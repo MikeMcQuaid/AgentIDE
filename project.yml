@@ -1,0 +1,42 @@
+name: AgentIDE
+options:
+  bundleIdPrefix: com.mikemcquaid
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "27.0"
+packages:
+  AgentIDEPackage:
+    path: .
+targets:
+  AgentIDEApp:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: AgentIDEPackage
+        product: DashboardFeature
+      - package: AgentIDEPackage
+        product: SessionFeature
+      - package: AgentIDEPackage
+        product: ReviewFeature
+      - package: AgentIDEPackage
+        product: PRFeature
+      - package: AgentIDEPackage
+        product: AgentIDEData
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
+        PRODUCT_NAME: AgentIDE
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+    scheme:
+      testTargets: []

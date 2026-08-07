@@ -113,18 +113,21 @@ before shipping.
 
 ## Usage
 
-Nothing builds yet; see [Status](#status). Once the app skeleton lands:
+After cloning:
 
 ```bash
 git clone https://github.com/MikeMcQuaid/AgentIDE
 cd AgentIDE
 script/bootstrap
-open AgentIDE.xcodeproj
+script/build
+open AgentIDE.app
 ```
 
-`script/bootstrap` installs the `Brewfile` dependencies and will generate the
-gitignored Xcode project with XcodeGen. A prebuilt app with automatic updates
-will come later.
+`script/bootstrap` installs the `Brewfile` dependencies and generates the
+gitignored Xcode project with XcodeGen (`open AgentIDE.xcodeproj` to work in
+Xcode). `AgentIDE.app` is a symlink to `script/build`'s output. The app
+currently launches to an empty dashboard; features land slice by slice (see
+[Status](#status)). A prebuilt app with automatic updates will come later.
 
 ## Status
 
@@ -132,9 +135,9 @@ Readme-driven development: this README describes the complete intended
 workflow before any of it exists. Slices land in order, each one usable when
 done:
 
-1. Documentation and guardrails: these documents, linting and CI (this pull
-   request)
+1. Documentation and guardrails: these documents, linting and CI (done)
 2. Skeleton: XcodeGen project, Swift packages and an empty dashboard app
+   (this pull request)
 3. Core loop: create worktrees, launch and attach to sandboxed agents
 4. Monitoring: notifications, unread tracking and resumable sessions
 5. Review: syntax-highlighted diffs, per-line rejection and editing

@@ -46,10 +46,52 @@ jobs:
       - name: Check style
         run: script/style
 
+  tests:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        with:
+          core: false
+          cask: false
+          test-bot: false
+
+      - name: Cache Homebrew prefix
+        uses: Homebrew/actions/cache-homebrew-prefix@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        with:
+          brewfile: true
+          uninstall: true
+
+      - name: Select Xcode 27
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::Xcode 27 is not installed on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      - name: Bootstrap
+        run: script/bootstrap
+
+      - name: Build
+        run: script/build
+
+      - name: Test
+        run: script/test
+
   check:
     if: always()
     needs:
       - style
+      - tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

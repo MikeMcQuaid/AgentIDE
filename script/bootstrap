@@ -1,4 +1,5 @@
 #!/bin/bash
+# Install Brewfile dependencies and generate AgentIDE.xcodeproj.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -6,3 +7,5 @@ cd "$(dirname "$0")/.."
 if ! brew bundle check &>/dev/null; then
   brew bundle
 fi
+
+xcodegen generate --quiet

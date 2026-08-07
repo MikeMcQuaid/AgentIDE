@@ -1,0 +1,13 @@
+#!/bin/bash
+# Run the Swift package tests.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  export SWIFTPM_DISABLE_SANDBOX=1
+  export SWIFT_BUILD_USE_SANDBOX=0
+  exec swift test --disable-sandbox
+fi
+
+exec swift test
