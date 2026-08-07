@@ -1,0 +1,6 @@
+# Every rule is enabled; disable per line with a reason, never here.
+opt_in_rules:
+  - all
+excluded:
+  - .build
+  - .DerivedData

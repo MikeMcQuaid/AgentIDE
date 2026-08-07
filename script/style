@@ -1,0 +1,45 @@
+#!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+STYLE_FIX=""
+[[ "${1-}" == "--fix" ]] && STYLE_FIX="1"
+
+shell_style() {
+  shellcheck script/*
+  if [[ -n "${STYLE_FIX}" ]]; then
+    shfmt -i 2 -ci -w script/*
+  else
+    shfmt -i 2 -ci -d script/*
+  fi
+}
+
+github_actions_style() {
+  actionlint
+  zizmor --no-online-audits .github/workflows
+}
+
+docs_style() {
+  awk 'length > 72 { print FILENAME ":" FNR ": longer than 72 characters"; failed = 1 } END { exit failed }' AGENTS.md
+  if [[ "$(readlink CLAUDE.md)" != "AGENTS.md" ]]; then
+    echo "CLAUDE.md must be a symlink to AGENTS.md" >&2
+    return 1
+  fi
+}
+
+swift_style() {
+  [[ -z "$(git ls-files "*.swift")" ]] && return 0
+  if [[ -n "${STYLE_FIX}" ]]; then
+    swiftformat .
+    swiftlint --fix --strict --quiet
+  else
+    swiftformat --lint .
+  fi
+  swiftlint --strict --quiet
+}
+
+shell_style
+github_actions_style
+docs_style
+swift_style

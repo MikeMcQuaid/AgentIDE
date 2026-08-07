@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if ! brew bundle check &>/dev/null; then
+  brew bundle
+fi

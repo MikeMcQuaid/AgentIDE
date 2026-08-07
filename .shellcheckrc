@@ -1,0 +1,12 @@
+# Suggest adding a default case in case statements.
+enable=add-default-case
+# Suggest [ -n "$var" ] over ! [ -z "$var" ].
+enable=avoid-nullary-conditions
+# Warn when uppercase variables are referenced but never assigned.
+enable=check-unassigned-uppercase
+# Suggest command -v over which.
+enable=deprecate-which
+# Suggest quoting variables even where safe.
+enable=quote-safe-variables
+# Require [[ ]] over [ ] in Bash scripts.
+enable=require-double-brackets
