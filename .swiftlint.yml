@@ -1,6 +1,25 @@
-# Every rule is enabled; disable per line with a reason, never here.
+# Every rule is enabled; disagreements are disabled per line with a
+# reason. Rules are excluded here only when they conflict with other
+# enabled rules or tools, or cannot apply to this codebase.
 opt_in_rules:
   - all
+disabled_rules:
+  # Conflicts with opening_brace and SwiftFormat's brace style.
+  - contrasted_opening_brace
+  # Conflicts with redundant_type_annotation.
+  - explicit_type_interface
+  # Conflict with SwiftFormat's redundantInternal rule.
+  - explicit_acl
+  - explicit_top_level_acl
+  # Conflicts with extension_access_modifier, which matches
+  # SwiftFormat's extensionAccessControl default.
+  - no_extension_access_modifier
+  # Hungarian-style k prefixes are not this codebase's style.
+  - prefixed_toplevel_constant
+  # SwiftFormat's organizeDeclarations owns declaration ordering.
+  - type_contents_order
+  # SwiftFormat's trailingCommas rule adds the commas this rule bans.
+  - trailing_comma
 excluded:
   - .build
   - .DerivedData

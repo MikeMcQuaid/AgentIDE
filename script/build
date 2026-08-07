@@ -1,0 +1,29 @@
+#!/bin/bash
+# Build AgentIDE.app; the repo-root AgentIDE.app symlink points at the output.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+[[ -d AgentIDE.xcodeproj ]] || script/bootstrap
+
+ARGS=(
+  -project AgentIDE.xcodeproj
+  -scheme AgentIDEApp
+  -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
+  -derivedDataPath .DerivedData
+  -jobs "$(sysctl -n hw.ncpu)"
+)
+
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  export SWIFTPM_DISABLE_SANDBOX=1
+  export SWIFT_BUILD_USE_SANDBOX=0
+  # The literal $(inherited) is for xcodebuild, not the shell.
+  # shellcheck disable=SC2016
+  ARGS+=(
+    -IDEPackageSupportDisableManifestSandbox=1
+    -IDEPackageSupportDisablePackageSandbox=1
+    'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
+  )
+fi
+
+xcodebuild "${ARGS[@]}" build

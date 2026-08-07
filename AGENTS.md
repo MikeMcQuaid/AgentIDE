@@ -6,16 +6,18 @@ update them in the same commit when behaviour they describe changes.
 This repository is readme-driven: documentation leads, code follows.
 
 AgentIDE is a native SwiftUI macOS app for running, steering and
-reviewing sandboxed AI coding agents. Nothing builds yet; see the
-Status section of `README.md` for the slice order.
+reviewing sandboxed AI coding agents. See the Status section of
+`README.md` for the slice order.
 
 Write sentence-case imperative commit messages without
 conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 
 ## Commands
 
-- `script/bootstrap`: install `Brewfile` dependencies (and generate
-  `AgentIDE.xcodeproj` with XcodeGen once the skeleton slice lands)
+- `script/bootstrap`: install `Brewfile` dependencies and generate
+  `AgentIDE.xcodeproj` with XcodeGen
+- `script/build`: build the app with xcodebuild
+- `script/test`: run the package tests with swift test
 - `script/style`: run all linters; `--fix` also applies safe fixes
 - `script/attach <session>`: attach this terminal to a sandboxed
   tmux session (works as the host user or inside the sandbox)
@@ -25,19 +27,22 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `README.md`: user workflow and features; the product specification
 - `ARCHITECTURE.md`: system design, packages and data flows
 - `AGENTS.md`: this file; `CLAUDE.md` is a symlink to it
+- `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
+- `App/`: the app shell; `project.yml` defines the XcodeGen target
+  (the generated `.xcodeproj` stays gitignored)
 - `script/`: development tasks
 - `Brewfile`: development dependencies
 - `.github/workflows/tests.yml`: CI
-- Planned: `project.yml` (XcodeGen; the generated `.xcodeproj` stays
-  gitignored), `App/` and `Packages/` with Domain, DataAccess and
-  Feature targets
 
 ## Code Standards
 
 - Swift 6.4 with strict concurrency: App and Feature targets use
   MainActor default isolation; Domain and DataAccess are nonisolated
 - Every SwiftLint and SwiftFormat rule is enabled; disable per line
-  with a comment explaining why, never in configuration
+  with a comment explaining why (configuration excludes only rules
+  that conflict with other enabled rules or tools, with reasons)
+- SwiftLint needs the full Xcode selected via xcode-select;
+  CommandLineTools alone cannot load SourceKit
 - UK English (organised, colour) in documentation, comments and UI
   strings; proper nouns keep their official spellings
 - Keep comments minimal; prefer self-documenting code
@@ -46,6 +51,7 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 ### Required Before Each Commit
 
 - Run `script/style --fix` and resolve anything it cannot fix
+- Run `script/test` when Swift changed
 - Reread changed documentation for UK English, working links and
   72-column wrapping of this file
 - Confirm `README.md` and `ARCHITECTURE.md` still describe behaviour

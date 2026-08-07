@@ -1,4 +1,5 @@
 #!/bin/bash
+# Run every linter across the repository; --fix also applies safe fixes.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -32,7 +33,7 @@ swift_style() {
   [[ -z "$(git ls-files "*.swift")" ]] && return 0
   if [[ -n "${STYLE_FIX}" ]]; then
     swiftformat .
-    swiftlint --fix --strict --quiet
+    swiftlint --fix --quiet
   else
     swiftformat --lint .
   fi

@@ -133,11 +133,12 @@ exec tmux new-session -A -d -s "${SESSION_NAME}" "${AGENT_COMMAND}"
   `TMPDIR`.
 - Sessions set `remain-on-exit on`, so a finished agent leaves a dead pane
   whose exit status and scrollback remain inspectable.
-- Session names follow `agentide--<repo>--<branch-slug>--<agent>` with `--2`
-  suffixes on collision (tmux forbids `.` and `:` in names). Names are a
-  human-readable fallback for `tmux ls` over SSH; the authoritative record is
-  the app's metadata store. Anything not matching `agentide--*` is treated as
-  foreign.
+- Session names follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
+  collapse `-` runs so the `--` separator stays unambiguous, collisions
+  append `-2` to the branch component and tmux's forbidden `.` and `:` are
+  replaced. Names are a human-readable fallback for `tmux ls` over SSH; the
+  authoritative record is the app's metadata store. Anything not matching
+  the full shape is treated as foreign.
 
 ### Terminals
 
@@ -476,32 +477,37 @@ exactly.
 Toolchain: Xcode 27, the macOS 27 SDK and Swift 6.4. XcodeGen generates the
 app project from `project.yml`; the `.xcodeproj` is gitignored. SwiftLint and
 SwiftFormat run with every rule enabled; disagreements are disabled per line
-with a reason, never in configuration.
+with a reason, and configuration excludes only rules that conflict with other
+enabled rules or tools, each with a recorded reason. SwiftLint requires the
+full Xcode toolchain selected via xcode-select; CommandLineTools alone cannot
+load SourceKit.
 
 Scripts follow the `script/` convention: `bootstrap` (Homebrew dependencies,
-then project generation once the skeleton lands), `style [--fix]` (all
-linters; Swift linters no-op until Swift files exist) and
+then XcodeGen project generation), `build` (the app via xcodebuild),
+`test` (package tests via `swift test`), `style [--fix]` (all linters) and
 `attach <session>` (attach the current terminal to a sandboxed tmux
-session), with `test` to follow. Agent-driven builds inside the sandbox cannot nest macOS
+session). Agent-driven builds inside the sandbox cannot nest macOS
 sandboxes, so build scripts gate on `SV_SESSION_ID` and pass
 `SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
 `-IDEPackageSupportDisable*Sandbox` xcodebuild flags, letting agents build
 AgentIDE itself.
 
 CI ("GitHub Actions CI" in `.github/workflows/tests.yml`) runs the style
-checks from this slice onward; build and test jobs join with the skeleton
-slice, pinned to the newest macOS image (with a documented risk while macOS
-27 runners are in beta). Tests use Swift Testing: near-total coverage of
-Domain's pure functions over recorded fixtures, Data adapters against fakes
-and scrubbed fixtures captured from a real machine, view models against fake
-ports and a single launch smoke test for UI.
+checks on every push and pull request. The build and test job runs on
+GitHub's Xcode 27 public-preview image (`runs-on: xcode-27`, arm64 only) and
+asserts Xcode 27 is present, failing rather than skipping, so a green run
+always means the app built and the tests passed (R2). Tests use
+Swift Testing: near-total coverage of Domain's pure functions over recorded
+fixtures, Data adapters against fakes and scrubbed fixtures captured from a
+real machine, view models against fake ports and a single launch smoke test
+for UI.
 
 ## Risks and open questions
 
 | # | Risk | Mitigation |
 |---|---|---|
 | R1 | tmux is validated under sandbox-exec on this machine: daemonised server, /tmp socket, separate clients, capture, dead panes with exit statuses, sudo-launched bring-up shared with in-sandbox clients and interactive attach and detach via `script/attach`; only long-run stability remains unobserved | watch stability through the core loop slice; fallback ladder is screen then a minimal PTY-holder process; app-owned PTYs are not acceptable because they forfeit Resilience |
-| R2 | macOS 27 GitHub runners may lag the beta | style-only CI first; self-hosted runner fallback |
+| R2 | the `xcode-27` runner image is a public preview that may change or lag Xcode 27 betas | the build and test job asserts Xcode 27 and fails loudly rather than skipping; a self-hosted runner remains the fallback |
 | R3 | per-line selection and diff gutters on STTextView are non-trivial | prototype early in the Review slice; interim read-only diff |
 | R4 | agent transcript formats drift across releases | tolerant decoders, per-release fixtures and adapter capability flags |
 | R5 | sandvault updates could change paths, profile or sudoers | pin the sandvault version; `SandvaultLauncher` is the single construction point; bootstrap asserts the expected shape |
