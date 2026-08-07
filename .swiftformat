@@ -1,0 +1,4 @@
+# Rule disagreements are disabled per line with a reason, never here.
+--enable all
+--swiftversion 6.4
+--indent 4

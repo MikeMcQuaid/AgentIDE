@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: ${0} <session>" >&2
+  exit 1
+fi
+
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  export TMUX_TMPDIR=/tmp
+  exec /opt/homebrew/bin/tmux attach-session -t "$1"
+fi
+
+exec sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
+  HOME="/Users/sandvault-${USER}" \
+  USER="sandvault-${USER}" \
+  SHELL=/bin/zsh \
+  TERM="${TERM:-xterm-256color}" \
+  PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+  /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb" \
+  /bin/zsh -c 'export TMUX_TMPDIR=/tmp; exec /opt/homebrew/bin/tmux attach-session -t "$1"' attach "$1"
