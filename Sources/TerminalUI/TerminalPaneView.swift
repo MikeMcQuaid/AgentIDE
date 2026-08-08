@@ -1,19 +1,39 @@
+import SwiftTerm
 import SwiftUI
 
-/// The shared terminal surface, a placeholder until the core loop
-/// slice.
-public struct TerminalPaneView: View {
+/// An embedded terminal running an argv on a local PTY. Closing the
+/// view only disconnects this client; tmux sessions keep running in
+/// the sandbox.
+public struct TerminalPaneView: NSViewRepresentable {
     // MARK: Lifecycle
 
-    /// Creates the terminal pane view.
-    public init() {
-        // SwiftUI requires a public initialiser across module boundaries.
+    /// Creates a terminal that runs an argv; the argv itself decides
+    /// its working directory.
+    public init(command: [String]) {
+        self.command = command
     }
 
     // MARK: Public
 
-    /// The placeholder content.
-    public var body: some View {
-        Text("The terminal arrives with the core loop slice.")
+    /// Builds the SwiftTerm view and starts the process.
+    public func makeNSView(context _: Context) -> LocalProcessTerminalView {
+        let view = LocalProcessTerminalView(frame: .zero)
+        let resolved = command.first?.hasPrefix("/") == true ? command : ["/usr/bin/env"] + command
+        view.startProcess(
+            executable: resolved.first ?? "/bin/zsh",
+            args: Array(resolved.dropFirst()),
+            environment: nil,
+            execName: nil,
+        )
+        return view
     }
+
+    /// The terminal owns its state; nothing to update.
+    public func updateNSView(_: LocalProcessTerminalView, context _: Context) {
+        // SwiftTerm manages the PTY after launch.
+    }
+
+    // MARK: Private
+
+    private let command: [String]
 }

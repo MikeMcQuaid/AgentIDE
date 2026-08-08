@@ -1,5 +1,6 @@
 brew "actionlint"
 brew "gh"
+brew "periphery"
 brew "shellcheck"
 brew "shfmt"
 brew "swiftformat"

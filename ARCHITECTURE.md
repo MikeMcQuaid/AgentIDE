@@ -211,15 +211,17 @@ flowchart TD
   value types (Date, URL and Data) are allowed; process, file, network and
   database APIs are banned.
 - **AgentIDEData**: protocol ports with adapter implementations: `GitClient`,
-  `GitHubClient` (URLSession GraphQL and REST), `SandvaultLauncher`,
-  `TmuxControl`, `TranscriptReader`, `EventSpool`, `MetadataStore` (GRDB),
-  `ProcessRunner` (Subprocess) and `AgentRunner` with `ClaudeCodeRunner` and
-  `CodexRunner`. One module with ports and adapters in separate directories,
-  split into two modules only if boundary violations appear.
+  `GitHubClient` (`gh` shell-outs today, native URLSession GraphQL for hot
+  paths later), `SandvaultLauncher`, `TmuxClient`, `TranscriptReader`,
+  `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
+  outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
+  later) and `AgentRunner` with `ClaudeCodeRunner` and `CodexRunner`. One
+  module, split only if boundary violations appear.
 - **Feature targets** (`DashboardFeature`, `SessionFeature`, `ReviewFeature`
   and `PRFeature`): SwiftUI views and `@Observable` view models, MainActor by
   default, given ports via injection. `SessionFeature` owns the WKWebView
-  preview; `ReviewFeature` owns the diff and editor surfaces.
+  preview; `ReviewFeature` owns the diff and editor surfaces (plain SwiftUI
+  text today, STTextView and tree-sitter as the review slice deepens).
 - **TerminalUI**: a dumb SwiftTerm wrapper (command specification in, PTY
   view out), used by `SessionFeature` for both terminal flavours. A
   component, not a feature.
@@ -302,10 +304,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
    clone. A per-repository opt-in provisions a read-only key through
    sandvault's `sv-clone -k` mechanism. Write keys are never provisioned;
    pushing is host-side.
-7. `AgentRunner` builds the agent command (sandvault's wrappers add the
-   agent's permission-skipping flag inside the sandbox) and the session
-   launches through the tmux payload above.
-8. The session is recorded in the metadata store, with the agent-native
+7. `AgentRunner` builds the agent command, with any per-session extra
+   arguments appended verbatim (sandvault's wrappers add the agent's
+   permission-skipping flag inside the sandbox), and the session launches
+   through the tmux payload above.
+8. The prompt is delivered as terminal input, not as a command argument:
+   tmux `load-buffer` then `paste-buffer` types the prompt file into the
+   agent after launch. The pane's `INITIAL_DIR` is pinned to the worktree so
+   the sandbox's zshenv cannot redirect the agent elsewhere.
+9. The session is recorded in the metadata store, with the agent-native
    resume id captured as soon as the transcript appears.
 
 ### Event pipeline (Watch and steer)
@@ -463,10 +470,10 @@ official language or project organisation.
 | Package | Role | Note |
 |---|---|---|
 | SwiftTerm | terminal emulator views | |
-| GRDB | metadata store | |
-| STTextView | diff and editor text surface | TextKit 2 |
-| swift-tree-sitter and language grammars | syntax highlighting | official-organisation exception; each grammar is its own package under the same exception |
-| swift-subprocess | process spawning | official-organisation exception (swiftlang) |
+| GRDB | metadata store | planned; a JSON file serves today |
+| STTextView | diff and editor text surface | TextKit 2; planned |
+| swift-tree-sitter and language grammars | syntax highlighting | official-organisation exception; each grammar is its own package under the same exception; planned |
+| swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 | Sparkle | app updates | later slice |
 
 System frameworks (WebKit, UserNotifications and FSEvents) and runtime tools
@@ -484,23 +491,35 @@ load SourceKit.
 
 Scripts follow the `script/` convention: `bootstrap` (Homebrew dependencies,
 then XcodeGen project generation), `build` (the app via xcodebuild),
-`test` (package tests via `swift test`), `style [--fix]` (all linters) and
-`attach <session>` (attach the current terminal to a sandboxed tmux
-session). Agent-driven builds inside the sandbox cannot nest macOS
-sandboxes, so build scripts gate on `SV_SESSION_ID` and pass
-`SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
+`test` (unit and integration tests via `swift test`), `analyze` (static
+analysis), `style [--fix]` (all linters) and `attach <session>` (attach the
+current terminal to a sandboxed tmux session). Agent-driven builds inside the
+sandbox cannot nest macOS sandboxes, so build scripts gate on `SV_SESSION_ID`
+and pass `SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
 `-IDEPackageSupportDisable*Sandbox` xcodebuild flags, letting agents build
 AgentIDE itself.
 
+The guardrails are layered so a mistake is caught as early as possible:
+Swift 6 strict concurrency and the type system at compile time; SwiftLint and
+SwiftFormat with every rule enabled at `script/style`; SwiftLint's analyzer
+(`unused_import`) plus periphery for dead code at `script/analyze`; and a
+test suite split into two tiers. Unit tests cover Domain's pure functions
+(`DiffParser`, `PatchBuilder`, `SessionName`) and Data decoders over
+fixtures. Integration tests exercise the real adapters end to end against
+real `git` repositories, a real `tmux` server on a private socket and
+temporary workspaces, because the bugs that reach manual testing live in the
+seams: worktree listing under path canonicalisation, reverse-patch
+application, tmux pane parsing and directory pinning, prompt delivery, and
+the archive and undelete round trip. View rendering is checked with headless
+`ImageRenderer` snapshots. periphery drives its own build so it runs on the
+host and in CI only, not inside the sandbox.
+
 CI ("GitHub Actions CI" in `.github/workflows/tests.yml`) runs the style
-checks on every push and pull request. The build and test job runs on
-GitHub's Xcode 27 public-preview image (`runs-on: xcode-27`, arm64 only) and
-asserts Xcode 27 is present, failing rather than skipping, so a green run
-always means the app built and the tests passed (R2). Tests use
-Swift Testing: near-total coverage of Domain's pure functions over recorded
-fixtures, Data adapters against fakes and scrubbed fixtures captured from a
-real machine, view models against fake ports and a single launch smoke test
-for UI.
+checks on every push and pull request. The build, test and analyze job runs
+on GitHub's Xcode 27 public-preview image (`runs-on: xcode-27`, arm64 only)
+and asserts Xcode 27 is present, failing rather than skipping, so a green run
+always means the app built, the tests passed and static analysis was
+clean (R2).
 
 ## Risks and open questions
 

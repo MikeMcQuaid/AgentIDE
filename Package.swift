@@ -19,6 +19,9 @@ let package = Package(
         .library(name: "PRFeature", targets: ["PRFeature"]),
         .library(name: "TerminalUI", targets: ["TerminalUI"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
+    ],
     targets: [
         .target(
             name: "AgentIDEDomain",
@@ -51,6 +54,7 @@ let package = Package(
         ),
         .target(
             name: "TerminalUI",
+            dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")],
             swiftSettings: mainActorByDefault,
         ),
         .testTarget(
@@ -62,6 +66,11 @@ let package = Package(
             name: "AgentIDEDataTests",
             dependencies: ["AgentIDEData"],
             swiftSettings: approachableConcurrency,
+        ),
+        .testTarget(
+            name: "DashboardFeatureTests",
+            dependencies: ["DashboardFeature"],
+            swiftSettings: mainActorByDefault,
         ),
     ],
 )
