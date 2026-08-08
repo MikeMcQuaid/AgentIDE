@@ -1,0 +1,48 @@
+import AgentIDEData
+import DashboardFeature
+
+/// Builds every adapter once and hands them to the features; the
+/// app's only wiring.
+@MainActor
+final class AppDependencies {
+    // MARK: Lifecycle
+
+    init() {
+        let paths = WorkspacePaths.current()
+        let runner = FoundationProcessRunner()
+        let gitClient = GitClient(runner: runner)
+        let githubClient = GitHubClient(runner: runner)
+        let store = MetadataStore(file: paths.metadataFile)
+        let tmux = TmuxClient(
+            runner: runner,
+            launcher: SandvaultLauncher(hostUser: paths.hostUser),
+            isInsideSandbox: WorkspacePaths.isInsideSandbox,
+        )
+        let sessionService = SessionService(
+            paths: paths,
+            git: gitClient,
+            tmux: tmux,
+            github: githubClient,
+            transcripts: TranscriptReader(),
+            spool: EventSpool(directory: paths.eventsDirectory),
+            store: store,
+            runners: [ClaudeCodeRunner(), CodexRunner()],
+        )
+        git = gitClient
+        github = githubClient
+        service = sessionService
+        dashboard = DashboardModel(service: sessionService, store: store)
+        try? HookInstaller(paths: paths).ensureInstalled()
+    }
+
+    deinit {
+        // Lives for the app's whole lifetime.
+    }
+
+    // MARK: Internal
+
+    let git: GitClient
+    let github: GitHubClient
+    let service: SessionService
+    let dashboard: DashboardModel
+}

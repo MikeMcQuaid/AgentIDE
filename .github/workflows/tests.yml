@@ -78,6 +78,9 @@ jobs:
           sudo xcode-select -s "${xcode}/Contents/Developer"
           xcodebuild -version
 
+      - name: Download Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
       - name: Bootstrap
         run: script/bootstrap
 
@@ -87,16 +90,12 @@ jobs:
       - name: Test
         run: script/test
 
-  check:
-    if: always()
-    needs:
-      - style
-      - tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Verify all jobs succeeded
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
-        with:
-          jobs: ${{ toJSON(needs) }}
+      - name: Analyze
+        run: script/analyze
+
+# `style` and `tests` always run, so they are the required checks in
+# branch protection directly. If any job ever becomes conditionally
+# skipped (a job-level `if:`, a path filter, or a matrix), add back an
+# aggregating `check` job with `if: always()` that fails unless every
+# `needs` job succeeded and require that instead: branch protection
+# handles a skipped required-by-name check poorly.

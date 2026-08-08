@@ -3,6 +3,11 @@
 # enabled rules or tools, or cannot apply to this codebase.
 opt_in_rules:
   - all
+analyzer_rules:
+  # unused_declaration cannot see SwiftUI's runtime use of views,
+  # bodies and representable methods, so it floods with false
+  # positives; periphery handles dead-code detection instead.
+  - unused_import
 disabled_rules:
   # Conflicts with opening_brace and SwiftFormat's brace style.
   - contrasted_opening_brace
@@ -20,6 +25,24 @@ disabled_rules:
   - type_contents_order
   # SwiftFormat's trailingCommas rule adds the commas this rule bans.
   - trailing_comma
+  # Small helper types (private subviews, a protocol beside its
+  # adapters) belong with their owner; a file each would force
+  # private helpers public.
+  - one_declaration_per_file
+  # Case order is meaningful here: picker order and status
+  # precedence follow declaration order.
+  - sorted_enum_cases
+  # SwiftFormat owns indentation, and this rule misfires on
+  # semantically indented multiline string content such as diff
+  # fixtures.
+  - indentation_width
+  # No single order fits both idioms in use: value types read before
+  # the aggregate that holds them, private subviews after the view
+  # that owns them.
+  - file_types_order
+  # Default parameters keep internal helpers (test support, launch
+  # commands) ergonomic; public API defaults are the documented seam.
+  - discouraged_default_parameter
 excluded:
   - .build
   - .DerivedData

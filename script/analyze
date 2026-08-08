@@ -1,0 +1,51 @@
+#!/bin/bash
+# Static analysis: unused declarations and imports via SwiftLint's
+# analyzer, plus dead-code detection via periphery when available.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+[[ -d AgentIDE.xcodeproj ]] || script/bootstrap
+
+log=".build/analyze-build.log"
+mkdir -p .build
+
+args=(
+  -project AgentIDE.xcodeproj
+  -scheme AgentIDEApp
+  -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
+  -derivedDataPath .DerivedData
+)
+
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  export SWIFTPM_DISABLE_SANDBOX=1
+  export SWIFT_BUILD_USE_SANDBOX=0
+  # The literal $(inherited) is for xcodebuild, not the shell.
+  # shellcheck disable=SC2016
+  args+=(
+    -IDEPackageSupportDisableManifestSandbox=1
+    -IDEPackageSupportDisablePackageSandbox=1
+    'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
+  )
+fi
+
+xcodebuild "${args[@]}" clean build >"$log" 2>&1
+swiftlint analyze --compiler-log-path "$log" --strict
+
+# periphery drives its own xcodebuild, which re-enters sandbox-exec
+# and cannot nest, so it runs on the host and in CI only. The project
+# is scanned through the app scheme because periphery's SPM mode does
+# not find an index store under the current build system; the app
+# scheme excludes the test targets, so the few declarations used only
+# by tests carry `// periphery:ignore`.
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  echo "skipping periphery: it cannot build inside the sandbox" >&2
+elif command -v periphery &>/dev/null; then
+  periphery scan \
+    --project AgentIDE.xcodeproj \
+    --schemes AgentIDEApp \
+    --strict \
+    --disable-update-check
+else
+  echo "skipping periphery: not installed (add it via the Brewfile)" >&2
+fi

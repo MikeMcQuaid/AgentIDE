@@ -19,6 +19,19 @@ shell_style() {
 github_actions_style() {
   actionlint
   zizmor --no-online-audits .github/workflows
+
+  # Only first-party (actions/*) and Homebrew (Homebrew/actions/*)
+  # actions are allowed; anything else needs a human decision, so add
+  # it here deliberately rather than letting it slip in.
+  local disallowed
+  disallowed="$(grep -rhoE 'uses:[[:space:]]*[^[:space:]#]+' .github/workflows |
+    sed -E 's/uses:[[:space:]]*//' |
+    grep -vE '^(actions/|Homebrew/actions/)' || true)"
+  if [[ -n "${disallowed}" ]]; then
+    echo "Only actions/* or Homebrew/actions/* actions are allowed:" >&2
+    echo "${disallowed}" >&2
+    return 1
+  fi
 }
 
 docs_style() {

@@ -137,13 +137,18 @@ done:
 
 1. Documentation and guardrails: these documents, linting and CI (done)
 2. Skeleton: XcodeGen project, Swift packages and an empty dashboard app
-   (this pull request)
+   (done)
 3. Core loop: create worktrees, launch and attach to sandboxed agents
+   (basic, this pull request)
 4. Monitoring: notifications, unread tracking and resumable sessions
-5. Review: syntax-highlighted diffs, per-line rejection and editing
-6. Embedded terminal and browser
+   (basic, this pull request)
+5. Review: diffs, per-line rejection and editing (basic and plain text
+   until the editor stack lands, this pull request)
+6. Embedded terminal and browser (basic, this pull request)
 7. GitHub pull request creation, dashboards and one-click fixes
+   (basic, this pull request)
 8. Lifecycle: cleanup on merge, undelete and foreign session discovery
+   (basic, this pull request)
 9. Automatic updates and polish
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and

@@ -1,11 +1,16 @@
-import DashboardFeature
 import SwiftUI
 
 @main
 struct AgentIDEApp: App {
+    // MARK: Internal
+
     var body: some Scene {
         WindowGroup {
-            DashboardView()
+            RootView(dependencies: dependencies)
         }
     }
+
+    // MARK: Private
+
+    private let dependencies: AppDependencies = .init()
 }
