@@ -101,7 +101,7 @@ sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
   TERM=xterm-256color COLORTERM=truecolor \
   INITIAL_DIR="${WORKTREE}" SHARED_WORKSPACE="/Users/Shared/sv-${USER}" \
   SV_SESSION_ID="$(uuidgen)" AGENTIDE_SESSION="${SESSION_NAME}" \
-  PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+  PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
   GIT_CONFIG_VALUE_0="/Users/Shared/sv-${USER}/*" \
   /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb" \
@@ -122,17 +122,24 @@ starts lazily inside the sandbox the first time a session is created, with a
 payload of:
 
 ```bash
-export TMPDIR="$(mktemp -d)" TMUX_TMPDIR=/tmp
+export TMUX_TMPDIR=~/.agentide/tmux
+mkdir -p "${TMUX_TMPDIR}" && chmod 700 "${TMUX_TMPDIR}"
+printf 'set -g remain-on-exit on\n...' > "${TMUX_TMPDIR}/agentide.conf"
 cd ~ && ~/configure
 source ~/.zshenv && source ~/.zprofile && source ~/.zshrc
-exec tmux new-session -A -d -s "${SESSION_NAME}" "${AGENT_COMMAND}"
+exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
+  new-session -A -d -s "${SESSION_NAME}" "${AGENT_COMMAND}"
 ```
 
-- `TMUX_TMPDIR` is pinned to `/tmp` (writable inside the sandbox) so every
-  later invocation finds the same server socket despite the randomised
-  `TMPDIR`.
-- Sessions set `remain-on-exit on`, so a finished agent leaves a dead pane
-  whose exit status and scrollback remain inspectable.
+- `TMUX_TMPDIR` is pinned to a fixed directory in the sandbox user's home,
+  so every invocation finds the same server socket and nothing lives in
+  world-writable `/tmp`. The config is written by that same payload: a
+  file written by the host user would be unreadable across the sudo
+  boundary. Its newlines travel as printf escapes, because `sudo --login`
+  rebuilds the command line and collapses literal newlines.
+- The config sets `remain-on-exit on`, so a finished agent leaves a dead
+  pane whose exit status and scrollback remain inspectable, `mouse on`,
+  so the wheel scrolls tmux's history, and a 50000-line history limit.
 - Session names follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
   append `-2` to the branch component and tmux's forbidden `.` and `:` are
@@ -151,9 +158,15 @@ PTY:
   Closing the view detaches and never kills the session.
 - **Host terminal** (Review): a host tmux session per worktree
   (`new-session -A`, so attach-or-create) as the host user, no sudo, no
-  sandbox, full `gh` credentials. tmux starts the user's default login
+  sandbox, full `gh` credentials. Named
+  `agentide-shell--<repo>--<branch-slug>`, so `tmux ls` on the host reads
+  like the sidebar. tmux starts the user's default login
   shell, and because the server outlives its clients the shell survives
-  pane switches and app restarts exactly like agent sessions do. Both
+  pane switches and app restarts exactly like agent sessions do. In both,
+  scrollback is tmux's: the alternate screen leaves the outer terminal
+  nothing to scroll, so the mouse wheel scrolls tmux history (`mouse on`)
+  rather than a native scroller; that is the price of sessions that
+  outlive the app. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.

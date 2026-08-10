@@ -22,14 +22,20 @@ public extension SessionService {
     /// The argv for a persistent host-user shell in a worktree: a
     /// host tmux session (attach-or-create) that survives tab
     /// switches and app restarts and starts the user's default login
-    /// shell.
-    func hostShellCommand(worktreePath: String) -> [String] {
-        let suffix = worktreePath
-            .split(separator: "/")
-            .suffix(Self.shellNameComponents)
-            .joined(separator: "-")
-        let name = "agentide-shell-" + SessionName.slug(suffix)
-        return [Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktreePath]
+    /// shell. Named `agentide-shell--<repository>--<branch>`, so
+    /// `tmux ls` reads like the sidebar rather than worktree uuids.
+    /// The chained `set` commands give the host server the same
+    /// wheel-scrolls-history behaviour as the sandbox one, whose
+    /// config file it does not read.
+    func hostShellCommand(worktree: Worktree) -> [String] {
+        let name = "agentide-shell--"
+            + SessionName.slug(worktree.repositoryName) + "--"
+            + SessionName.slug(worktree.branch)
+        return [
+            Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktree.path,
+            ";", "set", "-g", "mouse", "on",
+            ";", "set", "-g", "history-limit", "50000",
+        ]
     }
 
     /// Marks a worktree viewed: clears its unread state, including a

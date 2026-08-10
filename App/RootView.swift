@@ -230,7 +230,7 @@ struct RootView: View {
         return ZStack {
             if runningShells.contains(path) {
                 TerminalPaneView(
-                    command: dependencies.service.hostShellCommand(worktreePath: path),
+                    command: dependencies.service.hostShellCommand(worktree: item.worktree),
                 ) {
                     runningShells.remove(path)
                 }

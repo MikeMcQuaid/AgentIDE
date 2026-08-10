@@ -29,17 +29,19 @@ public struct TmuxPane: Sendable {
 public struct TmuxClient: Sendable {
     // MARK: Lifecycle
 
-    /// Creates a client; `socketDirectory` isolates test servers.
+    /// Creates a client; `socketDirectory` isolates test servers and
+    /// defaults to a fixed directory in the sandbox user's home, so
+    /// nothing shared lives in world-writable `/tmp`.
     public init(
         runner: any ProcessRunner,
         launcher: SandvaultLauncher,
         isInsideSandbox: Bool,
-        socketDirectory: String = "/tmp",
+        socketDirectory: String? = nil,
     ) {
         self.runner = runner
         self.launcher = launcher
         self.isInsideSandbox = isInsideSandbox
-        self.socketDirectory = socketDirectory
+        self.socketDirectory = socketDirectory ?? launcher.sandboxHome + "/.agentide/tmux"
     }
 
     // MARK: Public
@@ -109,8 +111,7 @@ public struct TmuxClient: Sendable {
         try await tmux(["kill-session", "-t", name])
     }
 
-    // periphery:ignore - used by integration tests, which the app
-    // scheme periphery scans excludes, and by the planned emergency stop.
+    // periphery:ignore - reserved for the planned emergency stop.
     /// Kills the whole server.
     public func killServer() async {
         _ = try? await tmux(["kill-server"], allowFailure: true)
@@ -122,7 +123,7 @@ public struct TmuxClient: Sendable {
             ["tmux", "attach-session", "-t", sessionName]
         } else {
             launcher.command(
-                payload: "export TMUX_TMPDIR=" + socketDirectory
+                payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
                     + "; exec tmux attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
@@ -131,11 +132,38 @@ public struct TmuxClient: Sendable {
         }
     }
 
+    // MARK: Internal
+
+    /// The shell prelude ensuring the socket directory and config
+    /// exist, run as the server's own user: a file written by the
+    /// host user would be unreadable across the sudo boundary. The
+    /// config's newlines travel as printf escapes, because
+    /// `sudo --login` rebuilds the command line and turns literal
+    /// newlines into line continuations, which once collapsed the
+    /// whole config onto one line.
+    var configPrelude: String {
+        let format = Self.configContent.replacing("\n", with: "\\n") + "\\n"
+        return "export TMUX_TMPDIR=" + shellQuote(socketDirectory) + "; "
+            + "mkdir -p " + shellQuote(socketDirectory) + "; "
+            + "chmod 700 " + shellQuote(socketDirectory) + "; "
+            + "printf " + shellQuote(format) + " > " + shellQuote(configFile) + "; "
+    }
+
     // MARK: Private
 
     private static let paneFieldCount = 5
     private static let paneFormat =
         "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_current_path}"
+
+    /// The server's config: dead panes stay inspectable, the mouse
+    /// wheel scrolls tmux's own history (the alternate screen leaves
+    /// the outer terminal nothing to scroll) and that history is
+    /// deep enough to review a whole session.
+    private static let configContent = """
+    set -g remain-on-exit on
+    set -g mouse on
+    set -g history-limit 50000
+    """
 
     private let runner: any ProcessRunner
     private let launcher: SandvaultLauncher
@@ -143,32 +171,26 @@ public struct TmuxClient: Sendable {
     private let socketDirectory: String
 
     /// tmux only reads `-f` config when it starts the server, so
-    /// passing it on every call is harmless and guarantees
-    /// `remain-on-exit` is set before any pane can exit. tmux config
-    /// can run shell commands, so the file is always overwritten with
-    /// the minimal content and owner-only permissions rather than
-    /// trusting whatever might already sit in the shared socket
-    /// directory.
-    private func configArguments() -> [String] {
-        let configFile = socketDirectory + "/agentide.conf"
-        try? FileManager.default.createDirectory(atPath: socketDirectory, withIntermediateDirectories: true)
-        try? "set -g remain-on-exit on\n".write(toFile: configFile, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configFile)
-        return ["-f", configFile]
+    /// passing it on every call is harmless and guarantees the
+    /// options are set before any pane can exit.
+    private var configFile: String {
+        socketDirectory + "/agentide.conf"
     }
 
     @discardableResult
     private func tmux(_ arguments: [String], allowFailure: Bool = false) async throws -> ProcessResult {
-        let full = configArguments() + arguments
+        let full = ["-f", configFile] + arguments
         let result: ProcessResult
         if isInsideSandbox {
+            try? FileManager.default.createDirectory(atPath: socketDirectory, withIntermediateDirectories: true)
+            try? Self.configContent.write(toFile: configFile, atomically: true, encoding: .utf8)
             result = try await runner.run(
                 ["tmux"] + full,
                 workingDirectory: nil,
                 environment: ["TMUX_TMPDIR": socketDirectory],
             )
         } else {
-            let payload = "export TMUX_TMPDIR=" + socketDirectory + "; cd ~ && ~/configure; "
+            let payload = configPrelude + "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; "
                 + "exec tmux " + full.map(shellQuote).joined(separator: " ")
             let argv = launcher.command(

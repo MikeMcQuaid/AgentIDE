@@ -1,4 +1,4 @@
-import AgentIDEData
+@testable import AgentIDEData
 import Foundation
 import Testing
 
@@ -7,10 +7,22 @@ import Testing
 /// and prompt delivery by paste.
 struct TmuxClientIntegrationTests {
     @Test
+    func `config prelude carries no literal newlines, which sudo login would collapse`() throws {
+        let (client, _) = try TestSupport.makeTmuxClient()
+
+        let prelude = client.configPrelude
+
+        #expect(prelude.contains("\n") == false)
+        #expect(prelude.contains("\\n"))
+        #expect(prelude.contains("mouse on"))
+        #expect(prelude.contains("history-limit"))
+    }
+
+    @Test
     func `sessions start in their directory and die visibly`() async throws {
-        let tmux = try TestSupport.makeTmuxClient()
+        let (tmux, socket) = try TestSupport.makeTmuxClient()
         let directory = try TestSupport.temporaryDirectory("pane")
-        defer { Task { await tmux.killServer() } }
+        defer { TestSupport.killServerSync(socketDirectory: socket) }
 
         try await tmux.newSession(name: "agentide--r--b--claude", directory: directory, command: "sleep 20")
         let running = await TestSupport.poll {
@@ -30,14 +42,7 @@ struct TmuxClientIntegrationTests {
         let socket = try TestSupport.socketDirectory() + "/host"
         let directory = try TestSupport.temporaryDirectory("host-shell")
         let runner = FoundationProcessRunner()
-        defer {
-            Task { _ = try? await runner.run(
-                ["tmux", "-S", socket, "kill-server"],
-                workingDirectory: nil,
-                environment: [:],
-            )
-            }
-        }
+        defer { TestSupport.killServerSync(socketFile: socket) }
 
         // `-A` attaches instead of creating when the session exists.
         // Detached creation works headlessly; the attach path needs a
@@ -59,9 +64,9 @@ struct TmuxClientIntegrationTests {
 
     @Test
     func `finished panes keep their exit status`() async throws {
-        let tmux = try TestSupport.makeTmuxClient()
+        let (tmux, socket) = try TestSupport.makeTmuxClient()
         let directory = try TestSupport.temporaryDirectory("dead")
-        defer { Task { await tmux.killServer() } }
+        defer { TestSupport.killServerSync(socketDirectory: socket) }
 
         try await tmux.newSession(name: "agentide--r--dead--claude", directory: directory, command: "exit 7")
         let dead = await TestSupport.poll {
@@ -73,9 +78,9 @@ struct TmuxClientIntegrationTests {
 
     @Test
     func `prompts arrive as terminal input, not arguments`() async throws {
-        let tmux = try TestSupport.makeTmuxClient()
+        let (tmux, socket) = try TestSupport.makeTmuxClient()
         let directory = try TestSupport.temporaryDirectory("paste")
-        defer { Task { await tmux.killServer() } }
+        defer { TestSupport.killServerSync(socketDirectory: socket) }
 
         try await tmux.newSession(
             name: "agentide--r--paste--claude",

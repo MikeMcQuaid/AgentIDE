@@ -71,14 +71,47 @@ enum TestSupport {
     }
 
     /// A tmux client on its own private socket, so tests never touch
-    /// the real server.
-    static func makeTmuxClient() throws -> TmuxClient {
-        try TmuxClient(
+    /// the real server; the socket directory comes back for
+    /// `killServerSync` in teardown.
+    static func makeTmuxClient() throws -> (client: TmuxClient, socketDirectory: String) {
+        let socket = try socketDirectory()
+        let client = TmuxClient(
             runner: FoundationProcessRunner(),
             launcher: SandvaultLauncher(hostUser: "test"),
             isInsideSandbox: true,
-            socketDirectory: socketDirectory(),
+            socketDirectory: socket,
         )
+        return (client, socket)
+    }
+
+    /// Kills a test server and removes its socket directory,
+    /// synchronously: a fire-and-forget Task raced process exit and
+    /// leaked servers.
+    static func killServerSync(socketDirectory: String) {
+        runSync(["tmux", "kill-server"], environment: ["TMUX_TMPDIR": socketDirectory])
+        try? FileManager.default.removeItem(atPath: socketDirectory)
+    }
+
+    /// Kills a test server addressed by socket file, synchronously.
+    static func killServerSync(socketFile: String) {
+        runSync(["tmux", "-S", socketFile, "kill-server"], environment: [:])
+    }
+
+    /// Runs a command to completion, discarding output; teardown
+    /// must finish before the process exits, so it cannot await.
+    static func runSync(_ argv: [String], environment: [String: String]) {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/env")
+        process.arguments = argv
+        var merged = ProcessInfo.processInfo.environment
+        for (key, value) in environment {
+            merged[key] = value
+        }
+        process.environment = merged
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
     }
 
     /// Polls a condition until it holds or the timeout passes.
@@ -103,6 +136,7 @@ struct World {
     let repository: Repository
     let service: SessionService
     let tmux: TmuxClient
+    let socketDirectory: String
 
     static func make() async throws -> Self {
         let base = try TestSupport.temporaryDirectory("world")
@@ -115,11 +149,12 @@ struct World {
         let repoPath = workspace.repositoriesDirectory + "/repo"
         try await TestSupport.makeRepository(at: repoPath)
         let runner = FoundationProcessRunner()
-        let tmuxClient = try TmuxClient(
+        let socket = try TestSupport.socketDirectory()
+        let tmuxClient = TmuxClient(
             runner: runner,
             launcher: SandvaultLauncher(hostUser: "test"),
             isInsideSandbox: true,
-            socketDirectory: TestSupport.socketDirectory(),
+            socketDirectory: socket,
         )
         let sessionService = SessionService(
             paths: workspace,
@@ -137,15 +172,13 @@ struct World {
             repository: Repository(name: "repo", path: repoPath),
             service: sessionService,
             tmux: tmuxClient,
+            socketDirectory: socket,
         )
     }
 
+    /// Synchronous, so the server dies before the test process can.
     func tearDown() {
-        let server = tmux
-        let directory = root
-        Task {
-            await server.killServer()
-            try? FileManager.default.removeItem(atPath: directory)
-        }
+        TestSupport.killServerSync(socketDirectory: socketDirectory)
+        try? FileManager.default.removeItem(atPath: root)
     }
 }
