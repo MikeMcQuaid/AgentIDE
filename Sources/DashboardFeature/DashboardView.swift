@@ -125,33 +125,53 @@ public struct DashboardView: View {
         }
     }
 
+    /// The disclosure button and a trailing new-session plus are
+    /// siblings: a button nested inside another button never
+    /// receives its clicks.
     private func header(for group: RepositoryGroup) -> some View {
-        Button {
-            toggleExpansion(of: group.repository.path)
-        } label: {
-            HStack(spacing: Self.statusPadding) {
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
-                    .accessibilityHidden(true)
-                avatar(for: group.repository)
-                Text(group.repository.fullName ?? group.repository.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                if group.items.count > 1 {
-                    Text("(" + String(group.items.count - 1) + ")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .hoverHelp("Worktrees beyond the default branch")
-                }
-                Spacer(minLength: 0)
+        HStack(spacing: Self.statusPadding) {
+            Button {
+                toggleExpansion(of: group.repository.path)
+            } label: {
+                headerLabel(for: group)
             }
-            .padding(.vertical, Self.rowVerticalPadding)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverHelp("Click to show or hide this repository's worktrees")
+            Button {
+                model.newSessionRepository = group.repository
+                model.showsNewSession = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("New session in " + group.repository.name)
+            }
+            .buttonStyle(.plain)
+            .hoverHelp("Start a new agent session in this repository")
         }
-        .buttonStyle(.plain)
-        .hoverHelp("Click to show or hide this repository's worktrees")
+    }
+
+    private func headerLabel(for group: RepositoryGroup) -> some View {
+        HStack(spacing: Self.statusPadding) {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
+                .accessibilityHidden(true)
+            avatar(for: group.repository)
+            Text(group.repository.fullName ?? group.repository.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            if group.items.count > 1 {
+                Text("(" + String(group.items.count - 1) + ")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .hoverHelp("Worktrees beyond the default branch")
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, Self.rowVerticalPadding)
+        .contentShape(Rectangle())
     }
 
     /// Selected rows use the full accent fill with light content,
