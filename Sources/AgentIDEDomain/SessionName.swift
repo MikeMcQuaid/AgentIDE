@@ -11,6 +11,21 @@ public enum SessionName {
         [prefix, slug(repository), slug(branch), agent.rawValue].joined(separator: separator)
     }
 
+    /// The repository slug embedded in an AgentIDE session name, nil
+    /// for foreign names. Used to attribute orphaned transcripts to a
+    /// repository after their worktree is deleted.
+    public static func repositorySlug(of sessionName: String) -> String? {
+        guard isAgentIDE(sessionName) else {
+            return nil
+        }
+
+        return sessionName
+            .split(separator: separator, omittingEmptySubsequences: false)
+            .dropFirst()
+            .first
+            .map(String.init)
+    }
+
     /// Whether a tmux session name was created by AgentIDE; anything
     /// else on the server is treated as foreign. The whole documented
     /// shape is validated, not just the prefix.

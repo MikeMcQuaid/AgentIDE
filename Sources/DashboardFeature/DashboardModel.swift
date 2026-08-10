@@ -1,7 +1,10 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import Observation
 import UserNotifications
+
+// MARK: - DashboardModel
 
 /// The dashboard's state: repositories, worktrees, sessions and
 /// archives, refreshed by polling and notifying on completion.
@@ -11,10 +14,30 @@ import UserNotifications
 public final class DashboardModel {
     // MARK: Lifecycle
 
-    /// Creates the model.
-    public init(service: SessionService, store: MetadataStore) {
+    /// Creates the model, seeding the sidebar from the last run's
+    /// snapshot so launch paints instantly.
+    public init(service: SessionService, store: MetadataStore, github: GitHubClient) {
         self.service = service
         self.store = store
+        self.github = github
+        groups = store.load().cachedSidebar.map { cached in
+            let repository = Repository(name: cached.name, path: cached.path, fullName: cached.fullName)
+            let items = cached.worktrees.map { worktree in
+                WorktreeItem(
+                    worktree: Worktree(
+                        repositoryName: cached.name,
+                        repositoryPath: cached.path,
+                        branch: worktree.branch,
+                        path: worktree.path,
+                    ),
+                    session: nil,
+                    isDirty: false,
+                    aheadOfUpstream: nil,
+                    hasUnread: false,
+                )
+            }
+            return RepositoryGroup(repository: repository, items: items)
+        }
     }
 
     deinit {
@@ -29,17 +52,34 @@ public final class DashboardModel {
     /// Sessions not created by AgentIDE.
     public private(set) var foreign: [AgentSession] = []
 
-    /// Archives available to undelete.
-    public private(set) var archives: [ArchiveMetadata] = []
-
-    /// The selected worktree item.
-    public var selection: WorktreeItem?
-
     /// Whether the new session sheet is shown.
     public var showsNewSession = false
 
-    /// The last background error, for display.
-    public private(set) var status: String?
+    /// Whether the repository finder sheet is shown.
+    public var showsRepositoryFinder = false
+
+    /// The repository the sheet preselects, set by the toolbar's new
+    /// session button.
+    public var newSessionRepository: Repository?
+
+    /// The last background error, for display; the repository
+    /// extension also reports through it.
+    public internal(set) var status: String?
+
+    /// The selected worktree item. Selecting an item marks it seen,
+    /// clearing its unread dot immediately and any manual mark.
+    public var selection: WorktreeItem? {
+        didSet {
+            guard let selection, selection.id != oldValue?.id else {
+                return
+            }
+
+            service.markSeen(worktreePath: selection.worktree.path)
+            clearUnread(at: selection.worktree.path)
+            // The freshly selected branch jumps the polling queue.
+            nextPullRequestFetch[selection.worktree.repositoryPath + "#" + selection.worktree.branch] = nil
+        }
+    }
 
     /// The repositories available for new sessions.
     public var repositories: [Repository] {
@@ -47,52 +87,138 @@ public final class DashboardModel {
     }
 
     /// Reloads everything and notifies about newly finished or
-    /// newly unread sessions.
+    /// newly unread sessions. The selected worktree is on screen, so
+    /// its activity counts as seen; a manual unread mark survives.
     public func refresh() async {
+        if let selection {
+            service.acknowledgeActivity(worktreePath: selection.worktree.path)
+        }
         let overview = await service.overview()
         notifyChanges(from: groups, to: overview.groups)
         groups = overview.groups
         foreign = overview.foreign
-        archives = store.load().archives
         if let selected = selection {
             selection = overview.groups.flatMap(\.items).first { $0.id == selected.id }
         }
+        cacheSidebar(overview.groups)
+        await refreshStalePullRequests()
     }
 
     /// Polls the system on an interval while the dashboard is alive.
+    /// Model discovery runs once per launch, so the pickers track the
+    /// installed CLIs.
     public func poll() async {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        for agent in AgentKind.allCases {
+            if let models = await service.discoverModels(for: agent) {
+                discoveredModels[agent] = models
+            }
+        }
         while Task.isCancelled == false {
             await refresh()
             try? await Task.sleep(for: .seconds(Self.pollInterval))
         }
     }
 
-    /// Creates a session from the sheet's input.
+    /// The models and efforts an agent offers: models the CLI
+    /// reported at startup when it answered, the curated fallback
+    /// otherwise.
+    public func launchChoices(for agent: AgentKind) -> (models: [String], efforts: [String]) {
+        let fallback = service.launchChoices(for: agent)
+        return (discoveredModels[agent] ?? fallback.models, fallback.efforts)
+    }
+
+    /// Creates a session from a typed prompt.
     public func createSession(
         repository: Repository,
         prompt: String,
         agent: AgentKind,
-        extraArguments: String = "",
+        options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        do {
+        await run {
             _ = try await service.createSession(
                 repository: repository,
                 prompt: prompt,
                 agent: agent,
-                extraArguments: extraArguments,
+                options: options,
             )
-            showsNewSession = false
-            await refresh()
-        } catch {
-            status = error.localizedDescription
         }
     }
 
-    /// Archives and deletes a worktree.
-    public func archive(item: WorktreeItem) async {
+    /// Creates a session working on a GitHub issue.
+    public func createSession(
+        fromIssue number: Int,
+        repository: Repository,
+        context: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run {
+            _ = try await service.createSession(
+                fromIssue: number,
+                repository: repository,
+                context: context,
+                agent: agent,
+                options: options,
+            )
+        }
+    }
+
+    /// Creates a session on a pull request's own branch.
+    public func createSession(
+        fromPullRequest number: Int,
+        repository: Repository,
+        context: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run {
+            _ = try await service.createSession(
+                fromPullRequest: number,
+                repository: repository,
+                context: context,
+                agent: agent,
+                options: options,
+            )
+        }
+    }
+
+    /// Starts an agent in an existing worktree.
+    public func launchAgent(
+        in worktree: Worktree,
+        prompt: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run {
+            _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
+        }
+    }
+
+    /// Starts an agent on an open issue in an existing worktree.
+    public func launchAgent(
+        fromIssue number: Int,
+        in worktree: Worktree,
+        context: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run {
+            _ = try await service.launchAgent(
+                fromIssue: number,
+                in: worktree,
+                context: context,
+                agent: agent,
+                options: options,
+            )
+        }
+    }
+
+    /// Deletes a worktree; its conversations stay readable in the
+    /// repository's sessions browser.
+    public func delete(item: WorktreeItem) async {
         do {
-            _ = try await service.archiveAndDelete(item: item)
+            try await service.deleteWorktree(item: item)
             if selection?.id == item.id {
                 selection = nil
             }
@@ -102,53 +228,119 @@ public final class DashboardModel {
         }
     }
 
-    /// Restores an archived worktree.
-    public func undelete(archive: ArchiveMetadata) async {
+    /// Flags the item unread until it is next viewed.
+    public func markUnread(item: WorktreeItem) async {
+        service.markUnread(worktreePath: item.worktree.path)
+        await refresh()
+    }
+
+    /// The repository's open issues, cached for instant pickers; an
+    /// empty answer falls back to the cache.
+    public func openIssues(repository: Repository) async -> [IssueSummary] {
+        let fresh = await service.openIssues(repository: repository)
+        guard fresh.isEmpty == false else {
+            return store.load().openIssuesCache[repository.path] ?? []
+        }
+
+        var metadata = store.load()
+        metadata.openIssuesCache[repository.path] = fresh
+        store.save(metadata)
+        return fresh
+    }
+
+    /// The repository's open pull requests, cached like the issues.
+    public func openPullRequests(repository: Repository) async -> [PullRequestSummary] {
+        let fresh = await (try? service.openPullRequests(repository: repository)) ?? []
+        guard fresh.isEmpty == false else {
+            return store.load().openPullRequestsCache[repository.path] ?? []
+        }
+
+        var metadata = store.load()
+        metadata.openPullRequestsCache[repository.path] = fresh
+        store.save(metadata)
+        return fresh
+    }
+
+    /// Fetches the item's repository and refreshes.
+    public func fetch(item: WorktreeItem) async {
         do {
-            try await service.undelete(archive: archive)
+            let repository = Repository(
+                name: item.worktree.repositoryName,
+                path: item.worktree.repositoryPath,
+            )
+            try await service.fetch(repository: repository)
+            status = "Fetched \(repository.name)."
             await refresh()
         } catch {
             status = error.localizedDescription
         }
     }
 
+    // MARK: Internal
+
+    /// Internal rather than private so the repository extension file
+    /// can reach the service too.
+    let service: SessionService
+
+    /// Internal so the pull request extension file can query GitHub.
+    let github: GitHubClient
+
+    /// Each worktree branch's open pull request, keyed by repository
+    /// path and branch. A cached nil records "asked, none open", so
+    /// failures keep the last good answer either way. Stored here,
+    /// managed by the pull request extension file.
+    var branchPullRequests: [String: PullRequestSummary?] = [:]
+
+    /// When each branch's pull request is next due, by cache key.
+    var nextPullRequestFetch: [String: Date] = [:]
+
+    /// Internal so the pull request extension file can persist its
+    /// cache.
+    let store: MetadataStore
+
     // MARK: Private
 
     private static let pollInterval = 5
 
-    private let service: SessionService
-    private let store: MetadataStore
+    /// Models each CLI reported at startup; absent agents fall back.
+    private var discoveredModels: [AgentKind: [String]] = [:]
 
-    private func notifyChanges(from old: [RepositoryGroup], to new: [RepositoryGroup]) {
-        // Uniquing, not trapping: duplicate ids would crash the poll.
-        let oldItems = Dictionary(old.flatMap(\.items).map { ($0.id, $0) }) { first, _ in first }
-        for item in new.flatMap(\.items) {
-            guard let session = item.session, let previous = oldItems[item.id] else {
-                continue
+    private func clearUnread(at path: String) {
+        for groupIndex in groups.indices {
+            let items = groups[groupIndex].items
+            for itemIndex in items.indices where items[itemIndex].worktree.path == path {
+                groups[groupIndex].items[itemIndex].hasUnread = false
             }
-
-            let finished = previous.session?.status == .running && session.status != .running
-            let becameUnread = previous.hasUnread == false && item.hasUnread
-            guard finished || becameUnread else {
-                continue
-            }
-
-            post(
-                title: finished ? "Agent finished" : "Agent output",
-                body: "\(item.worktree.repositoryName): \(item.worktree.branch)",
-            )
         }
     }
 
-    private func post(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil,
-        )
-        UNUserNotificationCenter.current().add(request)
+    private func cacheSidebar(_ groups: [RepositoryGroup]) {
+        var metadata = store.load()
+        metadata.cachedSidebar = groups.map { group in
+            var cached = CachedRepository()
+            cached.name = group.repository.name
+            cached.fullName = group.repository.fullName
+            cached.path = group.repository.path
+            cached.worktrees = group.items.map { item in
+                var worktree = CachedWorktree()
+                worktree.branch = item.worktree.branch
+                worktree.path = item.worktree.path
+                return worktree
+            }
+            return cached
+        }
+        store.save(metadata)
+    }
+
+    /// Runs a session-creation action, closing the sheet and
+    /// refreshing on success.
+    private func run(_ work: () async throws -> Void) async {
+        do {
+            try await work()
+            showsNewSession = false
+            await refresh()
+        } catch {
+            status = error.localizedDescription
+        }
     }
 }

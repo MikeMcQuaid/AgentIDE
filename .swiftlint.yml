@@ -19,6 +19,9 @@ disabled_rules:
   # Conflicts with extension_access_modifier, which matches
   # SwiftFormat's extensionAccessControl default.
   - no_extension_access_modifier
+  # Conflicts with SwiftFormat's modifierOrder over where
+  # `nonisolated` sits relative to access control.
+  - modifier_order
   # Hungarian-style k prefixes are not this codebase's style.
   - prefixed_toplevel_constant
   # SwiftFormat's organizeDeclarations owns declaration ordering.

@@ -28,9 +28,22 @@ struct SnapshotTests {
             isDirty: true,
             aheadOfUpstream: 2,
             hasUnread: true,
+            aheadOfDefault: 3,
+            behindDefault: 1,
+        )
+        let pullRequest = PullRequestSummary(
+            number: 12,
+            title: "Fix crash",
+            url: "https://github.com/MikeMcQuaid/AgentIDE/pull/12",
+            headBranch: "agent/fix-crash",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
         )
         let width: CGFloat = 320
-        let view = WorktreeRowView(item: item).frame(width: width).padding()
+        let view = WorktreeRowView(item: item, pullRequest: pullRequest, stackDepth: 1)
+            .frame(width: width)
+            .padding()
 
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2

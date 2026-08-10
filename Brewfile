@@ -1,6 +1,7 @@
 brew "actionlint"
 brew "gh"
 brew "periphery"
+brew "ripgrep"
 brew "shellcheck"
 brew "shfmt"
 brew "swiftformat"

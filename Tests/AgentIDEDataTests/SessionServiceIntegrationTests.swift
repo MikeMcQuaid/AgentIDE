@@ -12,6 +12,22 @@ struct PromptCaptureRunner: AgentRunner {
         .claudeCode
     }
 
+    var scopesTranscriptsByWorkingDirectory: Bool {
+        true
+    }
+
+    var models: [String] {
+        ["fable"]
+    }
+
+    var efforts: [String] {
+        ["max"]
+    }
+
+    var modelListingCommand: [String] {
+        ["true"]
+    }
+
     func launchCommand(extraArguments: String) -> String {
         let quoted = "'" + extraArguments.replacing("'", with: "'\\''") + "'"
         return "printf '%s' " + quoted + " > agent-arguments.txt; cat > agent-prompt.txt"
@@ -21,19 +37,28 @@ struct PromptCaptureRunner: AgentRunner {
         "printf '%s' '" + resumeID + "' > agent-resumed.txt; cat > /dev/null"
     }
 
-    func transcriptDirectory(workingDirectory _: String, sandboxHome: String) -> String? {
-        sandboxHome + "/transcripts"
+    func transcriptDirectory(workingDirectory: String, sandboxHome: String) -> String? {
+        sandboxHome + "/transcripts/" + workingDirectory.replacing("/", with: "-")
+    }
+
+    func optionArguments(model: String?, effort: String?) -> String {
+        var arguments = [String]()
+        if let model {
+            arguments += ["--model", model]
+        }
+        if let effort {
+            arguments += ["--effort", effort]
+        }
+        return arguments.joined(separator: " ")
     }
 }
 
 // MARK: - SessionServiceIntegrationTests
 
 /// Drives the whole core loop against real git, a private tmux
-/// server and a temporary workspace: create, observe, archive and
-/// undelete.
+/// server and a temporary workspace: create, observe, delete and
+/// resume.
 struct SessionServiceIntegrationTests {
-    // MARK: Internal
-
     @Test
     func `create session builds worktree, symlink, prompt and running pane`() async throws {
         let world = try await World.make()
@@ -43,12 +68,12 @@ struct SessionServiceIntegrationTests {
             repository: world.repository,
             prompt: "Do the thing",
             agent: .claudeCode,
-            extraArguments: "--model fable --effort max",
+            options: AgentLaunchOptions(model: "fable", effort: "max"),
         )
         #expect(SessionName.isAgentIDE(name))
 
         let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first)
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
         #expect(item.session?.name == name)
         #expect(item.session?.status == SessionStatus.running)
         let worktreePath = item.worktree.path
@@ -67,87 +92,229 @@ struct SessionServiceIntegrationTests {
     }
 
     @Test
-    func `archive removes the worktree and undelete restores it in place`() async throws {
+    func `deleting a worktree keeps its conversation in the repository sessions`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+
+        let sessionName = try await world.service.createSession(
+            repository: world.repository,
+            prompt: "Doomed work",
+            agent: .claudeCode,
+        )
+        let overview = await world.service.overview()
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let worktreePath = item.worktree.path
+        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktreePath)
+
+        // A conversation the deleted worktree leaves behind.
+        let runner = PromptCaptureRunner()
+        let directory = try #require(runner.transcriptDirectory(
+            workingDirectory: worktreePath,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"doomed"}]}}"# + "\n"
+        try transcript.write(toFile: directory + "/doomed.jsonl", atomically: true, encoding: .utf8)
+
+        try await world.service.deleteWorktree(item: item)
+        #expect(FileManager.default.fileExists(atPath: worktreePath) == false)
+        let after = await world.service.overview()
+        #expect(after.groups.first?.items.contains { $0.worktree.path == worktreePath } == false)
+
+        let sessions = await world.service.repositorySessions(for: world.repository)
+        let kept = try #require(sessions.first { $0.session.id == "doomed" })
+        #expect(kept.worktreePath == worktreePath)
+        #expect(kept.session.title == "doomed")
+    }
+
+    @Test
+    func `past sessions are discovered and resume into a new worktree with the transcript`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let sessionName = try await world.service.createSession(
+            repository: world.repository,
+            prompt: "original work",
+            agent: .claudeCode,
+        )
+        let overview = await world.service.overview()
+        let worktree = try #require(
+            overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") }?.worktree,
+        )
+        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
+
+        // A finished conversation left behind by any tool.
+        let runner = PromptCaptureRunner()
+        let directory = try #require(runner.transcriptDirectory(
+            workingDirectory: worktree.path,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"old prompt"}]}}"# + "\n"
+        try transcript.write(toFile: directory + "/oldsession.jsonl", atomically: true, encoding: .utf8)
+
+        let after = await world.service.overview()
+        let item = try #require(after.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let past = try #require(item.pastSessions.first { $0.id == "oldsession" })
+        #expect(past.title == "old prompt")
+        #expect(world.service.transcriptEntries(for: past).first?.text == "old prompt")
+
+        _ = try await world.service.resumeInNewWorktree(past, repository: world.repository)
+        let groups = await world.service.overview().groups
+        let resumed = try #require(groups.first?.items.first { $0.worktree.branch.contains("resume") })
+        let copied = try #require(runner.transcriptDirectory(
+            workingDirectory: resumed.worktree.path,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        #expect(FileManager.default.fileExists(atPath: copied + "/oldsession.jsonl"))
+        try await TestSupport.poll(timeout: 10) {
+            let marker = resumed.worktree.path + "/agent-resumed.txt"
+            return (try? String(contentsOfFile: marker, encoding: .utf8)) == "oldsession"
+        }
+    }
+
+    @Test
+    func `orphaned conversations surface on the main checkout and repositories always list`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let sessionName = try await world.service.createSession(
+            repository: world.repository,
+            prompt: "doomed worktree",
+            agent: .claudeCode,
+        )
+        let worktree = try #require(
+            await world.service
+                .overview()
+                .groups
+                .first?
+                .items
+                .first { $0.worktree.branch.hasPrefix("agent/") }?
+                .worktree,
+        )
+        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
+
+        let runner = PromptCaptureRunner()
+        let directory = try #require(runner.transcriptDirectory(
+            workingDirectory: worktree.path,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"lost work"}]}}"# + "\n"
+        try transcript.write(toFile: directory + "/lostsession.jsonl", atomically: true, encoding: .utf8)
+
+        // The worktree vanishes outside AgentIDE's lifecycle.
+        try await TestSupport.runGit(["worktree", "remove", "--force", worktree.path], in: world.repository.path)
+
+        let groups = await world.service.overview().groups
+        let main = try #require(groups.first?.items.first)
+        #expect(main.worktree.path == world.repository.path)
+        let orphan = try #require(main.pastSessions.first { $0.id == "lostsession" })
+        #expect(orphan.title == "lost work")
+    }
+
+    @Test
+    func `search finds matches with ripgrep`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let target = world.repository.path + "/needle.swift"
+        try "let haystack = 1\nlet needleValue = 2\n".write(toFile: target, atomically: true, encoding: .utf8)
+
+        let hits = await world.service.search(worktreePath: world.repository.path, query: "needleValue")
+        let hit = try #require(hits.first)
+        #expect(hit.file == "needle.swift")
+        #expect(hit.line == 2)
+        #expect(hit.text.contains("needleValue"))
+        #expect(await world.service.search(worktreePath: world.repository.path, query: "").isEmpty)
+    }
+
+    @Test
+    func `lists files for the fuzzy finder`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        try FileManager.default.createDirectory(
+            atPath: world.repository.path + "/deep",
+            withIntermediateDirectories: true,
+        )
+        try "x\n".write(toFile: world.repository.path + "/deep/nested.swift", atomically: true, encoding: .utf8)
+
+        let files = await world.service.listFiles(worktreePath: world.repository.path)
+        #expect(files.contains("deep/nested.swift"))
+        #expect(files.contains("README.md"))
+    }
+
+    @Test
+    func `host shell command is an attach-or-create host tmux session`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let command = world.service.hostShellCommand(worktreePath: "/tmp/somewhere/deep worktree")
+
+        #expect(command.first?.hasSuffix("tmux") == true)
+        #expect(command.contains("new-session"))
+        #expect(command.contains("-A"))
+        let name = try #require(command.drop { $0 != "-s" }.dropFirst().first)
+        #expect(name.hasPrefix("agentide-shell-"))
+        #expect(command.suffix(2).first == "-c")
+    }
+}
+
+// MARK: - RepositoryPageIntegrationTests
+
+/// The repository page's conversation browser and unread state, which
+/// span worktrees rather than one session.
+struct RepositoryPageIntegrationTests {
+    @Test
+    func `conversations from unrecorded worktrees in the repository's containers are listed`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
 
         _ = try await world.service.createSession(
             repository: world.repository,
-            prompt: "Recoverable work",
+            prompt: "Anchor work",
             agent: .claudeCode,
         )
         let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first)
-        let worktreePath = item.worktree.path
-        try "loose\n".write(toFile: worktreePath + "/untracked.txt", atomically: true, encoding: .utf8)
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let container = URL(filePath: item.worktree.path).deletingLastPathComponent().path
 
-        let archive = try await world.service.archiveAndDelete(item: item)
-        #expect(FileManager.default.fileExists(atPath: worktreePath) == false)
-        let archiveDirectory = world.paths.archivesDirectory + "/" + archive.id
-        #expect(FileManager.default.fileExists(atPath: archiveDirectory + "/branch.bundle"))
-        #expect(FileManager.default.fileExists(atPath: archiveDirectory + "/metadata.json"))
+        // A conversation from a worktree another tool created and
+        // deleted: nothing recorded anywhere, only its transcript.
+        let ghostPath = container + "/agent-ghost"
+        let runner = PromptCaptureRunner()
+        let directory = try #require(runner.transcriptDirectory(
+            workingDirectory: ghostPath,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"ghost"}]}}"# + "\n"
+        try transcript.write(toFile: directory + "/ghost.jsonl", atomically: true, encoding: .utf8)
 
-        try await world.service.undelete(archive: archive)
-        #expect(FileManager.default.fileExists(atPath: worktreePath + "/README.md"))
-        #expect(FileManager.default.fileExists(atPath: worktreePath + "/untracked.txt"))
-        let after = await world.service.overview()
-        #expect(after.groups.first?.items.first?.worktree.path == worktreePath)
+        let sessions = await world.service.repositorySessions(for: world.repository)
+        let ghost = try #require(sessions.first { $0.session.id == "ghost" })
+        #expect(ghost.worktreePath == ghostPath)
+        #expect(ghost.session.title == "ghost")
     }
 
-    // MARK: Private
+    @Test
+    func `manual unread marks survive acknowledgement and clear on viewing`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
 
-    /// One temporary world: workspace, repository, tmux and service.
-    private struct World {
-        let root: String
-        let paths: WorkspacePaths
-        let repository: Repository
-        let service: SessionService
-        let tmux: TmuxClient
+        let path = world.repository.path
+        let before = await world.service.overview()
+        let main = try #require(before.groups.first?.items.first { $0.worktree.path == path })
+        #expect(main.hasUnread == false)
 
-        static func make() async throws -> Self {
-            let base = try TestSupport.temporaryDirectory("world")
-            let workspace = WorkspacePaths(
-                hostUser: "test",
-                sharedWorkspace: base + "/shared",
-                sandboxHome: base + "/home",
-                archivesDirectory: base + "/archives",
-                metadataFile: base + "/state.json",
-            )
-            let repoPath = workspace.repositoriesDirectory + "/repo"
-            try await TestSupport.makeRepository(at: repoPath)
-            let runner = FoundationProcessRunner()
-            let tmuxClient = try TmuxClient(
-                runner: runner,
-                launcher: SandvaultLauncher(hostUser: "test"),
-                isInsideSandbox: true,
-                socketDirectory: TestSupport.socketDirectory(),
-            )
-            let sessionService = SessionService(
-                paths: workspace,
-                git: GitClient(runner: runner),
-                tmux: tmuxClient,
-                github: GitHubClient(runner: runner),
-                transcripts: TranscriptReader(),
-                spool: EventSpool(directory: workspace.eventsDirectory),
-                store: MetadataStore(file: workspace.metadataFile),
-                runners: [PromptCaptureRunner()],
-            )
-            return Self(
-                root: base,
-                paths: workspace,
-                repository: Repository(name: "repo", path: repoPath),
-                service: sessionService,
-                tmux: tmuxClient,
-            )
-        }
+        world.service.markUnread(worktreePath: path)
+        let marked = await world.service.overview()
+        #expect(marked.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == true)
 
-        func tearDown() {
-            let server = tmux
-            let directory = root
-            Task {
-                await server.killServer()
-                try? FileManager.default.removeItem(atPath: directory)
-            }
-        }
+        // Staying on screen acknowledges activity without clearing
+        // the deliberate mark.
+        world.service.acknowledgeActivity(worktreePath: path)
+        let acknowledged = await world.service.overview()
+        #expect(acknowledged.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == true)
+
+        world.service.markSeen(worktreePath: path)
+        let seen = await world.service.overview()
+        #expect(seen.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == false)
     }
 }

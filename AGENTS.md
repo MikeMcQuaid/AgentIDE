@@ -50,6 +50,30 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - Keep comments minimal; prefer self-documenting code
 - Two-space indentation, four-space for Swift (see `.editorconfig`)
 
+### Platform Notes
+
+Hard-won on macOS 27 beta; check before assuming they expired.
+
+- SwiftUI `List`/`Section` crash AppKit's outline diff when rows are
+  removed conditionally; the sidebar is a plain `ScrollView`.
+- Toolbars need a non-empty `.principal` item and one trailing
+  `ToolbarItemGroup`, or items reflow to the leading edge; segmented
+  pickers in toolbars also move unpredictably, so tabs are buttons.
+- `@State` objects outlive view re-initialisation: rebuild models
+  when their identity input changes (see `ReviewView`).
+- `Text("\(someInt)")` applies digit grouping; use `String(_:)`.
+- Trailing closures after multiline calls fight SwiftFormat; keep
+  them single-line or make the closure a non-final argument.
+- Length-limit splits use cross-file extensions; same-file grouping
+  extensions are banned by SwiftLint.
+- GitHub: never repository-wide `gh pr list` on large repositories
+  (the GraphQL gateway times out); query per branch, cache answers,
+  keep the last good value on failure.
+- `@AppStorage` keys are the cross-module signal bus (utility tab
+  index, finder mode and focus, browser address).
+- Octicon SVG imagesets in `App/Assets.xcassets` render as template
+  images; `ChecksStyle` maps GitHub states to them.
+
 ### Required Before Each Commit
 
 - Run `script/style --fix` and resolve anything it cannot fix
@@ -70,8 +94,8 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
    sandboxed pushes use per-repository deploy keys only.
 4. Derive state from tmux, git and `gh` on demand rather than caching
    it. AgentIDE must be killable at any moment losing nothing, and
-   closed sessions and deleted worktrees must stay restorable and
-   resumable.
+   every conversation must stay browsable and resumable after its
+   session closes or its worktree is deleted.
 5. Keep dependency directions clean: Domain depends on nothing,
    DataAccess and Features depend on Domain and App composes them.
 6. Follow YAGNI and DRY: build only what the current slice needs and

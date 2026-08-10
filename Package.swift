@@ -21,6 +21,15 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
+        .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.9.0"),
+        // The newest grammar releases are generated with tree-sitter
+        // ABI 15, which swift-tree-sitter 0.9.0's runtime rejects, so
+        // both grammars pin the latest ABI 14 releases.
+        .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.23.3"),
+        // The Swift grammar the tree-sitter ecosystem standardises on;
+        // the generated-files tag is the one consumable by SwiftPM.
+        .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", exact: "0.7.3-with-generated-files"),
     ],
     targets: [
         .target(
@@ -34,7 +43,7 @@ let package = Package(
         ),
         .target(
             name: "DashboardFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData"],
+            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
@@ -44,17 +53,24 @@ let package = Package(
         ),
         .target(
             name: "ReviewFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData"],
+            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "PRFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData"],
+            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "TerminalUI",
-            dependencies: [.product(name: "SwiftTerm", package: "SwiftTerm")],
+            dependencies: [
+                "AgentIDEDomain",
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+                .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
+                .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),
+                .product(name: "TreeSitterBash", package: "tree-sitter-bash"),
+                .product(name: "TreeSitterSwift", package: "tree-sitter-swift"),
+            ],
             swiftSettings: mainActorByDefault,
         ),
         .testTarget(
@@ -70,6 +86,11 @@ let package = Package(
         .testTarget(
             name: "DashboardFeatureTests",
             dependencies: ["DashboardFeature"],
+            swiftSettings: mainActorByDefault,
+        ),
+        .testTarget(
+            name: "TerminalUITests",
+            dependencies: ["TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
     ],

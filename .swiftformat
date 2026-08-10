@@ -2,3 +2,6 @@
 --enable all
 --swiftversion 6.4
 --indent 4
+# Group digits from four up so numberFormatting agrees with
+# SwiftLint's number_separator instead of fighting it.
+--decimalgrouping 3,4

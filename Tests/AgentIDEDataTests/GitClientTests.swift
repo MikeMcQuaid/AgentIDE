@@ -18,4 +18,18 @@ struct GitClientTests {
 
         #expect(repositories.map(\.name) == ["real"])
     }
+
+    @Test
+    func `changed lines parse hunk headers including pure deletions`() {
+        let diff = """
+        diff --git a/f b/f
+        @@ -1,2 +1,3 @@
+        @@ -10 +12 @@
+        @@ -20,3 +22,0 @@
+        """
+
+        let lines = GitClient.changedLines(fromUnifiedDiff: diff)
+
+        #expect(lines == Set([1, 2, 3, 12, 22]))
+    }
 }

@@ -1,48 +1,45 @@
 import AgentIDEDomain
 import SwiftUI
+import TerminalUI
 
-/// The prompt-to-worktree entry point: pick a repository and agent,
-/// type the problem statement and any extra agent arguments, go.
+/// The session entry point: pick a repository, then the shared form
+/// starts from a typed prompt, an open issue or an open pull request.
+/// Drafts survive quitting the app.
 public struct NewSessionSheet: View {
     // MARK: Lifecycle
 
     /// Creates the sheet.
     public init(model: DashboardModel) {
         self.model = model
+        _repository = State(initialValue: model.newSessionRepository)
     }
 
     // MARK: Public
 
-    /// The form.
+    /// The repository picker over the shared form.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("New agent session").font(.title2)
-            Picker("Repository", selection: $repository) {
-                Text("Choose").tag(Repository?.none)
-                ForEach(model.repositories) { repository in
-                    Text(repository.name).tag(Repository?.some(repository))
-                }
-            }
-            Picker("Agent", selection: $agent) {
-                ForEach(AgentKind.allCases, id: \.self) { kind in
-                    Text(kind.rawValue).tag(kind)
-                }
-            }
-            .pickerStyle(.segmented)
-            TextField("Extra agent arguments (optional)", text: $arguments)
-                .textFieldStyle(.roundedBorder)
-                .font(.body.monospaced())
-            TextEditor(text: $prompt)
-                .font(.body)
-                .frame(minHeight: Self.promptHeight)
-                .border(.separator)
             HStack {
+                Text("New agent session").font(.title2)
                 Spacer()
                 Button("Cancel") { model.showsNewSession = false }
-                Button("Start agent") { start() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(repository == nil || prompt.isEmpty)
+                    .keyboardShortcut(.cancelAction)
+                    .hoverHelp("Close without starting anything")
             }
+            Picker("Repository", selection: $repository) {
+                Text("Choose repository").tag(Repository?.none)
+                ForEach(model.repositories) { repository in
+                    Text(repository.fullName ?? repository.name).tag(Repository?.some(repository))
+                }
+            }
+            .labelsHidden()
+            .hoverHelp("The repository the worktree is created in; issues and pull requests load from it")
+            AgentSessionForm(
+                model: model,
+                repository: repository,
+                submitTitle: "Start agent",
+                submitHelp: "Create a worktree and branch and launch the agent in it",
+            ) { submission in await start(submission) }
         }
         .padding()
         .frame(minWidth: Self.minimumWidth)
@@ -50,29 +47,51 @@ public struct NewSessionSheet: View {
 
     // MARK: Private
 
-    private static let spacing: CGFloat = 12
-    private static let promptHeight: CGFloat = 140
-    private static let minimumWidth: CGFloat = 480
+    private static let spacing: CGFloat = 10
+    private static let minimumWidth: CGFloat = 520
 
     @State private var repository: Repository?
-    @State private var agent: AgentKind = .claudeCode
-    @State private var prompt = ""
-    @AppStorage("newSessionArguments")
-    private var arguments = ""
 
     private let model: DashboardModel
 
-    private func start() {
+    private func start(_ submission: AgentSessionForm.Submission) async {
         guard let repository else {
             return
         }
 
-        Task {
+        switch submission.source {
+        case .prompt:
             await model.createSession(
                 repository: repository,
-                prompt: prompt,
-                agent: agent,
-                extraArguments: arguments,
+                prompt: submission.prompt,
+                agent: submission.agent,
+                options: submission.options,
+            )
+
+        case .issue:
+            guard let number = submission.number else {
+                return
+            }
+
+            await model.createSession(
+                fromIssue: number,
+                repository: repository,
+                context: submission.context,
+                agent: submission.agent,
+                options: submission.options,
+            )
+
+        case .pullRequest:
+            guard let number = submission.number else {
+                return
+            }
+
+            await model.createSession(
+                fromPullRequest: number,
+                repository: repository,
+                context: submission.context,
+                agent: submission.agent,
+                options: submission.options,
             )
         }
     }

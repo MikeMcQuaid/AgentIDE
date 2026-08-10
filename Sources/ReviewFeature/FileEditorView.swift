@@ -1,19 +1,35 @@
+import AgentIDEData
+import AgentIDEDomain
 import SwiftUI
+import TerminalUI
 
-/// A plain text editor for one file in the worktree, for review-time
-/// fixes.
+/// A syntax-highlighted editor for one file in the worktree, with
+/// line numbers, visible invisibles and uncommitted-line markers,
+/// for review-time fixes.
 struct FileEditorView: View {
     // MARK: Lifecycle
 
-    /// Creates an editor for a file relative to the worktree.
-    init(worktreePath: String, relativePath: String) {
+    /// Creates an editor for a file relative to the worktree,
+    /// optionally jumping to a line. `onClose` closes an embedding
+    /// owner; without one the presenting sheet dismisses.
+    init(
+        worktreePath: String,
+        relativePath: String,
+        service: SessionService,
+        jumpToLine: Int? = nil,
+        onClose: (() -> Void)? = nil,
+    ) {
         self.worktreePath = worktreePath
         self.relativePath = relativePath
+        self.service = service
+        self.jumpToLine = jumpToLine
+        self.onClose = onClose
     }
 
     // MARK: Internal
 
-    /// The editor with save and close actions.
+    /// The editor with save and close actions. Save enables only
+    /// with unsaved changes and reads Saved after writing.
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -22,25 +38,33 @@ struct FileEditorView: View {
                 if let status {
                     Text(status).font(.callout).foregroundStyle(.secondary)
                 }
-                Button("Save") { save() }
-                Button("Close") { dismiss() }
+                Button(hasChanges || hasSaved == false ? "Save" : "Saved") { save() }
+                    .disabled(hasChanges == false)
+                    .keyboardShortcut("s", modifiers: .command)
+                    .hoverHelp("Write the buffer back to the file (Cmd-S); dims until there are changes")
+                Button("Close") { close() }
+                    .hoverHelp("Close the editor without saving")
             }
             .padding(Self.padding)
             Divider()
-            TextEditor(text: $content)
-                .font(.body.monospaced())
+            HighlightingTextEditor(
+                text: $content,
+                language: SyntaxLanguage.language(forPath: relativePath),
+                jumpToLine: jumpToLine,
+                changedLines: changedLines,
+            )
         }
-        .frame(minWidth: Self.minimumWidth, minHeight: Self.minimumHeight)
         .onAppear { load() }
     }
 
     // MARK: Private
 
     private static let padding: CGFloat = 8
-    private static let minimumWidth: CGFloat = 640
-    private static let minimumHeight: CGFloat = 480
 
     @State private var content = ""
+    @State private var saved = ""
+    @State private var hasSaved = false
+    @State private var changedLines: Set<Int> = []
     @State private var status: String?
 
     @Environment(\.dismiss)
@@ -48,6 +72,13 @@ struct FileEditorView: View {
 
     private let worktreePath: String
     private let relativePath: String
+    private let service: SessionService
+    private let jumpToLine: Int?
+    private let onClose: (() -> Void)?
+
+    private var hasChanges: Bool {
+        content != saved
+    }
 
     /// The resolved path, but only when it stays inside the worktree:
     /// a hostile repository could put `../` in a diff path.
@@ -64,6 +95,8 @@ struct FileEditorView: View {
         }
 
         content = (try? String(contentsOfFile: safePath, encoding: .utf8)) ?? ""
+        saved = content
+        reloadChangedLines()
     }
 
     private func save() {
@@ -73,10 +106,30 @@ struct FileEditorView: View {
         }
 
         do {
+            content = Whitespace.strippingTrailingWhitespace(content)
             try content.write(toFile: safePath, atomically: true, encoding: .utf8)
-            status = "Saved."
+            saved = content
+            hasSaved = true
+            status = nil
+            reloadChangedLines()
         } catch {
             status = error.localizedDescription
+        }
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
+
+    /// Marks lines uncommitted against HEAD in the gutter; buffer
+    /// edits count only once saved to disk.
+    private func reloadChangedLines() {
+        Task {
+            changedLines = await service.changedLineNumbers(worktreePath: worktreePath, file: relativePath)
         }
     }
 }

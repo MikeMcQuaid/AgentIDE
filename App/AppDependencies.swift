@@ -31,7 +31,7 @@ final class AppDependencies {
         git = gitClient
         github = githubClient
         service = sessionService
-        dashboard = DashboardModel(service: sessionService, store: store)
+        dashboard = DashboardModel(service: sessionService, store: store, github: githubClient)
         try? HookInstaller(paths: paths).ensureInstalled()
     }
 

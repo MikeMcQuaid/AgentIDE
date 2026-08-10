@@ -23,12 +23,18 @@ targets:
       - package: AgentIDEPackage
         product: PRFeature
       - package: AgentIDEPackage
+        product: TerminalUI
+      - package: AgentIDEPackage
         product: AgentIDEData
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
         PRODUCT_NAME: AgentIDE
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         MACOSX_DEPLOYMENT_TARGET: "27.0"
         SWIFT_VERSION: "6.0"

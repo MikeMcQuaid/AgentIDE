@@ -149,8 +149,14 @@ PTY:
   `exec tmux attach-session -t <name>`. The attaching client runs inside the
   sandbox too; tmux sockets are owner-only, so no attach path can skip sudo.
   Closing the view detaches and never kills the session.
-- **Host terminal** (Review): plain `/bin/zsh -il` as the host user in the
-  worktree, no sudo, no sandbox, full `gh` credentials.
+- **Host terminal** (Review): a host tmux session per worktree
+  (`new-session -A`, so attach-or-create) as the host user, no sudo, no
+  sandbox, full `gh` credentials. tmux starts the user's default login
+  shell, and because the server outlives its clients the shell survives
+  pane switches and app restarts exactly like agent sessions do. Both
+  terminals share one theme (black on white in light mode, white on
+  black in dark); what separates them visually is position, the agent
+  pane on the left and the shell in the utility pane.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
@@ -220,11 +226,15 @@ flowchart TD
 - **Feature targets** (`DashboardFeature`, `SessionFeature`, `ReviewFeature`
   and `PRFeature`): SwiftUI views and `@Observable` view models, MainActor by
   default, given ports via injection. `SessionFeature` owns the WKWebView
-  preview; `ReviewFeature` owns the diff and editor surfaces (plain SwiftUI
-  text today, STTextView and tree-sitter as the review slice deepens).
-- **TerminalUI**: a dumb SwiftTerm wrapper (command specification in, PTY
-  view out), used by `SessionFeature` for both terminal flavours. A
-  component, not a feature.
+  preview; `ReviewFeature` owns the diff and editor surfaces (SwiftUI text
+  and an attributed NSTextView today, STTextView as the review slice
+  deepens).
+- **TerminalUI**: shared UI components, not a feature: the SwiftTerm
+  wrapper (command specification in, PTY view out), the AppKit-backed
+  tooltips and the syntax highlighting engine. Highlighting parses with
+  tree-sitter grammars and falls back to a pure-Swift line tokenizer in
+  the Domain for text without a loaded grammar, such as fragmentary diff
+  lines the parser cannot classify.
 - **AgentIDEApp**: builds adapters, injects ports, owns navigation and the
   activation-policy switch. No logic.
 
@@ -245,7 +255,10 @@ worktree, prompt file and optional resume token; locating and decoding the
 agent's transcript into `SessionEvent` values; detecting completion and
 stalls (capability flags `supportsHooks` and `supportsResume` select
 hook-based or polling strategies); building the resume command; and
-extracting the final message for review. `ClaudeCodeRunner` uses hooks and
+extracting the final message for review. Each runner also declares its
+model listing command: at startup the app asks the installed CLI what
+models it offers and falls back to a curated list when the command
+fails, so the pickers track the binaries rather than hardcoded names. `ClaudeCodeRunner` uses hooks and
 cwd-keyed JSONL transcripts; `CodexRunner` proves the seam with
 directory-based transcripts and silence-based detection. Discovering foreign
 sessions is reconciliation logic in `AgentIDEData`, deliberately outside the
@@ -281,8 +294,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
 
 ### Create a worktree and launch an agent (Start work)
 
-1. Input: a typed prompt, or an issue or pull request reference, plus a
-   target repository.
+1. Input: a typed prompt, or an issue or pull request number with optional
+   extra context, plus a target repository, agent, model and effort. An
+   issue's title and body become the prompt. A pull request instead gets a
+   detached worktree that `gh pr checkout` (host-side) turns into the pull
+   request's own branch, so pushes and pulls track it directly.
 2. The branch name comes from a per-repository template, default
    `agent/<slug>`.
 3. Host-side `GitClient` fetches, then runs `git worktree add` under
@@ -333,8 +349,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    last line.
 3. Host-side, `EventSpool` watches the events directory with FSEvents and
    tails each file from its stored offset, emitting `SessionEvent` values
-   that drive unread counts and notifications (on Stop and
-   PermissionRequest).
+   that drive unread state and notifications (on Stop and
+   PermissionRequest). A worktree is unread when its spool events, its
+   tmux session's activity clock or its transcripts are newer than its
+   per-worktree seen time; viewing it records that time, and a context
+   menu marks it unread again until next viewed.
 4. Agents without hooks, and foreign sessions, fall back to tmux dead-pane
    detection for completion and a transcript-mtime timeout on a 30 second
    tick for stalls. `tmux monitor-silence` is a documented later refinement.
@@ -345,12 +364,18 @@ Sendable` and `nonisolated(unsafe)` are banned.
 
 1. `GitClient` produces diffs (`git diff`, `git diff --cached` and ranges)
    with rename detection; the pure `DiffParser` turns them into file, hunk
-   and line values.
+   and line values. The scope toggles between the last commit (or
+   uncommitted changes when there are any) and the whole branch against
+   its merge base: the open pull request's base branch when one exists,
+   otherwise the default branch. Per-line rejection and message
+   amendment apply only to the last commit scope.
 2. Generated files are hidden by default via
    `git check-attr linguist-generated` plus heuristics (lockfiles and
    per-repository generated globs), one click to reveal.
-3. Rendering uses STTextView with tree-sitter highlighting. Initial grammars:
-   Swift, Ruby, JavaScript, TypeScript, Markdown, JSON, YAML and Bash.
+3. Rendering highlights with tree-sitter grammars (Swift, Ruby and Bash
+   today; JavaScript, TypeScript, Markdown, JSON and YAML as the review
+   slice deepens, alongside the move to STTextView), with line numbers
+   and visible whitespace in both the diff and the editor.
 4. Rejecting selected lines builds a minimal reverse patch with
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and
@@ -366,12 +391,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
 
 1. The token comes from a one-shot `gh auth token`, held in memory only and
    refreshed on 401 (P6).
-2. One aliased GraphQL query batches every tracked repository: open pull
-   requests with mergeable state, merge-state status, review decision, check
-   rollup, unresolved review threads, draft state and automerge state.
-3. Poll cadence: 60 seconds for the focused repository, 5 minutes in the
-   background, jittered; the API point budget bounds how many repositories
-   can be tracked.
+2. Each worktree branch is polled with its own narrow query for its open
+   pull request's mergeable state, review decision and check rollup;
+   repository-wide queries timed out GitHub's gateway on very large
+   repositories.
+3. Poll cadence is tiered by attention and cached per branch: the selected
+   worktree refreshes most often, then its repository's other worktrees,
+   then other expanded repositories; repositories collapsed in the sidebar
+   poll rarely. Selecting a worktree jumps its branch to the front, and a
+   failed poll keeps the cached answer.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create` (templates and stacking), `gh pr merge --auto`
    and other one-shots shell out as the host user.
@@ -379,23 +407,20 @@ Sendable` and `nonisolated(unsafe)` are banned.
    and review comments natively, write them into a prompt file and launch a
    fix agent in the same worktree.
 
-### Cleanup and undelete (Tidy up)
+### Cleanup (Tidy up)
 
-1. A merged pull request offers cleanup (or per-repository auto-clean).
-2. An archive is written to
-   `~/Library/Application Support/AgentIDE/Archives/<id>/`, deliberately
-   outside the guest-writable workspace so recovery state cannot be tampered
-   with: a git bundle of the branch, a tar of untracked and modified files,
-   copies of transcript, prompt and event spool, and a self-describing
-   `metadata.json` recording the canonical worktree path, branch, repository
-   uuid and agent-native resume ids.
-3. Then: kill the tmux session, `git worktree remove`, `git branch -d` and
-   remove the friendly symlink. Canonical transcripts in the sandbox home are
-   never deleted.
-4. Undelete restores from the bundle at the same canonical path (so cwd-keyed
-   conversation state lines up), untars, recreates the symlink and restores
-   metadata; the session can then resume.
-5. Archives are kept until manually purged; total size is shown in settings.
+1. A merged pull request offers cleanup; the sidebar offers the same
+   deletion from a worktree's context menu at any time.
+2. Deletion records the session's agent-native resume id, kills the tmux
+   session, then runs `git worktree remove`, `git worktree prune` and
+   `git branch -D` and removes the friendly symlink. Nothing is archived:
+   the branch and any uncommitted files are gone.
+3. Canonical transcripts in the sandbox home are never deleted and the
+   metadata store keeps the session names it recorded per worktree path,
+   so every conversation stays attributed to its repository.
+4. The repository page, the main checkout's permanent sidebar entry, lists
+   every conversation attributable to the repository, from live and
+   deleted worktrees alike, and resumes any of them into a fresh worktree.
 
 ### Close and reopen a session
 
@@ -403,8 +428,31 @@ Closing a session kills only the tmux session. The worktree, transcripts and
 metadata (including the resume id) remain. Reopening builds the agent's
 resume command (`claude --resume <id>`, or the Codex equivalent) through the
 normal launch shape in the same canonical cwd, restoring the full prior
-conversation. Deleting and undeleting a worktree composes with this, so even
-a fully cleaned-up session is restorable and resumable.
+conversation. Deleting a worktree composes with this: its conversations stay
+listed on the repository page and resume into fresh worktrees.
+
+Beyond the one live session, every earlier conversation in a worktree is
+discovered by listing its transcript directory, whoever created it, and
+shown as an inactive session tab with a readable log: Markdown rendered,
+code fences highlighted and tool steps showing the actual command run.
+An inactive session resumes either in place or into a fresh worktree and
+branch; in the latter case the transcript is first copied into the new
+working directory's transcript directory, because agents look
+conversations up by cwd. Only agents whose transcripts are scoped per
+working directory participate; Codex's flat session directory cannot be
+attributed to one worktree, so its history surfaces through its own
+resume flow instead.
+
+Every repository also lists its main checkout as a permanent entry, so a
+repository with no worktrees still shows. Selecting it opens the
+repository page: every conversation attributable to the repository,
+across live and deleted worktrees, newest first, with the selected log
+below and a resume button that continues it in a fresh worktree. The
+session names recorded at launch attribute each orphaned transcript
+directory to its repository, and every transcript directory whose
+encoded name extends one of the repository's `worktrees/<uuid>`
+containers is scanned too, so conversations from worktrees created and
+deleted by other tooling still appear.
 
 ## State and persistence
 
@@ -415,14 +463,15 @@ a fully cleaned-up session is restorable and resumable.
 | Conversation history, final message | agent transcripts | read-only tail |
 | Pull request, CI and review state | GitHub | poll, cache in memory |
 | Agent process existence | `ps` | scan |
-| Unread markers, spool offsets, prompt history, per-repository settings, repository-to-uuid map, archive index, window state | metadata store (GRDB) | sole owner |
+| Earlier conversations per worktree | agent transcript directories | list and parse read-only |
+| Unread markers, spool offsets, prompt history, per-repository settings, repository-to-uuid map, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
 
 The metadata store lives at
 `~/Library/Application Support/AgentIDE/agentide.sqlite` (WAL mode, migrated
 with `DatabaseMigrator`), deliberately outside the shared workspace so agents
 can neither read nor corrupt it. Deleting it loses only unread state, prompt
-history and settings; everything else re-derives from the system or from
-archive metadata (P1).
+history, settings and the attribution of conversations to worktrees that no
+longer exist; everything else re-derives from the system (P1).
 
 ## Security model
 
@@ -448,8 +497,10 @@ Trust boundaries, numbered:
    group-read ACLs to agent transcript directories; AgentIDE relies on read
    access and never widens it.
 
-WKWebView previews use a non-persistent data store and are restricted to file
-and localhost origins; agent-authored HTML is untrusted content.
+The embedded WKWebView browser uses the shared persistent data store,
+so a GitHub login survives tab switches and restarts. Agent-authored
+pages are untrusted content: the web view holds no app state and no
+GitHub API token, only whatever the user logs into it.
 
 Never-do list:
 
@@ -472,7 +523,9 @@ official language or project organisation.
 | SwiftTerm | terminal emulator views | |
 | GRDB | metadata store | planned; a JSON file serves today |
 | STTextView | diff and editor text surface | TextKit 2; planned |
-| swift-tree-sitter and language grammars | syntax highlighting | official-organisation exception; each grammar is its own package under the same exception; planned |
+| swift-tree-sitter | syntax highlighting runtime | official-organisation exception |
+| tree-sitter-ruby, tree-sitter-bash | grammars | official organisation; pinned to the latest ABI 14 releases the runtime accepts |
+| tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 | Sparkle | app updates | later slice |
 
@@ -510,7 +563,7 @@ real `git` repositories, a real `tmux` server on a private socket and
 temporary workspaces, because the bugs that reach manual testing live in the
 seams: worktree listing under path canonicalisation, reverse-patch
 application, tmux pane parsing and directory pinning, prompt delivery, and
-the archive and undelete round trip. View rendering is checked with headless
+deletion keeping every conversation attributed to its repository. View rendering is checked with headless
 `ImageRenderer` snapshots. periphery drives its own build so it runs on the
 host and in CI only, not inside the sandbox.
 
@@ -535,6 +588,6 @@ clean (R2).
 | R8 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree pointing at the old transcript |
 
 Open questions: the iOS SSH account model (host user with a wrapper versus
-SSH directly to the sandbox user), the default branch template, archive
-retention policy, notification preference granularity and how deep stacked
-pull request support goes in v1.
+SSH directly to the sandbox user), the default branch template,
+notification preference granularity and how deep stacked pull request
+support goes in v1.

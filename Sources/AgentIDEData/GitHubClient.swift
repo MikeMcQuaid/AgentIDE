@@ -13,26 +13,42 @@ public struct GitHubClient: Sendable {
 
     // MARK: Public
 
-    /// The repository's open pull requests with dashboard state.
-    public func pullRequests(repositoryPath: String) async throws -> [PullRequestSummary] {
-        let fields = "number,title,url,headRefName,mergeable,reviewDecision,statusCheckRollup"
-        let result = try await gh(["pr", "list", "--json", fields], in: repositoryPath)
-        guard let data = result.standardOutput.data(using: .utf8) else {
-            return []
-        }
+    /// Which pull requests a listing covers.
+    public enum ListScope: Hashable, Sendable {
+        /// Open and closed pull requests from one branch.
+        case branch(String)
+        /// Open pull requests the authenticated user created.
+        case mine
+        /// Every open pull request.
+        case open
+    }
 
-        let rows = (try? JSONDecoder().decode([PullRequestRow].self, from: data)) ?? []
-        return rows.map { row in
-            PullRequestSummary(
-                number: row.number,
-                title: row.title,
-                url: row.url,
-                headBranch: row.headRefName,
-                mergeable: row.mergeable ?? "",
-                reviewDecision: row.reviewDecision ?? "",
-                checks: Self.aggregateChecks(row.statusCheckRollup ?? []),
-            )
-        }
+    /// The repository's pull requests for a scope, with dashboard
+    /// state.
+    public func pullRequests(
+        repositoryPath: String,
+        scope: ListScope = .open,
+    ) async throws -> [PullRequestSummary] {
+        let result = try await gh(Self.listArguments(scope: scope), in: repositoryPath)
+        return Self.summaries(fromJSON: result.standardOutput)
+    }
+
+    /// Every repository the authenticated user can access across
+    /// their organisations, as `owner/name`, most recently pushed
+    /// first.
+    public func accessibleRepositories(directory: String) async throws -> [String] {
+        let result = try await gh(
+            ["api", "user/repos?per_page=100&sort=pushed", "--paginate", "--jq", ".[].full_name"],
+            in: directory,
+        )
+        return result.standardOutput.split(separator: "\n").map(String.init)
+    }
+
+    /// Clones a repository into a directory, named after the
+    /// repository, using the host's credentials.
+    public func clone(fullName: String, into directory: String) async throws {
+        let name = fullName.split(separator: "/").last.map(String.init) ?? fullName
+        try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
     /// Opens a pull request from the worktree's branch, filling the
@@ -57,25 +73,120 @@ public struct GitHubClient: Sendable {
     /// text an agent can act on.
     public func remediationContext(repositoryPath: String, number: Int) async -> String {
         let view = try? await gh(["pr", "view", String(number), "--comments"], in: repositoryPath)
+        // `--comments` omits inline file comments, where review bots
+        // leave their findings, so they join separately.
+        let inline = await inlineComments(repositoryPath: repositoryPath, number: number)
+            .compactMap { row -> String? in
+                let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard body.isEmpty == false else {
+                    return nil
+                }
+
+                return (row.author ?? "unknown") + ": " + body
+            }
+            .joined(separator: "\n\n")
         let checks = try? await gh(
             ["pr", "checks", String(number)],
             in: repositoryPath,
             allowFailure: true,
         )
-        return [view?.standardOutput, checks?.standardOutput]
-            .compactMap(\.self)
-            .joined(separator: "\n\n")
+        return [
+            view?.standardOutput,
+            inline.isEmpty ? nil : "Inline review comments:\n\n" + inline,
+            checks?.standardOutput,
+        ]
+        .compactMap(\.self)
+        .joined(separator: "\n\n")
+    }
+
+    // MARK: Internal
+
+    /// The `gh pr list` invocation for a scope; separated for tests.
+    /// The default `gh pr list` limit of 30 hid pull requests on
+    /// busy repositories, so worktree branches failed to match.
+    static let listLimit = 200
+
+    static func listArguments(scope: ListScope) -> [String] {
+        let fields = "number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,"
+            + "statusCheckRollup,isDraft,autoMergeRequest,headRefOid"
+        var arguments = ["pr", "list", "--json", fields, "--limit", String(Self.listLimit)]
+        switch scope {
+        case let .branch(branch):
+            arguments += ["--head", branch, "--state", "all"]
+
+        case .mine:
+            arguments += ["--author", "@me"]
+
+        case .open:
+            break
+        }
+        return arguments
+    }
+
+    /// Parses `gh pr list` JSON into summaries; separated for tests.
+    static func summaries(fromJSON json: String) -> [PullRequestSummary] {
+        guard let data = json.data(using: .utf8) else {
+            return []
+        }
+
+        let rows = (try? JSONDecoder().decode([PullRequestRow].self, from: data)) ?? []
+        return rows.map { row in
+            let rollup = row.statusCheckRollup ?? []
+            return PullRequestSummary(
+                number: row.number,
+                title: row.title,
+                url: row.url,
+                headBranch: row.headRefName,
+                mergeable: row.mergeable ?? "",
+                reviewDecision: row.reviewDecision ?? "",
+                checks: Self.aggregateChecks(rollup),
+                failingCheckLinks: rollup
+                    .filter { ($0.conclusion ?? $0.state ?? "").uppercased() == "FAILURE" }
+                    .compactMap(\.detailsUrl), // swiftformat:disable:this acronyms
+                baseBranch: row.baseRefName ?? "",
+                state: row.state ?? "OPEN",
+                isDraft: row.isDraft ?? false,
+                hasAutomerge: row.autoMergeRequest != nil,
+                headOID: row.headRefOid ?? "",
+            )
+        }
+    }
+
+    @discardableResult
+    func gh(
+        _ arguments: [String],
+        in directory: String?,
+        allowFailure: Bool = false,
+    ) async throws -> ProcessResult {
+        let result = try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        guard result.succeeded || allowFailure else {
+            throw CommandError(command: "gh " + arguments.joined(separator: " "), result: result)
+        }
+
+        return result
     }
 
     // MARK: Private
+
+    /// Present when automerge is enabled; the contents are unused.
+    private struct AutoMergeRow: Decodable {
+        // Presence is the signal.
+    }
 
     private struct PullRequestRow: Decodable {
         let number: Int
         let title: String
         let url: String
         let headRefName: String
+        let baseRefName: String?
+        let state: String?
         let mergeable: String?
         let reviewDecision: String?
+        // Optional because older gh versions omit the field.
+        // swiftlint:disable:next discouraged_optional_boolean
+        let isDraft: Bool?
+        let autoMergeRequest: AutoMergeRow?
+        let headRefOid: String?
         // Absent from the JSON when a pull request has no checks.
         // swiftlint:disable:next discouraged_optional_collection
         let statusCheckRollup: [CheckRow]?
@@ -84,6 +195,9 @@ public struct GitHubClient: Sendable {
     private struct CheckRow: Decodable {
         let state: String?
         let conclusion: String?
+        // The property must match gh's JSON key exactly.
+        // swiftformat:disable:next acronyms
+        let detailsUrl: String?
     }
 
     private let runner: any ProcessRunner
@@ -101,19 +215,5 @@ public struct GitHubClient: Sendable {
             return "SUCCESS"
         }
         return "PENDING"
-    }
-
-    @discardableResult
-    private func gh(
-        _ arguments: [String],
-        in directory: String?,
-        allowFailure: Bool = false,
-    ) async throws -> ProcessResult {
-        let result = try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
-        guard result.succeeded || allowFailure else {
-            throw CommandError(command: "gh " + arguments.joined(separator: " "), result: result)
-        }
-
-        return result
     }
 }
