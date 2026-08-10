@@ -1,25 +1,26 @@
 import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
+import TerminalUI
 
 /// The session's last assistant message, with the session actions.
-struct FinalMessageView: View {
+public struct FinalMessageView: View {
     // MARK: Lifecycle
 
     /// Creates the message view.
-    init(item: WorktreeItem, service: SessionService) {
+    public init(item: WorktreeItem, service: SessionService) {
         self.item = item
         self.service = service
     }
 
-    // MARK: Internal
+    // MARK: Public
 
     /// The message text with commit, close, resume and ship actions.
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             actions
             ScrollView {
-                Text(message.isEmpty ? "No agent output yet." : message)
+                Text(message.isEmpty ? "The agent's last reply appears here once it says something." : message)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .padding(Self.spacing)
@@ -48,6 +49,7 @@ struct FinalMessageView: View {
                 run { try await service.commitOutstanding(worktreePath: item.worktree.path) }
             }
             .disabled(item.isDirty == false)
+            .hoverHelp("Commit changes the agent left uncommitted")
             Button("Close session") {
                 run {
                     guard let session = item.session else {
@@ -58,12 +60,15 @@ struct FinalMessageView: View {
                 }
             }
             .disabled(item.session == nil)
+            .hoverHelp("Kill the tmux session; the worktree and conversation survive for resuming")
             Button("Resume session") {
                 run { try await service.resumeWorktree(item.worktree) }
             }
+            .hoverHelp("Relaunch this worktree's last conversation where it left off")
             Button("Push and open PR") {
                 run { status = try await service.pushAndCreatePullRequest(worktree: item.worktree) }
             }
+            .hoverHelp("Push the branch and open a pull request filled from its commits")
             Spacer()
         }
         .padding(.horizontal, Self.spacing)
@@ -72,7 +77,7 @@ struct FinalMessageView: View {
     private func reload() {
         if let session = item.session {
             message = service.finalMessage(session: session, worktreePath: item.worktree.path) ?? ""
-            service.markSeen(sessionName: session.name)
+            service.markSeen(worktreePath: item.worktree.path)
         } else {
             message = ""
         }

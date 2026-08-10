@@ -1,30 +1,50 @@
 import SwiftUI
+import TerminalUI
 import WebKit
 
 // MARK: - BrowserView
 
-/// An embedded browser for previewing served pages and rendered
-/// Markdown; agent-authored content is treated as untrusted, so the
-/// data store is not persisted.
-struct BrowserView: View {
+/// An embedded browser for dev servers and pull request pages. The
+/// data store persists and is shared, so a GitHub login survives
+/// tab switches and restarts.
+public struct BrowserView: View {
     // MARK: Lifecycle
 
     /// Creates the browser.
-    init() {
+    public init() {
         // State holds the address.
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    /// An address bar over a web view.
-    var body: some View {
+    /// An address bar over a web view. Programmatic address changes
+    /// load immediately; typing loads only on return, since every
+    /// keystroke of a partial address would otherwise navigate.
+    public var body: some View {
         VStack(spacing: 0) {
             TextField("http://localhost:3000", text: $address)
                 .textFieldStyle(.roundedBorder)
+                .focused($editingAddress)
                 .onSubmit { load() }
                 .padding(Self.padding)
+                .hoverHelp("Enter an address and press return; useful for dev servers the agent starts")
             Divider()
-            WebPane(request: $request)
+            ZStack {
+                WebPane(request: $request)
+                if request == nil {
+                    ContentUnavailableView(
+                        "Nothing loaded",
+                        systemImage: "safari",
+                        description: Text("Preview what the agent built: enter a local dev server address above."),
+                    )
+                }
+            }
+        }
+        .onAppear { load() }
+        .onChange(of: address) {
+            if editingAddress == false {
+                load()
+            }
         }
     }
 
@@ -32,8 +52,11 @@ struct BrowserView: View {
 
     private static let padding: CGFloat = 8
 
-    @State private var address = ""
+    @AppStorage("browserAddress")
+    private var address = ""
     @State private var request: URLRequest?
+
+    @FocusState private var editingAddress: Bool
 
     private func load() {
         guard let url = URL(string: address) else {
@@ -51,7 +74,9 @@ private struct WebPane: NSViewRepresentable {
 
     func makeNSView(context _: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
+        // The shared persistent store keeps logins across tabs and
+        // restarts.
+        configuration.websiteDataStore = .default()
         return WKWebView(frame: .zero, configuration: configuration)
     }
 

@@ -43,9 +43,10 @@ before shipping.
 
 - Shows every agent's state on one dashboard, including sessions started
   outside AgentIDE (so one window tells you who needs attention)
-- Groups worktrees by repository, showing unread agent output, open pull
-  requests, mergeability and uncommitted or unpushed work (so you always know
-  where you are needed)
+- Groups worktrees by repository, showing unread terminal and agent activity
+  since each was last viewed, open pull requests, mergeability and
+  uncommitted or unpushed work, and a worktree can be marked unread to
+  revisit (so you always know where you are needed)
 - Notifies you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
 - Commits work the agent forgot to commit, clearly authored as such (so
@@ -76,9 +77,12 @@ before shipping.
 
 ### Tidy up
 
-- Deletes the worktree and its state when the pull request merges, with
-  undelete restoring the branch, files and resumable agent conversation (so
-  finished work disappears but nothing is ever truly lost)
+- Deletes a worktree and its branch once the pull request merges (so
+  finished work disappears without ceremony)
+- Keeps every conversation a repository has ever run browsable and
+  resumable from the repository's own page, whichever worktree it used and
+  even after that worktree is deleted (so tidying up never loses a
+  conversation)
 
 ### Resilience
 
@@ -147,9 +151,11 @@ done:
 6. Embedded terminal and browser (basic, this pull request)
 7. GitHub pull request creation, dashboards and one-click fixes
    (basic, this pull request)
-8. Lifecycle: cleanup on merge, undelete and foreign session discovery
-   (basic, this pull request)
-9. Automatic updates and polish
+8. Lifecycle: cleanup on merge, past conversation browsing and foreign
+   session discovery (basic, this pull request)
+9. Automatic updates and polish, including checking the Brewfile's
+   tools are installed at startup and offering to install any that
+   are missing from a copy vendored in the app bundle
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.

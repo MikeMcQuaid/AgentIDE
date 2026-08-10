@@ -3,10 +3,59 @@ import Foundation
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
-    /// Marks a session's output as read.
-    func markSeen(sessionName: String) {
+    /// The displayable conversation log of a past session.
+    func transcriptEntries(for past: TranscriptSession) -> [TranscriptEntry] {
+        transcripts.entries(in: URL(fileURLWithPath: past.path))
+    }
+
+    /// Pushes the branch and opens a pull request; returns its URL.
+    func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
+        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+        return try await github.createPullRequest(worktreePath: worktree.path)
+    }
+
+    /// The argv that attaches a terminal to a session.
+    func attachCommand(sessionName: String) -> [String] {
+        tmux.attachCommand(sessionName: sessionName)
+    }
+
+    /// The argv for a persistent host-user shell in a worktree: a
+    /// host tmux session (attach-or-create) that survives tab
+    /// switches and app restarts and starts the user's default login
+    /// shell.
+    func hostShellCommand(worktreePath: String) -> [String] {
+        let suffix = worktreePath
+            .split(separator: "/")
+            .suffix(Self.shellNameComponents)
+            .joined(separator: "-")
+        let name = "agentide-shell-" + SessionName.slug(suffix)
+        return [Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktreePath]
+    }
+
+    /// Marks a worktree viewed: clears its unread state, including a
+    /// manual mark.
+    func markSeen(worktreePath: String) {
         var metadata = store.load()
-        metadata.lastSeen[sessionName] = Date()
+        metadata.seenAt[worktreePath] = Date()
+        metadata.unreadMarks.removeAll { $0 == worktreePath }
+        store.save(metadata)
+    }
+
+    /// Records that the worktree's current activity has been seen
+    /// without clearing a manual unread mark, for the selected item
+    /// staying on screen.
+    func acknowledgeActivity(worktreePath: String) {
+        var metadata = store.load()
+        metadata.seenAt[worktreePath] = Date()
+        store.save(metadata)
+    }
+
+    /// Flags a worktree unread until it is next viewed.
+    func markUnread(worktreePath: String) {
+        var metadata = store.load()
+        if metadata.unreadMarks.contains(worktreePath) == false {
+            metadata.unreadMarks.append(worktreePath)
+        }
         store.save(metadata)
     }
 
@@ -54,6 +103,46 @@ public extension SessionService {
         try await resumeSession(sessionName: sessionName, worktree: worktree)
     }
 
+    /// Relaunches a past conversation in its own worktree, replacing
+    /// any session already there.
+    func resumePast(_ past: TranscriptSession, worktree: Worktree) async throws -> String {
+        let sessionName = SessionName.make(
+            repository: worktree.repositoryName,
+            branch: worktree.branch,
+            agent: past.agent,
+        )
+        try? await tmux.killSession(name: sessionName)
+        try await tmux.newSession(
+            name: sessionName,
+            directory: worktree.path,
+            command: runner(for: past.agent).resumeCommand(resumeID: past.id, extraArguments: ""),
+        )
+        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.id)
+        return sessionName
+    }
+
+    /// Creates a fresh worktree and branch and resumes a past
+    /// conversation there. The transcript is copied into the new
+    /// working directory's transcript directory first, because agents
+    /// look sessions up by working directory.
+    func resumeInNewWorktree(_ past: TranscriptSession, repository: Repository) async throws -> String {
+        let seed = past.title.isEmpty ? past.id : past.title
+        let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
+        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
+        let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
+        addFriendlySymlink(repository: repository, branch: branch, worktreePath: worktreePath)
+
+        let agentRunner = runner(for: past.agent)
+        copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
+        try await tmux.newSession(
+            name: sessionName,
+            directory: worktreePath,
+            command: agentRunner.resumeCommand(resumeID: past.id, extraArguments: ""),
+        )
+        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.id)
+        return sessionName
+    }
+
     /// Relaunches a closed session's conversation in its worktree.
     func resumeSession(sessionName: String, worktree: Worktree) async throws {
         guard let agent = agentKind(of: sessionName) else {
@@ -76,5 +165,86 @@ public extension SessionService {
                 try await tmux.sendPromptFile(promptFile, to: sessionName)
             }
         }
+    }
+
+    // MARK: Internal
+
+    /// Earlier conversations for a worktree, newest first, from every
+    /// runner with per-directory transcripts. A live session's own
+    /// transcript is its directory's newest, so that one is skipped.
+    /// The repository's main checkout also collects conversations
+    /// orphaned by deleted worktrees, so they stay readable and
+    /// resumable.
+    func pastSessions(of worktree: Worktree, liveSession: AgentSession?) -> [TranscriptSession] {
+        var sessions = sessionsInDirectories(of: worktree.path, liveSession: liveSession)
+        if worktree.path == worktree.repositoryPath {
+            sessions += orphanedSessions(repositoryName: worktree.repositoryName)
+        }
+        return sessions.sorted { $0.modifiedAt > $1.modifiedAt }
+    }
+
+    // MARK: Private
+
+    internal func sessionsInDirectories(
+        of workingDirectory: String,
+        liveSession: AgentSession?,
+    ) -> [TranscriptSession] {
+        runners
+            .filter(\.scopesTranscriptsByWorkingDirectory)
+            .flatMap { runner -> [TranscriptSession] in
+                guard let directory = runner.transcriptDirectory(
+                    workingDirectory: workingDirectory,
+                    sandboxHome: paths.sandboxHome,
+                ) else {
+                    return []
+                }
+
+                let sessions = transcripts.sessions(in: directory, agent: runner.kind)
+                let hidesNewest = liveSession?.agent == runner.kind
+                return hidesNewest ? Array(sessions.dropFirst()) : sessions
+            }
+    }
+
+    /// Conversations whose worktree no longer exists, attributed to
+    /// the repository through the session names recorded at launch.
+    private func orphanedSessions(repositoryName: String) -> [TranscriptSession] {
+        let slug = SessionName.slug(repositoryName)
+        return store.load()
+            .sessionsByWorktree
+            .filter { path, sessionName in
+                SessionName.repositorySlug(of: sessionName) == slug
+                    && FileManager.default.fileExists(atPath: path) == false
+            }
+            .flatMap { path, _ in
+                sessionsInDirectories(of: path, liveSession: nil)
+            }
+    }
+
+    // MARK: Private
+
+    private func copyTranscript(
+        _ past: TranscriptSession,
+        intoWorktree worktreePath: String,
+        using agentRunner: any AgentRunner,
+    ) {
+        guard agentRunner.scopesTranscriptsByWorkingDirectory,
+              let directory = agentRunner.transcriptDirectory(
+                  workingDirectory: worktreePath,
+                  sandboxHome: paths.sandboxHome,
+              )
+        else {
+            return
+        }
+
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.id + ".jsonl")
+    }
+
+    private func remember(sessionName: String, worktreePath: String, resumeID: String) {
+        var metadata = store.load()
+        metadata.resumeIDs[sessionName] = resumeID
+        metadata.sessionsByWorktree[worktreePath] = sessionName
+        metadata.seenAt[worktreePath] = Date()
+        store.save(metadata)
     }
 }

@@ -1,6 +1,9 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Darwin
 import Foundation
+
+// MARK: - TestSupport
 
 /// Shared helpers for integration tests that exercise real git, tmux
 /// and filesystem behaviour in isolated temporary locations.
@@ -88,5 +91,61 @@ enum TestSupport {
             try? await Task.sleep(for: .milliseconds(100))
         }
         return await condition()
+    }
+}
+
+// MARK: - World
+
+/// One temporary world: workspace, repository, tmux and service.
+struct World {
+    let root: String
+    let paths: WorkspacePaths
+    let repository: Repository
+    let service: SessionService
+    let tmux: TmuxClient
+
+    static func make() async throws -> Self {
+        let base = try TestSupport.temporaryDirectory("world")
+        let workspace = WorkspacePaths(
+            hostUser: "test",
+            sharedWorkspace: base + "/shared",
+            sandboxHome: base + "/home",
+            metadataFile: base + "/state.json",
+        )
+        let repoPath = workspace.repositoriesDirectory + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+        let runner = FoundationProcessRunner()
+        let tmuxClient = try TmuxClient(
+            runner: runner,
+            launcher: SandvaultLauncher(hostUser: "test"),
+            isInsideSandbox: true,
+            socketDirectory: TestSupport.socketDirectory(),
+        )
+        let sessionService = SessionService(
+            paths: workspace,
+            git: GitClient(runner: runner),
+            tmux: tmuxClient,
+            github: GitHubClient(runner: runner),
+            transcripts: TranscriptReader(),
+            spool: EventSpool(directory: workspace.eventsDirectory),
+            store: MetadataStore(file: workspace.metadataFile),
+            runners: [PromptCaptureRunner()],
+        )
+        return Self(
+            root: base,
+            paths: workspace,
+            repository: Repository(name: "repo", path: repoPath),
+            service: sessionService,
+            tmux: tmuxClient,
+        )
+    }
+
+    func tearDown() {
+        let server = tmux
+        let directory = root
+        Task {
+            await server.killServer()
+            try? FileManager.default.removeItem(atPath: directory)
+        }
     }
 }

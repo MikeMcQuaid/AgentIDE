@@ -10,10 +10,12 @@ import Observation
 final class ReviewModel {
     // MARK: Lifecycle
 
-    /// Creates a review model for a worktree.
-    init(worktreePath: String, git: GitClient) {
+    /// Creates a review model for a worktree; `baseRefProvider`
+    /// resolves the whole-branch scope's merge base on demand.
+    init(worktreePath: String, git: GitClient, baseRefProvider: @escaping () async -> String? = { nil }) {
         self.worktreePath = worktreePath
         self.git = git
+        self.baseRefProvider = baseRefProvider
     }
 
     deinit {
@@ -22,10 +24,23 @@ final class ReviewModel {
 
     // MARK: Internal
 
+    /// What the review diffs.
+    enum Scope: Hashable {
+        /// The last commit, or uncommitted changes when there are any.
+        case lastCommit
+        /// Every commit on the branch against its merge base: the
+        /// open pull request's base branch, or the default branch.
+        case branch
+    }
+
     /// Path fragments treated as generated and hidden by default.
     static let generatedFragments = [
         ".pbxproj", "Package.resolved", ".lock", "Gemfile.lock", ".xcassets",
     ]
+
+    /// The review scope; per-line rejection and message amendment
+    /// only apply to the last commit.
+    var scope: Scope = .lastCommit
 
     /// The parsed diff files.
     private(set) var files: [DiffFile] = []
@@ -46,6 +61,12 @@ final class ReviewModel {
     /// The last action's outcome, for display.
     private(set) var status: String?
 
+    /// The base ref the branch scope last diffed against.
+    private(set) var branchBase: String?
+
+    /// The branch scope's commits, newest first, one line each.
+    private(set) var branchCommits: [String] = []
+
     /// The files to display, generated ones filtered unless revealed.
     var visibleFiles: [DiffFile] {
         showsGenerated ? files : files.filter { isGenerated($0.path) == false }
@@ -56,17 +77,37 @@ final class ReviewModel {
         Self.generatedFragments.contains { path.contains($0) }
     }
 
-    /// Loads the diff, preferring uncommitted changes.
+    /// Loads the scope's diff; the last commit scope prefers
+    /// uncommitted changes when there are any.
     func reload() async {
         selections = [:]
         do {
-            let uncommitted = try await git.uncommittedDiff(worktreePath: worktreePath)
-            if uncommitted.isEmpty {
+            switch scope {
+            case .lastCommit:
+                let uncommitted = try await git.uncommittedDiff(worktreePath: worktreePath)
+                if uncommitted.isEmpty {
+                    showsUncommitted = false
+                    files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
+                } else {
+                    showsUncommitted = true
+                    files = DiffParser.parse(uncommitted)
+                }
+
+            case .branch:
                 showsUncommitted = false
-                files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
-            } else {
-                showsUncommitted = true
-                files = DiffParser.parse(uncommitted)
+                branchBase = nil
+                branchCommits = []
+                guard let baseRef = await baseRefProvider() else {
+                    status = "No base branch to diff against."
+                    files = []
+                    return
+                }
+
+                // Commits before the diff, so they list even when the
+                // diff itself fails to parse.
+                branchBase = baseRef
+                branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
+                files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: baseRef))
             }
             commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
         } catch {
@@ -120,4 +161,5 @@ final class ReviewModel {
 
     private let worktreePath: String
     private let git: GitClient
+    private let baseRefProvider: () async -> String?
 }

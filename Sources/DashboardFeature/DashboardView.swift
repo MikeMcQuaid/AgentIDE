@@ -1,8 +1,12 @@
 import AgentIDEDomain
 import SwiftUI
+import TerminalUI
 
-/// The sidebar listing worktrees grouped by repository, foreign
-/// sessions and undeletable archives.
+/// The sidebar listing worktrees grouped by repository and foreign
+/// sessions. Built on a plain scroll view rather than a list: the
+/// outline-backed list both crashed and ignored collapses when
+/// sections removed their rows, and rows here are simple enough not
+/// to need one.
 public struct DashboardView: View {
     // MARK: Lifecycle
 
@@ -13,23 +17,58 @@ public struct DashboardView: View {
 
     // MARK: Public
 
-    /// The grouped list with badges and lifecycle context menus.
+    /// The grouped rows with status badges per worktree.
     public var body: some View {
-        List(selection: selectionBinding) {
-            ForEach(model.groups) { group in
-                if group.items.isEmpty == false {
-                    section(for: group)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Self.rowSpacing) {
+                ForEach(model.groups) { group in
+                    header(for: group)
+                    if isExpanded(group.repository.path) {
+                        ForEach(group.items) { item in
+                            row(for: item)
+                        }
+                    }
                 }
+                foreignSection
             }
-            foreignSection
-            archivesSection
+            .padding(Self.listPadding)
         }
         .toolbar {
-            Button("New session", systemImage: "plus") { model.showsNewSession = true }
+            Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
+                .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
         }
-        .overlay(alignment: .bottom) {
+        .sheet(isPresented: finderBinding) {
+            RepositoryFinderSheet(model: model)
+        }
+        // An inset, not an overlay: long git errors must never draw
+        // over the rows. Clicking opens the full text, since two
+        // lines truncate most command failures.
+        .safeAreaInset(edge: .bottom) {
             if let status = model.status {
-                Text(status).font(.callout).foregroundStyle(.secondary).padding(Self.statusPadding)
+                Button {
+                    showsFullStatus = true
+                } label: {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(Self.statusLineLimit)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Self.statusPadding)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(.bar)
+                .hoverHelp("Click for the full message")
+                .popover(isPresented: $showsFullStatus) {
+                    ScrollView {
+                        Text(status)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                    .frame(width: Self.statusPopoverWidth, height: Self.statusPopoverHeight)
+                }
             }
         }
     }
@@ -37,63 +76,152 @@ public struct DashboardView: View {
     // MARK: Private
 
     private static let statusPadding: CGFloat = 4
+    private static let statusLineLimit = 2
+    private static let statusPopoverWidth: CGFloat = 420
+    private static let statusPopoverHeight: CGFloat = 200
+    private static let listPadding: CGFloat = 6
+    private static let rowSpacing: CGFloat = 1
+    private static let rowVerticalPadding: CGFloat = 3
+    private static let rowHorizontalPadding: CGFloat = 6
+    private static let rowIndent: CGFloat = 12
+    private static let rowCornerRadius: CGFloat = 5
+    private static let avatarSize: CGFloat = 14
+    private static let avatarCornerRadius: CGFloat = 3
+    private static let expandedChevronDegrees: Double = 90
+
+    @AppStorage("collapsedRepositories")
+    private var collapsedRepositories = ""
+
+    @State private var showsFullStatus = false
 
     private let model: DashboardModel
 
-    private var selectionBinding: Binding<WorktreeItem?> {
-        Binding(get: { model.selection }, set: { model.selection = $0 })
+    private var finderBinding: Binding<Bool> {
+        Binding(
+            get: { model.showsRepositoryFinder },
+            set: { model.showsRepositoryFinder = $0 },
+        )
     }
 
     @ViewBuilder private var foreignSection: some View {
         if model.foreign.isEmpty == false {
-            Section("Foreign sessions") {
-                ForEach(model.foreign) { session in
-                    Label {
-                        VStack(alignment: .leading) {
-                            Text(session.name)
-                            if let directory = session.workingDirectory {
-                                Text(directory).font(.caption).foregroundStyle(.secondary)
-                            }
+            Text("Foreign sessions")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, Self.rowIndent)
+            ForEach(model.foreign) { session in
+                Label {
+                    VStack(alignment: .leading) {
+                        Text(session.name)
+                        if let directory = session.workingDirectory {
+                            Text(directory).font(.caption).foregroundStyle(.secondary)
                         }
-                    } icon: {
-                        Image(systemName: "questionmark.circle")
                     }
+                } icon: {
+                    Image(systemName: "questionmark.circle")
                 }
+                .padding(.leading, Self.rowIndent)
             }
         }
     }
 
-    @ViewBuilder private var archivesSection: some View {
-        if model.archives.isEmpty == false {
-            Section("Archives") {
-                ForEach(model.archives) { archive in
-                    Label {
-                        VStack(alignment: .leading) {
-                            Text("\(archive.repositoryName): \(archive.branch)")
-                            Text(archive.archivedAt, format: .relative(presentation: .named))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "archivebox")
-                    }
-                    .contextMenu {
-                        Button("Undelete") { Task { await model.undelete(archive: archive) } }
-                    }
+    private func header(for group: RepositoryGroup) -> some View {
+        Button {
+            toggleExpansion(of: group.repository.path)
+        } label: {
+            HStack(spacing: Self.statusPadding) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
+                    .accessibilityHidden(true)
+                avatar(for: group.repository)
+                Text(group.repository.fullName ?? group.repository.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if group.items.count > 1 {
+                    Text("(" + String(group.items.count - 1) + ")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .hoverHelp("Worktrees beyond the default branch")
                 }
+                Spacer(minLength: 0)
             }
+            .padding(.vertical, Self.rowVerticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverHelp("Click to show or hide this repository's worktrees")
+    }
+
+    /// Selected rows use the full accent fill with light content,
+    /// matching native sidebar selection.
+    private func row(for item: WorktreeItem) -> some View {
+        let isSelected = model.selection?.id == item.id
+        return Button {
+            model.selection = item
+        } label: {
+            WorktreeRowView(
+                item: item,
+                pullRequest: model.pullRequest(for: item),
+                stackDepth: model.stackDepth(for: item),
+            )
+            .padding(.vertical, Self.rowVerticalPadding)
+            .padding(.horizontal, Self.rowHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .tint(isSelected ? Color.white : Color.accentColor)
+        .background(
+            RoundedRectangle(cornerRadius: Self.rowCornerRadius)
+                .fill(isSelected ? Color.accentColor : Color.clear),
+        )
+        .padding(.leading, Self.rowIndent)
+        .contextMenu { contextActions(for: item) }
+    }
+
+    @ViewBuilder
+    private func contextActions(for item: WorktreeItem) -> some View {
+        Button("Fetch") { Task { await model.fetch(item: item) } }
+            .hoverHelp("git fetch all remotes of this repository")
+        Button("Mark as unread") { Task { await model.markUnread(item: item) } }
+            .hoverHelp("Show the unread dot until this worktree is next viewed")
+        if item.worktree.path != item.worktree.repositoryPath {
+            Button("Delete worktree") { Task { await model.delete(item: item) } }
+                .hoverHelp("Deletes the worktree and branch; conversations stay on the repository page")
         }
     }
 
-    private func section(for group: RepositoryGroup) -> some View {
-        Section(group.repository.name) {
-            ForEach(group.items) { item in
-                WorktreeRowView(item: item)
-                    .tag(item)
-                    .contextMenu {
-                        Button("Archive and delete") { Task { await model.archive(item: item) } }
-                    }
-            }
+    private func avatar(for repository: Repository) -> some View {
+        AsyncImage(url: avatarURL(for: repository)) { image in
+            image.resizable()
+        } placeholder: {
+            Image(systemName: "folder.fill").font(.caption2)
         }
+        .frame(width: Self.avatarSize, height: Self.avatarSize)
+        .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
+        .accessibilityHidden(true)
+    }
+
+    private func isExpanded(_ path: String) -> Bool {
+        collapsedRepositories.split(separator: "\n").map(String.init).contains(path) == false
+    }
+
+    /// Collapsed repositories persist across launches as a
+    /// newline-joined path list.
+    private func toggleExpansion(of path: String) {
+        var collapsed = Set(collapsedRepositories.split(separator: "\n").map(String.init))
+        if collapsed.contains(path) {
+            collapsed.remove(path)
+        } else {
+            collapsed.insert(path)
+        }
+        collapsedRepositories = collapsed.sorted().joined(separator: "\n")
+    }
+
+    private func avatarURL(for repository: Repository) -> URL? {
+        repository.owner.flatMap { URL(string: "https://github.com/" + $0 + ".png?size=64") }
     }
 }

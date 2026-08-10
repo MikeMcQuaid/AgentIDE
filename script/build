@@ -14,6 +14,15 @@ ARGS=(
   -jobs "$(sysctl -n hw.ncpu)"
 )
 
+# The About panel's build number counts the default branch's
+# commits, so numbers are comparable across feature branches.
+BUILD_NUMBER="$(
+  git rev-list --count origin/main 2>/dev/null ||
+    git rev-list --count main 2>/dev/null ||
+    git rev-list --count HEAD
+)"
+ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}")
+
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
@@ -27,3 +36,7 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
 fi
 
 xcodebuild "${ARGS[@]}" build
+
+# Icon caches key on the bundle's modification time; bump it so the
+# Dock and Finder notice icon changes.
+touch AgentIDE.app

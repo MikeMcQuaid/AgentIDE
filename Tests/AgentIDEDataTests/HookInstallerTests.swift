@@ -13,7 +13,6 @@ struct HookInstallerTests {
             hostUser: "test",
             sharedWorkspace: root,
             sandboxHome: root + "/home",
-            archivesDirectory: root + "/archives",
             metadataFile: root + "/state.json",
         )
         let settingsPath = paths.userTemplateDirectory + "/.claude/settings.json"

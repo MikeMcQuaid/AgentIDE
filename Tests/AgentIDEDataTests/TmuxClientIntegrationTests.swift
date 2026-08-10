@@ -26,6 +26,38 @@ struct TmuxClientIntegrationTests {
     }
 
     @Test
+    func `attach-or-create reuses one shell session, the persistence the host shell relies on`() async throws {
+        let socket = try TestSupport.socketDirectory() + "/host"
+        let directory = try TestSupport.temporaryDirectory("host-shell")
+        let runner = FoundationProcessRunner()
+        defer {
+            Task { _ = try? await runner.run(
+                ["tmux", "-S", socket, "kill-server"],
+                workingDirectory: nil,
+                environment: [:],
+            )
+            }
+        }
+
+        // `-A` attaches instead of creating when the session exists.
+        // Detached creation works headlessly; the attach path needs a
+        // terminal, which the app's embedded terminal provides, so
+        // here it must fail with "not a terminal" rather than create
+        // a duplicate.
+        let create = ["tmux", "-S", socket, "new-session", "-d", "-A", "-s", "shell", "-c", directory]
+        let first = try await runner.run(create, workingDirectory: nil, environment: [:])
+        #expect(first.succeeded, "\(first.status): \(first.standardError)")
+        let second = try await runner.run(create, workingDirectory: nil, environment: [:])
+        #expect(second.standardError.contains("not a terminal"))
+        let list = try await runner.run(
+            ["tmux", "-S", socket, "list-sessions", "-F", "#{session_name}"],
+            workingDirectory: nil,
+            environment: [:],
+        )
+        #expect(list.standardOutput == "shell\n")
+    }
+
+    @Test
     func `finished panes keep their exit status`() async throws {
         let tmux = try TestSupport.makeTmuxClient()
         let directory = try TestSupport.temporaryDirectory("dead")

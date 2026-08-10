@@ -135,6 +135,62 @@ struct GitClientIntegrationTests {
     }
 
     @Test
+    func `parses github full names from origin urls`() async throws {
+        let root = try TestSupport.temporaryDirectory("names")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repoPath = root + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+        let repository = Repository(name: "repo", path: repoPath)
+
+        #expect(await git.fullName(of: repository) == nil)
+
+        try await TestSupport.runGit(
+            ["remote", "add", "origin", "https://github.com/MikeMcQuaid/AgentIDE.git"],
+            in: repoPath,
+        )
+        #expect(await git.fullName(of: repository) == "MikeMcQuaid/AgentIDE")
+
+        try await TestSupport.runGit(
+            ["remote", "set-url", "origin", "git@github.com:Homebrew/brew.git"],
+            in: repoPath,
+        )
+        #expect(await git.fullName(of: repository) == "Homebrew/brew")
+    }
+
+    @Test
+    func `counts commits ahead of and behind the default branch`() async throws {
+        let root = try TestSupport.temporaryDirectory("counts")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repoPath = root + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+        let repository = Repository(name: "repo", path: repoPath)
+        let worktreePath = root + "/worktrees/uuid/agent-count"
+        try await git.createWorktree(repository: repository, branch: "agent/count", at: worktreePath)
+
+        // One commit on the branch, one on the default branch after it.
+        try "branch\n".write(toFile: worktreePath + "/branch.txt", atomically: true, encoding: .utf8)
+        try await git.commitAll(worktreePath: worktreePath, message: "Branch work")
+        try "main\n".write(toFile: repoPath + "/main.txt", atomically: true, encoding: .utf8)
+        try await git.commitAll(worktreePath: repoPath, message: "Default work")
+
+        let baseRef = try #require(await git.defaultBaseRef(of: repository))
+        let counts = try #require(await git.aheadBehind(worktreePath: worktreePath, baseRef: baseRef))
+        #expect(counts.ahead == 1)
+        #expect(counts.behind == 1)
+
+        // The whole-branch diff shows only the branch's commits, not
+        // work that landed on the default branch afterwards.
+        let branchDiff = try await git.branchDiff(worktreePath: worktreePath, baseRef: baseRef)
+        #expect(branchDiff.contains("+branch"))
+        #expect(branchDiff.contains("main.txt") == false)
+
+        let commits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
+        #expect(commits.count == 1)
+        #expect(commits.first?.contains("Branch work") == true)
+        #expect(await git.lastCommitDate(worktreePath: worktreePath) > 0)
+    }
+
+    @Test
     func `push tracks a bare remote and ahead counts update`() async throws {
         let root = try TestSupport.temporaryDirectory("push")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -150,29 +206,6 @@ struct GitClientIntegrationTests {
         try "more\n".write(toFile: repoPath + "/more.txt", atomically: true, encoding: .utf8)
         try await git.commitAll(worktreePath: repoPath, message: "More")
         #expect(await git.aheadOfUpstream(worktreePath: repoPath) == 1)
-    }
-
-    @Test
-    func `bundles recreate deleted branches`() async throws {
-        let root = try TestSupport.temporaryDirectory("bundle")
-        defer { try? FileManager.default.removeItem(atPath: root) }
-        let repoPath = root + "/repo"
-        try await TestSupport.makeRepository(at: repoPath)
-        let repository = Repository(name: "repo", path: repoPath)
-        let worktreePath = root + "/wt"
-        try await git.createWorktree(repository: repository, branch: "agent/keep", at: worktreePath)
-        try "kept\n".write(toFile: worktreePath + "/kept.txt", atomically: true, encoding: .utf8)
-        try await git.commitAll(worktreePath: worktreePath, message: "Keep")
-
-        let bundle = root + "/branch.bundle"
-        try await git.bundle(worktreePath: worktreePath, branch: "agent/keep", to: bundle)
-        try await git.removeWorktree(repository: repository, worktreePath: worktreePath, branch: "agent/keep")
-        #expect(await git.branchExists(repository: repository, branch: "agent/keep") == false)
-
-        try await git.fetchBranch(repository: repository, fromBundle: bundle, branch: "agent/keep")
-        #expect(await git.branchExists(repository: repository, branch: "agent/keep"))
-        try await git.addWorktree(repository: repository, branch: "agent/keep", at: worktreePath)
-        #expect(FileManager.default.fileExists(atPath: worktreePath + "/kept.txt"))
     }
 
     // MARK: Private

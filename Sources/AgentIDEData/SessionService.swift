@@ -3,7 +3,8 @@ import Foundation
 
 /// Orchestrates the core loop: worktrees, sessions, review actions
 /// and lifecycle. Feature models call this; it composes the clients.
-/// Lifecycle (archive, undelete) lives in its own extension file.
+/// Deletion and the repository sessions browser live in their own
+/// extension file.
 public struct SessionService: Sendable {
     // MARK: Lifecycle
 
@@ -17,6 +18,8 @@ public struct SessionService: Sendable {
         spool: EventSpool,
         store: MetadataStore,
         runners: [any AgentRunner],
+        processes: any ProcessRunner = FoundationProcessRunner(),
+        launcher: SandvaultLauncher? = nil,
     ) {
         self.paths = paths
         self.git = git
@@ -26,6 +29,8 @@ public struct SessionService: Sendable {
         self.spool = spool
         self.store = store
         self.runners = runners
+        self.processes = processes
+        self.launcher = launcher ?? SandvaultLauncher(hostUser: paths.hostUser)
     }
 
     // MARK: Public
@@ -43,12 +48,46 @@ public struct SessionService: Sendable {
         let metadata = store.load()
         var groups = [RepositoryGroup]()
         for repository in repositories() {
+            let named = await Repository(
+                name: repository.name,
+                path: repository.path,
+                fullName: git.fullName(of: repository),
+            )
+            let baseRef = await git.defaultBaseRef(of: repository)
             let worktrees = await (try? git.worktrees(of: repository)) ?? []
+            // The main checkout always appears, so repositories show
+            // with no worktrees and orphaned conversations stay
+            // reachable.
+            let mainCheckout = Worktree(
+                repositoryName: repository.name,
+                repositoryPath: repository.path,
+                branch: baseRef?.split(separator: "/").last.map(String.init) ?? "main",
+                path: repository.path,
+            )
             var items = [WorktreeItem]()
-            for worktree in worktrees {
-                await items.append(item(worktree: worktree, panes: panes, activity: activity, metadata: metadata))
+            var seenPaths = Set<String>()
+            for worktree in [mainCheckout] + worktrees where seenPaths.insert(worktree.path).inserted {
+                await items.append(item(
+                    worktree: worktree,
+                    baseRef: baseRef,
+                    panes: panes,
+                    activity: activity,
+                    metadata: metadata,
+                ))
             }
-            groups.append(RepositoryGroup(repository: repository, items: items))
+            // The main checkout stays pinned first; worktrees order by
+            // recency of their own work.
+            let sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
+            groups.append(RepositoryGroup(repository: named, items: sorted))
+        }
+        // Repositories order by their worktrees' activity; the main
+        // checkout's own churn deliberately does not count.
+        groups.sort { first, second in
+            let firstActivity = first.items.dropFirst().map(\.lastActivityAt).max() ?? 0
+            let secondActivity = second.items.dropFirst().map(\.lastActivityAt).max() ?? 0
+            return firstActivity == secondActivity
+                ? first.repository.name < second.repository.name
+                : firstActivity > secondActivity
         }
         let foreign = panes
             .filter { SessionName.isAgentIDE($0.sessionName) == false }
@@ -64,79 +103,40 @@ public struct SessionService: Sendable {
     }
 
     /// Creates a worktree and branch for a prompt and starts the
-    /// agent in tmux, then pastes the prompt into it. `extraArguments`
-    /// are appended to the agent command verbatim. Returns the
-    /// session name.
+    /// agent in tmux with the picked model and effort, then pastes
+    /// the prompt into it. Returns the session name.
     public func createSession(
         repository: Repository,
         prompt: String,
         agent: AgentKind,
-        extraArguments: String = "",
+        options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
         let branch = await availableBranch(repository: repository, prompt: prompt)
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
-        let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: agent)
-
-        let promptFile = try writePrompt(prompt, sessionName: sessionName)
-        addFriendlySymlink(repository: repository, branch: branch, worktreePath: worktreePath)
-
-        try await tmux.newSession(
-            name: sessionName,
-            directory: worktreePath,
-            command: runner(for: agent).launchCommand(extraArguments: extraArguments),
-        )
-        try await tmux.sendPromptFile(promptFile, to: sessionName)
-
-        var metadata = store.load()
-        metadata.prompts[sessionName] = prompt
-        metadata.arguments[sessionName] = extraArguments
-        metadata.lastSeen[sessionName] = Date()
-        metadata.sessionsByWorktree[worktreePath] = sessionName
-        store.save(metadata)
-        return sessionName
-    }
-
-    /// Starts an agent in an existing worktree and pastes the prompt,
-    /// used by one-click remediation.
-    public func launchAgent(
-        in worktree: Worktree,
-        prompt: String,
-        agent: AgentKind,
-        extraArguments: String = "",
-    ) async throws -> String {
-        let sessionName = SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: agent)
-        let promptFile = try writePrompt(prompt, sessionName: sessionName)
-        try? await tmux.killSession(name: sessionName)
-        try await tmux.newSession(
-            name: sessionName,
-            directory: worktree.path,
-            command: runner(for: agent).launchCommand(extraArguments: extraArguments),
-        )
-        try await tmux.sendPromptFile(promptFile, to: sessionName)
-        var metadata = store.load()
-        metadata.sessionsByWorktree[worktree.path] = sessionName
-        store.save(metadata)
-        return sessionName
-    }
-
-    /// Pushes the branch and opens a pull request; returns its URL.
-    public func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-        return try await github.createPullRequest(worktreePath: worktree.path)
-    }
-
-    /// The argv that attaches a terminal to a session.
-    public func attachCommand(sessionName: String) -> [String] {
-        tmux.attachCommand(sessionName: sessionName)
-    }
-
-    /// The argv for a host-user shell starting in a worktree.
-    public func hostShellCommand(worktreePath: String) -> [String] {
-        let quoted = "'" + worktreePath.replacing("'", with: "'\\''") + "'"
-        return ["/bin/zsh", "-c", "cd " + quoted + " && exec /bin/zsh -il"]
+        let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
+        return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
     }
 
     // MARK: Internal
+
+    /// The most search hits returned to the UI.
+    static let searchHitLimit = 200
+
+    /// The most files the fuzzy finder considers.
+    static let fileListLimit = 5_000
+
+    /// ripgrep output splits into path, line and text.
+    static let searchFieldSplits = 2
+
+    /// How many trailing path components name a shell session.
+    static let shellNameComponents = 2
+
+    /// The host's tmux binary; Homebrew's location is not on a GUI
+    /// app's default PATH.
+    static var hostTmuxPath: String {
+        ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "tmux"
+    }
 
     let paths: WorkspacePaths
     let git: GitClient
@@ -146,6 +146,12 @@ public struct SessionService: Sendable {
     let spool: EventSpool
     let store: MetadataStore
     let runners: [any AgentRunner]
+    let processes: any ProcessRunner
+    let launcher: SandvaultLauncher
+
+    /// Worktrees never viewed count as seen at launch, so a fresh
+    /// install does not flag every historic conversation unread.
+    let startedAt: Date = .init()
 
     func runner(for agent: AgentKind) -> any AgentRunner {
         runners.first { $0.kind == agent } ?? ClaudeCodeRunner()
@@ -171,6 +177,35 @@ public struct SessionService: Sendable {
         store.save(metadata)
     }
 
+    /// Launches an agent in a prepared worktree slot: symlink, prompt
+    /// file, tmux session, paste, metadata.
+    func start(
+        prompt: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions,
+        slot: WorktreeSlot,
+    ) async throws -> String {
+        let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
+        let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
+        let promptFile = try writePrompt(prompt, sessionName: sessionName)
+        addFriendlySymlink(repository: slot.repository, branch: slot.branch, worktreePath: slot.path)
+
+        try await tmux.newSession(
+            name: sessionName,
+            directory: slot.path,
+            command: runner(for: agent).launchCommand(extraArguments: arguments),
+        )
+        try await tmux.sendPromptFile(promptFile, to: sessionName)
+
+        var metadata = store.load()
+        metadata.prompts[sessionName] = prompt
+        metadata.arguments[sessionName] = arguments
+        metadata.seenAt[slot.path] = Date()
+        metadata.sessionsByWorktree[slot.path] = sessionName
+        store.save(metadata)
+        return sessionName
+    }
+
     func writePrompt(_ prompt: String, sessionName: String) throws -> String {
         try FileManager.default.createDirectory(atPath: paths.promptsDirectory, withIntermediateDirectories: true)
         let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
@@ -186,6 +221,42 @@ public struct SessionService: Sendable {
         try? FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: worktreePath)
     }
 
+    func availableBranch(repository: Repository, prompt: String) async -> String {
+        let base = "agent/" + SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
+        guard await git.branchExists(repository: repository, branch: base) else {
+            return base
+        }
+
+        var attempt = 2
+        while await git.branchExists(repository: repository, branch: "\(base)-\(attempt)") {
+            attempt += 1
+        }
+        return "\(base)-\(attempt)"
+    }
+
+    func createWorktreePath(repository: Repository, branch: String) async throws -> String {
+        let path = try await worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        try await git.createWorktree(repository: repository, branch: branch, at: path)
+        return path
+    }
+
+    /// The repository's uuid worktree directory, reused when any
+    /// worktree already lives there and minted otherwise.
+    func worktreeContainer(repository: Repository) async -> String {
+        let existing = await (try? git.worktrees(of: repository)) ?? []
+        let prefix = paths.worktreesDirectory + "/"
+        let uuid = existing
+            .compactMap { worktree -> String? in
+                guard worktree.path.hasPrefix(prefix) else {
+                    return nil
+                }
+
+                return worktree.path.dropFirst(prefix.count).split(separator: "/").first.map(String.init)
+            }
+            .first ?? UUID().uuidString.lowercased()
+        return prefix + uuid
+    }
+
     // MARK: Private
 
     /// How much of the prompt seeds the branch name.
@@ -193,6 +264,7 @@ public struct SessionService: Sendable {
 
     private func item(
         worktree: Worktree,
+        baseRef: String?,
         panes: [TmuxPane],
         activity: [String: Date],
         metadata: AppMetadata,
@@ -208,46 +280,47 @@ public struct SessionService: Sendable {
                 workingDirectory: pane.currentPath,
             )
         }
-        var unread = false
-        if let session, let lastEvent = activity[session.name] {
-            unread = lastEvent > (metadata.lastSeen[session.name] ?? .distantPast)
+        let past = pastSessions(of: worktree, liveSession: session)
+
+        // Unread is any terminal or agent activity since the worktree
+        // was last viewed: the event spool, the tmux session's own
+        // activity clock and transcript modification all count.
+        var lastEvent = Date.distantPast
+        if let session, let spooled = activity[session.name] {
+            lastEvent = spooled
         }
+        if let pane, pane.activityAt > 0 {
+            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(pane.activityAt)))
+        }
+        if let newest = past.first {
+            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
+        }
+        let seen = metadata.seenAt[worktree.path]
+            ?? session.flatMap { metadata.lastSeen[$0.name] }
+            ?? startedAt
+        let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
+
+        var counts: (ahead: Int, behind: Int)?
+        if let baseRef {
+            counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: baseRef)
+        }
+        let dirty = await git.isDirty(worktreePath: worktree.path)
+        var lastActivity = await git.lastCommitDate(worktreePath: worktree.path)
+        if let session, session.status == .running || dirty {
+            // A live session or uncommitted edits mean work right now.
+            lastActivity = Int(Date().timeIntervalSince1970)
+        }
+        lastActivity = max(lastActivity, Int(lastEvent.timeIntervalSince1970))
         return await WorktreeItem(
             worktree: worktree,
             session: session,
-            isDirty: git.isDirty(worktreePath: worktree.path),
+            isDirty: dirty,
             aheadOfUpstream: git.aheadOfUpstream(worktreePath: worktree.path),
             hasUnread: unread,
+            pastSessions: past,
+            aheadOfDefault: counts?.ahead,
+            behindDefault: counts?.behind,
+            lastActivityAt: lastActivity,
         )
-    }
-
-    private func availableBranch(repository: Repository, prompt: String) async -> String {
-        let base = "agent/" + SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
-        guard await git.branchExists(repository: repository, branch: base) else {
-            return base
-        }
-
-        var attempt = 2
-        while await git.branchExists(repository: repository, branch: "\(base)-\(attempt)") {
-            attempt += 1
-        }
-        return "\(base)-\(attempt)"
-    }
-
-    private func createWorktreePath(repository: Repository, branch: String) async throws -> String {
-        let existing = await (try? git.worktrees(of: repository)) ?? []
-        let prefix = paths.worktreesDirectory + "/"
-        let uuid = existing
-            .compactMap { worktree -> String? in
-                guard worktree.path.hasPrefix(prefix) else {
-                    return nil
-                }
-
-                return worktree.path.dropFirst(prefix.count).split(separator: "/").first.map(String.init)
-            }
-            .first ?? UUID().uuidString.lowercased()
-        let path = prefix + uuid + "/" + branch.replacing("/", with: "-")
-        try await git.createWorktree(repository: repository, branch: branch, at: path)
-        return path
     }
 }

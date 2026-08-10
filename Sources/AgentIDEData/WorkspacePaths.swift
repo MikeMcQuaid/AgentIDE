@@ -10,13 +10,11 @@ public struct WorkspacePaths: Sendable {
         hostUser: String,
         sharedWorkspace: String,
         sandboxHome: String,
-        archivesDirectory: String,
         metadataFile: String,
     ) {
         self.hostUser = hostUser
         self.sharedWorkspace = sharedWorkspace
         self.sandboxHome = sandboxHome
-        self.archivesDirectory = archivesDirectory
         self.metadataFile = metadataFile
     }
 
@@ -35,10 +33,6 @@ public struct WorkspacePaths: Sendable {
 
     /// The sandbox user's home directory.
     public let sandboxHome: String
-
-    /// Where archives of deleted worktrees are kept, outside the
-    /// guest-writable workspace.
-    public let archivesDirectory: String
 
     /// Where the app's own metadata file lives.
     public let metadataFile: String
@@ -89,7 +83,6 @@ public struct WorkspacePaths: Sendable {
             hostUser: host,
             sharedWorkspace: "/Users/Shared/sv-" + host,
             sandboxHome: "/Users/sandvault-" + host,
-            archivesDirectory: support + "/Archives",
             metadataFile: support + "/state.json",
         )
     }
