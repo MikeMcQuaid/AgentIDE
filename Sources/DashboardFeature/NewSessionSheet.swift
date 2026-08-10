@@ -33,7 +33,14 @@ public struct NewSessionSheet: View {
                 }
             }
             .labelsHidden()
-            .hoverHelp("The repository the worktree is created in; issues and pull requests load from it")
+            // A preset repository is the whole point of the opener
+            // that set it, so it cannot be changed here.
+            .disabled(model.newSessionRepository != nil)
+            .hoverHelp(
+                model.newSessionRepository == nil
+                    ? "The repository the worktree is created in; issues and pull requests load from it"
+                    : "Fixed by where you opened this from",
+            )
             AgentSessionForm(
                 model: model,
                 repository: repository,
@@ -47,11 +54,7 @@ public struct NewSessionSheet: View {
         // seed only applies the first time; re-read the preset on
         // every appearance or a repository plus would show the
         // previous pick.
-        .onAppear {
-            if let preset = model.newSessionRepository {
-                repository = preset
-            }
-        }
+        .onAppear { repository = model.newSessionRepository ?? repository }
     }
 
     // MARK: Private

@@ -55,6 +55,10 @@ public struct TerminalPaneView: NSViewRepresentable {
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
 
+        /// Whether the process has been spawned; it waits for real
+        /// bounds so tmux sizes to the pane, not a placeholder frame.
+        var started = false
+
         let onProcessTerminated: (@MainActor () -> Void)?
 
         static func start(_ command: [String], in view: LocalProcessTerminalView) {
@@ -68,19 +72,26 @@ public struct TerminalPaneView: NSViewRepresentable {
         }
     }
 
-    /// Builds the SwiftTerm view, themes it and starts the process.
+    /// Builds the SwiftTerm view and themes it; the process starts
+    /// once layout gives the view its real size, otherwise tmux
+    /// sized itself to the placeholder frame and drew half a pane
+    /// until something forced a resize.
     public func makeNSView(context: Context) -> LocalProcessTerminalView {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
         view.font = CodeStyle.nsFont
         applyTheme(to: view, context: context)
-        Coordinator.start(command, in: view)
         return view
     }
 
-    /// Re-themes when the appearance actually changes.
+    /// Starts the process on the first update with real bounds and
+    /// re-themes when the appearance actually changes.
     public func updateNSView(_ view: LocalProcessTerminalView, context: Context) {
         applyTheme(to: view, context: context)
+        if context.coordinator.started == false, view.bounds.height > 0 {
+            context.coordinator.started = true
+            Coordinator.start(command, in: view)
+        }
     }
 
     /// Creates the process-lifecycle coordinator.

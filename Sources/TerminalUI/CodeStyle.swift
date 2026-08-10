@@ -7,16 +7,19 @@ import SwiftUI
 /// main actor's checking.
 public nonisolated enum CodeStyle {
     /// The shared monospaced point size.
-    public static let pointSize: CGFloat = 12
+    public static let pointSize: CGFloat = 13
 
-    /// The AppKit font for text views and terminals.
+    /// The AppKit font for text views and terminals: SF Mono when
+    /// available, the system monospaced face otherwise.
     public static var nsFont: NSFont {
-        .monospacedSystemFont(ofSize: pointSize, weight: .regular)
+        NSFont(name: "SFMono-Regular", size: pointSize)
+            ?? .monospacedSystemFont(ofSize: pointSize, weight: .regular)
     }
 
-    /// The SwiftUI font for diff lines and result rows.
+    /// The SwiftUI font for diff lines and result rows, from the
+    /// same AppKit face.
     public static var font: Font {
-        .system(size: pointSize, design: .monospaced)
+        Font(nsFont)
     }
 
     /// The light tone shared by visible whitespace glyphs in the

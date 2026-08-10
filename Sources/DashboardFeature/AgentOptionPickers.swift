@@ -18,7 +18,12 @@ struct AgentOptionPickers: View {
         HStack(spacing: Self.spacing) {
             Picker("Agent", selection: $agent) {
                 ForEach(AgentKind.allCases, id: \.self) { kind in
-                    Label(kind.displayName, systemImage: kind.iconSystemName).tag(kind)
+                    Label {
+                        Text(kind.displayName)
+                    } icon: {
+                        Image(kind.iconAssetName).resizable().scaledToFit()
+                    }
+                    .tag(kind)
                 }
             }
             .hoverHelp("The agent CLI to run")

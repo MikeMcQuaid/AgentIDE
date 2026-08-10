@@ -58,6 +58,9 @@ public final class DashboardModel {
     /// Whether the repository finder sheet is shown.
     public var showsRepositoryFinder = false
 
+    /// Whether the tmux session manager sheet is shown.
+    public var showsSessionManager = false
+
     /// The repository the sheet preselects, set by the toolbar's new
     /// session button.
     public var newSessionRepository: Repository?

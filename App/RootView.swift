@@ -1,7 +1,5 @@
 import AgentIDEDomain
 import DashboardFeature
-import PRFeature
-import ReviewFeature
 import SessionFeature
 import SwiftUI
 import TerminalUI
@@ -26,8 +24,17 @@ struct RootView: View {
         } detail: {
             detail
         }
+        // Nothing lives in the window toolbar any more, so hiding it
+        // reclaims its whole strip; the sidebar pads its own top for
+        // the traffic lights.
+        .toolbar(.hidden, for: .windowToolbar)
         .sheet(isPresented: newSessionBinding) {
             NewSessionSheet(model: dependencies.dashboard)
+        }
+        .sheet(isPresented: sessionManagerBinding) {
+            SessionManagerSheet(service: dependencies.service) {
+                dependencies.dashboard.showsSessionManager = false
+            }
         }
         // The repository sidebar's visibility round-trips through
         // storage so the View menu can drive and describe it.
@@ -41,6 +48,7 @@ struct RootView: View {
             finderFocusRequest = 0
             columnVisibility = showsRepositorySidebar ? .all : .detailOnly
             runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
+            rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
     }
@@ -73,6 +81,12 @@ struct RootView: View {
     /// automatically on the next launch; host tmux kept them alive.
     @AppStorage("runningShellPaths")
     private var runningShellPaths = ""
+
+    /// Each worktree's last utility tab, persisted as
+    /// path-tab-index lines so panes stay per-worktree.
+    @AppStorage("worktreeTabs")
+    private var worktreeTabs = ""
+    @State private var rememberedTabs: [String: Int] = [:]
 
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
@@ -155,26 +169,15 @@ struct RootView: View {
         }
     }
 
-    /// The utility pane's own header: its tabs, a New Session button
-    /// and the pane toggle. In-pane so the controls can never cross
-    /// the split into the primary pane.
+    /// The utility pane's own header: its tabs and the pane toggle.
+    /// In-pane so the controls can never cross the split into the
+    /// primary pane. Restores the worktree's remembered tab whenever
+    /// the selection changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Self.stripSpacing) {
                 UtilityTabStrip()
                 Spacer(minLength: 0)
-                Button {
-                    dependencies.dashboard.newSessionRepository = Repository(
-                        name: item.worktree.repositoryName,
-                        path: item.worktree.repositoryPath,
-                    )
-                    dependencies.dashboard.showsNewSession = true
-                } label: {
-                    Label("New session", systemImage: "plus.circle")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.plain)
-                .hoverHelp("Start a new agent session, prefilled with this repository")
                 Button {
                     showsUtilityPane.toggle()
                 } label: {
@@ -187,6 +190,18 @@ struct RootView: View {
             .padding(Self.stripSpacing)
             Divider()
             utilityContent(for: item)
+        }
+        .task(id: item.worktree.path) {
+            if let remembered = rememberedTabs[item.worktree.path] {
+                utilityTabIndex = remembered
+            }
+        }
+        .onChange(of: utilityTabIndex) {
+            rememberedTabs[item.worktree.path] = utilityTabIndex
+            worktreeTabs = rememberedTabs
+                .map { $0.key + "\t" + String($0.value) }
+                .sorted()
+                .joined(separator: "\n")
         }
     }
 
@@ -286,33 +301,16 @@ struct RootView: View {
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
     }
 
-    @ViewBuilder
-    private func switchedUtility(for item: WorktreeItem) -> some View {
-        switch utilityTab {
-        case .shell:
-            EmptyView()
-
-        case .review:
-            ReviewView(worktree: item.worktree, git: dependencies.git, service: dependencies.service)
-
-        case .editor:
-            EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
-
-        case .pullRequests:
-            PullRequestsView(
-                repository: Repository(name: item.worktree.repositoryName, path: item.worktree.repositoryPath),
-                items: repositoryItems(for: item),
-                github: dependencies.github,
-                service: dependencies.service,
-                branch: item.worktree.branch,
-            )
-
-        case .browser:
-            BrowserView()
-
-        case .message:
-            FinalMessageView(item: item, service: dependencies.service)
+    /// Parses the persisted path-tab lines.
+    private static func decodeTabs(_ stored: String) -> [String: Int] {
+        var tabs = [String: Int]()
+        for line in stored.split(separator: "\n") {
+            let parts = line.split(separator: "\t")
+            if let path = parts.first, let index = parts.last.flatMap({ Int($0) }), parts.first != parts.last {
+                tabs[String(path)] = index
+            }
         }
+        return tabs
     }
 
     private func sessionStarted() async {

@@ -11,7 +11,11 @@ public extension SessionService {
     /// Pushes the branch and opens a pull request; returns its URL.
     func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
         try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-        return try await github.createPullRequest(worktreePath: worktree.path)
+        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+        return try await github.createPullRequest(worktreePath: worktree.path, title: title)
     }
 
     /// The argv that attaches a terminal to a session.
@@ -36,7 +40,44 @@ public extension SessionService {
             ";", "set", "-g", "mouse", "on",
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
+            ";", "set", "-g", "status", "off",
         ]
+    }
+
+    /// Every AgentIDE tmux session for the session manager: the
+    /// sandboxed agents and the host shells, deduplicated.
+    func allTmuxSessions() async -> [(name: String, isHostShell: Bool)] {
+        var seen = Set<String>()
+        var results = [(name: String, isHostShell: Bool)]()
+        for pane in await (try? tmux.panes()) ?? [] where seen.insert(pane.sessionName).inserted {
+            results.append((pane.sessionName, false))
+        }
+        let list = try? await processes.run(
+            [Self.hostTmuxPath, "ls", "-F", "#{session_name}"],
+            workingDirectory: nil,
+            environment: [:],
+        )
+        let shells = (list?.standardOutput ?? "")
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.hasPrefix("agentide-shell--") }
+        for name in shells where seen.insert(name).inserted {
+            results.append((name, true))
+        }
+        return results
+    }
+
+    /// Kills one session on whichever server owns it.
+    func killTmuxSession(name: String, isHostShell: Bool) async {
+        if isHostShell {
+            _ = try? await processes.run(
+                [Self.hostTmuxPath, "kill-session", "-t", name],
+                workingDirectory: nil,
+                environment: [:],
+            )
+        } else {
+            try? await tmux.killSession(name: name)
+        }
     }
 
     /// Marks a worktree viewed: clears its unread state, including a

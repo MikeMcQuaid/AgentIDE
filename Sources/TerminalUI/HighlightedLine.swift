@@ -27,12 +27,8 @@ public struct HighlightedLine: View {
             .reduce(Text(""), +)
     }
 
-    // MARK: Private
-
-    private let line: String
-    private let language: SyntaxLanguage?
-
-    private static func colour(for kind: SyntaxToken.Kind) -> Color {
+    /// The one token colour mapping every code surface shares.
+    public static func colour(for kind: SyntaxToken.Kind) -> Color {
         switch kind {
         case .keyword:
             .purple
@@ -50,4 +46,9 @@ public struct HighlightedLine: View {
             .primary
         }
     }
+
+    // MARK: Private
+
+    private let line: String
+    private let language: SyntaxLanguage?
 }

@@ -49,6 +49,7 @@ public struct RepositorySessionsView: View {
 
     private static let padding: CGFloat = 6
     private static let headerBottomPadding: CGFloat = 3
+    private static let agentIconSize: CGFloat = 14
     private static let listHeight: CGFloat = 200
     private static let locationComponents = 2
 
@@ -87,11 +88,15 @@ public struct RepositorySessionsView: View {
     private var list: some View {
         List(sessions, id: \.session.id, selection: selectionBinding) { entry in
             HStack(spacing: Self.padding) {
-                Image(systemName: entry.session.agent.iconSystemName)
-                    .foregroundStyle(.secondary)
+                Image(entry.session.agent.iconAssetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.agentIconSize, height: Self.agentIconSize)
                     .accessibilityLabel(entry.session.agent.displayName)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(entry.session.title.isEmpty ? entry.session.id : entry.session.title)
+                    // Untitled conversations show only their date,
+                    // never the transcript uuid.
+                    Text(entry.session.title.isEmpty ? "Untitled conversation" : entry.session.title)
                         .lineLimit(1)
                     HStack(spacing: Self.padding) {
                         Text(

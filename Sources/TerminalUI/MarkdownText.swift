@@ -226,6 +226,17 @@ public struct MarkdownText: View {
              "python":
             .python
 
+        case "json":
+            .json
+
+        case "dockerfile":
+            .dockerfile
+
+        case "ts",
+             "tsx",
+             "typescript":
+            .typescript
+
         case "yaml",
              "yml":
             .yaml

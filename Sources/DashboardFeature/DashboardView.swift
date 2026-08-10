@@ -32,10 +32,22 @@ public struct DashboardView: View {
                 foreignSection
             }
             .padding(Self.listPadding)
+            // The window toolbar is hidden, so the sidebar leaves
+            // room for the traffic lights itself.
+            .padding(.top, Self.trafficLightInset)
         }
-        .toolbar {
-            Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
-                .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
+        // The window toolbar is gone, so Open repository lives at the
+        // sidebar's bottom bar beside the status.
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
+                Spacer()
+            }
+            .padding(Self.statusPadding)
+            .background(.bar)
         }
         .sheet(isPresented: finderBinding) {
             RepositoryFinderSheet(model: model)
@@ -77,6 +89,7 @@ public struct DashboardView: View {
 
     private static let statusPadding: CGFloat = 4
     private static let statusLineLimit = 2
+    private static let trafficLightInset: CGFloat = 22
     private static let statusPopoverWidth: CGFloat = 420
     private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6

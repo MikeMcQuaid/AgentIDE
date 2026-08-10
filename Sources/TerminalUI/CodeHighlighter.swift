@@ -2,9 +2,11 @@ import AgentIDEDomain
 import Foundation
 import SwiftTreeSitter
 import TreeSitterBash
+import TreeSitterJSON
 import TreeSitterPython
 import TreeSitterRuby
 import TreeSitterSwift
+import TreeSitterTypeScript
 
 /// Syntax highlighting through tree-sitter grammars, the same parsers
 /// editors standardise on. The pure-Swift tokenizer in the Domain
@@ -121,6 +123,8 @@ public enum CodeHighlighter {
         loaded[.ruby] = configuration(tree_sitter_ruby(), name: "Ruby")
         loaded[.shell] = configuration(tree_sitter_bash(), name: "Bash")
         loaded[.python] = configuration(tree_sitter_python(), name: "Python")
+        loaded[.json] = configuration(tree_sitter_json(), name: "JSON")
+        loaded[.typescript] = configuration(tree_sitter_typescript(), name: "TypeScript")
         return loaded
     }()
 

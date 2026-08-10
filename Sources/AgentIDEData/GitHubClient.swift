@@ -51,10 +51,18 @@ public struct GitHubClient: Sendable {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
-    /// Opens a pull request from the worktree's branch, filling the
-    /// title and body from its commits.
-    public func createPullRequest(worktreePath: String) async throws -> String {
-        try await gh(["pr", "create", "--fill"], in: worktreePath)
+    /// Opens a pull request from the worktree's branch. With a
+    /// repository pull request template the body comes from it
+    /// (which `--fill` would ignore) and the title from `title`;
+    /// without one `--fill` takes both from the commits.
+    public func createPullRequest(worktreePath: String, title: String) async throws -> String {
+        var arguments = ["pr", "create"]
+        if let template = Self.pullRequestTemplate(in: worktreePath), title.isEmpty == false {
+            arguments += ["--title", title, "--body-file", template]
+        } else {
+            arguments += ["--fill"]
+        }
+        return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -105,6 +113,18 @@ public struct GitHubClient: Sendable {
     /// The default `gh pr list` limit of 30 hid pull requests on
     /// busy repositories, so worktree branches failed to match.
     static let listLimit = 200
+
+    /// The repository's pull request template file, nil without one.
+    static func pullRequestTemplate(in worktreePath: String) -> String? {
+        [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            ".github/pull_request_template.md",
+            "PULL_REQUEST_TEMPLATE.md",
+            "docs/PULL_REQUEST_TEMPLATE.md",
+        ]
+        .map { worktreePath + "/" + $0 }
+        .first { FileManager.default.fileExists(atPath: $0) }
+    }
 
     static func listArguments(scope: ListScope) -> [String] {
         let fields = "number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,"

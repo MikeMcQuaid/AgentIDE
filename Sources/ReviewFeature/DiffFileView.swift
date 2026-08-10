@@ -210,22 +210,8 @@ struct DiffLineView: View {
         return parts.reduce(Text(""), +)
     }
 
+    /// The shared mapping, so diffs and editors colour identically.
     private static func colour(for kind: SyntaxToken.Kind) -> Color {
-        switch kind {
-        case .keyword:
-            .purple
-
-        case .string:
-            .red
-
-        case .comment:
-            .green
-
-        case .number:
-            .blue
-
-        case .plain:
-            .primary
-        }
+        HighlightedLine.colour(for: kind)
     }
 }

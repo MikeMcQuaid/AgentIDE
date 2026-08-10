@@ -11,10 +11,17 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Agent Session") { dashboard.showsNewSession = true }
-                .keyboardShortcut("n", modifiers: .command)
+            Button("New Agent Session") {
+                // No preset: the menu is repository-agnostic, and a
+                // stale preset would lock the picker.
+                dashboard.newSessionRepository = nil
+                dashboard.showsNewSession = true
+            }
+            .keyboardShortcut("n", modifiers: .command)
             Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+            Divider()
+            Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
         CommandGroup(after: .sidebar) {
             // The two panes toggle together in one group.

@@ -8,8 +8,8 @@ import Testing
 @MainActor
 struct CodeHighlighterTests {
     @Test
-    func `grammars load and classify swift, ruby, shell and python`() {
-        for language in [SyntaxLanguage.swift, .ruby, .shell, .python] {
+    func `every tree-sitter grammar loads and classifies`() {
+        for language in [SyntaxLanguage.swift, .ruby, .shell, .python, .json, .typescript] {
             let classified = CodeHighlighter.classifiedRanges(in: "# x\n// y\n1", language: language)
             #expect(classified != nil, "grammar for \(language) did not load")
         }
