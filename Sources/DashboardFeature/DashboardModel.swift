@@ -136,7 +136,7 @@ public final class DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
         await run {
-            _ = try await service.createSession(
+            try await service.createSession(
                 repository: repository,
                 prompt: prompt,
                 agent: agent,
@@ -154,7 +154,7 @@ public final class DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
         await run {
-            _ = try await service.createSession(
+            try await service.createSession(
                 fromIssue: number,
                 repository: repository,
                 context: context,
@@ -173,7 +173,7 @@ public final class DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
         await run {
-            _ = try await service.createSession(
+            try await service.createSession(
                 fromPullRequest: number,
                 repository: repository,
                 context: context,
@@ -191,7 +191,7 @@ public final class DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
         await run {
-            _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
+            try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
         }
     }
 
@@ -204,7 +204,7 @@ public final class DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
         await run {
-            _ = try await service.launchAgent(
+            try await service.launchAgent(
                 fromIssue: number,
                 in: worktree,
                 context: context,
@@ -332,13 +332,17 @@ public final class DashboardModel {
         store.save(metadata)
     }
 
-    /// Runs a session-creation action, closing the sheet and
-    /// refreshing on success.
-    private func run(_ work: () async throws -> Void) async {
+    /// Runs a session-creation action, closing the sheet, refreshing
+    /// and selecting the new session's worktree so the agent is on
+    /// screen immediately.
+    private func run(_ work: () async throws -> String) async {
         do {
-            try await work()
+            let sessionName = try await work()
             showsNewSession = false
             await refresh()
+            if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
+                selection = created
+            }
         } catch {
             status = error.localizedDescription
         }

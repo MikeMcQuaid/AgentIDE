@@ -50,6 +50,10 @@ public struct SandvaultLauncher: Sendable {
             "SHELL=/bin/zsh",
             "TERM=xterm-256color",
             "COLORTERM=truecolor",
+            // Without a UTF-8 locale tmux draws box characters as
+            // ASCII, which made agent panes render differently from
+            // host shells.
+            "LANG=en_US.UTF-8",
             "INITIAL_DIR=" + initialDirectory,
             "SHARED_WORKSPACE=" + sharedWorkspace,
             "SV_SESSION_ID=" + sessionID,

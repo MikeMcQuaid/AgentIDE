@@ -42,6 +42,7 @@ public enum SyntaxLanguage: Hashable, Sendable {
     case swift
     case ruby
     case shell
+    case python
     case yaml
     case markdown
 
@@ -66,6 +67,9 @@ public enum SyntaxLanguage: Hashable, Sendable {
              "zsh":
             return .shell
 
+        case "py":
+            return .python
+
         case "yaml",
              "yml":
             return .yaml
@@ -87,7 +91,8 @@ public enum SyntaxLanguage: Hashable, Sendable {
         case .swift:
             "//"
 
-        case .ruby,
+        case .python,
+             .ruby,
              .shell,
              .yaml:
             "#"
@@ -125,6 +130,14 @@ public enum SyntaxLanguage: Hashable, Sendable {
                 "case", "esac", "function", "return", "exit", "local", "export", "readonly",
                 "shift", "source", "set", "unset", "trap", "echo", "printf", "read", "eval",
                 "exec", "true", "false", "in",
+            ]
+
+        case .python:
+            [
+                "def", "class", "if", "elif", "else", "for", "while", "in", "return", "import",
+                "from", "as", "with", "try", "except", "finally", "raise", "pass", "break",
+                "continue", "lambda", "yield", "global", "nonlocal", "assert", "del", "not",
+                "and", "or", "is", "None", "True", "False", "async", "await", "match", "case",
             ]
 
         case .yaml:

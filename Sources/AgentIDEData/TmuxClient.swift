@@ -163,6 +163,7 @@ public struct TmuxClient: Sendable {
     set -g remain-on-exit on
     set -g mouse on
     set -g history-limit 50000
+    set -g default-terminal xterm-256color
     """
 
     private let runner: any ProcessRunner

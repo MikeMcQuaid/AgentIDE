@@ -43,6 +43,15 @@ public struct NewSessionSheet: View {
         }
         .padding()
         .frame(minWidth: Self.minimumWidth)
+        // Sheet state persists across presentations, so the init's
+        // seed only applies the first time; re-read the preset on
+        // every appearance or a repository plus would show the
+        // previous pick.
+        .onAppear {
+            if let preset = model.newSessionRepository {
+                repository = preset
+            }
+        }
     }
 
     // MARK: Private

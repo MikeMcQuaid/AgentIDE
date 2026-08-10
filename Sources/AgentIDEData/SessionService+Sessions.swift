@@ -35,6 +35,7 @@ public extension SessionService {
             Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktree.path,
             ";", "set", "-g", "mouse", "on",
             ";", "set", "-g", "history-limit", "50000",
+            ";", "set", "-g", "default-terminal", "xterm-256color",
         ]
     }
 

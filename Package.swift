@@ -27,6 +27,7 @@ let package = Package(
         // both grammars pin the latest ABI 14 releases.
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.23.3"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
         // The Swift grammar the tree-sitter ecosystem standardises on;
         // the generated-files tag is the one consumable by SwiftPM.
         .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", exact: "0.7.3-with-generated-files"),
@@ -69,6 +70,7 @@ let package = Package(
                 .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
                 .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),
                 .product(name: "TreeSitterBash", package: "tree-sitter-bash"),
+                .product(name: "TreeSitterPython", package: "tree-sitter-python"),
                 .product(name: "TreeSitterSwift", package: "tree-sitter-swift"),
             ],
             swiftSettings: mainActorByDefault,

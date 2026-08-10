@@ -40,6 +40,7 @@ struct RootView: View {
         .task {
             finderFocusRequest = 0
             columnVisibility = showsRepositorySidebar ? .all : .detailOnly
+            runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
             await dependencies.dashboard.poll()
         }
     }
@@ -67,6 +68,11 @@ struct RootView: View {
     /// when the shell process exits, so a quit shell shows its start
     /// button again.
     @State private var runningShells: Set<String> = []
+
+    /// The same set persisted, so shells running at quit reattach
+    /// automatically on the next launch; host tmux kept them alive.
+    @AppStorage("runningShellPaths")
+    private var runningShellPaths = ""
 
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
@@ -233,6 +239,7 @@ struct RootView: View {
                     command: dependencies.service.hostShellCommand(worktree: item.worktree),
                 ) {
                     runningShells.remove(path)
+                    runningShellPaths = runningShells.sorted().joined(separator: "\n")
                 }
                 .id("shell-" + path)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -271,6 +278,7 @@ struct RootView: View {
     private func startShellButton(for path: String) -> some View {
         Button {
             runningShells.insert(path)
+            runningShellPaths = runningShells.sorted().joined(separator: "\n")
         } label: {
             Label("Start shell", systemImage: "terminal")
         }

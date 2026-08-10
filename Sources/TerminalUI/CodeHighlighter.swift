@@ -2,6 +2,7 @@ import AgentIDEDomain
 import Foundation
 import SwiftTreeSitter
 import TreeSitterBash
+import TreeSitterPython
 import TreeSitterRuby
 import TreeSitterSwift
 
@@ -119,6 +120,7 @@ public enum CodeHighlighter {
         loaded[.swift] = configuration(tree_sitter_swift(), name: "Swift")
         loaded[.ruby] = configuration(tree_sitter_ruby(), name: "Ruby")
         loaded[.shell] = configuration(tree_sitter_bash(), name: "Bash")
+        loaded[.python] = configuration(tree_sitter_python(), name: "Python")
         return loaded
     }()
 
