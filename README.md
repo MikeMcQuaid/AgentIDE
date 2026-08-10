@@ -123,13 +123,16 @@ After cloning:
 git clone https://github.com/MikeMcQuaid/AgentIDE
 cd AgentIDE
 script/bootstrap
-script/build
-open AgentIDE.app
+script/install
+open /Applications/AgentIDE.app
 ```
 
 `script/bootstrap` installs the `Brewfile` dependencies and generates the
 gitignored Xcode project with XcodeGen (`open AgentIDE.xcodeproj` to work in
-Xcode). `AgentIDE.app` is a symlink to `script/build`'s output. The app
+Xcode). `script/install` builds and copies the app into `/Applications`, so
+the copy you run is never the build output a rebuild overwrites in place;
+the repo-root `AgentIDE.app` symlink to `script/build`'s output remains for
+quick development runs. The app
 currently launches to an empty dashboard; features land slice by slice (see
 [Status](#status)). A prebuilt app with automatic updates will come later.
 
