@@ -28,6 +28,20 @@ struct SandvaultLauncherTests {
         #expect(Array(command.suffix(3)) == ["/bin/zsh", "-c", "exec tmux ls"])
     }
 
+    @Test
+    func `injected PATH includes Homebrew, where tmux and agents live`() {
+        let command = launcher.command(
+            payload: "exec tmux ls",
+            initialDirectory: "/Users/Shared/sv-mike",
+            sessionID: "6E1A0A66-16F5-4EF5-B346-8E561E4D3E71",
+            sessionName: "agentide--agentide--app-skeleton--claude",
+        )
+        let path = try? #require(command.first { $0.hasPrefix("PATH=") })
+        #expect(path?.contains("/opt/homebrew/bin") == true)
+        #expect(path?.contains("/usr/local/bin") == true)
+        #expect(path?.contains("/usr/bin") == true)
+    }
+
     // MARK: Private
 
     private let launcher: SandvaultLauncher = .init(hostUser: "mike")

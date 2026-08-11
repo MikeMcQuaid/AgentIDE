@@ -1,7 +1,5 @@
 import AgentIDEDomain
 import DashboardFeature
-import PRFeature
-import ReviewFeature
 import SessionFeature
 import SwiftUI
 import TerminalUI
@@ -20,42 +18,52 @@ struct RootView: View {
     var utilityTabIndex = 0
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        // Plain panes with our own dividers: the navigation split
+        // view's floating toggle covered nearby controls and split
+        // views neither persisted divider positions nor honoured
+        // ideal widths on this OS. The sidebar never hides; it
+        // resizes down to a slim strip instead.
+        HStack(spacing: 0) {
             DashboardView(model: dependencies.dashboard)
-                .navigationSplitViewColumnWidth(min: Self.sidebarMinimum, ideal: Self.sidebarIdeal)
-        } detail: {
+                .frame(width: sidebarWidth)
+                .frame(maxHeight: .infinity)
+                .background(SidebarMaterial())
+                .ignoresSafeArea(.container, edges: .top)
+            PaneDivider(width: $sidebarWidth, range: Self.sidebarRange, controlsLeadingPane: true)
+                .ignoresSafeArea(.container, edges: .top)
             detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: .top)
         }
-        .sheet(isPresented: newSessionBinding) {
-            NewSessionSheet(model: dependencies.dashboard)
-        }
-        // The repository sidebar's visibility round-trips through
-        // storage so the View menu can drive and describe it.
-        .onChange(of: showsRepositorySidebar) {
-            columnVisibility = showsRepositorySidebar ? .all : .detailOnly
-        }
-        .onChange(of: columnVisibility) {
-            showsRepositorySidebar = columnVisibility != .detailOnly
+        .ignoresSafeArea(.container, edges: .top)
+        .background(WindowConfigurator())
+        .sheet(isPresented: sessionManagerBinding) {
+            SessionManagerSheet(service: dependencies.service) {
+                dependencies.dashboard.showsSessionManager = false
+            }
         }
         .task {
             finderFocusRequest = 0
-            columnVisibility = showsRepositorySidebar ? .all : .detailOnly
+            runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
+            rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
     }
 
     // MARK: Private
 
-    private static let sidebarMinimum: CGFloat = 240
-    private static let sidebarIdeal: CGFloat = 300
+    /// Slim enough for icon-and-truncated-text rows while staying
+    /// wider than the traffic lights band.
+    private static let sidebarRange = 150.0 ... 440.0
+    private static let utilityRange = 340.0 ... 1_200.0
     private static let primaryMinimum: CGFloat = 420
-    private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
-    private static let tabHorizontalPadding: CGFloat = 8
-    private static let tabVerticalPadding: CGFloat = 3
-    private static let tabSelectedOpacity = 0.25
 
-    /// Internal so the session tabs extension file can drive it.
+    /// The utility header row's height: the tab capsules plus the
+    /// row's padding. The floating toggle centres in the same height
+    /// so hiding the pane never moves it.
+    private static let toggleRowHeight: CGFloat = 30
+
     @State private var sessionTab: String = Self.activeTabID
 
     /// Focus requests from the finder menu items, cleared at launch
@@ -68,17 +76,37 @@ struct RootView: View {
     /// button again.
     @State private var runningShells: Set<String> = []
 
+    /// The same set persisted, so shells running at quit reattach
+    /// automatically on the next launch; host tmux kept them alive.
+    @AppStorage("runningShellPaths")
+    private var runningShellPaths = ""
+
+    /// Each worktree's last utility tab, persisted as
+    /// path-tab-index lines so panes stay per-worktree.
+    @AppStorage("worktreeTabs")
+    private var worktreeTabs = ""
+    @State private var rememberedTabs: [String: Int] = [:]
+
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
     @State private var visitedBrowsers: Set<String> = []
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
-    @AppStorage("showsRepositorySidebar")
-    private var showsRepositorySidebar = true
+
+    /// Pane widths, persisted so the layout restores on relaunch;
+    /// the dividers write them directly.
+    @AppStorage("sidebarWidth")
+    private var sidebarWidth = 300.0
+    @AppStorage("utilityPaneWidth")
+    private var utilityPaneWidth = 480.0
 
     @ViewBuilder private var detail: some View {
-        if let item = dependencies.dashboard.selection {
+        if dependencies.dashboard.showsNewSession {
+            // The middle pane, never a sheet.
+            NewSessionPane(model: dependencies.dashboard)
+        } else if dependencies.dashboard.showsRepositoryFinder {
+            RepositoryFinderPane(model: dependencies.dashboard)
+        } else if let item = dependencies.dashboard.selection {
             split(for: item)
                 .onChange(of: item.id) { sessionTab = initialTab(for: item) }
         } else {
@@ -90,51 +118,53 @@ struct RootView: View {
         }
     }
 
-    /// The worktree's sessions as capsule tabs at the top of the
-    /// primary pane; hidden when there is nothing to pick between.
-    /// In-pane rather than in the window toolbar, whose items
-    /// reflowed across the split on this OS.
-    @ViewBuilder
-    private func sessionStrip(for item: WorktreeItem) -> some View {
-        if item.session != nil || item.pastSessions.isEmpty == false {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Self.stripSpacing) {
-                    if let session = item.session {
-                        sessionTabButton(title: sessionTitle(for: session), id: Self.activeTabID)
-                    }
-                    ForEach(item.pastSessions) { past in
-                        sessionTabButton(title: pastTitle(for: past), id: past.id)
-                    }
-                }
-                .padding(Self.stripSpacing)
-            }
-            .hoverHelp("The worktree's sessions: the live one and past conversations")
-            Divider()
-        }
-    }
-
-    private func sessionTabButton(title: String, id: String) -> some View {
+    private var utilityToggleButton: some View {
         Button {
-            sessionTab = id
+            showsUtilityPane.toggle()
         } label: {
-            Text(title)
-                .font(.callout)
-                .lineLimit(1)
-                .padding(.horizontal, Self.tabHorizontalPadding)
-                .padding(.vertical, Self.tabVerticalPadding)
-                .background(
-                    Capsule().fill(sessionTab == id ? Color.accentColor.opacity(Self.tabSelectedOpacity) : .clear),
-                )
-                .contentShape(Capsule())
+            Label("Toggle utility pane", systemImage: "sidebar.right")
+                .labelStyle(.iconOnly)
         }
         .buttonStyle(.plain)
+        .hoverHelp(
+            showsUtilityPane
+                ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
+                : "Show the utility pane",
+        )
+    }
+
+    /// The tab bubbles and the pane toggle.
+    private var utilityHeader: some View {
+        HStack(spacing: Self.stripSpacing) {
+            // The tabs scroll when the pane narrows, so the toggle
+            // beside them can never be squeezed out.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Self.stripSpacing) {
+                    UtilityTabStrip()
+                }
+            }
+            Spacer(minLength: 0)
+            utilityToggleButton
+                .fixedSize()
+        }
+        .padding(Self.stripSpacing)
     }
 
     private func split(for item: WorktreeItem) -> some View {
-        HSplitView {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
-                sessionStrip(for: item)
+                sessionStrip(for: item, selection: $sessionTab)
                 primary(for: item)
+            }
+            // With the utility pane hidden its toggle overlays the
+            // session strip's empty right end, in exactly the spot
+            // the pane header shows it, so it never moves on toggle.
+            .overlay(alignment: .topTrailing) {
+                if showsUtilityPane == false {
+                    utilityToggleButton
+                        .frame(height: Self.toggleRowHeight)
+                        .padding(.trailing, Self.stripSpacing)
+                }
             }
             .frame(
                 minWidth: Self.primaryMinimum,
@@ -142,45 +172,40 @@ struct RootView: View {
                 maxHeight: .infinity,
                 alignment: .top,
             )
+            .ignoresSafeArea(.container, edges: .top)
             if showsUtilityPane {
+                PaneDivider(width: $utilityPaneWidth, range: Self.utilityRange, controlsLeadingPane: false)
+                    .ignoresSafeArea(.container, edges: .top)
                 utilityPane(for: item)
-                    .frame(minWidth: Self.utilityMinimum, maxHeight: .infinity)
+                    .frame(width: utilityPaneWidth)
+                    .frame(maxHeight: .infinity)
+                    .ignoresSafeArea(.container, edges: .top)
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
     }
 
-    /// The utility pane's own header: its tabs, a New Session button
-    /// and the pane toggle. In-pane so the controls can never cross
-    /// the split into the primary pane.
+    /// The utility pane: the shared tab header over the content, so
+    /// the current tab is always visible whichever tab shows.
+    /// Restores the worktree's remembered tab whenever the selection
+    /// changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: Self.stripSpacing) {
-                UtilityTabStrip()
-                Spacer(minLength: 0)
-                Button {
-                    dependencies.dashboard.newSessionRepository = Repository(
-                        name: item.worktree.repositoryName,
-                        path: item.worktree.repositoryPath,
-                    )
-                    dependencies.dashboard.showsNewSession = true
-                } label: {
-                    Label("New session", systemImage: "plus.circle")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.plain)
-                .hoverHelp("Start a new agent session, prefilled with this repository")
-                Button {
-                    showsUtilityPane.toggle()
-                } label: {
-                    Label("Toggle utility pane", systemImage: "sidebar.right")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.plain)
-                .hoverHelp("Hide the utility pane; View or Cmd-Shift-U brings it back")
-            }
-            .padding(Self.stripSpacing)
+            utilityHeader
             Divider()
             utilityContent(for: item)
+        }
+        .task(id: item.worktree.path) {
+            if let remembered = rememberedTabs[item.worktree.path] {
+                utilityTabIndex = remembered
+            }
+        }
+        .onChange(of: utilityTabIndex) {
+            rememberedTabs[item.worktree.path] = utilityTabIndex
+            worktreeTabs = rememberedTabs
+                .map { $0.key + "\t" + String($0.value) }
+                .sorted()
+                .joined(separator: "\n")
         }
     }
 
@@ -228,27 +253,19 @@ struct RootView: View {
         let showsBrowser = utilityTab == .browser
         let path = item.worktree.path
         return ZStack {
-            if runningShells.contains(path) {
-                TerminalPaneView(
-                    command: dependencies.service.hostShellCommand(worktreePath: path),
-                ) {
-                    runningShells.remove(path)
-                }
-                .id("shell-" + path)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            shellLayer(for: item)
                 .opacity(showsShell ? 1 : 0)
                 .allowsHitTesting(showsShell)
-            } else if showsShell {
-                startShellButton(for: path)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
             if showsShell == false, showsBrowser == false {
                 // Identity keyed by worktree, so switching in the
-                // sidebar always rebuilds the pane's state.
+                // sidebar always rebuilds the pane's state. The
+                // backgrounds must not expand into the ignored
+                // titlebar safe area, where they would paint over
+                // the tab header above.
                 switchedUtility(for: item)
                     .id("utility-" + path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(.background)
+                    .background(.background, ignoresSafeAreaEdges: [])
             }
             // Like the shell, a visited browser stays mounted so its
             // page survives tab switches without reloading.
@@ -256,7 +273,7 @@ struct RootView: View {
                 BrowserView()
                     .id("browser-" + path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.background)
+                    .background(.background, ignoresSafeAreaEdges: [])
                     .opacity(showsBrowser ? 1 : 0)
                     .allowsHitTesting(showsBrowser)
             }
@@ -268,43 +285,35 @@ struct RootView: View {
         }
     }
 
+    /// The shell tab's layer, always mounted while its shell runs so
+    /// the terminal survives tab switches at a constant size.
+    @ViewBuilder
+    private func shellLayer(for item: WorktreeItem) -> some View {
+        let path = item.worktree.path
+        if runningShells.contains(path) {
+            TerminalPaneView(
+                command: dependencies.service.hostShellCommand(worktree: item.worktree),
+            ) {
+                runningShells.remove(path)
+                runningShellPaths = runningShells.sorted().joined(separator: "\n")
+            }
+            .id("shell-" + path)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            startShellButton(for: path)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
     private func startShellButton(for path: String) -> some View {
         Button {
             runningShells.insert(path)
+            runningShellPaths = runningShells.sorted().joined(separator: "\n")
         } label: {
             Label("Start shell", systemImage: "terminal")
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
-    }
-
-    @ViewBuilder
-    private func switchedUtility(for item: WorktreeItem) -> some View {
-        switch utilityTab {
-        case .shell:
-            EmptyView()
-
-        case .review:
-            ReviewView(worktree: item.worktree, git: dependencies.git, service: dependencies.service)
-
-        case .editor:
-            EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
-
-        case .pullRequests:
-            PullRequestsView(
-                repository: Repository(name: item.worktree.repositoryName, path: item.worktree.repositoryPath),
-                items: repositoryItems(for: item),
-                github: dependencies.github,
-                service: dependencies.service,
-                branch: item.worktree.branch,
-            )
-
-        case .browser:
-            BrowserView()
-
-        case .message:
-            FinalMessageView(item: item, service: dependencies.service)
-        }
     }
 
     private func sessionStarted() async {

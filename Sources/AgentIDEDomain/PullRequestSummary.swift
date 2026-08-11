@@ -20,6 +20,8 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         isDraft: Bool = false,
         hasAutomerge: Bool = false,
         headOID: String = "",
+        author: String? = nil,
+        body: String? = nil,
     ) {
         self.number = number
         self.title = title
@@ -34,6 +36,8 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.isDraft = isDraft
         self.hasAutomerge = hasAutomerge
         self.headOID = headOID
+        self.author = author
+        self.body = body
     }
 
     // MARK: Public
@@ -78,6 +82,14 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// commit are treated as final, so caches key on it.
     public let headOID: String
 
+    /// The author's GitHub login; optional so summaries cached by
+    /// earlier releases still decode.
+    public let author: String?
+
+    /// The description, carried from the listing so a click-through
+    /// shows the conversation immediately; optional like the author.
+    public let body: String?
+
     /// The pull request's checks page.
     public var checksPageURL: String {
         url + "/checks"
@@ -97,15 +109,17 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
 
 // MARK: - ReviewComment
 
-/// One human comment on a pull request, from a review or the thread.
-public struct ReviewComment: Identifiable, Hashable, Sendable {
+/// One human comment on a pull request, from a review or the
+/// thread. Codable so conversations can cache between runs.
+public struct ReviewComment: Identifiable, Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a comment.
-    public init(id: Int, author: String, body: String) {
+    public init(id: Int, author: String, body: String, kind: String = "") {
         self.id = id
         self.author = author
         self.body = body
+        self.kind = kind
     }
 
     // MARK: Public
@@ -118,6 +132,10 @@ public struct ReviewComment: Identifiable, Hashable, Sendable {
 
     /// The comment text.
     public let body: String
+
+    /// The review state that produced this entry, such as
+    /// `APPROVED`; empty for plain comments.
+    public let kind: String
 }
 
 // MARK: - SearchHit

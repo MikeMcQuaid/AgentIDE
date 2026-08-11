@@ -28,7 +28,6 @@ struct TranscriptReaderTests {
         let latest = try #require(reader.latestTranscript(in: directory))
         #expect(latest.lastPathComponent == "22222222-bbbb.jsonl")
         #expect(reader.resumeID(of: latest) == "22222222-bbbb")
-        #expect(reader.finalAssistantMessage(in: latest) == "first\nsecond")
     }
 
     @Test

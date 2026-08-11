@@ -28,8 +28,8 @@ struct FileEditorView: View {
 
     // MARK: Internal
 
-    /// The editor with save and close actions. Save enables only
-    /// with unsaved changes and reads Saved after writing.
+    /// The editor with icon save and close actions. Save enables
+    /// only with unsaved changes and reports Saved after writing.
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -38,11 +38,15 @@ struct FileEditorView: View {
                 if let status {
                     Text(status).font(.callout).foregroundStyle(.secondary)
                 }
-                Button(hasChanges || hasSaved == false ? "Save" : "Saved") { save() }
+                Button("Save", systemImage: "square.and.arrow.down") { save() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
                     .disabled(hasChanges == false)
                     .keyboardShortcut("s", modifiers: .command)
                     .hoverHelp("Write the buffer back to the file (Cmd-S); dims until there are changes")
-                Button("Close") { close() }
+                Button("Close", systemImage: "xmark") { close() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
                     .hoverHelp("Close the editor without saving")
             }
             .padding(Self.padding)
@@ -55,15 +59,22 @@ struct FileEditorView: View {
             )
         }
         .onAppear { load() }
+        // Editing again invalidates the save report, but real error
+        // messages stay until resolved.
+        .onChange(of: content) {
+            if status == Self.savedStatus {
+                status = nil
+            }
+        }
     }
 
     // MARK: Private
 
     private static let padding: CGFloat = 8
+    private static let savedStatus = "Saved."
 
     @State private var content = ""
     @State private var saved = ""
-    @State private var hasSaved = false
     @State private var changedLines: Set<Int> = []
     @State private var status: String?
 
@@ -109,8 +120,7 @@ struct FileEditorView: View {
             content = Whitespace.strippingTrailingWhitespace(content)
             try content.write(toFile: safePath, atomically: true, encoding: .utf8)
             saved = content
-            hasSaved = true
-            status = nil
+            status = Self.savedStatus
             reloadChangedLines()
         } catch {
             status = error.localizedDescription

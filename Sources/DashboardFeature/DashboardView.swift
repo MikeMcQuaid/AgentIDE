@@ -33,12 +33,22 @@ public struct DashboardView: View {
             }
             .padding(Self.listPadding)
         }
-        .toolbar {
-            Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
-                .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
-        }
-        .sheet(isPresented: finderBinding) {
-            RepositoryFinderSheet(model: model)
+        // The traffic lights occupy the top-left; Open repository
+        // sits at the band's right end, and the inset spaces the
+        // first repository row beneath it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
+                    .labelStyle(.iconOnly)
+                    // The glass bubble the split view's own floating
+                    // toggle used to draw.
+                    .buttonStyle(.glass)
+                    .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
+            }
+            .padding(.trailing, Self.listPadding)
+            .padding(.top, Self.headerTopPadding)
+            .padding(.bottom, Self.statusPadding)
         }
         // An inset, not an overlay: long git errors must never draw
         // over the rows. Clicking opens the full text, since two
@@ -77,6 +87,7 @@ public struct DashboardView: View {
 
     private static let statusPadding: CGFloat = 4
     private static let statusLineLimit = 2
+    private static let headerTopPadding: CGFloat = 12
     private static let statusPopoverWidth: CGFloat = 420
     private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6
@@ -96,17 +107,10 @@ public struct DashboardView: View {
 
     private let model: DashboardModel
 
-    private var finderBinding: Binding<Bool> {
-        Binding(
-            get: { model.showsRepositoryFinder },
-            set: { model.showsRepositoryFinder = $0 },
-        )
-    }
-
     @ViewBuilder private var foreignSection: some View {
         if model.foreign.isEmpty == false {
             Text("Foreign sessions")
-                .font(.subheadline.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.top, Self.rowIndent)
             ForEach(model.foreign) { session in
@@ -125,33 +129,53 @@ public struct DashboardView: View {
         }
     }
 
+    /// The disclosure button and a trailing new-session plus are
+    /// siblings: a button nested inside another button never
+    /// receives its clicks.
     private func header(for group: RepositoryGroup) -> some View {
-        Button {
-            toggleExpansion(of: group.repository.path)
-        } label: {
-            HStack(spacing: Self.statusPadding) {
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
-                    .accessibilityHidden(true)
-                avatar(for: group.repository)
-                Text(group.repository.fullName ?? group.repository.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                if group.items.count > 1 {
-                    Text("(" + String(group.items.count - 1) + ")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .hoverHelp("Worktrees beyond the default branch")
-                }
-                Spacer(minLength: 0)
+        HStack(spacing: Self.statusPadding) {
+            Button {
+                toggleExpansion(of: group.repository.path)
+            } label: {
+                headerLabel(for: group)
             }
-            .padding(.vertical, Self.rowVerticalPadding)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverHelp("Click to show or hide this repository's worktrees")
+            Button {
+                model.newSessionRepository = group.repository
+                model.showsNewSession = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("New session in " + group.repository.name)
+            }
+            .buttonStyle(.plain)
+            .hoverHelp("Start a new agent session in this repository")
         }
-        .buttonStyle(.plain)
-        .hoverHelp("Click to show or hide this repository's worktrees")
+    }
+
+    private func headerLabel(for group: RepositoryGroup) -> some View {
+        HStack(spacing: Self.statusPadding) {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
+                .accessibilityHidden(true)
+            avatar(for: group.repository)
+            Text(group.repository.fullName ?? group.repository.name)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            if group.items.count > 1 {
+                Text("(" + String(group.items.count - 1) + ")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .hoverHelp("Worktrees beyond the default branch")
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, Self.rowVerticalPadding)
+        .contentShape(Rectangle())
     }
 
     /// Selected rows use the full accent fill with light content,
@@ -159,7 +183,7 @@ public struct DashboardView: View {
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
         return Button {
-            model.selection = item
+            model.select(item)
         } label: {
             WorktreeRowView(
                 item: item,

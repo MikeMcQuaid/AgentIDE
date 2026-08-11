@@ -23,22 +23,54 @@ public struct GitHubClient: Sendable {
         case open
     }
 
+    /// The `gh pr list` page size, public so it can default the
+    /// public listing's limit. The branch scope filters server-side
+    /// so one page is plenty, and the pull request tab raises the
+    /// limit as later pages are visited.
+    public static let listLimit = 25
+
     /// The repository's pull requests for a scope, with dashboard
     /// state.
     public func pullRequests(
         repositoryPath: String,
         scope: ListScope = .open,
+        limit: Int = Self.listLimit,
     ) async throws -> [PullRequestSummary] {
-        let result = try await gh(Self.listArguments(scope: scope), in: repositoryPath)
+        let result = try await gh(Self.listArguments(scope: scope, limit: limit), in: repositoryPath)
         return Self.summaries(fromJSON: result.standardOutput)
     }
 
-    /// Every repository the authenticated user can access across
-    /// their organisations, as `owner/name`, most recently pushed
-    /// first.
-    public func accessibleRepositories(directory: String) async throws -> [String] {
+    /// One pull request's full summary, fetched when a light list
+    /// row clicks through so its header gains the status icons.
+    public func pullRequestSummary(
+        repositoryPath: String,
+        number: Int,
+    ) async throws -> PullRequestSummary? {
+        let fields = Self.coreFields + "," + Self.statusFields
+        let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
+        return Self.summaries(fromJSON: "[" + result.standardOutput + "]").first
+    }
+
+    /// The authenticated user's login followed by their
+    /// organisations, for the repository finder's owner step.
+    public func organisations(directory: String) async throws -> [String] {
+        // gh's HTTP cache answers repeats for an hour; memberships
+        // change rarely.
+        let user = try await gh(["api", "user", "--cache", "1h", "--jq", ".login"], in: directory)
+        let organisations = try await gh(
+            ["api", "user/orgs?per_page=100", "--cache", "1h", "--paginate", "--jq", ".[].login"],
+            in: directory,
+        )
+        let login = user.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ([login] + organisations.standardOutput.split(separator: "\n").map(String.init))
+            .filter { $0.isEmpty == false }
+    }
+
+    /// Every repository under one owner, as `owner/name`, most
+    /// recently pushed first.
+    public func repositories(owner: String, directory: String) async throws -> [String] {
         let result = try await gh(
-            ["api", "user/repos?per_page=100&sort=pushed", "--paginate", "--jq", ".[].full_name"],
+            ["repo", "list", owner, "--limit", "1000", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
             in: directory,
         )
         return result.standardOutput.split(separator: "\n").map(String.init)
@@ -51,12 +83,50 @@ public struct GitHubClient: Sendable {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
-    /// Opens a pull request from the worktree's branch, filling the
-    /// title and body from its commits.
-    public func createPullRequest(worktreePath: String) async throws -> String {
-        try await gh(["pr", "create", "--fill"], in: worktreePath)
+    /// Opens a pull request from the worktree's branch. With a
+    /// repository pull request template the body comes from it
+    /// (which `--fill` would ignore) and the title from `title`;
+    /// without one `--fill` takes both from the commits.
+    public func createPullRequest(worktreePath: String, title: String) async throws -> String {
+        var arguments = ["pr", "create"]
+        if let template = Self.pullRequestTemplate(in: worktreePath), title.isEmpty == false {
+            arguments += ["--title", title, "--body-file", template]
+        } else {
+            arguments += ["--fill"]
+        }
+        return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Whether the repository merges through a merge queue, so merge
+    /// controls can say queue rather than merge.
+    public func hasMergeQueue(repositoryPath: String) async -> Bool {
+        let nameWithOwner = try? await gh(
+            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+            in: repositoryPath,
+        )
+        .standardOutput
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = (nameWithOwner ?? "").split(separator: "/", maxSplits: 1)
+        guard let owner = parts.first, let name = parts.dropFirst().first else {
+            return false
+        }
+
+        let query = "query($owner: String!, $name: String!) "
+            + "{ repository(owner: $owner, name: $name) { mergeQueue { id } } }"
+        // A repository setting that rarely changes; gh's HTTP cache
+        // answers repeats for a day.
+        let result = try? await gh(
+            [
+                "api", "graphql", "--cache", "24h",
+                "-f", "query=" + query,
+                "-f", "owner=" + String(owner),
+                "-f", "name=" + String(name),
+            ],
+            in: repositoryPath,
+        )
+        return result?.standardOutput.contains("\"mergeQueue\":{") ?? false
     }
 
     /// Enables automerge for a pull request.
@@ -101,15 +171,30 @@ public struct GitHubClient: Sendable {
 
     // MARK: Internal
 
-    /// The `gh pr list` invocation for a scope; separated for tests.
-    /// The default `gh pr list` limit of 30 hid pull requests on
-    /// busy repositories, so worktree branches failed to match.
-    static let listLimit = 200
+    /// Cheap fields, including the body so a click-through shows the
+    /// conversation immediately.
+    static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"
 
-    static func listArguments(scope: ListScope) -> [String] {
-        let fields = "number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,"
-            + "statusCheckRollup,isDraft,autoMergeRequest,headRefOid"
-        var arguments = ["pr", "list", "--json", fields, "--limit", String(Self.listLimit)]
+    /// The expensive dashboard fields; computing these across every
+    /// open pull request timed out (HTTP 504) on busy repositories,
+    /// so the open scope skips them and rows enrich on selection.
+    static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
+
+    /// The repository's pull request template file, nil without one.
+    static func pullRequestTemplate(in worktreePath: String) -> String? {
+        [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            ".github/pull_request_template.md",
+            "PULL_REQUEST_TEMPLATE.md",
+            "docs/PULL_REQUEST_TEMPLATE.md",
+        ]
+        .map { worktreePath + "/" + $0 }
+        .first { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    static func listArguments(scope: ListScope, limit: Int = Self.listLimit) -> [String] {
+        let fields = scope == .open ? Self.coreFields : Self.coreFields + "," + Self.statusFields
+        var arguments = ["pr", "list", "--json", fields, "--limit", String(limit)]
         switch scope {
         case let .branch(branch):
             arguments += ["--head", branch, "--state", "all"]
@@ -148,6 +233,8 @@ public struct GitHubClient: Sendable {
                 isDraft: row.isDraft ?? false,
                 hasAutomerge: row.autoMergeRequest != nil,
                 headOID: row.headRefOid ?? "",
+                author: row.author?.login,
+                body: row.body,
             )
         }
     }
@@ -173,6 +260,10 @@ public struct GitHubClient: Sendable {
         // Presence is the signal.
     }
 
+    private struct RowAuthor: Decodable {
+        let login: String?
+    }
+
     private struct PullRequestRow: Decodable {
         let number: Int
         let title: String
@@ -182,6 +273,8 @@ public struct GitHubClient: Sendable {
         let state: String?
         let mergeable: String?
         let reviewDecision: String?
+        let author: RowAuthor?
+        let body: String?
         // Optional because older gh versions omit the field.
         // swiftlint:disable:next discouraged_optional_boolean
         let isDraft: Bool?

@@ -42,6 +42,10 @@ public enum SyntaxLanguage: Hashable, Sendable {
     case swift
     case ruby
     case shell
+    case python
+    case json
+    case typescript
+    case dockerfile
     case yaml
     case markdown
 
@@ -66,6 +70,18 @@ public enum SyntaxLanguage: Hashable, Sendable {
              "zsh":
             return .shell
 
+        case "py":
+            return .python
+
+        case "json":
+            return .json
+
+        case "cts",
+             "mts",
+             "ts",
+             "tsx":
+            return .typescript
+
         case "yaml",
              "yml":
             return .yaml
@@ -75,6 +91,9 @@ public enum SyntaxLanguage: Hashable, Sendable {
             return .markdown
 
         default:
+            if name == "Dockerfile" || name.hasPrefix("Dockerfile.") {
+                return .dockerfile
+            }
             return name == "Gemfile" || name == "Rakefile" || name == "Brewfile" ? .ruby : nil
         }
     }
@@ -84,15 +103,19 @@ public enum SyntaxLanguage: Hashable, Sendable {
     /// The line-comment introducer, empty for languages without one.
     var commentPrefix: String {
         switch self {
-        case .swift:
+        case .swift,
+             .typescript:
             "//"
 
-        case .ruby,
+        case .dockerfile,
+             .python,
+             .ruby,
              .shell,
              .yaml:
             "#"
 
-        case .markdown:
+        case .json,
+             .markdown:
             ""
         }
     }
@@ -125,6 +148,35 @@ public enum SyntaxLanguage: Hashable, Sendable {
                 "case", "esac", "function", "return", "exit", "local", "export", "readonly",
                 "shift", "source", "set", "unset", "trap", "echo", "printf", "read", "eval",
                 "exec", "true", "false", "in",
+            ]
+
+        case .python:
+            [
+                "def", "class", "if", "elif", "else", "for", "while", "in", "return", "import",
+                "from", "as", "with", "try", "except", "finally", "raise", "pass", "break",
+                "continue", "lambda", "yield", "global", "nonlocal", "assert", "del", "not",
+                "and", "or", "is", "None", "True", "False", "async", "await", "match", "case",
+            ]
+
+        case .json:
+            ["true", "false", "null"]
+
+        case .typescript:
+            [
+                "const", "let", "var", "function", "return", "if", "else", "for", "while", "do",
+                "switch", "case", "default", "break", "continue", "class", "interface", "type",
+                "enum", "extends", "implements", "import", "export", "from", "as", "new", "this",
+                "null", "undefined", "true", "false", "async", "await", "try", "catch", "finally",
+                "throw", "typeof", "instanceof", "in", "of", "readonly", "public", "private",
+                "protected", "static", "abstract", "namespace", "declare", "keyof", "never",
+                "unknown", "any", "void", "string", "number", "boolean",
+            ]
+
+        case .dockerfile:
+            [
+                "FROM", "RUN", "CMD", "LABEL", "EXPOSE", "ENV", "ADD", "COPY", "ENTRYPOINT",
+                "VOLUME", "USER", "WORKDIR", "ARG", "ONBUILD", "STOPSIGNAL", "HEALTHCHECK",
+                "SHELL", "AS",
             ]
 
         case .yaml:

@@ -66,6 +66,7 @@ public struct EditorPane: View {
     }
 
     private static let padding: CGFloat = 6
+    private static let fieldTopPadding: CGFloat = 4
     private static let fileResultLimit = 12
     private static let contentQueryMinimum = 3
     private static let resultsHeight: CGFloat = 180
@@ -134,8 +135,9 @@ public struct EditorPane: View {
             RoundedRectangle(cornerRadius: Self.fieldCornerRadius)
                 .fill(.quaternary.opacity(Self.fieldBackgroundOpacity)),
         )
-        // Pinned to the pane's top edge: no top inset.
         .padding([.horizontal, .bottom], Self.padding)
+        // A little air below the utility tab bar above.
+        .padding(.top, Self.fieldTopPadding)
         .hoverHelp("Cmd-T focuses this; the toggle switches between fuzzy file names and ripgrep contents")
     }
 

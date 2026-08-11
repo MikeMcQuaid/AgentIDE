@@ -50,11 +50,17 @@ public struct SandvaultLauncher: Sendable {
             "SHELL=/bin/zsh",
             "TERM=xterm-256color",
             "COLORTERM=truecolor",
+            // Without a UTF-8 locale tmux draws box characters as
+            // ASCII, which made agent panes render differently from
+            // host shells.
+            "LANG=en_US.UTF-8",
             "INITIAL_DIR=" + initialDirectory,
             "SHARED_WORKSPACE=" + sharedWorkspace,
             "SV_SESSION_ID=" + sessionID,
             "AGENTIDE_SESSION=" + sessionName,
-            "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+            // Homebrew first: tmux and the agent CLIs live there, and
+            // env -i wipes whatever PATH the login shell would build.
+            "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             "GIT_CONFIG_COUNT=1",
             "GIT_CONFIG_KEY_0=safe.directory",
             "GIT_CONFIG_VALUE_0=" + sharedWorkspace + "/*",

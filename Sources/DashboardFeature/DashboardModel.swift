@@ -52,11 +52,8 @@ public final class DashboardModel {
     /// Sessions not created by AgentIDE.
     public private(set) var foreign: [AgentSession] = []
 
-    /// Whether the new session sheet is shown.
-    public var showsNewSession = false
-
-    /// Whether the repository finder sheet is shown.
-    public var showsRepositoryFinder = false
+    /// Whether the tmux session manager sheet is shown.
+    public var showsSessionManager = false
 
     /// The repository the sheet preselects, set by the toolbar's new
     /// session button.
@@ -66,14 +63,35 @@ public final class DashboardModel {
     /// extension also reports through it.
     public internal(set) var status: String?
 
+    /// Whether the new session page is shown; the middle-pane pages
+    /// are mutually exclusive, so showing one cancels the other.
+    public var showsNewSession = false {
+        didSet {
+            if showsNewSession {
+                showsRepositoryFinder = false
+            }
+        }
+    }
+
+    /// Whether the repository finder page is shown.
+    public var showsRepositoryFinder = false {
+        didSet {
+            if showsRepositoryFinder {
+                showsNewSession = false
+            }
+        }
+    }
+
     /// The selected worktree item. Selecting an item marks it seen,
-    /// clearing its unread dot immediately and any manual mark.
+    /// clearing its unread dot immediately and any manual mark, and
+    /// persists so the next launch resumes on the same worktree.
     public var selection: WorktreeItem? {
         didSet {
             guard let selection, selection.id != oldValue?.id else {
                 return
             }
 
+            UserDefaults.standard.set(selection.worktree.path, forKey: Self.selectedWorktreeKey)
             service.markSeen(worktreePath: selection.worktree.path)
             clearUnread(at: selection.worktree.path)
             // The freshly selected branch jumps the polling queue.
@@ -84,6 +102,14 @@ public final class DashboardModel {
     /// The repositories available for new sessions.
     public var repositories: [Repository] {
         service.repositories()
+    }
+
+    /// Selecting from the sidebar is a middle-pane action, so it
+    /// cancels any form the middle pane is showing.
+    public func select(_ item: WorktreeItem) {
+        showsNewSession = false
+        showsRepositoryFinder = false
+        selection = item
     }
 
     /// Reloads everything and notifies about newly finished or
@@ -99,7 +125,11 @@ public final class DashboardModel {
         foreign = overview.foreign
         if let selected = selection {
             selection = overview.groups.flatMap(\.items).first { $0.id == selected.id }
+        } else if hasRestoredSelection == false {
+            let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
+            selection = overview.groups.flatMap(\.items).first { $0.worktree.path == stored }
         }
+        hasRestoredSelection = true
         cacheSidebar(overview.groups)
         await refreshStalePullRequests()
     }
@@ -126,92 +156,6 @@ public final class DashboardModel {
     public func launchChoices(for agent: AgentKind) -> (models: [String], efforts: [String]) {
         let fallback = service.launchChoices(for: agent)
         return (discoveredModels[agent] ?? fallback.models, fallback.efforts)
-    }
-
-    /// Creates a session from a typed prompt.
-    public func createSession(
-        repository: Repository,
-        prompt: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async {
-        await run {
-            _ = try await service.createSession(
-                repository: repository,
-                prompt: prompt,
-                agent: agent,
-                options: options,
-            )
-        }
-    }
-
-    /// Creates a session working on a GitHub issue.
-    public func createSession(
-        fromIssue number: Int,
-        repository: Repository,
-        context: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async {
-        await run {
-            _ = try await service.createSession(
-                fromIssue: number,
-                repository: repository,
-                context: context,
-                agent: agent,
-                options: options,
-            )
-        }
-    }
-
-    /// Creates a session on a pull request's own branch.
-    public func createSession(
-        fromPullRequest number: Int,
-        repository: Repository,
-        context: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async {
-        await run {
-            _ = try await service.createSession(
-                fromPullRequest: number,
-                repository: repository,
-                context: context,
-                agent: agent,
-                options: options,
-            )
-        }
-    }
-
-    /// Starts an agent in an existing worktree.
-    public func launchAgent(
-        in worktree: Worktree,
-        prompt: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async {
-        await run {
-            _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
-        }
-    }
-
-    /// Starts an agent on an open issue in an existing worktree.
-    public func launchAgent(
-        fromIssue number: Int,
-        in worktree: Worktree,
-        context: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async {
-        await run {
-            _ = try await service.launchAgent(
-                fromIssue: number,
-                in: worktree,
-                context: context,
-                agent: agent,
-                options: options,
-            )
-        }
     }
 
     /// Deletes a worktree; its conversations stay readable in the
@@ -301,9 +245,14 @@ public final class DashboardModel {
     // MARK: Private
 
     private static let pollInterval = 5
+    private static let selectedWorktreeKey = "selectedWorktreePath"
 
     /// Models each CLI reported at startup; absent agents fall back.
     private var discoveredModels: [AgentKind: [String]] = [:]
+
+    /// Whether the persisted selection has been re-applied, tried on
+    /// the first refresh only so a deliberate deselection sticks.
+    private var hasRestoredSelection = false
 
     private func clearUnread(at path: String) {
         for groupIndex in groups.indices {
@@ -330,17 +279,5 @@ public final class DashboardModel {
             return cached
         }
         store.save(metadata)
-    }
-
-    /// Runs a session-creation action, closing the sheet and
-    /// refreshing on success.
-    private func run(_ work: () async throws -> Void) async {
-        do {
-            try await work()
-            showsNewSession = false
-            await refresh()
-        } catch {
-            status = error.localizedDescription
-        }
     }
 }

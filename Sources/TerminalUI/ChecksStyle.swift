@@ -105,6 +105,36 @@ public nonisolated enum ChecksStyle {
         }
     }
 
+    /// The octicon for GitHub's mergeability verdict, nil while it
+    /// is still unknown.
+    public static func mergeableOcticonName(for mergeable: String) -> String? {
+        switch mergeable {
+        case "MERGEABLE":
+            "octicon-git-merge"
+
+        case "CONFLICTING":
+            "octicon-x-circle-fill"
+
+        default:
+            nil
+        }
+    }
+
+    /// The colour for a mergeability verdict.
+    public static func mergeableColour(for mergeable: String) -> Color {
+        mergeable == "MERGEABLE" ? .green : .red
+    }
+
+    /// A short display name for a GitHub login: the code review bot
+    /// shortens to its product name and bot suffixes drop.
+    public static func authorDisplayName(_ login: String) -> String {
+        if login.lowercased().hasPrefix("copilot") {
+            return "Copilot"
+        }
+
+        return login.replacing("[bot]", with: "")
+    }
+
     /// The octicon for a pull request's overall state.
     public static func stateOcticonName(state: String, isDraft: Bool) -> String {
         switch state {

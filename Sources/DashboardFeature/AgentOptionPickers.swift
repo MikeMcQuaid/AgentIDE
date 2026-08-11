@@ -18,7 +18,15 @@ struct AgentOptionPickers: View {
         HStack(spacing: Self.spacing) {
             Picker("Agent", selection: $agent) {
                 ForEach(AgentKind.allCases, id: \.self) { kind in
-                    Label(kind.displayName, systemImage: kind.iconSystemName).tag(kind)
+                    Label {
+                        Text(kind.displayName)
+                    } icon: {
+                        Image(kind.iconAssetName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                    }
+                    .tag(kind)
                 }
             }
             .hoverHelp("The agent CLI to run")
@@ -44,6 +52,7 @@ struct AgentOptionPickers: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 6
+    private static let agentIconSize: CGFloat = 8
 
     /// Human-readable picker names: xhigh reads Extra High, gpt ids
     /// read GPT n and simple names capitalise.

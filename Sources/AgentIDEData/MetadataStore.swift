@@ -69,8 +69,10 @@ public struct AppMetadata: Codable, Sendable {
         unreadMarks = try container.decodeIfPresent([String].self, forKey: .unreadMarks) ?? []
         pullRequestCache = try container
             .decodeIfPresent([String: PullRequestSummary].self, forKey: .pullRequestCache) ?? [:]
-        accessibleRepositories = try container
-            .decodeIfPresent([String].self, forKey: .accessibleRepositories) ?? []
+        organisations = try container
+            .decodeIfPresent([String].self, forKey: .organisations) ?? []
+        ownerRepositories = try container
+            .decodeIfPresent([String: [String]].self, forKey: .ownerRepositories) ?? [:]
         openIssuesCache = try container
             .decodeIfPresent([String: [IssueSummary]].self, forKey: .openIssuesCache) ?? [:]
         openPullRequestsCache = try container
@@ -81,6 +83,10 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: String].self, forKey: .sessionsByWorktree) ?? [:]
         resumeIDs = try container.decodeIfPresent([String: String].self, forKey: .resumeIDs) ?? [:]
         cachedSidebar = try container.decodeIfPresent([CachedRepository].self, forKey: .cachedSidebar) ?? []
+        pullRequestListCache = try container
+            .decodeIfPresent([String: [PullRequestSummary]].self, forKey: .pullRequestListCache) ?? [:]
+        conversationCache = try container
+            .decodeIfPresent([String: CachedConversation].self, forKey: .conversationCache) ?? [:]
     }
 
     // MARK: Public
@@ -100,9 +106,13 @@ public struct AppMetadata: Codable, Sendable {
     /// for an unchanged commit need no refetch.
     public var pullRequestCache: [String: PullRequestSummary] = [:]
 
-    /// The GitHub repositories the user could reach at last listing,
-    /// so the repository finder opens instantly.
-    public var accessibleRepositories: [String] = []
+    /// The user's login and organisations at last listing, so the
+    /// repository finder's owner step opens instantly.
+    public var organisations: [String] = []
+
+    /// Each owner's repositories at last listing, keyed by owner, so
+    /// the finder's second step paints instantly.
+    public var ownerRepositories: [String: [String]] = [:]
 
     /// Each repository's open issues at last listing, for instant
     /// pickers, keyed by repository path.
@@ -128,6 +138,35 @@ public struct AppMetadata: Codable, Sendable {
     /// The last rendered sidebar, so a fresh launch paints instantly
     /// while the first poll runs.
     public var cachedSidebar: [CachedRepository] = []
+
+    /// Each repository and scope's last pull request listing, so the
+    /// tab paints instantly in a new session while a fetch refreshes.
+    public var pullRequestListCache: [String: [PullRequestSummary]] = [:]
+
+    /// Each pull request's last conversation, keyed by repository
+    /// path and number, painted instantly like the listings.
+    public var conversationCache: [String: CachedConversation] = [:]
+}
+
+// MARK: - CachedConversation
+
+/// One pull request's cached body and feedback timeline.
+public struct CachedConversation: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates a cached conversation.
+    public init(body: String = "", events: [ReviewComment] = []) {
+        self.body = body
+        self.events = events
+    }
+
+    // MARK: Public
+
+    /// The pull request's description.
+    public var body: String
+
+    /// The reviews and comments, in fetched order.
+    public var events: [ReviewComment]
 }
 
 // MARK: - MetadataStore

@@ -128,9 +128,6 @@ public struct SessionService: Sendable {
     /// ripgrep output splits into path, line and text.
     static let searchFieldSplits = 2
 
-    /// How many trailing path components name a shell session.
-    static let shellNameComponents = 2
-
     /// The host's tmux binary; Homebrew's location is not on a GUI
     /// app's default PATH.
     static var hostTmuxPath: String {

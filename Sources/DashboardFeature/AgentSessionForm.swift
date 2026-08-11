@@ -67,9 +67,14 @@ struct AgentSessionForm: View {
             sourceFields
             HStack {
                 Spacer()
-                Button(submitTitle) { submit() }
+                if isStarting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .hoverHelp("Creating the worktree and starting the agent")
+                }
+                Button(isStarting ? "Starting…" : submitTitle) { submit() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(submitDisabled)
+                    .disabled(submitDisabled || isStarting)
                     .hoverHelp(submitHelp)
             }
         }
@@ -85,6 +90,11 @@ struct AgentSessionForm: View {
     @State private var source: PromptSource = .prompt
     @State private var agent: AgentKind = .claudeCode
     @State private var number: Int?
+
+    /// Guards against double submission: creating a worktree takes
+    /// seconds, and a second click during it started a second
+    /// session.
+    @State private var isStarting = false
     @State private var issues: [IssueSummary] = []
     @State private var pullRequests: [PullRequestSummary] = []
     @AppStorage("newSessionPrompt")
@@ -173,6 +183,11 @@ struct AgentSessionForm: View {
     }
 
     private func submit() {
+        guard isStarting == false else {
+            return
+        }
+
+        isStarting = true
         let submission = Submission(
             source: source,
             number: number,
@@ -186,6 +201,7 @@ struct AgentSessionForm: View {
         )
         Task {
             await onSubmit(submission)
+            isStarting = false
             if source == .prompt {
                 prompt = ""
             } else {

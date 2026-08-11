@@ -1,22 +1,56 @@
 #!/bin/bash
-# Attach this terminal to a sandboxed tmux session by name.
+# Attach this terminal to a sandboxed tmux session by name, or list
+# the sessions when run without arguments (works as the host user or
+# inside the sandbox).
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "Usage: ${0} <session>" >&2
+if [[ $# -gt 1 ]]; then
+  echo "Usage: ${0} [session]" >&2
   exit 1
 fi
 
-if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  export TMUX_TMPDIR=/tmp
-  exec /opt/homebrew/bin/tmux attach-session -t "$1"
+if [[ $# -eq 0 ]]; then
+  TMUX_ARGS=(ls)
+else
+  TMUX_ARGS=(attach-session -t "$1")
 fi
 
-exec sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
-  HOME="/Users/sandvault-${USER}" \
-  USER="sandvault-${USER}" \
-  SHELL=/bin/zsh \
-  TERM="${TERM:-xterm-256color}" \
-  PATH=/usr/bin:/bin:/usr/sbin:/sbin \
-  /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb" \
-  /bin/zsh -c 'export TMUX_TMPDIR=/tmp; exec /opt/homebrew/bin/tmux attach-session -t "$1"' attach "$1"
+no_sessions() {
+  echo "No agent sessions are running."
+  exit 0
+}
+
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  # Matches TmuxClient: the socket lives in the sandbox user's home,
+  # not in /tmp.
+  export TMUX_TMPDIR="${HOME}/.agentide/tmux"
+  # Resolved through PATH: Intel Macs keep Homebrew in
+  # /usr/local/bin rather than /opt/homebrew/bin.
+  if [[ "${TMUX_ARGS[0]}" == "ls" ]]; then
+    tmux ls 2>/dev/null || no_sessions
+    exit 0
+  fi
+  exec tmux "${TMUX_ARGS[@]}"
+fi
+
+RUN_IN_SANDBOX=(
+  sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i
+  HOME="/Users/sandvault-${USER}"
+  USER="sandvault-${USER}"
+  SHELL=/bin/zsh
+  TERM="${TERM:-xterm-256color}"
+  # The same locale the launcher pins, so tmux draws the same box
+  # characters here as in the app's terminals.
+  LANG=en_US.UTF-8
+  PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+  TMUX_TMPDIR="/Users/sandvault-${USER}/.agentide/tmux"
+  /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb"
+  /bin/zsh -c 'exec tmux "$@"' tmux
+)
+
+if [[ "${TMUX_ARGS[0]}" == "ls" ]]; then
+  "${RUN_IN_SANDBOX[@]}" ls 2>/dev/null || no_sessions
+  exit 0
+fi
+
+exec "${RUN_IN_SANDBOX[@]}" "${TMUX_ARGS[@]}"

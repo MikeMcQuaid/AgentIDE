@@ -17,12 +17,15 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/bootstrap`: install `Brewfile` dependencies and generate
   `AgentIDE.xcodeproj` with XcodeGen
 - `script/build`: build the app with xcodebuild
+- `script/install`: build, then copy the app into /Applications so
+  the running copy survives rebuilds
 - `script/test`: run the unit and integration tests
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
-- `script/attach <session>`: attach this terminal to a sandboxed
-  tmux session (works as the host user or inside the sandbox)
+- `script/attach [session]`: attach this terminal to a sandboxed
+  tmux session, or list them when run without arguments (works as
+  the host user or inside the sandbox)
 
 ## Repository Structure
 
@@ -56,6 +59,16 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 
 - SwiftUI `List`/`Section` crash AppKit's outline diff when rows are
   removed conditionally; the sidebar is a plain `ScrollView`.
+- `NavigationSplitView` floats a sidebar toggle that survives
+  `.toolbar(removing: .sidebarToggle)` and covers nearby controls,
+  and `HSplitView` neither persists divider positions nor honours
+  ideal widths; the window is plain panes with `PaneDivider`
+  drag handles, `SidebarMaterial` supplying the sidebar blur and
+  the sidebar never hiding (only resizing).
+- Shape-style `.background` fills expand into ignored safe areas
+  by default and paint over sibling rows in the titlebar band;
+  pass `ignoresSafeAreaEdges: []` inside panes that ignore the
+  top safe area.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.
@@ -68,7 +81,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   extensions are banned by SwiftLint.
 - GitHub: never repository-wide `gh pr list` on large repositories
   (the GraphQL gateway times out); query per branch, cache answers,
-  keep the last good value on failure.
+  keep the last good value on failure. The expensive fields are
+  checks, mergeability and review decision: wide listings fetch
+  light fields only and enrich one pull request on selection.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
   index, finder mode and focus, browser address).
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
@@ -104,4 +119,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    speaks one agent interface.
 8. Describe third-party apps this project replaces by category, never
    by product name, in every committed file.
-9. Keep diffs minimal and follow existing structure.
+9. Never place app files in bare `/tmp`: cross-user files belong in
+   the shared workspace or the owning user's home, per-user scratch
+   in that user's macOS temporary directory.
+10. Keep diffs minimal and follow existing structure.

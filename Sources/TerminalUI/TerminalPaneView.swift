@@ -55,9 +55,43 @@ public struct TerminalPaneView: NSViewRepresentable {
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
 
+        /// Whether the process has been spawned; it waits for real
+        /// bounds so tmux sizes to the pane, not a placeholder frame.
+        var started = false
+
+        /// Watches for the first real layout, so the start is
+        /// immediate rather than waiting for an unrelated SwiftUI
+        /// update.
+        var frameObserver: NSObjectProtocol?
+
+        /// What the observer starts once the view has real bounds.
+        weak var pendingView: LocalProcessTerminalView?
+        var pendingCommand: [String] = []
+
         let onProcessTerminated: (@MainActor () -> Void)?
 
-        static func start(_ command: [String], in view: LocalProcessTerminalView) {
+        /// Spawns the process on the first nonzero layout, exactly
+        /// once.
+        func startWhenSized(_ command: [String], in view: LocalProcessTerminalView) {
+            guard started == false else {
+                return
+            }
+            guard view.bounds.width > 0, view.bounds.height > 0 else {
+                observeFrame(command, in: view)
+                return
+            }
+
+            started = true
+            if let frameObserver {
+                NotificationCenter.default.removeObserver(frameObserver)
+                self.frameObserver = nil
+            }
+            Self.start(command, in: view)
+        }
+
+        // MARK: Private
+
+        private static func start(_ command: [String], in view: LocalProcessTerminalView) {
             let resolved = command.first?.hasPrefix("/") == true ? command : ["/usr/bin/env"] + command
             view.startProcess(
                 executable: resolved.first ?? "/bin/zsh",
@@ -66,21 +100,52 @@ public struct TerminalPaneView: NSViewRepresentable {
                 execName: nil,
             )
         }
+
+        private func observeFrame(_ command: [String], in view: LocalProcessTerminalView) {
+            guard frameObserver == nil else {
+                return
+            }
+
+            // The view rides the coordinator rather than the closure:
+            // capturing a non-Sendable view in the notification
+            // closure trips region isolation.
+            pendingView = view
+            pendingCommand = command
+            view.postsFrameChangedNotifications = true
+            frameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: view,
+                queue: .main,
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, let sized = self.pendingView else {
+                        return
+                    }
+
+                    self.startWhenSized(self.pendingCommand, in: sized)
+                }
+            }
+        }
     }
 
-    /// Builds the SwiftTerm view, themes it and starts the process.
+    /// Builds the SwiftTerm view and themes it; the process starts
+    /// as soon as layout gives the view its real size, otherwise
+    /// tmux sized itself to the placeholder frame and drew half a
+    /// pane until something forced a resize.
     public func makeNSView(context: Context) -> LocalProcessTerminalView {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
         view.font = CodeStyle.nsFont
         applyTheme(to: view, context: context)
-        Coordinator.start(command, in: view)
+        context.coordinator.startWhenSized(command, in: view)
         return view
     }
 
-    /// Re-themes when the appearance actually changes.
+    /// Re-themes when the appearance actually changes; the start
+    /// also retries here as a fallback.
     public func updateNSView(_ view: LocalProcessTerminalView, context: Context) {
         applyTheme(to: view, context: context)
+        context.coordinator.startWhenSized(command, in: view)
     }
 
     /// Creates the process-lifecycle coordinator.

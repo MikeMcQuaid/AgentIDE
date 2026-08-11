@@ -8,11 +8,18 @@ import Testing
 @MainActor
 struct CodeHighlighterTests {
     @Test
-    func `grammars load and classify swift, ruby and shell`() {
-        for language in [SyntaxLanguage.swift, .ruby, .shell] {
+    func `every tree-sitter grammar loads and classifies`() {
+        for language in [SyntaxLanguage.swift, .ruby, .shell, .python, .json, .typescript] {
             let classified = CodeHighlighter.classifiedRanges(in: "# x\n// y\n1", language: language)
             #expect(classified != nil, "grammar for \(language) did not load")
         }
+    }
+
+    @Test
+    func `python lines classify through the grammar`() {
+        let tokens = CodeHighlighter.tokens(for: "def add(first):  # sum", language: .python)
+        #expect(tokens.contains { $0.kind == .keyword && $0.text == "def" })
+        #expect(tokens.contains { $0.kind == .comment && $0.text.contains("sum") })
     }
 
     @Test

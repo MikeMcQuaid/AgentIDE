@@ -11,7 +11,11 @@ public extension SessionService {
     /// Pushes the branch and opens a pull request; returns its URL.
     func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
         try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-        return try await github.createPullRequest(worktreePath: worktree.path)
+        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+        return try await github.createPullRequest(worktreePath: worktree.path, title: title)
     }
 
     /// The argv that attaches a terminal to a session.
@@ -22,14 +26,61 @@ public extension SessionService {
     /// The argv for a persistent host-user shell in a worktree: a
     /// host tmux session (attach-or-create) that survives tab
     /// switches and app restarts and starts the user's default login
-    /// shell.
-    func hostShellCommand(worktreePath: String) -> [String] {
-        let suffix = worktreePath
-            .split(separator: "/")
-            .suffix(Self.shellNameComponents)
-            .joined(separator: "-")
-        let name = "agentide-shell-" + SessionName.slug(suffix)
-        return [Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktreePath]
+    /// shell. Named `agentide-shell--<repository>-<digest>--<branch>`
+    /// so `tmux ls` reads like the sidebar rather than worktree
+    /// uuids; the path digest keeps same-named repositories under
+    /// different owners from attaching to each other's shells.
+    /// The chained `set` commands give the host server the same
+    /// wheel-scrolls-history behaviour as the sandbox one, whose
+    /// config file it does not read.
+    func hostShellCommand(worktree: Worktree) -> [String] {
+        let name = "agentide-shell--"
+            + SessionName.slug(worktree.repositoryName) + "-"
+            + SessionName.pathDigest(worktree.repositoryPath) + "--"
+            + SessionName.slug(worktree.branch)
+        return [
+            Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktree.path,
+            ";", "set", "-g", "mouse", "on",
+            ";", "set", "-g", "history-limit", "50000",
+            ";", "set", "-g", "default-terminal", "xterm-256color",
+            ";", "set", "-g", "status", "off",
+        ]
+    }
+
+    /// Every AgentIDE tmux session for the session manager: the
+    /// sandboxed agents and the host shells, deduplicated.
+    func allTmuxSessions() async -> [(name: String, isHostShell: Bool)] {
+        var seen = Set<String>()
+        var results = [(name: String, isHostShell: Bool)]()
+        for pane in await (try? tmux.panes()) ?? [] where seen.insert(pane.sessionName).inserted {
+            results.append((pane.sessionName, false))
+        }
+        let list = try? await processes.run(
+            [Self.hostTmuxPath, "ls", "-F", "#{session_name}"],
+            workingDirectory: nil,
+            environment: [:],
+        )
+        let shells = (list?.standardOutput ?? "")
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.hasPrefix("agentide-shell--") }
+        for name in shells where seen.insert(name).inserted {
+            results.append((name, true))
+        }
+        return results
+    }
+
+    /// Kills one session on whichever server owns it.
+    func killTmuxSession(name: String, isHostShell: Bool) async {
+        if isHostShell {
+            _ = try? await processes.run(
+                [Self.hostTmuxPath, "kill-session", "-t", name],
+                workingDirectory: nil,
+                environment: [:],
+            )
+        } else {
+            try? await tmux.killSession(name: name)
+        }
     }
 
     /// Marks a worktree viewed: clears its unread state, including a
@@ -59,21 +110,6 @@ public extension SessionService {
         store.save(metadata)
     }
 
-    /// The last assistant message of the session's newest transcript.
-    func finalMessage(session: AgentSession, worktreePath: String) -> String? {
-        guard let agent = session.agent,
-              let directory = runner(for: agent).transcriptDirectory(
-                  workingDirectory: worktreePath,
-                  sandboxHome: paths.sandboxHome,
-              ),
-              let transcript = transcripts.latestTranscript(in: directory)
-        else {
-            return nil
-        }
-
-        return transcripts.finalAssistantMessage(in: transcript)
-    }
-
     /// Commits anything the agent left uncommitted.
     func commitOutstanding(worktreePath: String) async throws {
         guard await git.isDirty(worktreePath: worktreePath) else {
@@ -88,19 +124,6 @@ public extension SessionService {
     func closeSession(sessionName: String, worktreePath: String) async throws {
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
         try await tmux.killSession(name: sessionName)
-    }
-
-    /// Resumes the session last launched in a worktree, whether or not
-    /// a live tmux session still names it.
-    func resumeWorktree(_ worktree: Worktree) async throws {
-        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
-            throw CommandError(
-                command: "resume " + worktree.path,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
-            )
-        }
-
-        try await resumeSession(sessionName: sessionName, worktree: worktree)
     }
 
     /// Relaunches a past conversation in its own worktree, replacing
@@ -141,30 +164,6 @@ public extension SessionService {
         )
         remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.id)
         return sessionName
-    }
-
-    /// Relaunches a closed session's conversation in its worktree.
-    func resumeSession(sessionName: String, worktree: Worktree) async throws {
-        guard let agent = agentKind(of: sessionName) else {
-            throw CommandError(
-                command: "resume " + sessionName,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
-            )
-        }
-
-        let metadata = store.load()
-        let arguments = metadata.arguments[sessionName] ?? ""
-        if let resumeID = metadata.resumeIDs[sessionName] {
-            let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-        } else {
-            let command = runner(for: agent).launchCommand(extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
-            if FileManager.default.fileExists(atPath: promptFile) {
-                try await tmux.sendPromptFile(promptFile, to: sessionName)
-            }
-        }
     }
 
     // MARK: Internal

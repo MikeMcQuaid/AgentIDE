@@ -242,17 +242,31 @@ struct SessionServiceIntegrationTests {
     }
 
     @Test
-    func `host shell command is an attach-or-create host tmux session`() async throws {
+    func `host shell command is an attach-or-create host tmux session named by repo and branch`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
-        let command = world.service.hostShellCommand(worktreePath: "/tmp/somewhere/deep worktree")
+        let worktree = Worktree(
+            repositoryName: "My Repo",
+            repositoryPath: world.repository.path,
+            branch: "agent/fix thing",
+            path: "/tmp/worktrees/0a1b2c/agent-fix-thing",
+        )
+        let command = world.service.hostShellCommand(worktree: worktree)
 
         #expect(command.first?.hasSuffix("tmux") == true)
         #expect(command.contains("new-session"))
         #expect(command.contains("-A"))
         let name = try #require(command.drop { $0 != "-s" }.dropFirst().first)
-        #expect(name.hasPrefix("agentide-shell-"))
-        #expect(command.suffix(2).first == "-c")
+        // Names the repository and branch, never the worktree uuid;
+        // the path digest keeps same-named repositories apart.
+        let digest = SessionName.pathDigest(world.repository.path)
+        #expect(name == "agentide-shell--my-repo-" + digest + "--agent-fix-thing")
+        let directoryFlag = try #require(command.firstIndex(of: "-c"))
+        #expect(command[directoryFlag + 1] == worktree.path)
+        // The host server reads no config file, so the wheel-scroll
+        // options chain onto the command.
+        #expect(command.contains("mouse"))
+        #expect(command.contains("history-limit"))
     }
 }
 

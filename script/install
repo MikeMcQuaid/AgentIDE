@@ -1,0 +1,14 @@
+#!/bin/bash
+# Build AgentIDE and install a copy into /Applications, so the app
+# you run daily is never the build output the next rebuild
+# overwrites in place.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+script/build
+
+rm -rf /Applications/AgentIDE.app
+ditto AgentIDE.app /Applications/AgentIDE.app
+
+echo "Installed /Applications/AgentIDE.app; quit and relaunch to update."

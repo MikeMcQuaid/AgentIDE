@@ -60,34 +60,44 @@ public extension GitHubClient {
         try await gh(["pr", "checkout", String(number)], in: worktreePath)
     }
 
-    /// Every human comment on a pull request: review bodies, inline
-    /// review comments and thread comments, in fetched order.
-    func reviewComments(repositoryPath: String, number: Int) async -> [ReviewComment] {
-        let result = try? await gh(
+    /// Every human comment on a pull request: review bodies with
+    /// their states, inline review comments and thread comments, in
+    /// fetched order. Bodyless reviews stay when their state says
+    /// something, so approvals appear in the timeline. Throws on
+    /// fetch failure so callers keep their last good cache rather
+    /// than mistaking a failure for no feedback.
+    func reviewComments(repositoryPath: String, number: Int) async throws -> [ReviewComment] {
+        let result = try await gh(
             ["pr", "view", String(number), "--json", "reviews,comments"],
             in: repositoryPath,
         )
-        var rows = [(author: String?, body: String?)]()
-        let feedback = (result?.standardOutput)
-            .flatMap { try? JSONDecoder().decode(Feedback.self, from: Data($0.utf8)) }
+        var rows = [FeedbackEntry]()
+        let feedback = try? JSONDecoder().decode(Feedback.self, from: Data(result.standardOutput.utf8))
         if let feedback {
-            rows += ((feedback.reviews ?? []) + (feedback.comments ?? []))
-                .map { ($0.author?.login, $0.body) }
+            rows += (feedback.reviews ?? [])
+                .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: $0.state ?? "") }
+            rows += (feedback.comments ?? [])
+                .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: "") }
         }
 
         rows += await inlineComments(repositoryPath: repositoryPath, number: number)
+            .map { FeedbackEntry(author: $0.author, body: $0.body, kind: "") }
 
-        return rows
-            .compactMap { row -> (author: String, body: String)? in
-                let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard body.isEmpty == false else {
-                    return nil
-                }
-
-                return (row.author ?? "unknown", body)
+        return rows.enumerated().compactMap { index, row in
+            let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard body.isEmpty == false || (row.kind.isEmpty == false && row.kind != "COMMENTED") else {
+                return nil
             }
-            .enumerated()
-            .map { ReviewComment(id: $0.offset, author: $0.element.author, body: $0.element.body) }
+
+            return ReviewComment(id: index, author: row.author ?? "unknown", body: body, kind: row.kind)
+        }
+    }
+
+    /// A pull request's body and full feedback timeline, for the
+    /// conversation view; throws like ``reviewComments`` does.
+    func conversation(repositoryPath: String, number: Int) async throws -> (body: String, events: [ReviewComment]) {
+        let body = try await pullRequestDetail(repositoryPath: repositoryPath, number: number).body
+        return try await (body, reviewComments(repositoryPath: repositoryPath, number: number))
     }
 
     // MARK: Internal
@@ -99,8 +109,10 @@ public extension GitHubClient {
         repositoryPath: String,
         number: Int,
     ) async -> [(author: String?, body: String?)] {
+        // gh's own HTTP cache answers repeats within the window, so
+        // revisiting a conversation does not re-query GitHub.
         let inline = try? await gh(
-            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100"],
+            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100", "--cache", "60s"],
             in: repositoryPath,
         )
         let decoded = (inline?.standardOutput)
@@ -154,6 +166,15 @@ private extension GitHubClient {
     struct FeedbackRow: Decodable {
         let author: Author?
         let body: String?
+        let state: String?
+    }
+
+    /// One collected feedback row before filtering, whichever source
+    /// it came from.
+    struct FeedbackEntry {
+        let author: String?
+        let body: String?
+        let kind: String
     }
 
     struct Author: Decodable {

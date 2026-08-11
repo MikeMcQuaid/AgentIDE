@@ -24,9 +24,12 @@ final class ReviewModel {
 
     // MARK: Internal
 
-    /// What the review diffs.
+    /// What the review diffs. Each scope always shows its own diff,
+    /// so switching between them reliably changes the display.
     enum Scope: Hashable {
-        /// The last commit, or uncommitted changes when there are any.
+        /// Uncommitted changes against `HEAD`.
+        case uncommitted
+        /// The last commit.
         case lastCommit
         /// Every commit on the branch against its merge base: the
         /// open pull request's base branch, or the default branch.
@@ -61,9 +64,6 @@ final class ReviewModel {
     /// The last action's outcome, for display.
     private(set) var status: String?
 
-    /// The base ref the branch scope last diffed against.
-    private(set) var branchBase: String?
-
     /// The branch scope's commits, newest first, one line each.
     private(set) var branchCommits: [String] = []
 
@@ -77,25 +77,21 @@ final class ReviewModel {
         Self.generatedFragments.contains { path.contains($0) }
     }
 
-    /// Loads the scope's diff; the last commit scope prefers
-    /// uncommitted changes when there are any.
+    /// Loads the scope's diff.
     func reload() async {
         selections = [:]
         do {
             switch scope {
+            case .uncommitted:
+                showsUncommitted = true
+                files = try await DiffParser.parse(git.uncommittedDiff(worktreePath: worktreePath))
+
             case .lastCommit:
-                let uncommitted = try await git.uncommittedDiff(worktreePath: worktreePath)
-                if uncommitted.isEmpty {
-                    showsUncommitted = false
-                    files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
-                } else {
-                    showsUncommitted = true
-                    files = DiffParser.parse(uncommitted)
-                }
+                showsUncommitted = false
+                files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
 
             case .branch:
                 showsUncommitted = false
-                branchBase = nil
                 branchCommits = []
                 guard let baseRef = await baseRefProvider() else {
                     status = "No base branch to diff against."
@@ -105,7 +101,6 @@ final class ReviewModel {
 
                 // Commits before the diff, so they list even when the
                 // diff itself fails to parse.
-                branchBase = baseRef
                 branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
                 files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: baseRef))
             }
@@ -113,6 +108,12 @@ final class ReviewModel {
         } catch {
             status = error.localizedDescription
         }
+    }
+
+    /// Shows an action's failure in the status line, for actions the
+    /// view runs against services the model does not hold.
+    func report(_ message: String) {
+        status = message
     }
 
     /// Toggles one line's selection.

@@ -19,14 +19,14 @@ public enum AgentKind: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// The SF Symbol shown beside the agent's name.
-    public var iconSystemName: String {
+    /// The vendored brand mark shown beside the agent's name.
+    public var iconAssetName: String {
         switch self {
         case .claudeCode:
-            "sparkles"
+            "agent-claude"
 
         case .codexCLI:
-            "curlybraces.square"
+            "agent-codex"
         }
     }
 }
