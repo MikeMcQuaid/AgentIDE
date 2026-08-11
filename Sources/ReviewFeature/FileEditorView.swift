@@ -59,11 +59,19 @@ struct FileEditorView: View {
             )
         }
         .onAppear { load() }
+        // Editing again invalidates the save report, but real error
+        // messages stay until resolved.
+        .onChange(of: content) {
+            if status == Self.savedStatus {
+                status = nil
+            }
+        }
     }
 
     // MARK: Private
 
     private static let padding: CGFloat = 8
+    private static let savedStatus = "Saved."
 
     @State private var content = ""
     @State private var saved = ""
@@ -112,7 +120,7 @@ struct FileEditorView: View {
             content = Whitespace.strippingTrailingWhitespace(content)
             try content.write(toFile: safePath, atomically: true, encoding: .utf8)
             saved = content
-            status = "Saved."
+            status = Self.savedStatus
             reloadChangedLines()
         } catch {
             status = error.localizedDescription

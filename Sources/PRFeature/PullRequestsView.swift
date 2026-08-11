@@ -251,6 +251,10 @@ public struct PullRequestsView: View {
             summaries = store.load().pullRequestListCache[cacheKey] ?? []
         }
         defer { isLoading = false }
+        // Captured before the await: a slow answer for an already
+        // switched scope must neither show nor cache under the new
+        // scope's key.
+        let requested = cacheKey
         do {
             let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
             let fetched = try await github.pullRequests(
@@ -258,10 +262,14 @@ public struct PullRequestsView: View {
                 scope: listScope,
                 limit: limit,
             )
+            guard Task.isCancelled == false, requested == cacheKey else {
+                return
+            }
+
             summaries = fetched
             fetchedLimit = limit
             var metadata = store.load()
-            metadata.pullRequestListCache[cacheKey] = fetched
+            metadata.pullRequestListCache[requested] = fetched
             store.save(metadata)
             if extending == false {
                 let chosen = fetched.first { $0.number == previous }

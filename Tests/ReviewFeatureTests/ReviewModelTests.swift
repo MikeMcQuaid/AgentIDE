@@ -10,7 +10,11 @@ struct ReviewModelTests {
 
     @Test
     func `scopes show their own diffs even with uncommitted changes present`() async throws {
-        let path = "/tmp/agentide-review-" + UUID().uuidString
+        // The user's temporary directory, per the no-bare-/tmp rule.
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-review-" + UUID().uuidString, isDirectory: true)
+            .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
         try "committed\n".write(toFile: path + "/committed.txt", atomically: true, encoding: .utf8)

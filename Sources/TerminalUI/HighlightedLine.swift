@@ -1,24 +1,9 @@
 import AgentIDEDomain
 import SwiftUI
 
-/// One syntax-highlighted source line, shared by the diff, the code
-/// fences in transcript logs and search results.
-public struct HighlightedLine: View {
-    // MARK: Lifecycle
-
-    /// Creates a highlighted line.
-    public init(line: String, language: SyntaxLanguage?) {
-        self.line = line
-        self.language = language
-    }
-
-    // MARK: Public
-
-    /// The concatenated coloured runs.
-    public var body: some View {
-        Self.text(line: line, language: language)
-    }
-
+/// One syntax-highlighted source line, shared by the diff, markdown
+/// code fences and search results.
+public enum HighlightedLine {
     /// The line as a single `Text`, for concatenation with prefixes.
     /// Unknown languages come back plain.
     public static func text(line: String, language: SyntaxLanguage?) -> Text {
@@ -46,9 +31,4 @@ public struct HighlightedLine: View {
             .primary
         }
     }
-
-    // MARK: Private
-
-    private let line: String
-    private let language: SyntaxLanguage?
 }

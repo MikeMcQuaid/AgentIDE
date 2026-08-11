@@ -92,24 +92,39 @@ struct PullRequestConversationView: View {
         // instantly (or the state clears, so another pull request's
         // never lingers) while the fetch refreshes and re-caches. A
         // seeded body is fresh from the listing, so only the events
-        // need fetching.
+        // need fetching. Failures and cancelled fetches change and
+        // cache nothing, keeping the last good conversation.
         .task(id: number) {
             isLoading = true
+            defer { isLoading = false }
             let cached = store.load().conversationCache[cacheKey]
             description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
-            if let seededBody {
-                events = await github.reviewComments(repositoryPath: repositoryPath, number: number)
-                description = seededBody
-            } else {
-                let conversation = await github.conversation(repositoryPath: repositoryPath, number: number)
-                description = conversation.body
-                events = conversation.events
+            do {
+                let freshBody: String
+                let freshEvents: [ReviewComment]
+                if let seededBody {
+                    freshBody = seededBody
+                    freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
+                } else {
+                    (freshBody, freshEvents) = try await github.conversation(
+                        repositoryPath: repositoryPath,
+                        number: number,
+                    )
+                }
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                description = freshBody
+                events = freshEvents
+                var metadata = store.load()
+                metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
+                store.save(metadata)
+            } catch {
+                // The painted cache stays; a transient failure must
+                // not replace or overwrite it.
             }
-            var metadata = store.load()
-            metadata.conversationCache[cacheKey] = CachedConversation(body: description, events: events)
-            store.save(metadata)
-            isLoading = false
         }
     }
 

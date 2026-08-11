@@ -76,7 +76,7 @@ public struct TerminalPaneView: NSViewRepresentable {
             guard started == false else {
                 return
             }
-            guard view.bounds.height > 0 else {
+            guard view.bounds.width > 0, view.bounds.height > 0 else {
                 observeFrame(command, in: view)
                 return
             }

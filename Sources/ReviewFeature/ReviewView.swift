@@ -262,11 +262,17 @@ public struct ReviewView: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? Self.disabledOpacity : 1)
+        // The colour fill alone is invisible to VoiceOver.
+        .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
     }
 
     private func commitOutstanding() async {
-        try? await service.commitOutstanding(worktreePath: worktreePath)
-        await model.reload()
+        do {
+            try await service.commitOutstanding(worktreePath: worktreePath)
+            await model.reload()
+        } catch {
+            model.report(error.localizedDescription)
+        }
     }
 }

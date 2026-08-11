@@ -24,11 +24,13 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # Matches TmuxClient: the socket lives in the sandbox user's home,
   # not in /tmp.
   export TMUX_TMPDIR="${HOME}/.agentide/tmux"
+  # Resolved through PATH: Intel Macs keep Homebrew in
+  # /usr/local/bin rather than /opt/homebrew/bin.
   if [[ "${TMUX_ARGS[0]}" == "ls" ]]; then
-    /opt/homebrew/bin/tmux ls 2>/dev/null || no_sessions
+    tmux ls 2>/dev/null || no_sessions
     exit 0
   fi
-  exec /opt/homebrew/bin/tmux "${TMUX_ARGS[@]}"
+  exec tmux "${TMUX_ARGS[@]}"
 fi
 
 RUN_IN_SANDBOX=(
@@ -37,6 +39,9 @@ RUN_IN_SANDBOX=(
   USER="sandvault-${USER}"
   SHELL=/bin/zsh
   TERM="${TERM:-xterm-256color}"
+  # The same locale the launcher pins, so tmux draws the same box
+  # characters here as in the app's terminals.
+  LANG=en_US.UTF-8
   PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
   TMUX_TMPDIR="/Users/sandvault-${USER}/.agentide/tmux"
   /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb"

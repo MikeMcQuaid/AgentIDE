@@ -26,14 +26,17 @@ public extension SessionService {
     /// The argv for a persistent host-user shell in a worktree: a
     /// host tmux session (attach-or-create) that survives tab
     /// switches and app restarts and starts the user's default login
-    /// shell. Named `agentide-shell--<repository>--<branch>`, so
-    /// `tmux ls` reads like the sidebar rather than worktree uuids.
+    /// shell. Named `agentide-shell--<repository>-<digest>--<branch>`
+    /// so `tmux ls` reads like the sidebar rather than worktree
+    /// uuids; the path digest keeps same-named repositories under
+    /// different owners from attaching to each other's shells.
     /// The chained `set` commands give the host server the same
     /// wheel-scrolls-history behaviour as the sandbox one, whose
     /// config file it does not read.
     func hostShellCommand(worktree: Worktree) -> [String] {
         let name = "agentide-shell--"
-            + SessionName.slug(worktree.repositoryName) + "--"
+            + SessionName.slug(worktree.repositoryName) + "-"
+            + SessionName.pathDigest(worktree.repositoryPath) + "--"
             + SessionName.slug(worktree.branch)
         return [
             Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktree.path,
@@ -123,19 +126,6 @@ public extension SessionService {
         try await tmux.killSession(name: sessionName)
     }
 
-    /// Resumes the session last launched in a worktree, whether or not
-    /// a live tmux session still names it.
-    func resumeWorktree(_ worktree: Worktree) async throws {
-        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
-            throw CommandError(
-                command: "resume " + worktree.path,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
-            )
-        }
-
-        try await resumeSession(sessionName: sessionName, worktree: worktree)
-    }
-
     /// Relaunches a past conversation in its own worktree, replacing
     /// any session already there.
     func resumePast(_ past: TranscriptSession, worktree: Worktree) async throws -> String {
@@ -174,30 +164,6 @@ public extension SessionService {
         )
         remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.id)
         return sessionName
-    }
-
-    /// Relaunches a closed session's conversation in its worktree.
-    func resumeSession(sessionName: String, worktree: Worktree) async throws {
-        guard let agent = agentKind(of: sessionName) else {
-            throw CommandError(
-                command: "resume " + sessionName,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
-            )
-        }
-
-        let metadata = store.load()
-        let arguments = metadata.arguments[sessionName] ?? ""
-        if let resumeID = metadata.resumeIDs[sessionName] {
-            let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-        } else {
-            let command = runner(for: agent).launchCommand(extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
-            if FileManager.default.fileExists(atPath: promptFile) {
-                try await tmux.sendPromptFile(promptFile, to: sessionName)
-            }
-        }
     }
 
     // MARK: Internal

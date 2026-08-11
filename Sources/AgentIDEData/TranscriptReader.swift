@@ -85,32 +85,6 @@ public struct TranscriptReader: Sendable {
         return results
     }
 
-    /// The last assistant message's text in a transcript, tolerating
-    /// unknown line shapes.
-    public func finalAssistantMessage(in transcript: URL) -> String? {
-        guard let content = try? String(contentsOf: transcript, encoding: .utf8) else {
-            return nil
-        }
-
-        let decoder = Self.makeDecoder()
-        for line in content.split(separator: "\n").reversed() {
-            guard let data = line.data(using: .utf8),
-                  let parsed = try? decoder.decode(TranscriptLine.self, from: data),
-                  parsed.type == "assistant"
-            else {
-                continue
-            }
-
-            let texts = (parsed.message?.content ?? []).compactMap(\.text)
-            guard texts.isEmpty == false else {
-                continue
-            }
-
-            return texts.joined(separator: "\n")
-        }
-        return nil
-    }
-
     // MARK: Private
 
     private struct TranscriptLine: Decodable {

@@ -110,6 +110,12 @@ final class ReviewModel {
         }
     }
 
+    /// Shows an action's failure in the status line, for actions the
+    /// view runs against services the model does not hold.
+    func report(_ message: String) {
+        status = message
+    }
+
     /// Toggles one line's selection.
     func toggle(file: DiffFile, selection: DiffSelection) {
         var set = selections[file.path] ?? []

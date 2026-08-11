@@ -47,7 +47,14 @@ public struct RepositoryFinderPane: View {
             }
 
             repositories = model.cachedRepositories(owner: owner)
-            repositories = await model.repositories(owner: owner)
+            let fresh = await model.repositories(owner: owner)
+            // A slow answer for a previously picked owner must not
+            // overwrite the currently shown owner's list.
+            guard Task.isCancelled == false, owner == self.owner else {
+                return
+            }
+
+            repositories = fresh
         }
     }
 

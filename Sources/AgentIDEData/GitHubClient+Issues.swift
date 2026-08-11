@@ -63,15 +63,16 @@ public extension GitHubClient {
     /// Every human comment on a pull request: review bodies with
     /// their states, inline review comments and thread comments, in
     /// fetched order. Bodyless reviews stay when their state says
-    /// something, so approvals appear in the timeline.
-    func reviewComments(repositoryPath: String, number: Int) async -> [ReviewComment] {
-        let result = try? await gh(
+    /// something, so approvals appear in the timeline. Throws on
+    /// fetch failure so callers keep their last good cache rather
+    /// than mistaking a failure for no feedback.
+    func reviewComments(repositoryPath: String, number: Int) async throws -> [ReviewComment] {
+        let result = try await gh(
             ["pr", "view", String(number), "--json", "reviews,comments"],
             in: repositoryPath,
         )
         var rows = [FeedbackEntry]()
-        let feedback = (result?.standardOutput)
-            .flatMap { try? JSONDecoder().decode(Feedback.self, from: Data($0.utf8)) }
+        let feedback = try? JSONDecoder().decode(Feedback.self, from: Data(result.standardOutput.utf8))
         if let feedback {
             rows += (feedback.reviews ?? [])
                 .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: $0.state ?? "") }
@@ -93,10 +94,10 @@ public extension GitHubClient {
     }
 
     /// A pull request's body and full feedback timeline, for the
-    /// conversation view.
-    func conversation(repositoryPath: String, number: Int) async -> (body: String, events: [ReviewComment]) {
-        let body = await (try? pullRequestDetail(repositoryPath: repositoryPath, number: number).body) ?? ""
-        return await (body, reviewComments(repositoryPath: repositoryPath, number: number))
+    /// conversation view; throws like ``reviewComments`` does.
+    func conversation(repositoryPath: String, number: Int) async throws -> (body: String, events: [ReviewComment]) {
+        let body = try await pullRequestDetail(repositoryPath: repositoryPath, number: number).body
+        return try await (body, reviewComments(repositoryPath: repositoryPath, number: number))
     }
 
     // MARK: Internal

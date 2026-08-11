@@ -101,6 +101,7 @@ sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
   TERM=xterm-256color COLORTERM=truecolor \
   INITIAL_DIR="${WORKTREE}" SHARED_WORKSPACE="/Users/Shared/sv-${USER}" \
   SV_SESSION_ID="$(uuidgen)" AGENTIDE_SESSION="${SESSION_NAME}" \
+  LANG=en_US.UTF-8 \
   PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
   GIT_CONFIG_VALUE_0="/Users/Shared/sv-${USER}/*" \
