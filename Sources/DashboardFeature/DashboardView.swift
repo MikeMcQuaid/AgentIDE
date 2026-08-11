@@ -32,22 +32,22 @@ public struct DashboardView: View {
                 foreignSection
             }
             .padding(Self.listPadding)
-            // The pane ignores the top safe area, so only the
-            // traffic lights need clearing.
-            .padding(.top, Self.trafficLightInset)
         }
-        // The window toolbar is gone, so Open repository lives at the
-        // sidebar's bottom bar beside the status.
-        .safeAreaInset(edge: .bottom) {
+        // The traffic lights occupy the top-left; Open repository
+        // sits at the top-right beside the sidebar toggle, in the
+        // same quiet icon style.
+        .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
+                Spacer()
                 Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
                     .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
                     .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
-                Spacer()
             }
-            .padding(Self.statusPadding)
-            .background(.bar)
+            .padding(.horizontal, Self.listPadding)
+            .padding(.top, Self.headerTopPadding)
+            .padding(.bottom, Self.statusPadding)
         }
         // An inset, not an overlay: long git errors must never draw
         // over the rows. Clicking opens the full text, since two
@@ -86,7 +86,7 @@ public struct DashboardView: View {
 
     private static let statusPadding: CGFloat = 4
     private static let statusLineLimit = 2
-    private static let trafficLightInset: CGFloat = 22
+    private static let headerTopPadding: CGFloat = 10
     private static let statusPopoverWidth: CGFloat = 420
     private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6

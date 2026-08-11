@@ -113,9 +113,34 @@ struct RootView: View {
         }
     }
 
+    private var utilityToggleButton: some View {
+        Button {
+            showsUtilityPane.toggle()
+        } label: {
+            Label("Toggle utility pane", systemImage: "sidebar.right")
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.plain)
+        .hoverHelp(
+            showsUtilityPane
+                ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
+                : "Show the utility pane",
+        )
+    }
+
     private func split(for item: WorktreeItem) -> some View {
         HSplitView {
             VStack(spacing: 0) {
+                // With the utility pane hidden its toggle moves here,
+                // so the pane can always be brought back by mouse.
+                if showsUtilityPane == false {
+                    HStack(spacing: Self.stripSpacing) {
+                        Spacer(minLength: 0)
+                        utilityToggleButton
+                    }
+                    .padding(Self.stripSpacing)
+                    Divider()
+                }
                 sessionStrip(for: item, selection: $sessionTab)
                 primary(for: item)
             }
@@ -125,11 +150,14 @@ struct RootView: View {
                 maxHeight: .infinity,
                 alignment: .top,
             )
+            .ignoresSafeArea(.container, edges: .top)
             if showsUtilityPane {
                 utilityPane(for: item)
                     .frame(minWidth: Self.utilityMinimum, maxHeight: .infinity)
+                    .ignoresSafeArea(.container, edges: .top)
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     /// The utility pane's own header: its tabs and the pane toggle.
@@ -141,14 +169,7 @@ struct RootView: View {
             HStack(spacing: Self.stripSpacing) {
                 UtilityTabStrip()
                 Spacer(minLength: 0)
-                Button {
-                    showsUtilityPane.toggle()
-                } label: {
-                    Label("Toggle utility pane", systemImage: "sidebar.right")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.plain)
-                .hoverHelp("Hide the utility pane; View or Cmd-Shift-U brings it back")
+                utilityToggleButton
             }
             .padding(Self.stripSpacing)
             Divider()
