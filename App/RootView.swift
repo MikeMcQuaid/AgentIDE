@@ -18,21 +18,18 @@ struct RootView: View {
     var utilityTabIndex = 0
 
     var body: some View {
-        // A plain split rather than a navigation split view: its
-        // floating sidebar toggle cannot be removed on this OS and
-        // covered anything placed near it. The sidebar never hides;
-        // it resizes down to a slim strip instead, so nothing in
-        // the middle pane ever sits under the traffic lights.
-        HSplitView {
+        // Plain panes with our own dividers: the navigation split
+        // view's floating toggle covered nearby controls and split
+        // views neither persisted divider positions nor honoured
+        // ideal widths on this OS. The sidebar never hides; it
+        // resizes down to a slim strip instead.
+        HStack(spacing: 0) {
             DashboardView(model: dependencies.dashboard)
-                .frame(
-                    minWidth: Self.sidebarMinimum,
-                    idealWidth: sidebarWidth,
-                    maxWidth: Self.sidebarMaximum,
-                    maxHeight: .infinity,
-                )
-                .onGeometryChange(for: Double.self, of: { $0.size.width }, action: persistSidebarWidth)
+                .frame(width: sidebarWidth)
+                .frame(maxHeight: .infinity)
                 .background(SidebarMaterial())
+                .ignoresSafeArea(.container, edges: .top)
+            PaneDivider(width: $sidebarWidth, range: Self.sidebarRange, controlsLeadingPane: true)
                 .ignoresSafeArea(.container, edges: .top)
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,29 +48,18 @@ struct RootView: View {
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
-        // The stored pane widths seed the ideal widths above; writes
-        // wait out the launch layout passes, whose transient widths
-        // would otherwise overwrite the stored values before the
-        // ideals are honoured.
-        .task {
-            try? await Task.sleep(for: .seconds(Self.layoutSettleDelay))
-            hasSettledLayout = true
-        }
     }
 
     // MARK: Private
 
     /// Slim enough for icon-and-truncated-text rows while staying
     /// wider than the traffic lights band.
-    private static let sidebarMinimum: CGFloat = 150
-    private static let sidebarMaximum: CGFloat = 440
+    private static let sidebarRange = 150.0 ... 440.0
+    private static let utilityRange = 340.0 ... 1_200.0
     private static let primaryMinimum: CGFloat = 420
-    private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
-    private static let layoutSettleDelay = 2
 
     @State private var sessionTab: String = Self.activeTabID
-    @State private var hasSettledLayout = false
 
     /// Focus requests from the finder menu items, cleared at launch
     /// so a request from the previous run cannot fire.
@@ -102,8 +88,8 @@ struct RootView: View {
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
 
-    /// Divider positions, persisted so the panes restore their sizes
-    /// on the next launch; the ideal widths seed the first layout.
+    /// Pane widths, persisted so the layout restores on relaunch;
+    /// the dividers write them directly.
     @AppStorage("sidebarWidth")
     private var sidebarWidth = 300.0
     @AppStorage("utilityPaneWidth")
@@ -160,7 +146,7 @@ struct RootView: View {
     }
 
     private func split(for item: WorktreeItem) -> some View {
-        HSplitView {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
                 sessionStrip(for: item, selection: $sessionTab)
                 primary(for: item)
@@ -181,9 +167,11 @@ struct RootView: View {
             )
             .ignoresSafeArea(.container, edges: .top)
             if showsUtilityPane {
+                PaneDivider(width: $utilityPaneWidth, range: Self.utilityRange, controlsLeadingPane: false)
+                    .ignoresSafeArea(.container, edges: .top)
                 utilityPane(for: item)
-                    .frame(minWidth: Self.utilityMinimum, idealWidth: utilityPaneWidth, maxHeight: .infinity)
-                    .onGeometryChange(for: Double.self, of: { $0.size.width }, action: persistUtilityWidth)
+                    .frame(width: utilityPaneWidth)
+                    .frame(maxHeight: .infinity)
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
@@ -319,18 +307,6 @@ struct RootView: View {
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
-    }
-
-    private func persistSidebarWidth(_ width: Double) {
-        if hasSettledLayout {
-            sidebarWidth = width
-        }
-    }
-
-    private func persistUtilityWidth(_ width: Double) {
-        if hasSettledLayout {
-            utilityPaneWidth = width
-        }
     }
 
     private func sessionStarted() async {

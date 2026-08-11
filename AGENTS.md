@@ -60,9 +60,11 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - SwiftUI `List`/`Section` crash AppKit's outline diff when rows are
   removed conditionally; the sidebar is a plain `ScrollView`.
 - `NavigationSplitView` floats a sidebar toggle that survives
-  `.toolbar(removing: .sidebarToggle)` and covers nearby controls;
-  the window is a plain `HSplitView` whose sidebar never hides
-  (only resizes), with `SidebarMaterial` supplying the blur.
+  `.toolbar(removing: .sidebarToggle)` and covers nearby controls,
+  and `HSplitView` neither persists divider positions nor honours
+  ideal widths; the window is plain panes with `PaneDivider`
+  drag handles, `SidebarMaterial` supplying the sidebar blur and
+  the sidebar never hiding (only resizing).
 - Shape-style `.background` fills expand into ignored safe areas
   by default and paint over sibling rows in the titlebar band;
   pass `ignoresSafeAreaEdges: []` inside panes that ignore the
