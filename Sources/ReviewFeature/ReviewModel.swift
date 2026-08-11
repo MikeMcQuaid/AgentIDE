@@ -64,9 +64,6 @@ final class ReviewModel {
     /// The last action's outcome, for display.
     private(set) var status: String?
 
-    /// The base ref the branch scope last diffed against.
-    private(set) var branchBase: String?
-
     /// The branch scope's commits, newest first, one line each.
     private(set) var branchCommits: [String] = []
 
@@ -95,7 +92,6 @@ final class ReviewModel {
 
             case .branch:
                 showsUncommitted = false
-                branchBase = nil
                 branchCommits = []
                 guard let baseRef = await baseRefProvider() else {
                     status = "No base branch to diff against."
@@ -105,7 +101,6 @@ final class ReviewModel {
 
                 // Commits before the diff, so they list even when the
                 // diff itself fails to parse.
-                branchBase = baseRef
                 branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
                 files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: baseRef))
             }

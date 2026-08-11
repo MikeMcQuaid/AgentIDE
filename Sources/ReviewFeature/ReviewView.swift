@@ -68,22 +68,17 @@ public struct ReviewView: View {
 
     /// Icon-only controls, every one explained by its tooltip.
     private var toolbar: some View {
-        VStack(alignment: .leading, spacing: Self.captionSpacing) {
-            HStack(spacing: Self.captionSpacing) {
-                scopeButtons
-                Divider().frame(height: Self.dividerHeight)
-                iconButton(
-                    "doc.badge.gearshape",
-                    help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
-                    title: "Generated",
-                    isOn: model.showsGenerated,
-                ) { model.showsGenerated.toggle() }
-                Spacer()
-                actionButtons
-            }
-            if model.scope == .branch, let base = model.branchBase {
-                Text("vs " + base).font(.caption).foregroundStyle(.secondary)
-            }
+        HStack(spacing: Self.captionSpacing) {
+            scopeButtons
+            Divider().frame(height: Self.dividerHeight)
+            iconButton(
+                "doc.badge.gearshape",
+                help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
+                title: "Generated",
+                isOn: model.showsGenerated,
+            ) { model.showsGenerated.toggle() }
+            Spacer()
+            actionButtons
         }
         .padding(Self.spacing)
     }
