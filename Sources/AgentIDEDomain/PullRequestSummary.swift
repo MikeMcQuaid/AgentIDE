@@ -102,10 +102,11 @@ public struct ReviewComment: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a comment.
-    public init(id: Int, author: String, body: String) {
+    public init(id: Int, author: String, body: String, kind: String = "") {
         self.id = id
         self.author = author
         self.body = body
+        self.kind = kind
     }
 
     // MARK: Public
@@ -118,6 +119,10 @@ public struct ReviewComment: Identifiable, Hashable, Sendable {
 
     /// The comment text.
     public let body: String
+
+    /// The review state that produced this entry, such as
+    /// `APPROVED`; empty for plain comments.
+    public let kind: String
 }
 
 // MARK: - SearchHit

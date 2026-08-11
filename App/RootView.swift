@@ -59,6 +59,11 @@ struct RootView: View {
     private static let primaryMinimum: CGFloat = 420
     private static let stripSpacing: CGFloat = 4
 
+    /// The utility header row's height: the tab capsules plus the
+    /// row's padding. The floating toggle centres in the same height
+    /// so hiding the pane never moves it.
+    private static let toggleRowHeight: CGFloat = 30
+
     @State private var sessionTab: String = Self.activeTabID
 
     /// Focus requests from the finder menu items, cleared at launch
@@ -152,11 +157,13 @@ struct RootView: View {
                 primary(for: item)
             }
             // With the utility pane hidden its toggle overlays the
-            // session strip's empty right end, so the pane can always
-            // come back by mouse without pushing the pane down.
+            // session strip's empty right end, in exactly the spot
+            // the pane header shows it, so it never moves on toggle.
             .overlay(alignment: .topTrailing) {
                 if showsUtilityPane == false {
-                    utilityToggleButton.padding(Self.stripSpacing)
+                    utilityToggleButton
+                        .frame(height: Self.toggleRowHeight)
+                        .padding(.trailing, Self.stripSpacing)
                 }
             }
             .frame(

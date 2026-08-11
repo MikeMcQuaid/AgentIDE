@@ -88,7 +88,7 @@ public struct ReviewView: View {
         scopeButton(
             .lastCommit,
             systemImage: "clock",
-            title: "Commit",
+            title: "Last Commit",
             help: "Review the last commit",
         )
         scopeButton(
@@ -117,19 +117,21 @@ public struct ReviewView: View {
 
     /// Editing a file jumps to the Editor tab rather than opening a
     /// duplicate editor surface; Cmd-click opens the external editor.
-    private var diffList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                ForEach(model.visibleFiles) { file in
-                    DiffFileView(file: file, model: model) {
-                        FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
+    @ViewBuilder private var diffList: some View {
+        if model.visibleFiles.isEmpty {
+            ContentUnavailableView("No changes", systemImage: "checkmark.circle")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Self.spacing) {
+                    ForEach(model.visibleFiles) { file in
+                        DiffFileView(file: file, model: model) {
+                            FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
+                        }
                     }
                 }
-                if model.visibleFiles.isEmpty {
-                    ContentUnavailableView("No changes", systemImage: "checkmark.circle")
-                }
+                .padding(Self.spacing)
             }
-            .padding(Self.spacing)
         }
     }
 

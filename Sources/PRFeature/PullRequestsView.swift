@@ -3,9 +3,8 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-// MARK: - PullRequestsView
-
-/// The repository's open pull requests with one-click actions.
+/// The repository's pull requests: a paginated title list clicking
+/// through to each pull request's conversation and actions.
 public struct PullRequestsView: View {
     // MARK: Lifecycle
 
@@ -27,41 +26,24 @@ public struct PullRequestsView: View {
 
     // MARK: Public
 
-    /// The scope picker over the list, with merge, automerge and fix
-    /// actions per row and each pull request's review comments
-    /// beneath it.
+    /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
             scopePicker
             Divider()
-            List(summaries) { summary in
-                PullRequestRowView(
-                    summary: summary,
-                    canRemediate: worktree(for: summary) != nil,
-                    commentCount: comments[summary.number]?.count,
-                    stackDepth: stackDepth(for: summary),
-                    onAutomerge: {
-                        act {
-                            try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
-                        }
-                    },
-                    onMerge: {
-                        act { try await github.merge(repositoryPath: repository.path, number: summary.number) }
-                    },
-                    onRemediate: { act { try await remediate(summary) } },
-                )
-                commentsSection(for: summary)
-            }
-            .overlay {
-                if summaries.isEmpty {
-                    ContentUnavailableView("No pull requests", systemImage: "arrow.triangle.pull")
-                }
+            if let selected {
+                conversation(for: selected)
+            } else {
+                listView
             }
         }
         .safeAreaInset(edge: .bottom) { footer }
         // The branch joins the identity so switching worktrees in
         // the same repository reloads the list.
         .task(id: repository.id + scopeIdentity + (branch ?? "")) { await reload() }
+        .task(id: repository.id) {
+            hasMergeQueue = await github.hasMergeQueue(repositoryPath: repository.path)
+        }
     }
 
     // MARK: Private
@@ -73,16 +55,14 @@ public struct PullRequestsView: View {
     }
 
     private static let footerPadding: CGFloat = 8
-    private static let commentSpacing: CGFloat = 4
-
-    /// Comments are fetched per pull request, so wide scopes only
-    /// fetch them for the first few.
-    private static let commentFetchLimit = 5
+    private static let rowSpacing: CGFloat = 4
 
     @State private var scope: Scope = .worktree
-
     @State private var summaries: [PullRequestSummary] = []
-    @State private var comments: [Int: [ReviewComment]] = [:]
+    @State private var selected: PullRequestSummary?
+    @State private var isLoading = false
+    @State private var page = 0
+    @State private var hasMergeQueue = false
     @State private var status: String?
 
     private let repository: Repository
@@ -135,6 +115,16 @@ public struct PullRequestsView: View {
         )
     }
 
+    private var listView: some View {
+        PullRequestListView(
+            summaries: summaries,
+            isLoading: isLoading,
+            stackDepth: { stackDepth(for: $0) },
+            onSelect: { selected = $0 },
+            page: $page,
+        )
+    }
+
     private var footer: some View {
         HStack {
             Button("Push and open PR") { Task { await ship() } }
@@ -144,8 +134,8 @@ public struct PullRequestsView: View {
                         ? "Push this worktree's branch and open a pull request; a repository template fills the body"
                         : "Everything is pushed and this branch already has an open pull request",
                 )
-            Button("Refresh") { Task { await reload() } }
-                .hoverHelp("Fetch the open pull requests again")
+            Button("Refresh") { Task { await reload(keepingSelection: true) } }
+                .hoverHelp("Fetch the pull requests again")
             if let status {
                 Text(status).font(.callout).foregroundStyle(.secondary)
             }
@@ -155,15 +145,36 @@ public struct PullRequestsView: View {
         .background(.bar)
     }
 
-    private func commentsSection(for summary: PullRequestSummary) -> some View {
-        ForEach(comments[summary.number] ?? []) { comment in
-            HStack(alignment: .firstTextBaseline, spacing: Self.commentSpacing) {
-                Text(comment.author).font(.caption.bold())
-                MarkdownText(comment.body)
-                    .font(.caption)
+    private func conversation(for summary: PullRequestSummary) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Self.rowSpacing) {
+                Button("Back to the list", systemImage: "chevron.backward") { selected = nil }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .hoverHelp("Back to the pull request list")
+                PullRequestRowView(
+                    summary: summary,
+                    canRemediate: worktree(for: summary) != nil,
+                    stackDepth: stackDepth(for: summary),
+                    hasMergeQueue: hasMergeQueue,
+                    onAutomerge: {
+                        act {
+                            try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
+                        }
+                    },
+                    onMerge: {
+                        act { try await github.merge(repositoryPath: repository.path, number: summary.number) }
+                    },
+                    onRemediate: { act { try await remediate(summary) } },
+                )
             }
-            .padding(.leading, Self.footerPadding)
-            .hoverHelp("A review comment; Fix sends every comment and failing check to an agent")
+            .padding(.horizontal, Self.footerPadding)
+            Divider()
+            PullRequestConversationView(
+                github: github,
+                repositoryPath: repository.path,
+                number: summary.number,
+            )
         }
     }
 
@@ -174,7 +185,7 @@ public struct PullRequestsView: View {
 
         do {
             status = try await service.pushAndCreatePullRequest(worktree: item.worktree)
-            await reload()
+            await reload(keepingSelection: true)
         } catch {
             status = error.localizedDescription
         }
@@ -198,15 +209,21 @@ public struct PullRequestsView: View {
         return depth
     }
 
-    private func reload() async {
+    /// The list empties and shows its loading state instantly; a
+    /// kept selection is re-selected once the fetch answers, and a
+    /// single result opens its conversation directly.
+    private func reload(keepingSelection: Bool = false) async {
+        let previous = keepingSelection ? selected?.number : nil
+        isLoading = true
+        summaries = []
+        selected = nil
+        page = 0
+        defer { isLoading = false }
         do {
-            summaries = try await github.pullRequests(repositoryPath: repository.path, scope: listScope)
-            for summary in summaries.prefix(Self.commentFetchLimit) {
-                comments[summary.number] = await github.reviewComments(
-                    repositoryPath: repository.path,
-                    number: summary.number,
-                )
-            }
+            let fetched = try await github.pullRequests(repositoryPath: repository.path, scope: listScope)
+            summaries = fetched
+            selected = fetched.first { $0.number == previous }
+                ?? (fetched.count == 1 ? fetched.first : nil)
         } catch {
             status = error.localizedDescription
         }
@@ -233,142 +250,9 @@ public struct PullRequestsView: View {
             do {
                 try await work()
                 status = "Done."
-                await reload()
+                await reload(keepingSelection: true)
             } catch {
                 status = error.localizedDescription
-            }
-        }
-    }
-}
-
-// MARK: - PullRequestRowView
-
-/// One pull request row with its badges and actions.
-struct PullRequestRowView: View {
-    // MARK: Internal
-
-    static let rowPadding: CGFloat = 4
-
-    let summary: PullRequestSummary
-    let canRemediate: Bool
-    let commentCount: Int?
-    let stackDepth: Int
-    let onAutomerge: () -> Void
-    let onMerge: () -> Void
-    let onRemediate: () -> Void
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                titleRow
-                Text(badges).font(.callout).foregroundStyle(.secondary)
-            }
-            Spacer()
-            actions
-        }
-        .padding(.vertical, Self.rowPadding)
-    }
-
-    // MARK: Private
-
-    private static let commentBadgeSpacing: CGFloat = 2
-
-    private var badges: String {
-        let state = summary.state == "OPEN" ? "" : summary.state
-        // Approval shows as the tick beside the title instead.
-        let decision = summary.reviewDecision == "APPROVED" ? "" : summary.reviewDecision
-        return [state, summary.headBranch, summary.mergeable, decision]
-            .filter { $0.isEmpty == false }
-            .joined(separator: " · ")
-    }
-
-    private var stateHelp: String {
-        if summary.state != "OPEN" {
-            summary.state.capitalized + " pull request"
-        } else if summary.isDraft {
-            "Draft pull request"
-        } else {
-            "Open pull request"
-        }
-    }
-
-    private var titleRow: some View {
-        HStack(spacing: Self.rowPadding) {
-            Octicon(
-                ChecksStyle.stateOcticonName(state: summary.state, isDraft: summary.isDraft),
-                colour: ChecksStyle.stateColour(state: summary.state, isDraft: summary.isDraft),
-            )
-            .hoverHelp(stateHelp)
-            Button {
-                LinkOpener.open(summary.url)
-            } label: {
-                Text("#" + String(summary.number)).font(.headline)
-            }
-            .buttonStyle(.plain)
-            .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the system browser")
-            checksButton
-            statusBadges
-            Text(summary.title).font(.headline).lineLimit(1)
-            if let commentCount, commentCount > 0 {
-                HStack(spacing: Self.commentBadgeSpacing) {
-                    Octicon("octicon-comment", colour: .secondary)
-                    Text(String(commentCount)).font(.caption).foregroundStyle(.secondary)
-                }
-                .hoverHelp("Review and conversation comments")
-            }
-        }
-    }
-
-    @ViewBuilder private var statusBadges: some View {
-        if let review = ChecksStyle.reviewOcticonName(for: summary.reviewDecision) {
-            Octicon(review, colour: ChecksStyle.reviewColour(for: summary.reviewDecision))
-                .hoverHelp("Review: " + summary.reviewDecision.lowercased())
-        }
-        if summary.hasAutomerge {
-            Octicon("octicon-git-merge-queue", colour: .blue)
-                .hoverHelp("Automerge enabled")
-        }
-        if stackDepth > 1 {
-            Octicon("octicon-stack", colour: .secondary)
-                .hoverHelp("Stacked: \(stackDepth) pull requests based on each other")
-            Text(String(stackDepth)).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    /// The same jump the sidebar's icon makes: the one failing run
-    /// when there is exactly one, the checks page otherwise.
-    private var checksButton: some View {
-        Button {
-            LinkOpener.open(summary.checksClickURL)
-        } label: {
-            Octicon(
-                ChecksStyle.octiconName(for: summary.checks),
-                colour: ChecksStyle.colour(for: summary.checks),
-            )
-            .accessibilityLabel("Checks: \(summary.checks.lowercased())")
-        }
-        .buttonStyle(.plain)
-        .hoverHelp(
-            summary.failingCheckLinks.count == 1
-                ? "Open the one failing run in the Browser tab; Cmd-click for the system browser"
-                : "Open the checks page in the Browser tab; Cmd-click for the system browser",
-        )
-    }
-
-    @ViewBuilder private var actions: some View {
-        Button("Fix", action: onRemediate)
-            .disabled(canRemediate == false)
-            .hoverHelp("Dump every review comment and failing check into an agent in this worktree")
-        // One merge action, matching what the pull request can do
-        // right now: merge when green and mergeable, automerge
-        // while checks are still running.
-        if summary.state == "OPEN" {
-            if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
-                Button("Merge", action: onMerge)
-                    .hoverHelp("Checks passed and the branch is mergeable: squash-merge now")
-            } else {
-                Button("Automerge", action: onAutomerge)
-                    .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
             }
         }
     }

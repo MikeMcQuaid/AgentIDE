@@ -79,6 +79,34 @@ public struct GitHubClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Whether the repository merges through a merge queue, so merge
+    /// controls can say queue rather than merge.
+    public func hasMergeQueue(repositoryPath: String) async -> Bool {
+        let nameWithOwner = try? await gh(
+            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+            in: repositoryPath,
+        )
+        .standardOutput
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = (nameWithOwner ?? "").split(separator: "/", maxSplits: 1)
+        guard let owner = parts.first, let name = parts.dropFirst().first else {
+            return false
+        }
+
+        let query = "query($owner: String!, $name: String!) "
+            + "{ repository(owner: $owner, name: $name) { mergeQueue { id } } }"
+        let result = try? await gh(
+            [
+                "api", "graphql",
+                "-f", "query=" + query,
+                "-f", "owner=" + String(owner),
+                "-f", "name=" + String(name),
+            ],
+            in: repositoryPath,
+        )
+        return result?.standardOutput.contains("\"mergeQueue\":{") ?? false
+    }
+
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
         try await gh(["pr", "merge", String(number), "--auto", "--squash"], in: repositoryPath)
