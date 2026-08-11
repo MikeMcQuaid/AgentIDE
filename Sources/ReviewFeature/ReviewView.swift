@@ -13,6 +13,7 @@ public struct ReviewView: View {
     /// Creates the review view for a worktree.
     public init(worktree: Worktree, git: GitClient, service: SessionService) {
         worktreePath = worktree.path
+        self.service = service
         let builder = {
             ReviewModel(worktreePath: worktree.path, git: git) {
                 await service.reviewBase(for: worktree)
@@ -45,6 +46,7 @@ public struct ReviewView: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 8
+    private static let captionSpacing: CGFloat = 2
     private static let commitListSpacing: CGFloat = 4
     private static let commitLineSpacing: CGFloat = 2
     private static let messageHeight: CGFloat = 88
@@ -56,6 +58,7 @@ public struct ReviewView: View {
     @State private var model: ReviewModel
 
     private let worktreePath: String
+    private let service: SessionService
     private let makeModel: () -> ReviewModel
 
     private var scopeHelp: String {
@@ -67,28 +70,35 @@ public struct ReviewView: View {
     }
 
     private var toolbar: some View {
-        HStack {
-            Picker("Scope", selection: $model.scope) {
-                Text(model.showsUncommitted ? "Uncommitted" : "Last commit").tag(ReviewModel.Scope.lastCommit)
-                Text("Branch").tag(ReviewModel.Scope.branch)
+        VStack(alignment: .leading, spacing: Self.captionSpacing) {
+            HStack {
+                Picker("Scope", selection: $model.scope) {
+                    Text(model.showsUncommitted ? "Uncommitted" : "Last commit").tag(ReviewModel.Scope.lastCommit)
+                    Text("Branch").tag(ReviewModel.Scope.branch)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .labelsHidden()
+                .fixedSize()
+                .onChange(of: model.scope) { Task { await model.reload() } }
+                .hoverHelp(scopeHelp)
+                Toggle("Generated", isOn: $model.showsGenerated)
+                    .hoverHelp(
+                        "Reveal files hidden as generated: lockfiles, Xcode projects, asset catalogues and similar",
+                    )
+                Spacer()
+                Button("Commit outstanding") { Task { await commitOutstanding() } }
+                    .disabled(model.showsUncommitted == false)
+                    .hoverHelp("Commit changes the agent left uncommitted; disabled when the worktree is clean")
+                Button("Reject selected lines") { Task { await model.rejectSelected() } }
+                    .disabled(model.selections.values.allSatisfy(\.isEmpty) || model.scope == .branch)
+                    .hoverHelp("Reverse-apply the selected lines and amend the commit; last commit scope only")
+                Button("Refresh") { Task { await model.reload() } }
+                    .hoverHelp("Reload the diff from git")
             }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .labelsHidden()
-            .fixedSize()
-            .onChange(of: model.scope) { Task { await model.reload() } }
-            .hoverHelp(scopeHelp)
             if model.scope == .branch, let base = model.branchBase {
                 Text("vs " + base).font(.caption).foregroundStyle(.secondary)
             }
-            Toggle("Show generated", isOn: $model.showsGenerated)
-                .hoverHelp("Reveal files hidden as generated: lockfiles, Xcode projects, asset catalogues and similar")
-            Spacer()
-            Button("Reject selected lines") { Task { await model.rejectSelected() } }
-                .disabled(model.selections.values.allSatisfy(\.isEmpty) || model.scope == .branch)
-                .hoverHelp("Reverse-apply the selected lines and amend the commit; last commit scope only")
-            Button("Refresh") { Task { await model.reload() } }
-                .hoverHelp("Reload the diff from git")
         }
         .padding(Self.spacing)
     }
@@ -190,5 +200,10 @@ public struct ReviewView: View {
         }
         .font(.caption.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
+    }
+
+    private func commitOutstanding() async {
+        try? await service.commitOutstanding(worktreePath: worktreePath)
+        await model.reload()
     }
 }

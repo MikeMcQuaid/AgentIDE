@@ -21,7 +21,10 @@ struct AgentOptionPickers: View {
                     Label {
                         Text(kind.displayName)
                     } icon: {
-                        Image(kind.iconAssetName).resizable().scaledToFit()
+                        Image(kind.iconAssetName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: Self.agentIconSize, height: Self.agentIconSize)
                     }
                     .tag(kind)
                 }
@@ -49,6 +52,7 @@ struct AgentOptionPickers: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 6
+    private static let agentIconSize: CGFloat = 8
 
     /// Human-readable picker names: xhigh reads Extra High, gpt ids
     /// read GPT n and simple names capitalise.

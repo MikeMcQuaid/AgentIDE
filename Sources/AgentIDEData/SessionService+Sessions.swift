@@ -107,21 +107,6 @@ public extension SessionService {
         store.save(metadata)
     }
 
-    /// The last assistant message of the session's newest transcript.
-    func finalMessage(session: AgentSession, worktreePath: String) -> String? {
-        guard let agent = session.agent,
-              let directory = runner(for: agent).transcriptDirectory(
-                  workingDirectory: worktreePath,
-                  sandboxHome: paths.sandboxHome,
-              ),
-              let transcript = transcripts.latestTranscript(in: directory)
-        else {
-            return nil
-        }
-
-        return transcripts.finalAssistantMessage(in: transcript)
-    }
-
     /// Commits anything the agent left uncommitted.
     func commitOutstanding(worktreePath: String) async throws {
         guard await git.isDirty(worktreePath: worktreePath) else {

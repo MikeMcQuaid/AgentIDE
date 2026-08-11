@@ -5,7 +5,6 @@ enum UtilityTab: CaseIterable {
     case pullRequests
     case editor
     case browser
-    case message
 
     // MARK: Internal
 
@@ -25,9 +24,6 @@ enum UtilityTab: CaseIterable {
 
         case .browser:
             "Browser"
-
-        case .message:
-            "Summary"
         }
     }
 
@@ -47,9 +43,6 @@ enum UtilityTab: CaseIterable {
 
         case .browser:
             "An embedded browser for dev servers the agent starts and pull request pages; logins persist"
-
-        case .message:
-            "The agent's last reply as text, plus the session actions: commit leftover work, close, resume, push and PR"
         }
     }
 }

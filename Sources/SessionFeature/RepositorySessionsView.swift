@@ -49,7 +49,7 @@ public struct RepositorySessionsView: View {
 
     private static let padding: CGFloat = 6
     private static let headerBottomPadding: CGFloat = 3
-    private static let agentIconSize: CGFloat = 14
+    private static let agentIconSize: CGFloat = 7
     private static let listHeight: CGFloat = 200
     private static let locationComponents = 2
 

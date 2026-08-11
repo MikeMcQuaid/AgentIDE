@@ -32,8 +32,8 @@ public struct DashboardView: View {
                 foreignSection
             }
             .padding(Self.listPadding)
-            // The window toolbar is hidden, so the sidebar leaves
-            // room for the traffic lights itself.
+            // The pane ignores the top safe area, so only the
+            // traffic lights need clearing.
             .padding(.top, Self.trafficLightInset)
         }
         // The window toolbar is gone, so Open repository lives at the

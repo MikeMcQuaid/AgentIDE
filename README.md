@@ -56,7 +56,7 @@ before shipping.
 
 ### Review
 
-- Presents the agent's final message beside a pull-request-style review of its
+- Presents the agent's conversation beside a pull-request-style review of its
   diff, syntax highlighted with generated files hidden (so you review what
   matters the way you would on GitHub)
 - Rejects individual lines to amend the commit, edits commit messages and

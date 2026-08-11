@@ -20,13 +20,15 @@ struct RootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             DashboardView(model: dependencies.dashboard)
+                .ignoresSafeArea(.container, edges: .top)
                 .navigationSplitViewColumnWidth(min: Self.sidebarMinimum, ideal: Self.sidebarIdeal)
         } detail: {
             detail
+                .ignoresSafeArea(.container, edges: .top)
         }
-        // Nothing lives in the window toolbar any more, so hiding it
-        // reclaims its whole strip; the sidebar pads its own top for
-        // the traffic lights.
+        // Nothing lives in the window toolbar any more: hiding it and
+        // ignoring the top safe area lets every pane start at the
+        // window's top edge instead of below a reserved dead strip.
         .toolbar(.hidden, for: .windowToolbar)
         .sheet(isPresented: newSessionBinding) {
             NewSessionSheet(model: dependencies.dashboard)
@@ -60,11 +62,7 @@ struct RootView: View {
     private static let primaryMinimum: CGFloat = 420
     private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
-    private static let tabHorizontalPadding: CGFloat = 8
-    private static let tabVerticalPadding: CGFloat = 3
-    private static let tabSelectedOpacity = 0.25
 
-    /// Internal so the session tabs extension file can drive it.
     @State private var sessionTab: String = Self.activeTabID
 
     /// Focus requests from the finder menu items, cleared at launch
@@ -110,50 +108,10 @@ struct RootView: View {
         }
     }
 
-    /// The worktree's sessions as capsule tabs at the top of the
-    /// primary pane; hidden when there is nothing to pick between.
-    /// In-pane rather than in the window toolbar, whose items
-    /// reflowed across the split on this OS.
-    @ViewBuilder
-    private func sessionStrip(for item: WorktreeItem) -> some View {
-        if item.session != nil || item.pastSessions.isEmpty == false {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Self.stripSpacing) {
-                    if let session = item.session {
-                        sessionTabButton(title: sessionTitle(for: session), id: Self.activeTabID)
-                    }
-                    ForEach(item.pastSessions) { past in
-                        sessionTabButton(title: pastTitle(for: past), id: past.id)
-                    }
-                }
-                .padding(Self.stripSpacing)
-            }
-            .hoverHelp("The worktree's sessions: the live one and past conversations")
-            Divider()
-        }
-    }
-
-    private func sessionTabButton(title: String, id: String) -> some View {
-        Button {
-            sessionTab = id
-        } label: {
-            Text(title)
-                .font(.callout)
-                .lineLimit(1)
-                .padding(.horizontal, Self.tabHorizontalPadding)
-                .padding(.vertical, Self.tabVerticalPadding)
-                .background(
-                    Capsule().fill(sessionTab == id ? Color.accentColor.opacity(Self.tabSelectedOpacity) : .clear),
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
     private func split(for item: WorktreeItem) -> some View {
         HSplitView {
             VStack(spacing: 0) {
-                sessionStrip(for: item)
+                sessionStrip(for: item, selection: $sessionTab)
                 primary(for: item)
             }
             .frame(
@@ -299,18 +257,6 @@ struct RootView: View {
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
-    }
-
-    /// Parses the persisted path-tab lines.
-    private static func decodeTabs(_ stored: String) -> [String: Int] {
-        var tabs = [String: Int]()
-        for line in stored.split(separator: "\n") {
-            let parts = line.split(separator: "\t")
-            if let path = parts.first, let index = parts.last.flatMap({ Int($0) }), parts.first != parts.last {
-                tabs[String(path)] = index
-            }
-        }
-        return tabs
     }
 
     private func sessionStarted() async {

@@ -108,6 +108,18 @@ public struct PullRequestsView: View {
         }
     }
 
+    /// Push makes sense with unpushed commits or without an open
+    /// pull request for this worktree's branch; nil upstream means
+    /// nothing was ever pushed.
+    private var canShip: Bool {
+        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+            return false
+        }
+
+        let hasOpen = summaries.contains { $0.headBranch == branch && $0.state == "OPEN" }
+        return (item.aheadOfUpstream ?? 1) > 0 || hasOpen == false
+    }
+
     private var scopePicker: some View {
         Picker("Scope", selection: $scope) {
             Text("Worktree").tag(Scope.worktree)
@@ -125,6 +137,13 @@ public struct PullRequestsView: View {
 
     private var footer: some View {
         HStack {
+            Button("Push and open PR") { Task { await ship() } }
+                .disabled(canShip == false)
+                .hoverHelp(
+                    canShip
+                        ? "Push this worktree's branch and open a pull request; a repository template fills the body"
+                        : "Everything is pushed and this branch already has an open pull request",
+                )
             Button("Refresh") { Task { await reload() } }
                 .hoverHelp("Fetch the open pull requests again")
             if let status {
@@ -145,6 +164,19 @@ public struct PullRequestsView: View {
             }
             .padding(.leading, Self.footerPadding)
             .hoverHelp("A review comment; Fix sends every comment and failing check to an agent")
+        }
+    }
+
+    private func ship() async {
+        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+            return
+        }
+
+        do {
+            status = try await service.pushAndCreatePullRequest(worktree: item.worktree)
+            await reload()
+        } catch {
+            status = error.localizedDescription
         }
     }
 
