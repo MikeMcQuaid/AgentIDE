@@ -41,8 +41,9 @@ public struct DashboardView: View {
                 Spacer()
                 Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
                     .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
+                    // The glass bubble the split view's own floating
+                    // toggle used to draw.
+                    .buttonStyle(.glass)
                     .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
             }
             .padding(.trailing, Self.listPadding)
@@ -182,7 +183,7 @@ public struct DashboardView: View {
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
         return Button {
-            model.selection = item
+            model.select(item)
         } label: {
             WorktreeRowView(
                 item: item,

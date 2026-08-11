@@ -18,14 +18,9 @@ public struct RepositoryFinderPane: View {
     /// A search field over the fuzzy-ranked repository list.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack {
-                Text("Open repository").font(.subheadline.weight(.semibold))
-                Spacer()
-                Button("Cancel") { model.showsRepositoryFinder = false }
-                    .controlSize(.small)
-                    .keyboardShortcut(.cancelAction)
-                    .hoverHelp("Close without opening anything")
-            }
+            // No cancel button: any other middle-pane action, like
+            // selecting a worktree, replaces this page.
+            Text("Open repository").font(.subheadline.weight(.semibold))
             TextField("Find a repository across your organisations", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .onChange(of: query) { highlighted = 0 }

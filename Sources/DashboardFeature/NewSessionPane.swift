@@ -21,14 +21,9 @@ public struct NewSessionPane: View {
     /// pane's top like the other middle-pane pages.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack {
-                Text("New agent session").font(.subheadline.weight(.semibold))
-                Spacer()
-                Button("Cancel") { model.showsNewSession = false }
-                    .controlSize(.small)
-                    .keyboardShortcut(.cancelAction)
-                    .hoverHelp("Close without starting anything")
-            }
+            // No cancel button: any other middle-pane action, like
+            // selecting a worktree, replaces this page.
+            Text("New agent session").font(.subheadline.weight(.semibold))
             Picker("Repository", selection: $repository) {
                 Text("Choose repository").tag(Repository?.none)
                 ForEach(model.repositories) { repository in

@@ -27,10 +27,11 @@ struct RootView: View {
             DashboardView(model: dependencies.dashboard)
                 .frame(
                     minWidth: Self.sidebarMinimum,
-                    idealWidth: Self.sidebarIdeal,
+                    idealWidth: sidebarWidth,
                     maxWidth: Self.sidebarMaximum,
                     maxHeight: .infinity,
                 )
+                .onGeometryChange(for: Double.self, of: { $0.size.width }, action: { sidebarWidth = $0 })
                 .background(SidebarMaterial())
                 .ignoresSafeArea(.container, edges: .top)
             detail
@@ -57,7 +58,6 @@ struct RootView: View {
     /// Slim enough for icon-and-truncated-text rows while staying
     /// wider than the traffic lights band.
     private static let sidebarMinimum: CGFloat = 150
-    private static let sidebarIdeal: CGFloat = 300
     private static let sidebarMaximum: CGFloat = 440
     private static let primaryMinimum: CGFloat = 420
     private static let utilityMinimum: CGFloat = 340
@@ -92,6 +92,13 @@ struct RootView: View {
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
 
+    /// Divider positions, persisted so the panes restore their sizes
+    /// on the next launch; the ideal widths seed the first layout.
+    @AppStorage("sidebarWidth")
+    private var sidebarWidth = 300.0
+    @AppStorage("utilityPaneWidth")
+    private var utilityPaneWidth = 480.0
+
     @ViewBuilder private var detail: some View {
         if dependencies.dashboard.showsNewSession {
             // The middle pane, never a sheet.
@@ -125,9 +132,7 @@ struct RootView: View {
         )
     }
 
-    /// The tab bubbles and pane toggle, shown only on the shell tab;
-    /// every other tab reclaims the row for its own content, leaving
-    /// the tab shortcuts (Cmd-1 to 5) to switch away from them.
+    /// The tab bubbles and the pane toggle.
     private var utilityHeader: some View {
         HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
@@ -167,30 +172,36 @@ struct RootView: View {
             .ignoresSafeArea(.container, edges: .top)
             if showsUtilityPane {
                 utilityPane(for: item)
-                    .frame(minWidth: Self.utilityMinimum, maxHeight: .infinity)
+                    .frame(minWidth: Self.utilityMinimum, idealWidth: utilityPaneWidth, maxHeight: .infinity)
+                    .onGeometryChange(for: Double.self, of: { $0.size.width }, action: { utilityPaneWidth = $0 })
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
         .ignoresSafeArea(.container, edges: .top)
     }
 
-    /// The utility pane. Restores the worktree's remembered tab
-    /// whenever the selection changes, so each worktree keeps its
-    /// own pane.
+    /// The utility pane: the shared tab header over the content, so
+    /// the current tab is always visible whichever tab shows.
+    /// Restores the worktree's remembered tab whenever the selection
+    /// changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem) -> some View {
-        utilityContent(for: item)
-            .task(id: item.worktree.path) {
-                if let remembered = rememberedTabs[item.worktree.path] {
-                    utilityTabIndex = remembered
-                }
+        VStack(spacing: 0) {
+            utilityHeader
+            Divider()
+            utilityContent(for: item)
+        }
+        .task(id: item.worktree.path) {
+            if let remembered = rememberedTabs[item.worktree.path] {
+                utilityTabIndex = remembered
             }
-            .onChange(of: utilityTabIndex) {
-                rememberedTabs[item.worktree.path] = utilityTabIndex
-                worktreeTabs = rememberedTabs
-                    .map { $0.key + "\t" + String($0.value) }
-                    .sorted()
-                    .joined(separator: "\n")
-            }
+        }
+        .onChange(of: utilityTabIndex) {
+            rememberedTabs[item.worktree.path] = utilityTabIndex
+            worktreeTabs = rememberedTabs
+                .map { $0.key + "\t" + String($0.value) }
+                .sorted()
+                .joined(separator: "\n")
+        }
     }
 
     @ViewBuilder
@@ -266,26 +277,23 @@ struct RootView: View {
         }
     }
 
-    /// The tab header lives inside the shell's layer, so the mounted
-    /// terminal keeps one size whichever tab shows.
+    /// The shell tab's layer, always mounted while its shell runs so
+    /// the terminal survives tab switches at a constant size.
+    @ViewBuilder
     private func shellLayer(for item: WorktreeItem) -> some View {
         let path = item.worktree.path
-        return VStack(spacing: 0) {
-            utilityHeader
-            Divider()
-            if runningShells.contains(path) {
-                TerminalPaneView(
-                    command: dependencies.service.hostShellCommand(worktree: item.worktree),
-                ) {
-                    runningShells.remove(path)
-                    runningShellPaths = runningShells.sorted().joined(separator: "\n")
-                }
-                .id("shell-" + path)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                startShellButton(for: path)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if runningShells.contains(path) {
+            TerminalPaneView(
+                command: dependencies.service.hostShellCommand(worktree: item.worktree),
+            ) {
+                runningShells.remove(path)
+                runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }
+            .id("shell-" + path)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            startShellButton(for: path)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
