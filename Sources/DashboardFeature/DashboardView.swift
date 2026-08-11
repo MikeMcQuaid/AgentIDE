@@ -49,9 +49,6 @@ public struct DashboardView: View {
             .padding(Self.statusPadding)
             .background(.bar)
         }
-        .sheet(isPresented: finderBinding) {
-            RepositoryFinderSheet(model: model)
-        }
         // An inset, not an overlay: long git errors must never draw
         // over the rows. Clicking opens the full text, since two
         // lines truncate most command failures.
@@ -108,13 +105,6 @@ public struct DashboardView: View {
     @State private var showsFullStatus = false
 
     private let model: DashboardModel
-
-    private var finderBinding: Binding<Bool> {
-        Binding(
-            get: { model.showsRepositoryFinder },
-            set: { model.showsRepositoryFinder = $0 },
-        )
-    }
 
     @ViewBuilder private var foreignSection: some View {
         if model.foreign.isEmpty == false {

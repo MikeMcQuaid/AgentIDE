@@ -3,25 +3,26 @@ import SwiftUI
 import TerminalUI
 
 /// Fuzzy-finds a repository across every GitHub organisation the
-/// user can reach: picking a cloned one jumps to it, picking any
-/// other clones it into the workspace first.
-struct RepositoryFinderSheet: View {
+/// user can reach, in the middle pane: picking a cloned one jumps
+/// to it, picking any other clones it into the workspace first.
+public struct RepositoryFinderPane: View {
     // MARK: Lifecycle
 
     /// Creates the finder.
-    init(model: DashboardModel) {
+    public init(model: DashboardModel) {
         self.model = model
     }
 
-    // MARK: Internal
+    // MARK: Public
 
     /// A search field over the fuzzy-ranked repository list.
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack {
-                Text("Open repository").font(.title2)
+                Text("Open repository").font(.subheadline.weight(.semibold))
                 Spacer()
                 Button("Cancel") { model.showsRepositoryFinder = false }
+                    .controlSize(.small)
                     .keyboardShortcut(.cancelAction)
                     .hoverHelp("Close without opening anything")
             }
@@ -38,8 +39,9 @@ struct RepositoryFinderSheet: View {
                 resultsList
             }
         }
-        .padding()
-        .frame(minWidth: Self.minimumWidth)
+        .padding([.horizontal, .bottom])
+        .padding(.top, Self.topPadding)
+        .frame(maxWidth: Self.maximumWidth, maxHeight: .infinity, alignment: .top)
         // The cached listing paints instantly; the fetch refreshes.
         .task {
             all = model.cachedAccessibleRepositories()
@@ -53,7 +55,8 @@ struct RepositoryFinderSheet: View {
     private static let rowPadding: CGFloat = 4
     private static let resultLimit = 15
     private static let listHeight: CGFloat = 300
-    private static let minimumWidth: CGFloat = 480
+    private static let topPadding: CGFloat = 3
+    private static let maximumWidth: CGFloat = 640
     private static let highlightOpacity = 0.25
 
     @State private var query = ""

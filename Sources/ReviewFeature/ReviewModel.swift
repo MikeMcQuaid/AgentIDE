@@ -26,7 +26,10 @@ final class ReviewModel {
 
     /// What the review diffs.
     enum Scope: Hashable {
-        /// The last commit, or uncommitted changes when there are any.
+        /// Uncommitted changes against `HEAD`.
+        case uncommitted
+        /// The last commit, or uncommitted changes when there are
+        /// any and nothing picked uncommitted explicitly.
         case lastCommit
         /// Every commit on the branch against its merge base: the
         /// open pull request's base branch, or the default branch.
@@ -83,6 +86,10 @@ final class ReviewModel {
         selections = [:]
         do {
             switch scope {
+            case .uncommitted:
+                showsUncommitted = true
+                files = try await DiffParser.parse(git.uncommittedDiff(worktreePath: worktreePath))
+
             case .lastCommit:
                 let uncommitted = try await git.uncommittedDiff(worktreePath: worktreePath)
                 if uncommitted.isEmpty {

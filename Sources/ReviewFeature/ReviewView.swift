@@ -47,6 +47,11 @@ public struct ReviewView: View {
 
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
+    private static let dividerHeight: CGFloat = 14
+    private static let iconPadding: CGFloat = 4
+    private static let iconCornerRadius: CGFloat = 5
+    private static let iconSelectedOpacity = 0.2
+    private static let disabledOpacity = 0.4
     private static let commitListSpacing: CGFloat = 4
     private static let commitLineSpacing: CGFloat = 2
     private static let messageHeight: CGFloat = 88
@@ -61,46 +66,55 @@ public struct ReviewView: View {
     private let service: SessionService
     private let makeModel: () -> ReviewModel
 
-    private var scopeHelp: String {
-        """
-        Last commit reviews the newest commit (or uncommitted changes); \
-        Branch reviews every commit against the pull request's base \
-        branch, or the default branch without one
-        """
-    }
-
+    /// Icon-only controls, every one explained by its tooltip.
     private var toolbar: some View {
         VStack(alignment: .leading, spacing: Self.captionSpacing) {
-            HStack {
-                Picker("Scope", selection: $model.scope) {
-                    Text(model.showsUncommitted ? "Uncommitted" : "Last commit").tag(ReviewModel.Scope.lastCommit)
-                    Text("Branch").tag(ReviewModel.Scope.branch)
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: model.scope) { Task { await model.reload() } }
-                .hoverHelp(scopeHelp)
-                Toggle("Generated", isOn: $model.showsGenerated)
-                    .hoverHelp(
-                        "Reveal files hidden as generated: lockfiles, Xcode projects, asset catalogues and similar",
-                    )
+            HStack(spacing: Self.captionSpacing) {
+                scopeButtons
+                Divider().frame(height: Self.dividerHeight)
+                iconButton(
+                    "doc.badge.gearshape",
+                    help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
+                    isOn: model.showsGenerated,
+                ) { model.showsGenerated.toggle() }
                 Spacer()
-                Button("Commit outstanding") { Task { await commitOutstanding() } }
-                    .disabled(model.showsUncommitted == false)
-                    .hoverHelp("Commit changes the agent left uncommitted; disabled when the worktree is clean")
-                Button("Reject selected lines") { Task { await model.rejectSelected() } }
-                    .disabled(model.selections.values.allSatisfy(\.isEmpty) || model.scope == .branch)
-                    .hoverHelp("Reverse-apply the selected lines and amend the commit; last commit scope only")
-                Button("Refresh") { Task { await model.reload() } }
-                    .hoverHelp("Reload the diff from git")
+                actionButtons
             }
             if model.scope == .branch, let base = model.branchBase {
                 Text("vs " + base).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(Self.spacing)
+    }
+
+    @ViewBuilder private var scopeButtons: some View {
+        scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
+        scopeButton(
+            .lastCommit,
+            systemImage: "clock",
+            help: "Review the last commit, or uncommitted changes when there are any",
+        )
+        scopeButton(
+            .branch,
+            systemImage: "arrow.triangle.branch",
+            help: "Review every commit on the branch against its merge base",
+        )
+    }
+
+    @ViewBuilder private var actionButtons: some View {
+        iconButton(
+            "tray.and.arrow.down",
+            help: "Commit changes the agent left uncommitted; dimmed when the worktree is clean",
+            disabled: model.showsUncommitted == false,
+        ) { Task { await commitOutstanding() } }
+        iconButton(
+            "arrow.uturn.backward",
+            help: "Reject the selected lines: reverse-apply them and amend the commit",
+            disabled: model.selections.values.allSatisfy(\.isEmpty) || model.scope == .branch,
+        ) { Task { await model.rejectSelected() } }
+        iconButton("arrow.clockwise", help: "Reload the diff from git") {
+            Task { await model.reload() }
+        }
     }
 
     /// Editing a file jumps to the Editor tab rather than opening a
@@ -200,6 +214,37 @@ public struct ReviewView: View {
         }
         .font(.caption.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
+    }
+
+    private func scopeButton(_ scope: ReviewModel.Scope, systemImage: String, help: String) -> some View {
+        iconButton(systemImage, help: help, isOn: model.scope == scope) {
+            model.scope = scope
+            Task { await model.reload() }
+        }
+    }
+
+    private func iconButton(
+        _ systemImage: String,
+        help: String,
+        isOn: Bool = false,
+        disabled: Bool = false,
+        action: @escaping () -> Void,
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .padding(Self.iconPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: Self.iconCornerRadius)
+                        .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
+                )
+                .contentShape(Rectangle())
+                .accessibilityLabel(help)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? Self.disabledOpacity : 1)
+        .hoverHelp(help)
     }
 
     private func commitOutstanding() async {

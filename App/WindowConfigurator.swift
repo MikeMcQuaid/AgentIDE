@@ -29,6 +29,12 @@ struct WindowConfigurator: NSViewRepresentable {
             window.styleMask.insert(.fullSizeContentView)
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
+            // An empty toolbar still reserves a tall unified strip;
+            // removing it leaves only the plain titlebar, which the
+            // panes draw beneath.
+            if window.toolbar != nil {
+                window.toolbar = nil
+            }
             for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
                 window.standardWindowButton(kind)?.isHidden = false
             }

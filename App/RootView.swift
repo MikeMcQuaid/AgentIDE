@@ -26,11 +26,12 @@ struct RootView: View {
             detail
                 .ignoresSafeArea(.container, edges: .top)
         }
-        // Nothing lives in the window toolbar any more: hiding it and
-        // ignoring the top safe area lets every pane start at the
-        // window's top edge instead of below a reserved dead strip,
-        // and the configurator keeps the traffic lights visible.
-        .toolbar(.hidden, for: .windowToolbar)
+        // Hiding the whole window toolbar took the traffic lights
+        // with it. Instead only the split view's automatic sidebar
+        // toggle is removed, so no toolbar ever forms; the panes
+        // ignore the remaining titlebar inset and the configurator
+        // keeps the titlebar transparent with its buttons visible.
+        .toolbar(removing: .sidebarToggle)
         .background(WindowConfigurator())
         .sheet(isPresented: sessionManagerBinding) {
             SessionManagerSheet(service: dependencies.service) {
@@ -98,6 +99,8 @@ struct RootView: View {
         if dependencies.dashboard.showsNewSession {
             // The middle pane, never a sheet.
             NewSessionPane(model: dependencies.dashboard)
+        } else if dependencies.dashboard.showsRepositoryFinder {
+            RepositoryFinderPane(model: dependencies.dashboard)
         } else if let item = dependencies.dashboard.selection {
             split(for: item)
                 .onChange(of: item.id) { sessionTab = initialTab(for: item) }
