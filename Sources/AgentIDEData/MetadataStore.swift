@@ -69,8 +69,10 @@ public struct AppMetadata: Codable, Sendable {
         unreadMarks = try container.decodeIfPresent([String].self, forKey: .unreadMarks) ?? []
         pullRequestCache = try container
             .decodeIfPresent([String: PullRequestSummary].self, forKey: .pullRequestCache) ?? [:]
-        accessibleRepositories = try container
-            .decodeIfPresent([String].self, forKey: .accessibleRepositories) ?? []
+        organisations = try container
+            .decodeIfPresent([String].self, forKey: .organisations) ?? []
+        ownerRepositories = try container
+            .decodeIfPresent([String: [String]].self, forKey: .ownerRepositories) ?? [:]
         openIssuesCache = try container
             .decodeIfPresent([String: [IssueSummary]].self, forKey: .openIssuesCache) ?? [:]
         openPullRequestsCache = try container
@@ -100,9 +102,13 @@ public struct AppMetadata: Codable, Sendable {
     /// for an unchanged commit need no refetch.
     public var pullRequestCache: [String: PullRequestSummary] = [:]
 
-    /// The GitHub repositories the user could reach at last listing,
-    /// so the repository finder opens instantly.
-    public var accessibleRepositories: [String] = []
+    /// The user's login and organisations at last listing, so the
+    /// repository finder's owner step opens instantly.
+    public var organisations: [String] = []
+
+    /// Each owner's repositories at last listing, keyed by owner, so
+    /// the finder's second step paints instantly.
+    public var ownerRepositories: [String: [String]] = [:]
 
     /// Each repository's open issues at last listing, for instant
     /// pickers, keyed by repository path.

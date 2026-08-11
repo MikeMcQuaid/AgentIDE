@@ -33,12 +33,24 @@ public struct GitHubClient: Sendable {
         return Self.summaries(fromJSON: result.standardOutput)
     }
 
-    /// Every repository the authenticated user can access across
-    /// their organisations, as `owner/name`, most recently pushed
-    /// first.
-    public func accessibleRepositories(directory: String) async throws -> [String] {
+    /// The authenticated user's login followed by their
+    /// organisations, for the repository finder's owner step.
+    public func organisations(directory: String) async throws -> [String] {
+        let user = try await gh(["api", "user", "--jq", ".login"], in: directory)
+        let organisations = try await gh(
+            ["api", "user/orgs?per_page=100", "--paginate", "--jq", ".[].login"],
+            in: directory,
+        )
+        let login = user.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ([login] + organisations.standardOutput.split(separator: "\n").map(String.init))
+            .filter { $0.isEmpty == false }
+    }
+
+    /// Every repository under one owner, as `owner/name`, most
+    /// recently pushed first.
+    public func repositories(owner: String, directory: String) async throws -> [String] {
         let result = try await gh(
-            ["api", "user/repos?per_page=100&sort=pushed", "--paginate", "--jq", ".[].full_name"],
+            ["repo", "list", owner, "--limit", "1000", "--json", "nameWithOwner", "--jq", ".[].nameWithOwner"],
             in: directory,
         )
         return result.standardOutput.split(separator: "\n").map(String.init)

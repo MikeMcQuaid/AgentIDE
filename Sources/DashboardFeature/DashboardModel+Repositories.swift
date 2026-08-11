@@ -3,22 +3,42 @@ import AgentIDEDomain
 /// The repository finder's model surface: listing everything the
 /// user can reach on GitHub and jumping to or cloning a pick.
 public extension DashboardModel {
-    /// The repositories listed last time, for an instant finder.
-    func cachedAccessibleRepositories() -> [String] {
-        store.load().accessibleRepositories
+    /// The owners listed last time, for an instant first step.
+    func cachedOrganisations() -> [String] {
+        store.load().organisations
     }
 
-    /// Every repository the user can reach on GitHub, cached for the
-    /// next launch. An empty answer keeps the cache: GitHub was
-    /// probably unreachable.
-    func accessibleRepositories() async -> [String] {
-        let fresh = await service.accessibleRepositories()
+    /// The user's login and organisations, cached for the next
+    /// launch. An empty answer keeps the cache: GitHub was probably
+    /// unreachable.
+    func organisations() async -> [String] {
+        let fresh = await service.organisations()
         guard fresh.isEmpty == false else {
-            return cachedAccessibleRepositories()
+            return cachedOrganisations()
         }
 
         var metadata = store.load()
-        metadata.accessibleRepositories = fresh
+        metadata.organisations = fresh
+        store.save(metadata)
+        return fresh
+    }
+
+    /// The owner's repositories listed last time, for an instant
+    /// second step.
+    func cachedRepositories(owner: String) -> [String] {
+        store.load().ownerRepositories[owner] ?? []
+    }
+
+    /// Every repository under an owner, cached per owner like the
+    /// organisations.
+    func repositories(owner: String) async -> [String] {
+        let fresh = await service.repositories(owner: owner)
+        guard fresh.isEmpty == false else {
+            return cachedRepositories(owner: owner)
+        }
+
+        var metadata = store.load()
+        metadata.ownerRepositories[owner] = fresh
         store.save(metadata)
         return fresh
     }

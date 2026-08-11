@@ -54,7 +54,7 @@ public struct NewSessionPane: View {
         // seed only applies the first time; re-read the preset on
         // every appearance or a repository plus would show the
         // previous pick.
-        .onAppear { repository = model.newSessionRepository ?? repository }
+        .onAppear { repository = resolvedPreset ?? repository }
     }
 
     // MARK: Private
@@ -66,6 +66,17 @@ public struct NewSessionPane: View {
     @State private var repository: Repository?
 
     private let model: DashboardModel
+
+    /// The preset re-resolved against the picker's own list: the
+    /// sidebar's copy differs (its full name comes from GitHub), and
+    /// the picker only shows a selection it contains an equal of.
+    private var resolvedPreset: Repository? {
+        guard let preset = model.newSessionRepository else {
+            return nil
+        }
+
+        return model.repositories.first { $0.path == preset.path } ?? preset
+    }
 
     private func start(_ submission: AgentSessionForm.Submission) async {
         guard let repository else {

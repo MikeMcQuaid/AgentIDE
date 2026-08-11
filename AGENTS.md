@@ -63,6 +63,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `.toolbar(removing: .sidebarToggle)` and covers nearby controls;
   the window is a plain `HSplitView` whose sidebar never hides
   (only resizes), with `SidebarMaterial` supplying the blur.
+- Shape-style `.background` fills expand into ignored safe areas
+  by default and paint over sibling rows in the titlebar band;
+  pass `ignoresSafeAreaEdges: []` inside panes that ignore the
+  top safe area.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.

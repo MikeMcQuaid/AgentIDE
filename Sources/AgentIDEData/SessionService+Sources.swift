@@ -146,10 +146,16 @@ public extension SessionService {
         try await github.pullRequests(repositoryPath: repository.path, scope: .open)
     }
 
-    /// Every repository the user can reach on GitHub, for the
-    /// repository finder. Empty when GitHub is unreachable.
-    func accessibleRepositories() async -> [String] {
-        await (try? github.accessibleRepositories(directory: paths.repositoriesDirectory)) ?? []
+    /// The user's login and organisations, for the repository
+    /// finder's owner step. Empty when GitHub is unreachable.
+    func organisations() async -> [String] {
+        await (try? github.organisations(directory: paths.repositoriesDirectory)) ?? []
+    }
+
+    /// Every repository under one owner on GitHub. Empty when GitHub
+    /// is unreachable.
+    func repositories(owner: String) async -> [String] {
+        await (try? github.repositories(owner: owner, directory: paths.repositoriesDirectory)) ?? []
     }
 
     /// Clones a repository into the shared workspace when it is not

@@ -31,7 +31,7 @@ struct RootView: View {
                     maxWidth: Self.sidebarMaximum,
                     maxHeight: .infinity,
                 )
-                .onGeometryChange(for: Double.self, of: { $0.size.width }, action: { sidebarWidth = $0 })
+                .onGeometryChange(for: Double.self, of: { $0.size.width }, action: persistSidebarWidth)
                 .background(SidebarMaterial())
                 .ignoresSafeArea(.container, edges: .top)
             detail
@@ -51,6 +51,14 @@ struct RootView: View {
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
+        // The stored pane widths seed the ideal widths above; writes
+        // wait out the launch layout passes, whose transient widths
+        // would otherwise overwrite the stored values before the
+        // ideals are honoured.
+        .task {
+            try? await Task.sleep(for: .seconds(Self.layoutSettleDelay))
+            hasSettledLayout = true
+        }
     }
 
     // MARK: Private
@@ -62,8 +70,10 @@ struct RootView: View {
     private static let primaryMinimum: CGFloat = 420
     private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
+    private static let layoutSettleDelay = 2
 
     @State private var sessionTab: String = Self.activeTabID
+    @State private var hasSettledLayout = false
 
     /// Focus requests from the finder menu items, cleared at launch
     /// so a request from the previous run cannot fire.
@@ -173,7 +183,7 @@ struct RootView: View {
             if showsUtilityPane {
                 utilityPane(for: item)
                     .frame(minWidth: Self.utilityMinimum, idealWidth: utilityPaneWidth, maxHeight: .infinity)
-                    .onGeometryChange(for: Double.self, of: { $0.size.width }, action: { utilityPaneWidth = $0 })
+                    .onGeometryChange(for: Double.self, of: { $0.size.width }, action: persistUtilityWidth)
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
@@ -253,11 +263,14 @@ struct RootView: View {
                 .allowsHitTesting(showsShell)
             if showsShell == false, showsBrowser == false {
                 // Identity keyed by worktree, so switching in the
-                // sidebar always rebuilds the pane's state.
+                // sidebar always rebuilds the pane's state. The
+                // backgrounds must not expand into the ignored
+                // titlebar safe area, where they would paint over
+                // the tab header above.
                 switchedUtility(for: item)
                     .id("utility-" + path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(.background)
+                    .background(.background, ignoresSafeAreaEdges: [])
             }
             // Like the shell, a visited browser stays mounted so its
             // page survives tab switches without reloading.
@@ -265,7 +278,7 @@ struct RootView: View {
                 BrowserView()
                     .id("browser-" + path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.background)
+                    .background(.background, ignoresSafeAreaEdges: [])
                     .opacity(showsBrowser ? 1 : 0)
                     .allowsHitTesting(showsBrowser)
             }
@@ -306,6 +319,18 @@ struct RootView: View {
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
+    }
+
+    private func persistSidebarWidth(_ width: Double) {
+        if hasSettledLayout {
+            sidebarWidth = width
+        }
+    }
+
+    private func persistUtilityWidth(_ width: Double) {
+        if hasSettledLayout {
+            utilityPaneWidth = width
+        }
     }
 
     private func sessionStarted() async {
