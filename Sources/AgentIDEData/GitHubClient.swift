@@ -40,6 +40,17 @@ public struct GitHubClient: Sendable {
         return Self.summaries(fromJSON: result.standardOutput)
     }
 
+    /// One pull request's full summary, fetched when a light list
+    /// row clicks through so its header gains the status icons.
+    public func pullRequestSummary(
+        repositoryPath: String,
+        number: Int,
+    ) async throws -> PullRequestSummary? {
+        let fields = Self.coreFields + "," + Self.statusFields
+        let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
+        return Self.summaries(fromJSON: "[" + result.standardOutput + "]").first
+    }
+
     /// The authenticated user's login followed by their
     /// organisations, for the repository finder's owner step.
     public func organisations(directory: String) async throws -> [String] {
@@ -160,6 +171,15 @@ public struct GitHubClient: Sendable {
 
     // MARK: Internal
 
+    /// Cheap fields, including the body so a click-through shows the
+    /// conversation immediately.
+    static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"
+
+    /// The expensive dashboard fields; computing these across every
+    /// open pull request timed out (HTTP 504) on busy repositories,
+    /// so the open scope skips them and rows enrich on selection.
+    static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
+
     /// The repository's pull request template file, nil without one.
     static func pullRequestTemplate(in worktreePath: String) -> String? {
         [
@@ -173,8 +193,7 @@ public struct GitHubClient: Sendable {
     }
 
     static func listArguments(scope: ListScope, limit: Int = Self.listLimit) -> [String] {
-        let fields = "number,title,url,headRefName,baseRefName,state,mergeable,reviewDecision,"
-            + "statusCheckRollup,isDraft,autoMergeRequest,headRefOid,author"
+        let fields = scope == .open ? Self.coreFields : Self.coreFields + "," + Self.statusFields
         var arguments = ["pr", "list", "--json", fields, "--limit", String(limit)]
         switch scope {
         case let .branch(branch):
@@ -215,6 +234,7 @@ public struct GitHubClient: Sendable {
                 hasAutomerge: row.autoMergeRequest != nil,
                 headOID: row.headRefOid ?? "",
                 author: row.author?.login,
+                body: row.body,
             )
         }
     }
@@ -254,6 +274,7 @@ public struct GitHubClient: Sendable {
         let mergeable: String?
         let reviewDecision: String?
         let author: RowAuthor?
+        let body: String?
         // Optional because older gh versions omit the field.
         // swiftlint:disable:next discouraged_optional_boolean
         let isDraft: Bool?

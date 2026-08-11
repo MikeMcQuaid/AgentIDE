@@ -21,6 +21,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         hasAutomerge: Bool = false,
         headOID: String = "",
         author: String? = nil,
+        body: String? = nil,
     ) {
         self.number = number
         self.title = title
@@ -36,6 +37,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.hasAutomerge = hasAutomerge
         self.headOID = headOID
         self.author = author
+        self.body = body
     }
 
     // MARK: Public
@@ -83,6 +85,10 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// The author's GitHub login; optional so summaries cached by
     /// earlier releases still decode.
     public let author: String?
+
+    /// The description, carried from the listing so a click-through
+    /// shows the conversation immediately; optional like the author.
+    public let body: String?
 
     /// The pull request's checks page.
     public var checksPageURL: String {

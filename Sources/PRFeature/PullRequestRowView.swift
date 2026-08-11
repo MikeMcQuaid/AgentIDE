@@ -65,7 +65,11 @@ struct PullRequestRowView: View {
             }
             .buttonStyle(.plain)
             .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the system browser")
-            checksButton
+            // Light listings skip the status fields, so an unknown
+            // check state shows nothing rather than pending.
+            if summary.checks.isEmpty == false {
+                checksButton
+            }
             statusBadges
             Text(summary.title).font(.headline).lineLimit(1)
         }
@@ -76,8 +80,7 @@ struct PullRequestRowView: View {
             Octicon(review, colour: ChecksStyle.reviewColour(for: summary.reviewDecision))
                 .hoverHelp("Review: " + summary.reviewDecision.lowercased())
         }
-        if summary.state == "OPEN",
-           let mergeable = ChecksStyle.mergeableOcticonName(for: summary.mergeable) {
+        if summary.state == "OPEN", let mergeable = ChecksStyle.mergeableOcticonName(for: summary.mergeable) {
             Octicon(mergeable, colour: ChecksStyle.mergeableColour(for: summary.mergeable))
                 .hoverHelp(
                     summary.mergeable == "MERGEABLE"

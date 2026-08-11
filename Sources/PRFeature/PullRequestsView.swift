@@ -58,8 +58,6 @@ public struct PullRequestsView: View {
     }
 
     private static let footerPadding: CGFloat = 8
-    private static let rowSpacing: CGFloat = 4
-
     /// Fetches stay one page ahead of the visible one, so the pager
     /// knows whether a next page exists.
     private static let pageLookahead = 2
@@ -134,7 +132,7 @@ public struct PullRequestsView: View {
             isLoading: isLoading,
             hasMore: summaries.isEmpty == false && summaries.count == fetchedLimit,
             stackDepth: { stackDepth(for: $0) },
-            onSelect: { selected = $0 },
+            onSelect: { select($0) },
             page: $page,
         )
         // Visiting a page beyond the fetched data refetches with a
@@ -175,38 +173,23 @@ public struct PullRequestsView: View {
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Self.rowSpacing) {
-                Button("Back to the list", systemImage: "chevron.backward") { selected = nil }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .hoverHelp("Back to the pull request list")
-                PullRequestRowView(
-                    summary: summary,
-                    canRemediate: worktree(for: summary) != nil,
-                    stackDepth: stackDepth(for: summary),
-                    hasMergeQueue: hasMergeQueue,
-                    showsActions: true,
-                    onAutomerge: {
-                        act {
-                            try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
-                        }
-                    },
-                    onMerge: {
-                        act { try await github.merge(repositoryPath: repository.path, number: summary.number) }
-                    },
-                    onRemediate: { act { try await remediate(summary) } },
-                )
-            }
-            .padding(.horizontal, Self.footerPadding)
-            Divider()
-            PullRequestConversationView(
-                github: github,
-                repositoryPath: repository.path,
-                number: summary.number,
-                store: store,
-            )
-        }
+        PullRequestConversationPane(
+            summary: summary,
+            canRemediate: worktree(for: summary) != nil,
+            stackDepth: stackDepth(for: summary),
+            hasMergeQueue: hasMergeQueue,
+            github: github,
+            repositoryPath: repository.path,
+            store: store,
+            onBack: { selected = nil },
+            onAutomerge: {
+                act { try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number) }
+            },
+            onMerge: {
+                act { try await github.merge(repositoryPath: repository.path, number: summary.number) }
+            },
+            onRemediate: { act { try await remediate(summary) } },
+        )
     }
 
     private func ship() async {
@@ -224,6 +207,21 @@ public struct PullRequestsView: View {
 
     private func worktree(for summary: PullRequestSummary) -> Worktree? {
         items.first { $0.worktree.branch == summary.headBranch }?.worktree
+    }
+
+    /// Opens a conversation and refreshes its header: the open
+    /// scope's light rows gain their status icons here.
+    private func select(_ summary: PullRequestSummary) {
+        selected = summary
+        Task {
+            let full = try? await github.pullRequestSummary(
+                repositoryPath: repository.path,
+                number: summary.number,
+            )
+            if let full, selected?.number == full.number {
+                selected = full
+            }
+        }
     }
 
     /// The stack size, following base branches that are other listed
@@ -266,8 +264,11 @@ public struct PullRequestsView: View {
             metadata.pullRequestListCache[cacheKey] = fetched
             store.save(metadata)
             if extending == false {
-                selected = fetched.first { $0.number == previous }
+                let chosen = fetched.first { $0.number == previous }
                     ?? (fetched.count == 1 ? fetched.first : nil)
+                if let chosen {
+                    select(chosen)
+                }
             }
         } catch {
             status = error.localizedDescription

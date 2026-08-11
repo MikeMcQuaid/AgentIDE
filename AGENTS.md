@@ -81,7 +81,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   extensions are banned by SwiftLint.
 - GitHub: never repository-wide `gh pr list` on large repositories
   (the GraphQL gateway times out); query per branch, cache answers,
-  keep the last good value on failure.
+  keep the last good value on failure. The expensive fields are
+  checks, mergeability and review decision: wide listings fetch
+  light fields only and enrich one pull request on selection.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
   index, finder mode and focus, browser address).
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template

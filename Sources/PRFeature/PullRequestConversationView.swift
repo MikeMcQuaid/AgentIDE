@@ -3,6 +3,63 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - PullRequestConversationPane
+
+/// The conversation page: the back button and full header row over
+/// the timeline.
+struct PullRequestConversationPane: View {
+    // MARK: Internal
+
+    let summary: PullRequestSummary
+    let canRemediate: Bool
+    let stackDepth: Int
+    let hasMergeQueue: Bool
+    let github: GitHubClient
+    let repositoryPath: String
+    let store: MetadataStore
+    let onBack: () -> Void
+    let onAutomerge: () -> Void
+    let onMerge: () -> Void
+    let onRemediate: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Self.spacing) {
+                Button("Back to the list", systemImage: "chevron.backward", action: onBack)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .hoverHelp("Back to the pull request list")
+                PullRequestRowView(
+                    summary: summary,
+                    canRemediate: canRemediate,
+                    stackDepth: stackDepth,
+                    hasMergeQueue: hasMergeQueue,
+                    showsActions: true,
+                    onAutomerge: onAutomerge,
+                    onMerge: onMerge,
+                    onRemediate: onRemediate,
+                )
+            }
+            .padding(.horizontal, Self.padding)
+            Divider()
+            PullRequestConversationView(
+                github: github,
+                repositoryPath: repositoryPath,
+                number: summary.number,
+                seededBody: summary.body,
+                store: store,
+            )
+        }
+    }
+
+    // MARK: Private
+
+    private static let spacing: CGFloat = 4
+    private static let padding: CGFloat = 8
+}
+
+// MARK: - PullRequestConversationView
+
 /// A pull request's conversation: its description, then every review
 /// and comment down a timeline rail.
 struct PullRequestConversationView: View {
@@ -11,6 +68,11 @@ struct PullRequestConversationView: View {
     let github: GitHubClient
     let repositoryPath: String
     let number: Int
+
+    /// The description already carried by the listing, shown before
+    /// any fetch answers.
+    let seededBody: String?
+
     let store: MetadataStore
 
     var body: some View {
@@ -26,22 +88,26 @@ struct PullRequestConversationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Self.padding)
         }
-        // The cached conversation paints instantly (or the state
-        // clears, so another pull request's never lingers) while the
-        // fetch refreshes and re-caches.
+        // The listing's body or the cached conversation paints
+        // instantly (or the state clears, so another pull request's
+        // never lingers) while the fetch refreshes and re-caches. A
+        // seeded body is fresh from the listing, so only the events
+        // need fetching.
         .task(id: number) {
             isLoading = true
             let cached = store.load().conversationCache[cacheKey]
-            description = cached?.body ?? ""
+            description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
-            let conversation = await github.conversation(repositoryPath: repositoryPath, number: number)
-            description = conversation.body
-            events = conversation.events
+            if let seededBody {
+                events = await github.reviewComments(repositoryPath: repositoryPath, number: number)
+                description = seededBody
+            } else {
+                let conversation = await github.conversation(repositoryPath: repositoryPath, number: number)
+                description = conversation.body
+                events = conversation.events
+            }
             var metadata = store.load()
-            metadata.conversationCache[cacheKey] = CachedConversation(
-                body: conversation.body,
-                events: conversation.events,
-            )
+            metadata.conversationCache[cacheKey] = CachedConversation(body: description, events: events)
             store.save(metadata)
             isLoading = false
         }
