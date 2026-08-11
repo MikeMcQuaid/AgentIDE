@@ -18,37 +18,44 @@ struct RootView: View {
     var utilityTabIndex = 0
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            DashboardView(model: dependencies.dashboard)
-                .ignoresSafeArea(.container, edges: .top)
-                .navigationSplitViewColumnWidth(min: Self.sidebarMinimum, ideal: Self.sidebarIdeal)
-        } detail: {
+        // A plain split rather than a navigation split view: its
+        // floating sidebar toggle cannot be removed on this OS and
+        // covered anything placed near it, so the window owns its
+        // sidebar pane and both toggles outright.
+        HSplitView {
+            if showsRepositorySidebar {
+                DashboardView(model: dependencies.dashboard)
+                    .frame(
+                        minWidth: Self.sidebarMinimum,
+                        idealWidth: Self.sidebarIdeal,
+                        maxWidth: Self.sidebarMaximum,
+                        maxHeight: .infinity,
+                    )
+                    .background(SidebarMaterial())
+                    .ignoresSafeArea(.container, edges: .top)
+            }
             detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.container, edges: .top)
+                // With the sidebar hidden its toggle floats right of
+                // the traffic lights; top rows flow around it.
+                .overlay(alignment: .topLeading) {
+                    if showsRepositorySidebar == false {
+                        showSidebarButton
+                            .padding(.leading, WindowChrome.trafficLightClearance)
+                            .padding(.top, Self.chromeButtonTopPadding)
+                    }
+                }
         }
-        // Hiding the whole window toolbar took the traffic lights
-        // with it. Instead only the split view's automatic sidebar
-        // toggle is removed, so no toolbar ever forms; the panes
-        // ignore the remaining titlebar inset and the configurator
-        // keeps the titlebar transparent with its buttons visible.
-        .toolbar(removing: .sidebarToggle)
+        .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
         .sheet(isPresented: sessionManagerBinding) {
             SessionManagerSheet(service: dependencies.service) {
                 dependencies.dashboard.showsSessionManager = false
             }
         }
-        // The repository sidebar's visibility round-trips through
-        // storage so the View menu can drive and describe it.
-        .onChange(of: showsRepositorySidebar) {
-            columnVisibility = showsRepositorySidebar ? .all : .detailOnly
-        }
-        .onChange(of: columnVisibility) {
-            showsRepositorySidebar = columnVisibility != .detailOnly
-        }
         .task {
             finderFocusRequest = 0
-            columnVisibility = showsRepositorySidebar ? .all : .detailOnly
             runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
@@ -59,12 +66,14 @@ struct RootView: View {
 
     private static let sidebarMinimum: CGFloat = 240
     private static let sidebarIdeal: CGFloat = 300
+    private static let sidebarMaximum: CGFloat = 440
+    private static let chromeButtonTopPadding: CGFloat = 6
     private static let primaryMinimum: CGFloat = 420
     private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
 
     /// Height of the transparent titlebar band holding the traffic
-    /// lights and the floating sidebar toggle.
+    /// lights; centred forms drop below it when the sidebar hides.
     private static let titlebarClearance: CGFloat = 28
 
     @State private var sessionTab: String = Self.activeTabID
@@ -93,26 +102,37 @@ struct RootView: View {
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
     @State private var visitedBrowsers: Set<String> = []
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
     @AppStorage("showsRepositorySidebar")
     private var showsRepositorySidebar = true
 
-    /// With the sidebar hidden the middle pane starts at the window's
-    /// left edge, so its first line needs to clear the traffic lights.
-    private var hiddenSidebarInset: CGFloat {
-        showsRepositorySidebar ? 0 : Self.titlebarClearance
+    /// Leading inset for the primary pane's topmost row when the
+    /// sidebar is hidden, flowing it around the traffic lights and
+    /// the floating sidebar toggle.
+    private var headerInset: CGFloat {
+        showsRepositorySidebar ? 0 : WindowChrome.hiddenSidebarClearance
+    }
+
+    private var showSidebarButton: some View {
+        PaneToggleButton(
+            title: "Show repository sidebar",
+            systemImage: "sidebar.leading",
+            action: { showsRepositorySidebar = true },
+            help: "Show the repository sidebar; View or Ctrl-Cmd-S also brings it back",
+        )
+        .foregroundStyle(.secondary)
     }
 
     @ViewBuilder private var detail: some View {
         if dependencies.dashboard.showsNewSession {
-            // The middle pane, never a sheet.
+            // The middle pane, never a sheet; these centred forms
+            // drop below the titlebar band when the sidebar hides.
             NewSessionPane(model: dependencies.dashboard)
-                .padding(.top, hiddenSidebarInset)
+                .padding(.top, showsRepositorySidebar ? 0 : Self.titlebarClearance)
         } else if dependencies.dashboard.showsRepositoryFinder {
             RepositoryFinderPane(model: dependencies.dashboard)
-                .padding(.top, hiddenSidebarInset)
+                .padding(.top, showsRepositorySidebar ? 0 : Self.titlebarClearance)
         } else if let item = dependencies.dashboard.selection {
             split(for: item)
                 .onChange(of: item.id) { sessionTab = initialTab(for: item) }
@@ -126,15 +146,11 @@ struct RootView: View {
     }
 
     private var utilityToggleButton: some View {
-        Button {
-            showsUtilityPane.toggle()
-        } label: {
-            Label("Toggle utility pane", systemImage: "sidebar.right")
-                .labelStyle(.iconOnly)
-        }
-        .buttonStyle(.plain)
-        .hoverHelp(
-            showsUtilityPane
+        PaneToggleButton(
+            title: "Toggle utility pane",
+            systemImage: "sidebar.right",
+            action: { showsUtilityPane.toggle() },
+            help: showsUtilityPane
                 ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
                 : "Show the utility pane",
         )
@@ -143,10 +159,9 @@ struct RootView: View {
     private func split(for item: WorktreeItem) -> some View {
         HSplitView {
             VStack(spacing: 0) {
-                sessionStrip(for: item, selection: $sessionTab)
+                sessionStrip(for: item, selection: $sessionTab, leadingInset: headerInset)
                 primary(for: item)
             }
-            .padding(.top, hiddenSidebarInset)
             // With the utility pane hidden its toggle overlays the
             // session strip's empty right end, so the pane can always
             // come back by mouse without pushing the pane down.
@@ -178,9 +193,16 @@ struct RootView: View {
     private func utilityPane(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Self.stripSpacing) {
-                UtilityTabStrip()
+                // The tabs scroll when the pane narrows, so the
+                // toggle beside them can never be squeezed out.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Self.stripSpacing) {
+                        UtilityTabStrip()
+                    }
+                }
                 Spacer(minLength: 0)
                 utilityToggleButton
+                    .fixedSize()
             }
             .padding(Self.stripSpacing)
             Divider()
@@ -223,11 +245,13 @@ struct RootView: View {
                     fullName: nil,
                 ),
                 service: dependencies.service,
+                headerLeadingInset: paneHeaderInset(for: item),
             ) { await dependencies.dashboard.refresh() }
         } else {
             CreateSessionPane(
                 worktree: item.worktree,
                 model: dependencies.dashboard,
+                headerLeadingInset: paneHeaderInset(for: item),
             ) { await sessionStarted() }
         }
     }
@@ -294,6 +318,13 @@ struct RootView: View {
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
+    }
+
+    /// The same inset for a pane's own header, applied only when no
+    /// session strip already occupies the titlebar band above it.
+    private func paneHeaderInset(for item: WorktreeItem) -> CGFloat {
+        let stripVisible = item.session != nil || item.pastSessions.isEmpty == false
+        return stripVisible ? 0 : headerInset
     }
 
     private func sessionStarted() async {

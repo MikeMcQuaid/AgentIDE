@@ -61,9 +61,15 @@ extension RootView {
     /// primary pane; hidden when there is nothing to pick between.
     /// In-pane rather than in the window toolbar, whose items
     /// reflowed across the split on this OS. The selection rides a
-    /// binding, because the state itself stays private to the view.
+    /// binding, because the state itself stays private to the view;
+    /// the leading inset flows the tabs around the traffic lights
+    /// when the sidebar is hidden.
     @ViewBuilder
-    func sessionStrip(for item: WorktreeItem, selection: Binding<String>) -> some View {
+    func sessionStrip(
+        for item: WorktreeItem,
+        selection: Binding<String>,
+        leadingInset: CGFloat,
+    ) -> some View {
         if item.session != nil || item.pastSessions.isEmpty == false {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
@@ -80,6 +86,7 @@ extension RootView {
                     }
                 }
                 .padding(Self.stripSpacing)
+                .padding(.leading, leadingInset)
             }
             .hoverHelp("The worktree's sessions: the live one and past conversations")
             Divider()

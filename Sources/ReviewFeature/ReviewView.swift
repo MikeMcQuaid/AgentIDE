@@ -75,6 +75,7 @@ public struct ReviewView: View {
                 iconButton(
                     "doc.badge.gearshape",
                     help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
+                    title: "Generated",
                     isOn: model.showsGenerated,
                 ) { model.showsGenerated.toggle() }
                 Spacer()
@@ -88,15 +89,17 @@ public struct ReviewView: View {
     }
 
     @ViewBuilder private var scopeButtons: some View {
-        scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
+        scopeButton(.uncommitted, systemImage: "pencil", title: "Uncommitted", help: "Review uncommitted changes")
         scopeButton(
             .lastCommit,
             systemImage: "clock",
+            title: "Commit",
             help: "Review the last commit, or uncommitted changes when there are any",
         )
         scopeButton(
             .branch,
             systemImage: "arrow.triangle.branch",
+            title: "Branch",
             help: "Review every commit on the branch against its merge base",
         )
     }
@@ -216,30 +219,43 @@ public struct ReviewView: View {
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
     }
 
-    private func scopeButton(_ scope: ReviewModel.Scope, systemImage: String, help: String) -> some View {
-        iconButton(systemImage, help: help, isOn: model.scope == scope) {
+    private func scopeButton(
+        _ scope: ReviewModel.Scope,
+        systemImage: String,
+        title: String,
+        help: String,
+    ) -> some View {
+        iconButton(systemImage, help: help, title: title, isOn: model.scope == scope) {
             model.scope = scope
             Task { await model.reload() }
         }
     }
 
+    /// A one-word title beside the icon where one fits; the action
+    /// buttons on the right stay icon-only.
     private func iconButton(
         _ systemImage: String,
         help: String,
+        title: String? = nil,
         isOn: Bool = false,
         disabled: Bool = false,
         action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                .padding(Self.iconPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: Self.iconCornerRadius)
-                        .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
-                )
-                .contentShape(Rectangle())
-                .accessibilityLabel(help)
+            HStack(spacing: Self.captionSpacing) {
+                Image(systemName: systemImage)
+                if let title {
+                    Text(title).font(.caption)
+                }
+            }
+            .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+            .padding(Self.iconPadding)
+            .background(
+                RoundedRectangle(cornerRadius: Self.iconCornerRadius)
+                    .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
+            )
+            .contentShape(Rectangle())
+            .accessibilityLabel(help)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
