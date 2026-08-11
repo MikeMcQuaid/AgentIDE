@@ -24,12 +24,12 @@ final class ReviewModel {
 
     // MARK: Internal
 
-    /// What the review diffs.
+    /// What the review diffs. Each scope always shows its own diff,
+    /// so switching between them reliably changes the display.
     enum Scope: Hashable {
         /// Uncommitted changes against `HEAD`.
         case uncommitted
-        /// The last commit, or uncommitted changes when there are
-        /// any and nothing picked uncommitted explicitly.
+        /// The last commit.
         case lastCommit
         /// Every commit on the branch against its merge base: the
         /// open pull request's base branch, or the default branch.
@@ -80,8 +80,7 @@ final class ReviewModel {
         Self.generatedFragments.contains { path.contains($0) }
     }
 
-    /// Loads the scope's diff; the last commit scope prefers
-    /// uncommitted changes when there are any.
+    /// Loads the scope's diff.
     func reload() async {
         selections = [:]
         do {
@@ -91,14 +90,8 @@ final class ReviewModel {
                 files = try await DiffParser.parse(git.uncommittedDiff(worktreePath: worktreePath))
 
             case .lastCommit:
-                let uncommitted = try await git.uncommittedDiff(worktreePath: worktreePath)
-                if uncommitted.isEmpty {
-                    showsUncommitted = false
-                    files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
-                } else {
-                    showsUncommitted = true
-                    files = DiffParser.parse(uncommitted)
-                }
+                showsUncommitted = false
+                files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
 
             case .branch:
                 showsUncommitted = false

@@ -7,19 +7,11 @@ import SwiftUI
 public struct CreateSessionPane: View {
     // MARK: Lifecycle
 
-    /// Creates the pane; `headerLeadingInset` flows the header around
-    /// the window's titlebar controls and `onStarted` runs after a
-    /// successful launch.
+    /// Creates the pane; `onStarted` runs after a successful launch.
     @preconcurrency
-    public init(
-        worktree: Worktree,
-        model: DashboardModel,
-        headerLeadingInset: CGFloat = 0,
-        onStarted: @escaping @MainActor () async -> Void,
-    ) {
+    public init(worktree: Worktree, model: DashboardModel, onStarted: @escaping @MainActor () async -> Void) {
         self.worktree = worktree
         self.model = model
-        self.headerLeadingInset = headerLeadingInset
         self.onStarted = onStarted
     }
 
@@ -32,7 +24,6 @@ public struct CreateSessionPane: View {
             Text("Start an agent in \(target)")
                 .font(.subheadline.weight(.semibold))
                 .padding(.top, Self.headerTopPadding)
-                .padding(.leading, headerLeadingInset)
             AgentSessionForm(
                 model: model,
                 repository: repository,
@@ -51,7 +42,6 @@ public struct CreateSessionPane: View {
 
     private let worktree: Worktree
     private let model: DashboardModel
-    private let headerLeadingInset: CGFloat
     private let onStarted: @MainActor () async -> Void
 
     private var repository: Repository {

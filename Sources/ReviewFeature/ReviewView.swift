@@ -94,7 +94,7 @@ public struct ReviewView: View {
             .lastCommit,
             systemImage: "clock",
             title: "Commit",
-            help: "Review the last commit, or uncommitted changes when there are any",
+            help: "Review the last commit",
         )
         scopeButton(
             .branch,
@@ -107,8 +107,8 @@ public struct ReviewView: View {
     @ViewBuilder private var actionButtons: some View {
         iconButton(
             "tray.and.arrow.down",
-            help: "Commit changes the agent left uncommitted; dimmed when the worktree is clean",
-            disabled: model.showsUncommitted == false,
+            help: "Commit changes the agent left uncommitted; enabled on the uncommitted scope when there are any",
+            disabled: model.showsUncommitted == false || model.files.isEmpty,
         ) { Task { await commitOutstanding() } }
         iconButton(
             "arrow.uturn.backward",

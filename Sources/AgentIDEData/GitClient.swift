@@ -302,13 +302,17 @@ public struct GitClient: Sendable {
 
     // MARK: Private
 
-    /// Config a compromised repository could abuse, forced off.
+    /// Config a compromised repository could abuse, forced off, plus
+    /// user diff prefix preferences that would break the a/b paths
+    /// the diff parser and patch builder expect.
     private static let hardening = [
         "-c", "core.fsmonitor=",
         "-c", "core.sshCommand=",
         "-c", "core.hooksPath=/dev/null",
         "-c", "core.pager=cat",
         "-c", "protocol.ext.allow=never",
+        "-c", "diff.mnemonicPrefix=false",
+        "-c", "diff.noprefix=false",
     ]
 
     private let runner: any ProcessRunner

@@ -24,11 +24,8 @@ struct AppCommands: Commands {
             Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
         CommandGroup(after: .sidebar) {
-            // The two panes toggle together in one group.
-            Button(showsRepositorySidebar ? "Hide Repository Sidebar" : "Show Repository Sidebar") {
-                showsRepositorySidebar.toggle()
-            }
-            .keyboardShortcut("s", modifiers: [.command, .control])
+            // The repository sidebar never hides, only resizes, so
+            // the utility pane is the one toggle here.
             Button(showsUtilityPane ? "Hide Utility Pane" : "Show Utility Pane") {
                 showsUtilityPane.toggle()
             }
@@ -48,8 +45,6 @@ struct AppCommands: Commands {
 
     // MARK: Private
 
-    @AppStorage("showsRepositorySidebar")
-    private var showsRepositorySidebar = true
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
     @AppStorage("utilityTabIndex")

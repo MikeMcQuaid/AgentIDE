@@ -61,8 +61,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   removed conditionally; the sidebar is a plain `ScrollView`.
 - `NavigationSplitView` floats a sidebar toggle that survives
   `.toolbar(removing: .sidebarToggle)` and covers nearby controls;
-  the window is a plain `HSplitView` with its own toggle buttons
-  and `SidebarMaterial` supplying the sidebar blur.
+  the window is a plain `HSplitView` whose sidebar never hides
+  (only resizes), with `SidebarMaterial` supplying the blur.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.

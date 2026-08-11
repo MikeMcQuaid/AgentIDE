@@ -10,19 +10,15 @@ import TerminalUI
 public struct RepositorySessionsView: View {
     // MARK: Lifecycle
 
-    /// Creates the browser; `headerLeadingInset` flows the header
-    /// around the window's titlebar controls and `onResumed` runs
-    /// after a resume launches.
+    /// Creates the browser; `onResumed` runs after a resume launches.
     @preconcurrency
     public init(
         repository: Repository,
         service: SessionService,
-        headerLeadingInset: CGFloat = 0,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
         self.repository = repository
         self.service = service
-        self.headerLeadingInset = headerLeadingInset
         self.onResumed = onResumed
     }
 
@@ -63,7 +59,6 @@ public struct RepositorySessionsView: View {
 
     private let repository: Repository
     private let service: SessionService
-    private let headerLeadingInset: CGFloat
     private let onResumed: @MainActor () async -> Void
 
     private var selectionBinding: Binding<TranscriptSession?> {
@@ -74,7 +69,6 @@ public struct RepositorySessionsView: View {
         HStack {
             Text("Conversations in \(repository.name)")
                 .font(.subheadline.weight(.semibold))
-                .padding(.leading, headerLeadingInset)
             if let status {
                 Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }

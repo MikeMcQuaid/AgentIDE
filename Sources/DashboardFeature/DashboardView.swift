@@ -34,24 +34,16 @@ public struct DashboardView: View {
             .padding(Self.listPadding)
         }
         // The traffic lights occupy the top-left; Open repository
-        // and the sidebar toggle share the band's right end as one
-        // matched pair, and the inset spaces the first repository
-        // row beneath them.
+        // sits at the band's right end, and the inset spaces the
+        // first repository row beneath it.
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: Self.headerButtonSpacing) {
+            HStack {
                 Spacer()
                 Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                     .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
-                Button("Hide repository sidebar", systemImage: "sidebar.leading") {
-                    showsRepositorySidebar = false
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .hoverHelp("Hide the repository sidebar; View or Ctrl-Cmd-S brings it back")
             }
             .padding(.trailing, Self.listPadding)
             .padding(.top, Self.headerTopPadding)
@@ -95,7 +87,6 @@ public struct DashboardView: View {
     private static let statusPadding: CGFloat = 4
     private static let statusLineLimit = 2
     private static let headerTopPadding: CGFloat = 12
-    private static let headerButtonSpacing: CGFloat = 10
     private static let statusPopoverWidth: CGFloat = 420
     private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6
@@ -110,10 +101,6 @@ public struct DashboardView: View {
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
-
-    /// The cross-module signal the app and View menu also drive.
-    @AppStorage("showsRepositorySidebar")
-    private var showsRepositorySidebar = true
 
     @State private var showsFullStatus = false
 

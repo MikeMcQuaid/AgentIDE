@@ -99,5 +99,10 @@ let package = Package(
             dependencies: ["TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
+        .testTarget(
+            name: "ReviewFeatureTests",
+            dependencies: ["ReviewFeature"],
+            swiftSettings: mainActorByDefault,
+        ),
     ],
 )
