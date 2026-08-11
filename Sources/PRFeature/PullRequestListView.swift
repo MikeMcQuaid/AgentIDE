@@ -7,8 +7,16 @@ import TerminalUI
 struct PullRequestListView: View {
     // MARK: Internal
 
+    /// One fetch page; the tab grows its query limit in these steps.
+    static let pageSize = 25
+
     let summaries: [PullRequestSummary]
     let isLoading: Bool
+
+    /// Whether the last fetch filled its limit, so later pages may
+    /// exist beyond what is loaded.
+    let hasMore: Bool
+
     let stackDepth: (PullRequestSummary) -> Int
 
     /// The selection closure is a non-final property so call sites
@@ -24,13 +32,13 @@ struct PullRequestListView: View {
                 row(summary)
             }
             .overlay {
-                if isLoading {
+                if isLoading, summaries.isEmpty {
                     ProgressView("Loading pull requests…")
                 } else if summaries.isEmpty {
                     ContentUnavailableView("No pull requests", systemImage: "arrow.triangle.pull")
                 }
             }
-            if summaries.count > Self.pageSize {
+            if summaries.count > Self.pageSize || hasMore {
                 Divider()
                 pager
             }
@@ -39,7 +47,6 @@ struct PullRequestListView: View {
 
     // MARK: Private
 
-    private static let pageSize = 25
     private static let rowSpacing: CGFloat = 4
     private static let pagerSpacing: CGFloat = 8
 
@@ -62,34 +69,34 @@ struct PullRequestListView: View {
             Button("Next page", systemImage: "chevron.forward") { page += 1 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-                .disabled(last >= summaries.count)
+                .disabled(last >= summaries.count && hasMore == false)
                 .hoverHelp("The next \(Self.pageSize) pull requests")
             Spacer()
         }
         .padding(Self.rowSpacing)
     }
 
+    /// The conversation header's own look, without its actions; a
+    /// click anywhere outside the inner links opens the conversation.
     private func row(_ summary: PullRequestSummary) -> some View {
-        Button {
-            onSelect(summary)
-        } label: {
-            HStack(spacing: Self.rowSpacing) {
-                Octicon(
-                    ChecksStyle.stateOcticonName(state: summary.state, isDraft: summary.isDraft),
-                    colour: ChecksStyle.stateColour(state: summary.state, isDraft: summary.isDraft),
-                )
-                Text("#" + String(summary.number)).font(.callout).foregroundStyle(.secondary)
-                Text(summary.title).font(.callout).lineLimit(1)
-                if stackDepth(summary) > 1 {
-                    Octicon("octicon-stack", colour: .secondary)
-                        .hoverHelp("Stacked: \(stackDepth(summary)) pull requests based on each other")
-                    Text(String(stackDepth(summary))).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        PullRequestRowView(
+            summary: summary,
+            canRemediate: false,
+            stackDepth: stackDepth(summary),
+            hasMergeQueue: false,
+            showsActions: false,
+            onAutomerge: noAction,
+            onMerge: noAction,
+            onRemediate: noAction,
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect(summary) }
+        .accessibilityAddTraits(.isButton)
         .hoverHelp("Open this pull request's conversation")
+    }
+
+    /// Rows hide their actions but the parameters remain.
+    private func noAction() {
+        // Never called: the action buttons are not rendered.
     }
 }

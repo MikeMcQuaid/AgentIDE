@@ -9,18 +9,21 @@ public struct PullRequestsView: View {
     // MARK: Lifecycle
 
     /// Creates the pull request list for a repository, filtered to
-    /// one branch when given.
+    /// one branch when given; the store caches listings and
+    /// conversations between sessions.
     public init(
         repository: Repository,
         items: [WorktreeItem],
         github: GitHubClient,
         service: SessionService,
+        store: MetadataStore,
         branch: String? = nil,
     ) {
         self.repository = repository
         self.items = items
         self.github = github
         self.service = service
+        self.store = store
         self.branch = branch
     }
 
@@ -57,11 +60,16 @@ public struct PullRequestsView: View {
     private static let footerPadding: CGFloat = 8
     private static let rowSpacing: CGFloat = 4
 
+    /// Fetches stay one page ahead of the visible one, so the pager
+    /// knows whether a next page exists.
+    private static let pageLookahead = 2
+
     @State private var scope: Scope = .worktree
     @State private var summaries: [PullRequestSummary] = []
     @State private var selected: PullRequestSummary?
     @State private var isLoading = false
     @State private var page = 0
+    @State private var fetchedLimit = 0
     @State private var hasMergeQueue = false
     @State private var status: String?
 
@@ -69,7 +77,12 @@ public struct PullRequestsView: View {
     private let items: [WorktreeItem]
     private let github: GitHubClient
     private let service: SessionService
+    private let store: MetadataStore
     private let branch: String?
+
+    private var cacheKey: String {
+        repository.path + "#" + scopeIdentity + "#" + (branch ?? "")
+    }
 
     private var scopeIdentity: String {
         String(describing: scope)
@@ -119,10 +132,22 @@ public struct PullRequestsView: View {
         PullRequestListView(
             summaries: summaries,
             isLoading: isLoading,
+            hasMore: summaries.isEmpty == false && summaries.count == fetchedLimit,
             stackDepth: { stackDepth(for: $0) },
             onSelect: { selected = $0 },
             page: $page,
         )
+        // Visiting a page beyond the fetched data refetches with a
+        // higher limit; a short answer means there is no more.
+        .onChange(of: page) {
+            guard summaries.count == fetchedLimit,
+                  (page + 1) * PullRequestListView.pageSize >= summaries.count
+            else {
+                return
+            }
+
+            Task { await reload(extending: true) }
+        }
     }
 
     private var footer: some View {
@@ -137,7 +162,11 @@ public struct PullRequestsView: View {
             Button("Refresh") { Task { await reload(keepingSelection: true) } }
                 .hoverHelp("Fetch the pull requests again")
             if let status {
-                Text(status).font(.callout).foregroundStyle(.secondary)
+                // Selectable so failures can be copied and reported.
+                Text(status)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
             Spacer()
         }
@@ -157,6 +186,7 @@ public struct PullRequestsView: View {
                     canRemediate: worktree(for: summary) != nil,
                     stackDepth: stackDepth(for: summary),
                     hasMergeQueue: hasMergeQueue,
+                    showsActions: true,
                     onAutomerge: {
                         act {
                             try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
@@ -174,6 +204,7 @@ public struct PullRequestsView: View {
                 github: github,
                 repositoryPath: repository.path,
                 number: summary.number,
+                store: store,
             )
         }
     }
@@ -209,21 +240,35 @@ public struct PullRequestsView: View {
         return depth
     }
 
-    /// The list empties and shows its loading state instantly; a
+    /// The cached listing paints instantly while the fetch runs; a
     /// kept selection is re-selected once the fetch answers, and a
-    /// single result opens its conversation directly.
-    private func reload(keepingSelection: Bool = false) async {
+    /// single result opens its conversation directly. Extending
+    /// keeps the current page and raises the fetch limit.
+    private func reload(keepingSelection: Bool = false, extending: Bool = false) async {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
-        summaries = []
-        selected = nil
-        page = 0
+        if extending == false {
+            page = 0
+            selected = nil
+            summaries = store.load().pullRequestListCache[cacheKey] ?? []
+        }
         defer { isLoading = false }
         do {
-            let fetched = try await github.pullRequests(repositoryPath: repository.path, scope: listScope)
+            let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
+            let fetched = try await github.pullRequests(
+                repositoryPath: repository.path,
+                scope: listScope,
+                limit: limit,
+            )
             summaries = fetched
-            selected = fetched.first { $0.number == previous }
-                ?? (fetched.count == 1 ? fetched.first : nil)
+            fetchedLimit = limit
+            var metadata = store.load()
+            metadata.pullRequestListCache[cacheKey] = fetched
+            store.save(metadata)
+            if extending == false {
+                selected = fetched.first { $0.number == previous }
+                    ?? (fetched.count == 1 ? fetched.first : nil)
+            }
         } catch {
             status = error.localizedDescription
         }

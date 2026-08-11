@@ -171,6 +171,7 @@ extension RootView {
                 items: repositoryItems(for: item),
                 github: dependencies.github,
                 service: dependencies.service,
+                store: dependencies.store,
                 branch: item.worktree.branch,
             )
 

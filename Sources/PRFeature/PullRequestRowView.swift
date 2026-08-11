@@ -3,7 +3,9 @@ import SwiftUI
 import TerminalUI
 
 /// One pull request's header: state, checks, review and mergeability
-/// icons around the title, with the merge and fix actions.
+/// icons around the title over the branch and author, with the merge
+/// and fix actions when shown. The list rows share this look with
+/// the conversation view's header.
 struct PullRequestRowView: View {
     // MARK: Internal
 
@@ -13,6 +15,7 @@ struct PullRequestRowView: View {
     let canRemediate: Bool
     let stackDepth: Int
     let hasMergeQueue: Bool
+    let showsActions: Bool
     let onAutomerge: () -> Void
     let onMerge: () -> Void
     let onRemediate: () -> Void
@@ -21,15 +24,22 @@ struct PullRequestRowView: View {
         HStack {
             VStack(alignment: .leading) {
                 titleRow
-                Text(summary.headBranch).font(.callout).foregroundStyle(.secondary)
+                Text(caption).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-            actions
+            if showsActions {
+                actions
+            }
         }
         .padding(.vertical, Self.rowPadding)
     }
 
     // MARK: Private
+
+    private var caption: String {
+        let author = ChecksStyle.authorDisplayName(summary.author ?? "")
+        return author.isEmpty ? summary.headBranch : summary.headBranch + " · " + author
+    }
 
     private var stateHelp: String {
         if summary.state != "OPEN" {

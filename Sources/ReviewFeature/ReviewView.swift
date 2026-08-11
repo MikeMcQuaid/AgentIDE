@@ -173,7 +173,12 @@ public struct ReviewView: View {
                         .hoverHelp("Rewrite the last commit's message")
                     messageLengths
                     if let status = model.status {
-                        Text(status).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        // Selectable so failures can be copied out.
+                        Text(status)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .textSelection(.enabled)
                     }
                     Spacer()
                 }

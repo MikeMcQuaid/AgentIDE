@@ -12,7 +12,7 @@ final class AppDependencies {
         let runner = FoundationProcessRunner()
         let gitClient = GitClient(runner: runner)
         let githubClient = GitHubClient(runner: runner)
-        let store = MetadataStore(file: paths.metadataFile)
+        let metadataStore = MetadataStore(file: paths.metadataFile)
         let tmux = TmuxClient(
             runner: runner,
             launcher: SandvaultLauncher(hostUser: paths.hostUser),
@@ -25,13 +25,14 @@ final class AppDependencies {
             github: githubClient,
             transcripts: TranscriptReader(),
             spool: EventSpool(directory: paths.eventsDirectory),
-            store: store,
+            store: metadataStore,
             runners: [ClaudeCodeRunner(), CodexRunner()],
         )
         git = gitClient
         github = githubClient
         service = sessionService
-        dashboard = DashboardModel(service: sessionService, store: store, github: githubClient)
+        store = metadataStore
+        dashboard = DashboardModel(service: sessionService, store: metadataStore, github: githubClient)
         try? HookInstaller(paths: paths).ensureInstalled()
     }
 
@@ -45,4 +46,5 @@ final class AppDependencies {
     let github: GitHubClient
     let service: SessionService
     let dashboard: DashboardModel
+    let store: MetadataStore
 }

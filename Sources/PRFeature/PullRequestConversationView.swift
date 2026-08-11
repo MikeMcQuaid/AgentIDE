@@ -11,11 +11,12 @@ struct PullRequestConversationView: View {
     let github: GitHubClient
     let repositoryPath: String
     let number: Int
+    let store: MetadataStore
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
-                if isLoading {
+                if isLoading, events.isEmpty, description.isEmpty {
                     ProgressView("Loading conversation…")
                         .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
                 } else {
@@ -25,15 +26,23 @@ struct PullRequestConversationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Self.padding)
         }
-        // State clears instantly on arrival, so a previous pull
-        // request's conversation never lingers while this one loads.
+        // The cached conversation paints instantly (or the state
+        // clears, so another pull request's never lingers) while the
+        // fetch refreshes and re-caches.
         .task(id: number) {
             isLoading = true
-            description = ""
-            events = []
+            let cached = store.load().conversationCache[cacheKey]
+            description = cached?.body ?? ""
+            events = cached?.events ?? []
             let conversation = await github.conversation(repositoryPath: repositoryPath, number: number)
             description = conversation.body
             events = conversation.events
+            var metadata = store.load()
+            metadata.conversationCache[cacheKey] = CachedConversation(
+                body: conversation.body,
+                events: conversation.events,
+            )
+            store.save(metadata)
             isLoading = false
         }
     }
@@ -51,9 +60,13 @@ struct PullRequestConversationView: View {
     @State private var events: [ReviewComment] = []
     @State private var isLoading = true
 
+    private var cacheKey: String {
+        repositoryPath + "#" + String(number)
+    }
+
     @ViewBuilder private var content: some View {
         if description.isEmpty == false {
-            MarkdownText(description).font(.caption)
+            MarkdownText(description)
             Divider()
         }
         ForEach(events) { event in
@@ -61,7 +74,7 @@ struct PullRequestConversationView: View {
         }
         if events.isEmpty, description.isEmpty {
             Text("No description or feedback yet.")
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
         }
     }
@@ -71,16 +84,16 @@ struct PullRequestConversationView: View {
     private func eventRow(_ event: ReviewComment) -> some View {
         VStack(alignment: .leading, spacing: Self.headerSpacing) {
             HStack(spacing: Self.headerSpacing) {
-                Text(ChecksStyle.authorDisplayName(event.author)).font(.caption.bold())
+                Text(ChecksStyle.authorDisplayName(event.author)).font(.callout.bold())
                 if let icon = ChecksStyle.reviewOcticonName(for: event.kind) {
                     Octicon(icon, colour: ChecksStyle.reviewColour(for: event.kind))
                     Text(event.kind.replacing("_", with: " ").lowercased())
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
             if event.body.isEmpty == false {
-                MarkdownText(event.body).font(.caption)
+                MarkdownText(event.body)
             }
         }
         .padding(.leading, Self.railInset)

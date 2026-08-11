@@ -108,8 +108,10 @@ public extension GitHubClient {
         repositoryPath: String,
         number: Int,
     ) async -> [(author: String?, body: String?)] {
+        // gh's own HTTP cache answers repeats within the window, so
+        // revisiting a conversation does not re-query GitHub.
         let inline = try? await gh(
-            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100"],
+            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100", "--cache", "60s"],
             in: repositoryPath,
         )
         let decoded = (inline?.standardOutput)

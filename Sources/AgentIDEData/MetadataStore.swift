@@ -83,6 +83,10 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: String].self, forKey: .sessionsByWorktree) ?? [:]
         resumeIDs = try container.decodeIfPresent([String: String].self, forKey: .resumeIDs) ?? [:]
         cachedSidebar = try container.decodeIfPresent([CachedRepository].self, forKey: .cachedSidebar) ?? []
+        pullRequestListCache = try container
+            .decodeIfPresent([String: [PullRequestSummary]].self, forKey: .pullRequestListCache) ?? [:]
+        conversationCache = try container
+            .decodeIfPresent([String: CachedConversation].self, forKey: .conversationCache) ?? [:]
     }
 
     // MARK: Public
@@ -134,6 +138,35 @@ public struct AppMetadata: Codable, Sendable {
     /// The last rendered sidebar, so a fresh launch paints instantly
     /// while the first poll runs.
     public var cachedSidebar: [CachedRepository] = []
+
+    /// Each repository and scope's last pull request listing, so the
+    /// tab paints instantly in a new session while a fetch refreshes.
+    public var pullRequestListCache: [String: [PullRequestSummary]] = [:]
+
+    /// Each pull request's last conversation, keyed by repository
+    /// path and number, painted instantly like the listings.
+    public var conversationCache: [String: CachedConversation] = [:]
+}
+
+// MARK: - CachedConversation
+
+/// One pull request's cached body and feedback timeline.
+public struct CachedConversation: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates a cached conversation.
+    public init(body: String = "", events: [ReviewComment] = []) {
+        self.body = body
+        self.events = events
+    }
+
+    // MARK: Public
+
+    /// The pull request's description.
+    public var body: String
+
+    /// The reviews and comments, in fetched order.
+    public var events: [ReviewComment]
 }
 
 // MARK: - MetadataStore

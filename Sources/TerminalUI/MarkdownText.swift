@@ -15,17 +15,23 @@ public struct MarkdownText: View {
 
     // MARK: Public
 
-    /// The stacked prose and code segments.
+    /// The stacked prose and code segments, with details blocks
+    /// collapsed behind their summaries. One font for every markdown
+    /// surface in the app.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                if segment.isCode {
-                    code(segment.text, language: segment.language)
+            ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
+                if let summary = chunk.detailsSummary {
+                    DisclosureGroup(
+                        content: { Self(chunk.text) },
+                        label: { Text(Self.inline(summary)).fontWeight(.medium) },
+                    )
                 } else {
-                    prose(segment.text)
+                    segmentViews(chunk.text)
                 }
             }
         }
+        .font(.callout)
     }
 
     // MARK: Private
@@ -34,6 +40,13 @@ public struct MarkdownText: View {
         let text: String
         let isCode: Bool
         var language: SyntaxLanguage?
+    }
+
+    /// A top-level run of markdown, either plain or one details
+    /// block folded behind its summary.
+    private struct Chunk {
+        let text: String
+        let detailsSummary: String?
     }
 
     /// One structural piece of prose: GitHub comments mix headings,
@@ -59,33 +72,40 @@ public struct MarkdownText: View {
 
     private let text: String
 
-    /// The text split on ``` fences after stripping the HTML wrapper
-    /// tags review bots emit; each fence's language tag drives the
-    /// block's highlighting.
-    private var segments: [Segment] {
-        var results = [Segment]()
-        var current = [Substring]()
-        var inCode = false
-        var language: SyntaxLanguage?
-        for line in Self.strippingHTML(text).split(separator: "\n", omittingEmptySubsequences: false) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("```") {
-                let joined = current.joined(separator: "\n")
-                if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    results.append(Segment(text: joined, isCode: inCode, language: language))
-                }
-                current = []
-                language = inCode ? nil : Self.syntaxLanguage(for: String(trimmed.dropFirst("```".count)))
-                inCode.toggle()
-            } else {
-                current.append(line)
+    /// The text split on `<details>` blocks, which render collapsed;
+    /// bots fold their long reports into them for a reason.
+    private var chunks: [Chunk] {
+        var results = [Chunk]()
+        var remainder = Substring(text)
+        while let match = remainder.firstMatch(of: /<details[^>]*>([\s\S]*?)<\/details>/.ignoresCase()) {
+            let before = String(remainder[..<match.range.lowerBound])
+            if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                results.append(Chunk(text: before, detailsSummary: nil))
             }
+            var inner = String(match.output.1)
+            var summary = ""
+            if let heading = inner.firstMatch(of: /<summary>([\s\S]*?)<\/summary>/.ignoresCase()) {
+                summary = String(heading.output.1).trimmingCharacters(in: .whitespacesAndNewlines)
+                inner.removeSubrange(heading.range)
+            }
+            results.append(Chunk(text: inner, detailsSummary: summary.isEmpty ? "Details" : summary))
+            remainder = remainder[match.range.upperBound...]
         }
-        let joined = current.joined(separator: "\n")
-        if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            results.append(Segment(text: joined, isCode: inCode, language: language))
+        if remainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            results.append(Chunk(text: String(remainder), detailsSummary: nil))
         }
         return results
+    }
+
+    /// One chunk's fences and prose.
+    private func segmentViews(_ text: String) -> some View {
+        ForEach(Array(segments(of: text).enumerated()), id: \.offset) { _, segment in
+            if segment.isCode {
+                code(segment.text, language: segment.language)
+            } else {
+                prose(segment.text)
+            }
+        }
     }
 
     /// A fenced block: monospaced, syntax highlighted when the fence
@@ -271,5 +291,34 @@ public struct MarkdownText: View {
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
         )
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    }
+
+    /// The text split on ``` fences after stripping the HTML wrapper
+    /// tags review bots emit; each fence's language tag drives the
+    /// block's highlighting.
+    private func segments(of text: String) -> [Segment] {
+        var results = [Segment]()
+        var current = [Substring]()
+        var inCode = false
+        var language: SyntaxLanguage?
+        for line in Self.strippingHTML(text).split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") {
+                let joined = current.joined(separator: "\n")
+                if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    results.append(Segment(text: joined, isCode: inCode, language: language))
+                }
+                current = []
+                language = inCode ? nil : Self.syntaxLanguage(for: String(trimmed.dropFirst("```".count)))
+                inCode.toggle()
+            } else {
+                current.append(line)
+            }
+        }
+        let joined = current.joined(separator: "\n")
+        if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            results.append(Segment(text: joined, isCode: inCode, language: language))
+        }
+        return results
     }
 }
