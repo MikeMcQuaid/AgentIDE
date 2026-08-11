@@ -14,6 +14,7 @@ struct WorktreeRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
             leadingIcon
+                .padding(.top, Self.iconDrop)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Self.spacing) {
                     Text(item.worktree.branch).lineLimit(1)
@@ -42,6 +43,10 @@ struct WorktreeRowView: View {
     private static let spacing: CGFloat = 4
     private static let badgeSpacing: CGFloat = 2
     private static let iconStackSpacing: CGFloat = 1
+
+    /// Sits the icon on the branch line's baseline rather than the
+    /// row's very top.
+    private static let iconDrop: CGFloat = 2
 
     private var badges: String {
         var parts = [String]()

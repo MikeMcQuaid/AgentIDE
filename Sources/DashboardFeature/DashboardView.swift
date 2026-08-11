@@ -33,9 +33,10 @@ public struct DashboardView: View {
             }
             .padding(Self.listPadding)
         }
-        // The traffic lights occupy the top-left; Open repository
-        // sits at the top-right beside the sidebar toggle, in the
-        // same quiet icon style.
+        // The traffic lights occupy the top-left and the floating
+        // sidebar toggle the top-right; Open repository shares that
+        // band, immediately left of the toggle, and the inset spaces
+        // the first repository row beneath it.
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
                 Spacer()
@@ -45,7 +46,7 @@ public struct DashboardView: View {
                     .foregroundStyle(.secondary)
                     .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
             }
-            .padding(.horizontal, Self.listPadding)
+            .padding(.trailing, Self.toggleClearance)
             .padding(.top, Self.headerTopPadding)
             .padding(.bottom, Self.statusPadding)
         }
@@ -86,7 +87,11 @@ public struct DashboardView: View {
 
     private static let statusPadding: CGFloat = 4
     private static let statusLineLimit = 2
-    private static let headerTopPadding: CGFloat = 10
+    private static let headerTopPadding: CGFloat = 12
+
+    /// Clears the split view's floating sidebar toggle at the
+    /// sidebar's top right.
+    private static let toggleClearance: CGFloat = 34
     private static let statusPopoverWidth: CGFloat = 420
     private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6
@@ -109,7 +114,7 @@ public struct DashboardView: View {
     @ViewBuilder private var foreignSection: some View {
         if model.foreign.isEmpty == false {
             Text("Foreign sessions")
-                .font(.subheadline.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.top, Self.rowIndent)
             ForEach(model.foreign) { session in
@@ -162,7 +167,7 @@ public struct DashboardView: View {
                 .accessibilityHidden(true)
             avatar(for: group.repository)
             Text(group.repository.fullName ?? group.repository.name)
-                .font(.subheadline.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if group.items.count > 1 {

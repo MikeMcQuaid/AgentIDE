@@ -63,6 +63,10 @@ struct RootView: View {
     private static let utilityMinimum: CGFloat = 340
     private static let stripSpacing: CGFloat = 4
 
+    /// Height of the transparent titlebar band holding the traffic
+    /// lights and the floating sidebar toggle.
+    private static let titlebarClearance: CGFloat = 28
+
     @State private var sessionTab: String = Self.activeTabID
 
     /// Focus requests from the finder menu items, cleared at launch
@@ -95,12 +99,20 @@ struct RootView: View {
     @AppStorage("showsRepositorySidebar")
     private var showsRepositorySidebar = true
 
+    /// With the sidebar hidden the middle pane starts at the window's
+    /// left edge, so its first line needs to clear the traffic lights.
+    private var hiddenSidebarInset: CGFloat {
+        showsRepositorySidebar ? 0 : Self.titlebarClearance
+    }
+
     @ViewBuilder private var detail: some View {
         if dependencies.dashboard.showsNewSession {
             // The middle pane, never a sheet.
             NewSessionPane(model: dependencies.dashboard)
+                .padding(.top, hiddenSidebarInset)
         } else if dependencies.dashboard.showsRepositoryFinder {
             RepositoryFinderPane(model: dependencies.dashboard)
+                .padding(.top, hiddenSidebarInset)
         } else if let item = dependencies.dashboard.selection {
             split(for: item)
                 .onChange(of: item.id) { sessionTab = initialTab(for: item) }
@@ -131,18 +143,17 @@ struct RootView: View {
     private func split(for item: WorktreeItem) -> some View {
         HSplitView {
             VStack(spacing: 0) {
-                // With the utility pane hidden its toggle moves here,
-                // so the pane can always be brought back by mouse.
-                if showsUtilityPane == false {
-                    HStack(spacing: Self.stripSpacing) {
-                        Spacer(minLength: 0)
-                        utilityToggleButton
-                    }
-                    .padding(Self.stripSpacing)
-                    Divider()
-                }
                 sessionStrip(for: item, selection: $sessionTab)
                 primary(for: item)
+            }
+            .padding(.top, hiddenSidebarInset)
+            // With the utility pane hidden its toggle overlays the
+            // session strip's empty right end, so the pane can always
+            // come back by mouse without pushing the pane down.
+            .overlay(alignment: .topTrailing) {
+                if showsUtilityPane == false {
+                    utilityToggleButton.padding(Self.stripSpacing)
+                }
             }
             .frame(
                 minWidth: Self.primaryMinimum,
