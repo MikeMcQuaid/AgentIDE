@@ -11,13 +11,6 @@ extension RootView {
     static let activeTabID = "active"
     static let newTabID = "new"
 
-    var newSessionBinding: Binding<Bool> {
-        Binding(
-            get: { dependencies.dashboard.showsNewSession },
-            set: { dependencies.dashboard.showsNewSession = $0 },
-        )
-    }
-
     var sessionManagerBinding: Binding<Bool> {
         Binding(
             get: { dependencies.dashboard.showsSessionManager },

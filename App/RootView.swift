@@ -28,11 +28,10 @@ struct RootView: View {
         }
         // Nothing lives in the window toolbar any more: hiding it and
         // ignoring the top safe area lets every pane start at the
-        // window's top edge instead of below a reserved dead strip.
+        // window's top edge instead of below a reserved dead strip,
+        // and the configurator keeps the traffic lights visible.
         .toolbar(.hidden, for: .windowToolbar)
-        .sheet(isPresented: newSessionBinding) {
-            NewSessionSheet(model: dependencies.dashboard)
-        }
+        .background(WindowConfigurator())
         .sheet(isPresented: sessionManagerBinding) {
             SessionManagerSheet(service: dependencies.service) {
                 dependencies.dashboard.showsSessionManager = false
@@ -96,7 +95,10 @@ struct RootView: View {
     private var showsRepositorySidebar = true
 
     @ViewBuilder private var detail: some View {
-        if let item = dependencies.dashboard.selection {
+        if dependencies.dashboard.showsNewSession {
+            // The middle pane, never a sheet.
+            NewSessionPane(model: dependencies.dashboard)
+        } else if let item = dependencies.dashboard.selection {
             split(for: item)
                 .onChange(of: item.id) { sessionTab = initialTab(for: item) }
         } else {

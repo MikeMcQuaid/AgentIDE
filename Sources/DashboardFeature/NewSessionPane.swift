@@ -2,13 +2,14 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-/// The session entry point: pick a repository, then the shared form
-/// starts from a typed prompt, an open issue or an open pull request.
-/// Drafts survive quitting the app.
-public struct NewSessionSheet: View {
+/// The session entry point, shown in the middle pane rather than a
+/// sheet: pick a repository, then the shared form starts from a
+/// typed prompt, an open issue or an open pull request. Drafts
+/// survive quitting the app.
+public struct NewSessionPane: View {
     // MARK: Lifecycle
 
-    /// Creates the sheet.
+    /// Creates the pane.
     public init(model: DashboardModel) {
         self.model = model
         _repository = State(initialValue: model.newSessionRepository)
@@ -16,13 +17,15 @@ public struct NewSessionSheet: View {
 
     // MARK: Public
 
-    /// The repository picker over the shared form.
+    /// The repository picker over the shared form, hugging the
+    /// pane's top like the other middle-pane pages.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack {
-                Text("New agent session").font(.title2)
+                Text("New agent session").font(.subheadline.weight(.semibold))
                 Spacer()
                 Button("Cancel") { model.showsNewSession = false }
+                    .controlSize(.small)
                     .keyboardShortcut(.cancelAction)
                     .hoverHelp("Close without starting anything")
             }
@@ -47,10 +50,12 @@ public struct NewSessionSheet: View {
                 submitTitle: "Start agent",
                 submitHelp: "Create a worktree and branch and launch the agent in it",
             ) { submission in await start(submission) }
+            Spacer()
         }
-        .padding()
-        .frame(minWidth: Self.minimumWidth)
-        // Sheet state persists across presentations, so the init's
+        .padding([.horizontal, .bottom])
+        .padding(.top, Self.topPadding)
+        .frame(maxWidth: Self.maximumWidth, maxHeight: .infinity, alignment: .top)
+        // View state persists across presentations, so the init's
         // seed only applies the first time; re-read the preset on
         // every appearance or a repository plus would show the
         // previous pick.
@@ -60,7 +65,8 @@ public struct NewSessionSheet: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 10
-    private static let minimumWidth: CGFloat = 520
+    private static let topPadding: CGFloat = 3
+    private static let maximumWidth: CGFloat = 640
 
     @State private var repository: Repository?
 
