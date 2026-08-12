@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
 import TerminalUI
@@ -105,26 +106,35 @@ struct PullRequestListView: View {
 
 // MARK: - PullRequestFooterView
 
-/// The pull request tab's footer actions: ship, rebase, refresh and
-/// the status line.
+/// The pull request tab's footer actions: push, open, rebase,
+/// refresh and the status line.
 struct PullRequestFooterView: View {
     // MARK: Internal
 
-    let canShip: Bool
+    let canPush: Bool
+    let canOpenPullRequest: Bool
     let canRebase: Bool
     let status: String?
-    let onShip: () -> Void
+    let onPush: () -> Void
+    let onOpenPullRequest: () -> Void
     let onRebase: () -> Void
     let onRefresh: () -> Void
 
     var body: some View {
         HStack {
-            Button("Push and open PR", action: onShip)
-                .disabled(canShip == false)
+            Button("Push", action: onPush)
+                .disabled(canPush == false)
                 .hoverHelp(
-                    canShip
-                        ? "Push this worktree's branch and open a pull request; a repository template fills the body"
-                        : "Everything is pushed and this branch already has an open pull request",
+                    canPush
+                        ? "Push this branch's unpushed commits to origin"
+                        : "Everything is already pushed",
+                )
+            Button("Open PR", action: onOpenPullRequest)
+                .disabled(canOpenPullRequest == false)
+                .hoverHelp(
+                    canOpenPullRequest
+                        ? "Push if needed and open a pull request; a repository template fills the body"
+                        : "This branch already has an open pull request",
                 )
             Button("Rebase on origin", action: onRebase)
                 .disabled(canRebase == false)
@@ -145,6 +155,72 @@ struct PullRequestFooterView: View {
         }
         .padding(Self.padding)
         .background(.bar)
+    }
+
+    // MARK: Private
+
+    private static let padding: CGFloat = 8
+}
+
+// MARK: - PullRequestScope
+
+/// Which pull requests the tab lists.
+enum PullRequestScope: CaseIterable {
+    case worktree
+    case mine
+    case open
+
+    // MARK: Internal
+
+    var title: String {
+        switch self {
+        case .worktree:
+            "Worktree"
+
+        case .mine:
+            "Mine"
+
+        case .open:
+            "Open"
+        }
+    }
+
+    /// The client's scope, branch-bound for the worktree case.
+    func listScope(branch: String?) -> GitHubClient.ListScope {
+        switch self {
+        case .worktree:
+            .branch(branch ?? "")
+
+        case .mine:
+            .mine
+
+        case .open:
+            .open
+        }
+    }
+}
+
+// MARK: - PullRequestScopePicker
+
+/// The segmented scope control at the tab's top.
+struct PullRequestScopePicker: View {
+    // MARK: Internal
+
+    @Binding var scope: PullRequestScope
+
+    var body: some View {
+        Picker("Scope", selection: $scope) {
+            ForEach(PullRequestScope.allCases, id: \.self) { scope in
+                Text(scope.title).tag(scope)
+            }
+        }
+        .pickerStyle(.segmented)
+        .controlSize(.small)
+        .labelsHidden()
+        .padding(Self.padding)
+        .hoverHelp(
+            "Worktree: this branch's pull requests, open and closed. Mine: open ones you created. Open: every open one",
+        )
     }
 
     // MARK: Private

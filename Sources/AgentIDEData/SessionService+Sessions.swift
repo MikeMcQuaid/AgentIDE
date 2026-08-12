@@ -22,6 +22,11 @@ public extension SessionService {
         transcripts.entries(in: URL(fileURLWithPath: past.path))
     }
 
+    /// Pushes the branch to origin without opening anything.
+    func push(worktree: Worktree) async throws {
+        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+    }
+
     /// Pushes the branch and opens a pull request; returns its URL.
     func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
         try await git.push(worktreePath: worktree.path, branch: worktree.branch)

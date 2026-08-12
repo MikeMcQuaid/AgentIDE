@@ -32,7 +32,7 @@ public struct PullRequestsView: View {
     /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
-            scopePicker
+            PullRequestScopePicker(scope: $scope)
             Divider()
             if let selected {
                 conversation(for: selected)
@@ -51,13 +51,6 @@ public struct PullRequestsView: View {
 
     // MARK: Private
 
-    private enum Scope: Hashable {
-        case worktree
-        case mine
-        case open
-    }
-
-    private static let footerPadding: CGFloat = 8
     /// Fetches stay one page ahead of the visible one, so the pager
     /// knows whether a next page exists.
     private static let pageLookahead = 2
@@ -70,7 +63,7 @@ public struct PullRequestsView: View {
     @AppStorage("utilityTabIndex")
     private var utilityTabIndex = 0
 
-    @State private var scope: Scope = .worktree
+    @State private var scope: PullRequestScope = .worktree
     @State private var summaries: [PullRequestSummary] = []
     @State private var selected: PullRequestSummary?
     @State private var isLoading = false
@@ -94,44 +87,25 @@ public struct PullRequestsView: View {
         String(describing: scope)
     }
 
-    private var listScope: GitHubClient.ListScope {
-        switch scope {
-        case .worktree:
-            .branch(branch ?? "")
-
-        case .mine:
-            .mine
-
-        case .open:
-            .open
-        }
+    private var branchItem: WorktreeItem? {
+        items.first { $0.worktree.branch == branch }
     }
 
-    /// Push makes sense with unpushed commits or without an open
-    /// pull request for this worktree's branch; nil upstream means
+    /// Push makes sense with unpushed commits; nil upstream means
     /// nothing was ever pushed.
-    private var canShip: Bool {
-        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+    private var canPush: Bool {
+        guard let item = branchItem else {
             return false
         }
 
-        let hasOpen = summaries.contains { $0.headBranch == branch && $0.state == "OPEN" }
-        return (item.aheadOfUpstream ?? 1) > 0 || hasOpen == false
+        return (item.aheadOfUpstream ?? 1) > 0
     }
 
-    private var scopePicker: some View {
-        Picker("Scope", selection: $scope) {
-            Text("Worktree").tag(Scope.worktree)
-            Text("Mine").tag(Scope.mine)
-            Text("Open").tag(Scope.open)
-        }
-        .pickerStyle(.segmented)
-        .controlSize(.small)
-        .labelsHidden()
-        .padding(Self.footerPadding)
-        .hoverHelp(
-            "Worktree: this branch's pull requests, open and closed. Mine: open ones you created. Open: every open one",
-        )
+    /// Opening a pull request makes sense until one is open; it
+    /// pushes first when needed.
+    private var canOpenPullRequest: Bool {
+        branchItem != nil
+            && summaries.contains { $0.headBranch == branch && $0.state == "OPEN" } == false
     }
 
     private var listView: some View {
@@ -158,10 +132,12 @@ public struct PullRequestsView: View {
 
     private var footer: some View {
         PullRequestFooterView(
-            canShip: canShip,
-            canRebase: items.contains { $0.worktree.branch == branch },
+            canPush: canPush,
+            canOpenPullRequest: canOpenPullRequest,
+            canRebase: branchItem != nil,
             status: status,
-            onShip: { Task { await ship() } },
+            onPush: { Task { await push() } },
+            onOpenPullRequest: { Task { await ship() } },
             onRebase: { Task { await rebaseSigned() } },
             onRefresh: { Task { await reload(keepingSelection: true) } },
         )
@@ -188,7 +164,7 @@ public struct PullRequestsView: View {
     }
 
     private func ship() async {
-        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+        guard let item = branchItem else {
             return
         }
 
@@ -200,10 +176,24 @@ public struct PullRequestsView: View {
         }
     }
 
+    private func push() async {
+        guard let item = branchItem else {
+            return
+        }
+
+        do {
+            try await service.push(worktree: item.worktree)
+            status = "Pushed."
+            await reload(keepingSelection: true)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
     /// Rebases onto origin with signed commits; a failure aborted
     /// the rebase already, so the errors tab opens with the cause.
     private func rebaseSigned() async {
-        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+        guard let item = branchItem else {
             return
         }
 
@@ -271,7 +261,7 @@ public struct PullRequestsView: View {
             let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
             let fetched = try await github.pullRequests(
                 repositoryPath: repository.path,
-                scope: listScope,
+                scope: scope.listScope(branch: branch),
                 limit: limit,
             )
             guard Task.isCancelled == false, requested == cacheKey else {
