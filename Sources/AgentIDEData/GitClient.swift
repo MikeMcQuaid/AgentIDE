@@ -258,6 +258,19 @@ public struct GitClient: Sendable {
         try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
     }
 
+    /// Fetches origin and rebases the worktree onto its default
+    /// branch, re-signing every commit; failure or conflict aborts
+    /// the rebase so the worktree is left exactly as it was.
+    public func rebaseSignedOntoOrigin(worktreePath: String) async throws {
+        try await git(["fetch", "origin"], in: worktreePath)
+        do {
+            try await git(["rebase", "--force-rebase", "--gpg-sign", "origin/HEAD"], in: worktreePath)
+        } catch {
+            try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
+            throw error
+        }
+    }
+
     /// Reverse-applies a patch to the index and worktree together.
     public func applyReverse(patch: String, worktreePath: String) async throws {
         let url = FileManager.default

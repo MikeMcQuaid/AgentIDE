@@ -73,12 +73,9 @@ public struct ReviewView: View {
         HStack(spacing: Self.captionSpacing) {
             scopeButtons
             Divider().frame(height: Self.dividerHeight)
-            iconButton(
-                "doc.badge.gearshape",
-                help: "Cycle the file display: Default hides generated files, "
-                    + "Hide All collapses every file, Show All expands everything",
-                title: display.title,
-            ) { cycleDisplay() }
+            displayButton(.standard, systemImage: "doc.badge.gearshape", help: "Hide generated files, expand the rest")
+            displayButton(.hideAll, systemImage: "eye.slash", help: "Collapse every file to its name")
+            displayButton(.showAll, systemImage: "eye", help: "Expand every file, generated included")
             Spacer()
             actionButtons
         }
@@ -270,14 +267,19 @@ public struct ReviewView: View {
         .hoverHelp(help)
     }
 
-    /// Cycles Default, Hide All and Show All; generated files show
-    /// outside the default mode and manual carets reset.
-    private func cycleDisplay() {
-        let all = ReviewFileDisplay.allCases
-        let next = ((all.firstIndex(of: display) ?? 0) + 1) % all.count
-        display = all[next]
-        collapseOverrides = [:]
-        model.showsGenerated = display != .standard
+    /// One bubble per display mode, like the scope toggles;
+    /// generated files show outside the default mode and manual
+    /// carets reset on every switch.
+    private func displayButton(
+        _ mode: ReviewFileDisplay,
+        systemImage: String,
+        help: String,
+    ) -> some View {
+        iconButton(systemImage, help: help, title: mode.title, isOn: display == mode) {
+            display = mode
+            collapseOverrides = [:]
+            model.showsGenerated = mode != .standard
+        }
     }
 
     private func commitOutstanding() async {

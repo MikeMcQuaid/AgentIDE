@@ -142,6 +142,12 @@ public extension SessionService {
         try await git.fetchAndReset(repositoryPath: repository.path)
     }
 
+    /// Rebases the worktree onto origin's default branch with every
+    /// commit re-signed, aborting cleanly on conflict.
+    func rebaseSigned(worktree: Worktree) async throws {
+        try await git.rebaseSignedOntoOrigin(worktreePath: worktree.path)
+    }
+
     /// A repository's recency for sidebar ordering: its worktrees
     /// always count, the main checkout only while a session runs in
     /// it, so resuming on the repository page bumps the repository

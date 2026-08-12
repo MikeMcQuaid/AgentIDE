@@ -45,66 +45,16 @@ struct WindowConfigurator: NSViewRepresentable {
         // MARK: Private
 
         private static let autosaveName = "AgentIDEMainWindow"
-        private static let fullscreenKey = "windowFullscreen"
-        private static let fullscreenScreenKey = "windowFullscreenScreen"
 
-        private var restoredFullscreen = false
-        private var observers: [NSObjectProtocol] = []
-
-        /// The frame autosave restores position and size; fullscreen
-        /// does not round-trip through it, so its state persists via
-        /// the enter and exit notifications and replays once, moving
-        /// the window onto the remembered screen first so fullscreen
-        /// returns to the monitor it was on.
+        /// The frame autosave restores position and size. Fullscreen
+        /// deliberately does not restore: macOS reopens fullscreen
+        /// spaces on the display it chooses (often the one with the
+        /// Dock), so the window restores as a plain frame the user
+        /// can drag to a monitor before going fullscreen.
         private func restoreFrame(of window: NSWindow) {
             if window.frameAutosaveName != Self.autosaveName {
                 window.setFrameAutosaveName(Self.autosaveName)
             }
-            observeFullscreen(of: window)
-            if restoredFullscreen == false {
-                restoredFullscreen = true
-                if UserDefaults.standard.bool(forKey: Self.fullscreenKey),
-                   window.styleMask.contains(.fullScreen) == false {
-                    moveToRememberedScreen(window)
-                    window.toggleFullScreen(nil)
-                }
-            }
-        }
-
-        private func moveToRememberedScreen(_ window: NSWindow) {
-            guard let stored = UserDefaults.standard.string(forKey: Self.fullscreenScreenKey),
-                  let screen = NSScreen.screens.first(where: { NSStringFromRect($0.frame) == stored }),
-                  window.screen != screen
-            else {
-                return
-            }
-
-            window.setFrameOrigin(screen.visibleFrame.origin)
-        }
-
-        private func observeFullscreen(of window: NSWindow) {
-            guard observers.isEmpty else {
-                return
-            }
-
-            let center = NotificationCenter.default
-            observers.append(center.addObserver(
-                forName: NSWindow.didEnterFullScreenNotification,
-                object: window,
-                queue: .main,
-            ) { [weak window] _ in
-                UserDefaults.standard.set(true, forKey: Self.fullscreenKey)
-                if let frame = window?.screen?.frame {
-                    UserDefaults.standard.set(NSStringFromRect(frame), forKey: Self.fullscreenScreenKey)
-                }
-            })
-            observers.append(center.addObserver(
-                forName: NSWindow.didExitFullScreenNotification,
-                object: window,
-                queue: .main,
-            ) { _ in
-                UserDefaults.standard.set(false, forKey: Self.fullscreenKey)
-            })
         }
     }
 

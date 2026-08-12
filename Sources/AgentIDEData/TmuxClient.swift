@@ -161,12 +161,17 @@ public struct TmuxClient: Sendable {
     /// wheel scrolls tmux's own history (the alternate screen leaves
     /// the outer terminal nothing to scroll) and that history is
     /// deep enough to review a whole session.
+    /// `set-clipboard` with the clipboard terminal feature makes
+    /// copy-mode yanks (including mouse drags) reach the macOS
+    /// clipboard through OSC 52, which the terminal view forwards.
     private static let configContent = """
     set -g remain-on-exit on
     set -g mouse on
     set -g history-limit 50000
     set -g default-terminal xterm-256color
     set -g status off
+    set -g set-clipboard on
+    set -as terminal-features xterm-256color:clipboard
     """
 
     private let runner: any ProcessRunner

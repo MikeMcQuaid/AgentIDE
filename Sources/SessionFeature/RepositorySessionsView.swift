@@ -30,12 +30,17 @@ public struct RepositorySessionsView: View {
 
     // MARK: Public
 
-    /// The session list over the selected conversation's log, or a
-    /// pane-filling progress state while a resume launches.
+    /// The session list over the selected conversation's log, a
+    /// pane-filling progress state while a resume launches, and a
+    /// loading state until the first listing answers so the empty
+    /// message never flashes before conversations arrive.
     public var body: some View {
         VStack(spacing: 0) {
             if isResuming {
                 ProgressView("Resuming conversation…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if hasLoaded == false {
+                ProgressView("Loading conversations…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 header
@@ -54,7 +59,13 @@ public struct RepositorySessionsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .task(id: repository.id) { await reload() }
+        // The worktree scope joins the identity, so switching
+        // between worktrees of one repository reloads the list.
+        .task(id: repository.id + (worktreePath ?? "")) {
+            hasLoaded = false
+            await reload()
+            hasLoaded = true
+        }
     }
 
     // MARK: Private
@@ -69,6 +80,10 @@ public struct RepositorySessionsView: View {
     @State private var selected: TranscriptSession?
     /// Fills the pane with progress the moment a resume starts.
     @State private var isResuming = false
+
+    /// False until the first listing answers, so the pane shows
+    /// loading rather than an empty message that fills in later.
+    @State private var hasLoaded = false
 
     private let repository: Repository
     private let service: SessionService
@@ -129,9 +144,9 @@ public struct RepositorySessionsView: View {
                     .frame(width: Self.agentIconSize, height: Self.agentIconSize)
                     .accessibilityLabel(entry.session.agent.displayName)
                 VStack(alignment: .leading, spacing: 1) {
-                    // Untitled conversations show only their date,
-                    // never the transcript uuid.
-                    Text(entry.session.title.isEmpty ? "Untitled conversation" : entry.session.title)
+                    // Untitled conversations borrow their worktree's
+                    // name, never the transcript uuid.
+                    Text(title(of: entry))
                         .lineLimit(1)
                     HStack(spacing: Self.padding) {
                         Text(
@@ -165,6 +180,16 @@ public struct RepositorySessionsView: View {
                 description: Text("Pick a conversation above to read it."),
             )
         }
+    }
+
+    /// The first user prompt, or the worktree's directory name for
+    /// untitled conversations.
+    private func title(of entry: (session: TranscriptSession, worktreePath: String)) -> String {
+        guard entry.session.title.isEmpty else {
+            return entry.session.title
+        }
+
+        return entry.worktreePath.split(separator: "/").last.map(String.init) ?? "Untitled conversation"
     }
 
     /// The worktree's readable tail; deleted locations are marked.

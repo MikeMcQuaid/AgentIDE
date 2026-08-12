@@ -43,14 +43,27 @@ public final class ErrorLog {
     /// a clear.
     public private(set) var everReported = false
 
-    /// Appends a failure to the log.
+    /// Appends a failure to the log, dropping the oldest entries
+    /// beyond the cap so a noisy session never grows without bound.
     public func report(_ message: String) {
         everReported = true
-        entries.append(Entry(id: entries.count, date: Date(), message: message))
+        nextID += 1
+        entries.append(Entry(id: nextID, date: Date(), message: message))
+        if entries.count > Self.entryCap {
+            entries.removeFirst(entries.count - Self.entryCap)
+        }
     }
 
     /// Empties the log; the errors tab stays for the session.
     public func clear() {
         entries = []
     }
+
+    // MARK: Private
+
+    /// Kept small: the pane is for recent failures, not an archive.
+    private static let entryCap = 500
+
+    /// Monotonic, so identities survive the cap dropping entries.
+    private var nextID = 0
 }

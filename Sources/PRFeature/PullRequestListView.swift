@@ -2,6 +2,8 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - PullRequestListView
+
 /// The paginated pull request title list: state icon, number and
 /// title per row, each clicking through to its conversation.
 struct PullRequestListView: View {
@@ -99,4 +101,53 @@ struct PullRequestListView: View {
     private func noAction() {
         // Never called: the action buttons are not rendered.
     }
+}
+
+// MARK: - PullRequestFooterView
+
+/// The pull request tab's footer actions: ship, rebase, refresh and
+/// the status line.
+struct PullRequestFooterView: View {
+    // MARK: Internal
+
+    let canShip: Bool
+    let canRebase: Bool
+    let status: String?
+    let onShip: () -> Void
+    let onRebase: () -> Void
+    let onRefresh: () -> Void
+
+    var body: some View {
+        HStack {
+            Button("Push and open PR", action: onShip)
+                .disabled(canShip == false)
+                .hoverHelp(
+                    canShip
+                        ? "Push this worktree's branch and open a pull request; a repository template fills the body"
+                        : "Everything is pushed and this branch already has an open pull request",
+                )
+            Button("Rebase on origin", action: onRebase)
+                .disabled(canRebase == false)
+                .hoverHelp(
+                    "git fetch origin, then rebase this branch onto origin/HEAD re-signing every commit; "
+                        + "a conflict aborts and reports to the Errors tab",
+                )
+            Button("Refresh", action: onRefresh)
+                .hoverHelp("Fetch the pull requests again")
+            if let status {
+                // Selectable so failures can be copied and reported.
+                Text(status)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            Spacer()
+        }
+        .padding(Self.padding)
+        .background(.bar)
+    }
+
+    // MARK: Private
+
+    private static let padding: CGFloat = 8
 }

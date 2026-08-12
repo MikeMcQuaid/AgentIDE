@@ -58,6 +58,8 @@ public extension SessionService {
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
+            ";", "set", "-g", "set-clipboard", "on",
+            ";", "set", "-as", "terminal-features", "xterm-256color:clipboard",
         ]
     }
 

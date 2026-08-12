@@ -62,6 +62,9 @@ public struct CodexTranscriptIndex: Sendable {
     /// whole rollout files can be large.
     private static let headBytes = 65_536
 
+    /// The most sessions kept indexed, newest first.
+    private static let entryCap = 2_000
+
     private static let cache: Mutex<[String: Entry]> = .init([:])
 
     /// Reads the file head: the metadata line names the session and
@@ -131,10 +134,18 @@ public struct CodexTranscriptIndex: Sendable {
             if let cached, cached.modifiedAt == modifiedAt {
                 results[path] = cached
             } else if let parsed = Self.parseHead(path: path, modifiedAt: modifiedAt) {
-                Self.cache.withLock { $0[path] = parsed }
                 results[path] = parsed
             }
         }
-        return results
+        // The cache mirrors disk exactly and caps at the newest
+        // entries, so deleted sessions drop out and it never grows
+        // without bound.
+        var bounded = results
+        if bounded.count > Self.entryCap {
+            let newest = bounded.sorted { $0.value.modifiedAt > $1.value.modifiedAt }.prefix(Self.entryCap)
+            bounded = Dictionary(uniqueKeysWithValues: Array(newest))
+        }
+        Self.cache.withLock { $0 = bounded }
+        return bounded
     }
 }

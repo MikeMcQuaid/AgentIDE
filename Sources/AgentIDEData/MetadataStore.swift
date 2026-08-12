@@ -83,8 +83,8 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: String].self, forKey: .sessionsByWorktree) ?? [:]
         resumeIDs = try container.decodeIfPresent([String: String].self, forKey: .resumeIDs) ?? [:]
         cachedSidebar = try container.decodeIfPresent([CachedRepository].self, forKey: .cachedSidebar) ?? []
-        pullRequestListCache = try container
-            .decodeIfPresent([String: [PullRequestSummary]].self, forKey: .pullRequestListCache) ?? [:]
+        pullRequestListsCache = try container
+            .decodeIfPresent([String: CachedPullRequestList].self, forKey: .pullRequestListsCache) ?? [:]
         conversationCache = try container
             .decodeIfPresent([String: CachedConversation].self, forKey: .conversationCache) ?? [:]
         intentionallyClosed = try container
@@ -143,7 +143,7 @@ public struct AppMetadata: Codable, Sendable {
 
     /// Each repository and scope's last pull request listing, so the
     /// tab paints instantly in a new session while a fetch refreshes.
-    public var pullRequestListCache: [String: [PullRequestSummary]] = [:]
+    public var pullRequestListsCache: [String: CachedPullRequestList] = [:]
 
     /// Each pull request's last conversation, keyed by repository
     /// path and number, painted instantly like the listings.
@@ -153,6 +153,52 @@ public struct AppMetadata: Codable, Sendable {
     /// automatic resumes leave them alone until a session starts
     /// there again.
     public var intentionallyClosed: [String] = []
+
+    /// Drops the oldest cache entries beyond each cap, so the
+    /// metadata file stays bounded however long the app runs.
+    public mutating func enforceCacheCaps() {
+        if conversationCache.count > Self.conversationCap {
+            let newest = conversationCache
+                .sorted { $0.value.savedAt > $1.value.savedAt }
+                .prefix(Self.conversationCap)
+            conversationCache = Dictionary(uniqueKeysWithValues: Array(newest))
+        }
+        if pullRequestListsCache.count > Self.listingCap {
+            let newest = pullRequestListsCache
+                .sorted { $0.value.savedAt > $1.value.savedAt }
+                .prefix(Self.listingCap)
+            pullRequestListsCache = Dictionary(uniqueKeysWithValues: Array(newest))
+        }
+    }
+
+    // MARK: Private
+
+    /// Enough for every recently visited conversation and listing
+    /// without the file growing forever.
+    private static let conversationCap = 80
+    private static let listingCap = 40
+}
+
+// MARK: - CachedPullRequestList
+
+/// One repository scope's cached pull request listing, stamped so
+/// the cap can evict the oldest.
+public struct CachedPullRequestList: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates a cached listing stamped now by default.
+    public init(summaries: [PullRequestSummary], savedAt: Date = Date()) {
+        self.summaries = summaries
+        self.savedAt = savedAt
+    }
+
+    // MARK: Public
+
+    /// The listing as fetched.
+    public var summaries: [PullRequestSummary]
+
+    /// When the listing was cached, for eviction.
+    public var savedAt: Date
 }
 
 // MARK: - CachedConversation
@@ -161,10 +207,20 @@ public struct AppMetadata: Codable, Sendable {
 public struct CachedConversation: Codable, Sendable {
     // MARK: Lifecycle
 
-    /// Creates a cached conversation.
-    public init(body: String = "", events: [ReviewComment] = []) {
+    /// Creates a cached conversation stamped now by default.
+    public init(body: String = "", events: [ReviewComment] = [], savedAt: Date = Date()) {
         self.body = body
         self.events = events
+        self.savedAt = savedAt
+    }
+
+    /// Decodes tolerantly: entries cached before the stamp existed
+    /// count as oldest rather than failing the whole metadata load.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
+        events = try container.decodeIfPresent([ReviewComment].self, forKey: .events) ?? []
+        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .distantPast
     }
 
     // MARK: Public
@@ -174,6 +230,9 @@ public struct CachedConversation: Codable, Sendable {
 
     /// The reviews and comments, in fetched order.
     public var events: [ReviewComment]
+
+    /// When the conversation was cached, for eviction.
+    public var savedAt: Date
 }
 
 // MARK: - MetadataStore
@@ -202,8 +261,11 @@ public struct MetadataStore: Sendable {
         return (try? decoder.decode(AppMetadata.self, from: data)) ?? AppMetadata()
     }
 
-    /// Saves the metadata, creating parent directories as needed.
+    /// Saves the metadata, creating parent directories as needed;
+    /// the caches are capped first so the file never grows forever.
     public func save(_ metadata: AppMetadata) {
+        var metadata = metadata
+        metadata.enforceCacheCaps()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

@@ -62,6 +62,14 @@ public struct PullRequestsView: View {
     /// knows whether a next page exists.
     private static let pageLookahead = 2
 
+    /// The errors tab's position in the utility tab order, driven
+    /// through the storage signal bus.
+    private static let errorsTabIndex = 5
+
+    /// The cross-module signal that switches the utility pane's tab.
+    @AppStorage("utilityTabIndex")
+    private var utilityTabIndex = 0
+
     @State private var scope: Scope = .worktree
     @State private var summaries: [PullRequestSummary] = []
     @State private var selected: PullRequestSummary?
@@ -149,27 +157,14 @@ public struct PullRequestsView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Button("Push and open PR") { Task { await ship() } }
-                .disabled(canShip == false)
-                .hoverHelp(
-                    canShip
-                        ? "Push this worktree's branch and open a pull request; a repository template fills the body"
-                        : "Everything is pushed and this branch already has an open pull request",
-                )
-            Button("Refresh") { Task { await reload(keepingSelection: true) } }
-                .hoverHelp("Fetch the pull requests again")
-            if let status {
-                // Selectable so failures can be copied and reported.
-                Text(status)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-            Spacer()
-        }
-        .padding(Self.footerPadding)
-        .background(.bar)
+        PullRequestFooterView(
+            canShip: canShip,
+            canRebase: items.contains { $0.worktree.branch == branch },
+            status: status,
+            onShip: { Task { await ship() } },
+            onRebase: { Task { await rebaseSigned() } },
+            onRefresh: { Task { await reload(keepingSelection: true) } },
+        )
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
@@ -202,6 +197,23 @@ public struct PullRequestsView: View {
             await reload(keepingSelection: true)
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Rebases onto origin with signed commits; a failure aborted
+    /// the rebase already, so the errors tab opens with the cause.
+    private func rebaseSigned() async {
+        guard let item = items.first(where: { $0.worktree.branch == branch }) else {
+            return
+        }
+
+        do {
+            try await service.rebaseSigned(worktree: item.worktree)
+            status = "Rebased onto origin."
+            await reload(keepingSelection: true)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+            utilityTabIndex = Self.errorsTabIndex
         }
     }
 
@@ -248,7 +260,7 @@ public struct PullRequestsView: View {
         if extending == false {
             page = 0
             selected = nil
-            summaries = store.load().pullRequestListCache[cacheKey] ?? []
+            summaries = store.load().pullRequestListsCache[cacheKey]?.summaries ?? []
         }
         defer { isLoading = false }
         // Captured before the await: a slow answer for an already
@@ -269,7 +281,7 @@ public struct PullRequestsView: View {
             summaries = fetched
             fetchedLimit = limit
             var metadata = store.load()
-            metadata.pullRequestListCache[requested] = fetched
+            metadata.pullRequestListsCache[requested] = CachedPullRequestList(summaries: fetched)
             store.save(metadata)
             if extending == false {
                 let chosen = fetched.first { $0.number == previous }
