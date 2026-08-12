@@ -45,6 +45,30 @@ public struct ReviewView: View {
 
     // MARK: Private
 
+    /// How the file list shows: Default hides generated files and
+    /// expands the rest, Hide All collapses everything and Show All
+    /// expands everything, generated included.
+    private enum FileDisplay: CaseIterable {
+        case standard
+        case hideAll
+        case showAll
+
+        // MARK: Internal
+
+        var title: String {
+            switch self {
+            case .standard:
+                "Default"
+
+            case .hideAll:
+                "Hide All"
+
+            case .showAll:
+                "Show All"
+            }
+        }
+    }
+
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
     private static let dividerHeight: CGFloat = 14
@@ -61,6 +85,8 @@ public struct ReviewView: View {
     private static let bodyLimit = 72
 
     @State private var model: ReviewModel
+    @State private var display: FileDisplay = .standard
+    @State private var collapseOverrides: [String: Bool] = [:]
 
     private let worktreePath: String
     private let service: SessionService
@@ -73,10 +99,10 @@ public struct ReviewView: View {
             Divider().frame(height: Self.dividerHeight)
             iconButton(
                 "doc.badge.gearshape",
-                help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
-                title: "Generated",
-                isOn: model.showsGenerated,
-            ) { model.showsGenerated.toggle() }
+                help: "Cycle the file display: Default hides generated files, "
+                    + "Hide All collapses every file, Show All expands everything",
+                title: display.title,
+            ) { cycleDisplay() }
             Spacer()
             actionButtons
         }
@@ -115,23 +141,20 @@ public struct ReviewView: View {
         }
     }
 
-    /// Editing a file jumps to the Editor tab rather than opening a
-    /// duplicate editor surface; Cmd-click opens the external editor.
+    /// The collapsible file list; the uncommitted scope embeds the
+    /// shared editor per file so fixes are typed directly.
     @ViewBuilder private var diffList: some View {
         if model.visibleFiles.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                    ForEach(model.visibleFiles) { file in
-                        DiffFileView(file: file, model: model) {
-                            FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
-                        }
-                    }
-                }
-                .padding(Self.spacing)
-            }
+            ReviewFileListView(
+                model: model,
+                worktreePath: worktreePath,
+                service: service,
+                hideAllByDefault: display == .hideAll,
+                collapseOverrides: $collapseOverrides,
+            )
         }
     }
 
@@ -229,6 +252,7 @@ public struct ReviewView: View {
     ) -> some View {
         iconButton(systemImage, help: help, title: title, isOn: model.scope == scope) {
             model.scope = scope
+            collapseOverrides = [:]
             Task { await model.reload() }
         }
     }
@@ -265,6 +289,16 @@ public struct ReviewView: View {
         // The colour fill alone is invisible to VoiceOver.
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
+    }
+
+    /// Cycles Default, Hide All and Show All; generated files show
+    /// outside the default mode and manual carets reset.
+    private func cycleDisplay() {
+        let all = FileDisplay.allCases
+        let next = ((all.firstIndex(of: display) ?? 0) + 1) % all.count
+        display = all[next]
+        collapseOverrides = [:]
+        model.showsGenerated = display != .standard
     }
 
     private func commitOutstanding() async {

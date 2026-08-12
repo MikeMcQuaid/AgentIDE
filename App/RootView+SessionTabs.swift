@@ -80,14 +80,22 @@ extension RootView {
 
     /// Continues the worktree's most recent conversation: the newest
     /// transcript when one lists here, otherwise the recorded closed
-    /// session. Failures surface in the sidebar status line rather
-    /// than disappearing, so a resume that cannot launch says why.
+    /// session. The state refreshes first, so a stale cached item
+    /// never resumes over a session that is already live (tmux would
+    /// try to attach without a terminal). Failures surface in the
+    /// error log, so a resume that cannot launch says why.
     func resumeLatest(in item: WorktreeItem) async {
+        await dependencies.dashboard.refresh()
+        let fresh = dependencies.dashboard.groups.flatMap(\.items).first { $0.id == item.id } ?? item
+        guard fresh.session == nil else {
+            return
+        }
+
         do {
-            if let past = item.pastSessions.first {
-                _ = try await dependencies.service.resumePast(past, worktree: item.worktree)
+            if let past = fresh.pastSessions.first {
+                _ = try await dependencies.service.resumePast(past, worktree: fresh.worktree)
             } else {
-                try await dependencies.service.resumeWorktree(item.worktree)
+                try await dependencies.service.resumeWorktree(fresh.worktree)
             }
         } catch {
             dependencies.dashboard.report(error.localizedDescription)

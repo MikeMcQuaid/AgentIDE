@@ -11,18 +11,21 @@ struct FileEditorView: View {
 
     /// Creates an editor for a file relative to the worktree,
     /// optionally jumping to a line. `onClose` closes an embedding
-    /// owner; without one the presenting sheet dismisses.
+    /// owner; `showsClose: false` suits inline embeddings that have
+    /// nothing to close.
     init(
         worktreePath: String,
         relativePath: String,
         service: SessionService,
         jumpToLine: Int? = nil,
+        showsClose: Bool = true,
         onClose: (() -> Void)? = nil,
     ) {
         self.worktreePath = worktreePath
         self.relativePath = relativePath
         self.service = service
         self.jumpToLine = jumpToLine
+        self.showsClose = showsClose
         self.onClose = onClose
     }
 
@@ -44,10 +47,12 @@ struct FileEditorView: View {
                     .disabled(hasChanges == false)
                     .keyboardShortcut("s", modifiers: .command)
                     .hoverHelp("Write the buffer back to the file (Cmd-S); dims until there are changes")
-                Button("Close", systemImage: "xmark") { close() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .hoverHelp("Close the editor without saving")
+                if showsClose {
+                    Button("Close", systemImage: "xmark") { close() }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .hoverHelp("Close the editor without saving")
+                }
             }
             .padding(Self.padding)
             Divider()
@@ -85,6 +90,7 @@ struct FileEditorView: View {
     private let relativePath: String
     private let service: SessionService
     private let jumpToLine: Int?
+    private let showsClose: Bool
     private let onClose: (() -> Void)?
 
     private var hasChanges: Bool {

@@ -88,7 +88,13 @@ struct RootView: View {
                 return
             }
 
-            Task { await resumeLatest(in: item) }
+            // The pane fills with progress before the resume starts,
+            // so the conversation list never flashes first.
+            isAutoResuming = true
+            Task {
+                await resumeLatest(in: item)
+                isAutoResuming = false
+            }
         }
     }
 
@@ -109,6 +115,10 @@ struct RootView: View {
     /// Whether the launch's one automatic resume has run, so later
     /// selection changes never launch anything by themselves.
     @State private var hasAutoResumed = false
+
+    /// Fills the primary pane with progress while the launch resume
+    /// runs, instead of flashing the conversation list first.
+    @State private var isAutoResuming = false
 
     /// The worktrees with running sessions when the machine slept,
     /// so wake can resume exactly the ones sleep killed.
@@ -237,7 +247,10 @@ struct RootView: View {
     /// a worktree with nothing to list offers the new session form.
     @ViewBuilder
     private func primary(for item: WorktreeItem) -> some View {
-        if let session = item.session {
+        if isAutoResuming, item.session == nil {
+            ProgressView("Resuming conversation…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let session = item.session {
             TerminalPaneView(command: dependencies.service.attachCommand(sessionName: session.name))
                 .id(session.name)
                 // Dropped files stage into the shared workspace (the
