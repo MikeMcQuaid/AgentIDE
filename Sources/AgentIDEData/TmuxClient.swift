@@ -120,13 +120,23 @@ public struct TmuxClient: Sendable {
     }
 
     /// The argv a terminal view should spawn to attach interactively.
+    /// Servers outlive app updates and only read their config file
+    /// at start, so options added since the server began would never
+    /// apply; the attach chain sets the clipboard option live and
+    /// idempotently, which is what lets copy-mode yanks reach the
+    /// macOS clipboard on long-running servers.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
-            ["tmux", "attach-session", "-t", sessionName]
+            [
+                "tmux",
+                "set", "-s", "set-clipboard", "on",
+                ";", "attach-session", "-t", sessionName,
+            ]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux attach-session -t " + shellQuote(sessionName),
+                    + "; exec tmux set -s set-clipboard on ';'"
+                    + " attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
                 sessionName: sessionName,
@@ -170,7 +180,7 @@ public struct TmuxClient: Sendable {
     set -g history-limit 50000
     set -g default-terminal xterm-256color
     set -g status off
-    set -g set-clipboard on
+    set -s set-clipboard on
     set -as terminal-features xterm-256color:clipboard
     """
 

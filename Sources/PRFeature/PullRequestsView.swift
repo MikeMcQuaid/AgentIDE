@@ -51,14 +51,16 @@ public struct PullRequestsView: View {
         .safeAreaInset(edge: .bottom) { footer }
         // The model is rebuilt whenever the repository or branch
         // changes: state objects outlive view re-initialisation, so
-        // the last worktree's list would otherwise linger.
+        // the last worktree's list would otherwise linger. The first
+        // reload happens here rather than in a second task keyed on
+        // the scope, which could run against the model this one is
+        // about to replace.
         .task(id: identity) {
             model = makeModel()
+            await model.reload()
             await model.loadMergeQueue()
         }
-        // The scope joins the reload identity so switching scopes
-        // refetches without rebuilding the model.
-        .task(id: identity + model.scopeIdentity) { await model.reload() }
+        .onChange(of: model.scope) { Task { await model.reload() } }
         .onChange(of: items) { model.items = items }
     }
 
@@ -77,6 +79,13 @@ public struct PullRequestsView: View {
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage("utilityTabIndex")
     private var utilityTabIndex = 0
+
+    /// The new session form's last choices, naming what wrote the
+    /// change in the draft's AI disclosure.
+    @AppStorage("agentModel")
+    private var agentModel = ""
+    @AppStorage("agentEffort")
+    private var agentEffort = ""
 
     @State private var model: PullRequestsModel
 
@@ -103,9 +112,8 @@ public struct PullRequestsView: View {
             canPush: model.canPush,
             canOpenPullRequest: model.canOpenPullRequest,
             canRebase: model.branchItem != nil,
+            hasDraft: model.hasDraft,
             status: model.status,
-            onPush: { Task { await model.push() } },
-            onOpenPullRequest: { Task { await model.ship() } },
             onRebase: {
                 Task {
                     if await model.rebaseSigned() == false {
@@ -113,6 +121,14 @@ public struct PullRequestsView: View {
                     }
                 }
             },
+            onPush: {
+                Task {
+                    if await model.push() == false {
+                        utilityTabIndex = Self.errorsTabIndex
+                    }
+                }
+            },
+            onOpenPullRequest: { Task { await ship() } },
             onRefresh: { Task { await model.reload(keepingSelection: true) } },
         )
     }
@@ -143,5 +159,29 @@ public struct PullRequestsView: View {
             },
             onRemediate: { model.act { try await model.remediate(summary) } },
         )
+    }
+
+    /// Routes Open PR's outcome: a fresh draft opens in the editor
+    /// tab, a failure opens the errors tab.
+    private func ship() async {
+        let item = model.branchItem
+        let disclosure = PullRequestDraft.disclosure(
+            agent: (item?.session?.agent ?? item?.pastSessions.first?.agent)?.displayName,
+            model: agentModel,
+            effort: agentEffort,
+        )
+        switch await model.ship(disclosure: disclosure) {
+        case let .drafted(relativePath):
+            if let path = item?.worktree.path {
+                FileOpener.open(relativePath: relativePath, line: nil, worktreePath: path)
+            }
+
+        case .failed:
+            utilityTabIndex = Self.errorsTabIndex
+
+        case .created,
+             .unavailable:
+            break
+        }
     }
 }

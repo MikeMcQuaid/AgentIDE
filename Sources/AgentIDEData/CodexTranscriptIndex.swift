@@ -70,14 +70,14 @@ public struct CodexTranscriptIndex: Sendable {
     /// Reads the file head: the metadata line names the session and
     /// its working directory, and the first user message titles it.
     private static func parseHead(path: String, modifiedAt: Int) -> Entry? {
-        guard let handle = FileHandle(forReadingAtPath: path),
-              let head = try? handle.read(upToCount: headBytes)
-        else {
+        guard let handle = FileHandle(forReadingAtPath: path) else {
             return nil
         }
 
-        try? handle.close()
-        guard let text = String(bytes: head, encoding: .utf8) else {
+        defer { try? handle.close() }
+        guard let head = try? handle.read(upToCount: headBytes),
+              let text = String(bytes: head, encoding: .utf8)
+        else {
             return nil
         }
 

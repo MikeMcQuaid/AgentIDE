@@ -106,7 +106,7 @@ struct PullRequestListView: View {
 
 // MARK: - PullRequestFooterView
 
-/// The pull request tab's footer actions: push, open, rebase,
+/// The pull request tab's footer actions: rebase, push, open,
 /// refresh and the status line.
 struct PullRequestFooterView: View {
     // MARK: Internal
@@ -114,34 +114,31 @@ struct PullRequestFooterView: View {
     let canPush: Bool
     let canOpenPullRequest: Bool
     let canRebase: Bool
+    let hasDraft: Bool
     let status: String?
+    let onRebase: () -> Void
     let onPush: () -> Void
     let onOpenPullRequest: () -> Void
-    let onRebase: () -> Void
     let onRefresh: () -> Void
 
     var body: some View {
         HStack {
-            Button("Push", action: onPush)
-                .disabled(canPush == false)
-                .hoverHelp(
-                    canPush
-                        ? "Push this branch's unpushed commits to origin"
-                        : "Everything is already pushed",
-                )
-            Button("Open PR", action: onOpenPullRequest)
-                .disabled(canOpenPullRequest == false)
-                .hoverHelp(
-                    canOpenPullRequest
-                        ? "Push if needed and open a pull request; a repository template fills the body"
-                        : "This branch already has an open pull request",
-                )
             Button("Rebase on origin", action: onRebase)
                 .disabled(canRebase == false)
                 .hoverHelp(
                     "git fetch origin, then rebase this branch onto origin/HEAD re-signing every commit; "
                         + "a conflict aborts and reports to the Errors tab",
                 )
+            Button("Push", action: onPush)
+                .disabled(canPush == false)
+                .hoverHelp(
+                    canPush
+                        ? "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
+                        : "Everything is already pushed",
+                )
+            Button(hasDraft ? "Create PR" : "Open PR", action: onOpenPullRequest)
+                .disabled(canOpenPullRequest == false)
+                .hoverHelp(openHelp)
             Button("Refresh", action: onRefresh)
                 .hoverHelp("Fetch the pull requests again")
             if let status {
@@ -160,6 +157,16 @@ struct PullRequestFooterView: View {
     // MARK: Private
 
     private static let padding: CGFloat = 8
+
+    private var openHelp: String {
+        guard canOpenPullRequest else {
+            return "This branch already has an open pull request"
+        }
+
+        return hasDraft
+            ? "Push if needed and open the pull request from the draft's edited title and body"
+            : "Write a pull request draft from the repository template and open it in the editor tab"
+    }
 }
 
 // MARK: - PullRequestScope

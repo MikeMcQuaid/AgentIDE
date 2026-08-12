@@ -114,10 +114,83 @@ struct PullRequestsModelTests {
         #expect(rebuilt.summaries.map(\.number) == [4])
     }
 
+    @Test
+    func `pushing dims the button until new commits arrive`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
+        #expect(model.canPush)
+
+        #expect(await model.push())
+        #expect(model.isPushed)
+        #expect(model.canPush == false)
+        #expect(model.status == "Pushed.")
+
+        model.items = [item(branch: "feature", ahead: 1)]
+        #expect(model.canPush)
+    }
+
+    @Test
+    func `a failed push reports rather than dimming`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
+        model.performPush = { _ in throw CocoaError(.fileNoSuchFile) }
+        #expect(await model.push() == false)
+        #expect(model.canPush)
+    }
+
+    @Test
+    func `opening a pull request drafts first and creates second`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        var prepared: String?
+        model.prepareDraft = { _, disclosure in
+            prepared = disclosure
+            return ".agentide-pull-request.md"
+        }
+
+        let first = await model.ship(disclosure: "Claude Code")
+        guard case let .drafted(relativePath) = first else {
+            Issue.record("Expected a draft, got \(first)")
+            return
+        }
+
+        #expect(relativePath == ".agentide-pull-request.md")
+        #expect(prepared == "Claude Code")
+        #expect(model.hasDraft)
+
+        let second = await model.ship(disclosure: nil)
+        guard case .created = second else {
+            Issue.record("Expected creation, got \(second)")
+            return
+        }
+
+        #expect(model.hasDraft == false)
+        #expect(model.isPushed)
+        #expect(model.status == "https://example.test/pull/1")
+    }
+
+    @Test
+    func `the checked-out branch drives listing and actions`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "switched" }
+        var listed: GitHubClient.ListScope?
+        model.fetchList = { scope, _ in
+            listed = scope
+            return [summary(1, head: "switched")]
+        }
+        var pushed: String?
+        model.performPush = { worktree in pushed = worktree.branch }
+
+        await model.reload()
+        #expect(listed == .branch("switched"))
+        #expect(model.canOpenPullRequest == false)
+
+        _ = await model.push()
+        #expect(pushed == "switched")
+    }
+
     // MARK: Private
 
-    /// A model against a throwaway store whose every fetch seam is
-    /// replaced; the service is never reached by these tests.
+    /// A model against a throwaway store whose every fetch and
+    /// service seam is replaced; nothing real is reached by these
+    /// tests.
     private func makeModel(
         items: [WorktreeItem] = [],
         metadataFile: String? = nil,
@@ -160,6 +233,16 @@ struct PullRequestsModelTests {
         model.fetchSummary = { _ in nil }
         model.fetchHasMergeQueue = { false }
         model.fetchRemediationContext = { _ in "" }
+        model.fetchCurrentBranch = { _ in nil }
+        model.checkDraft = { _ in false }
+        model.prepareDraft = { _, _ in ".agentide-pull-request.md" }
+        model.createFromDraft = { _ in "https://example.test/pull/1" }
+        model.performPush = { _ in
+            // Succeeds without side effects.
+        }
+        model.performRebase = { _ in
+            // Succeeds without side effects.
+        }
         return model
     }
 

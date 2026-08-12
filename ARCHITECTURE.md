@@ -420,9 +420,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
    poll rarely. Selecting a worktree jumps its branch to the front, and a
    failed poll keeps the cached answer.
 4. Native versus shell: polling, dashboards and review threads are native
-   URLSession; `gh pr create` (templates and stacking), `gh pr merge --auto`
-   and other one-shots shell out as the host user.
-5. One-click remediation composes existing flows: fetch failing check logs
+   URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
+   shell out as the host user.
+5. Opening a pull request is two-phase: the first click writes a draft file
+   in the worktree (the last commit's subject over the repository template,
+   checkboxes prechecked, any AI disclosure line filled with the session's
+   agent, model and effort) and opens it in the editor tab, hidden from git
+   status through the repository-local exclude file; the second click, now
+   Create PR, pushes and runs `gh pr create` with the draft's edited title
+   and body, then deletes the draft.
+6. The listing and the footer act on the branch actually checked out in the
+   worktree, asked of git on each reload, because agents sometimes switch
+   branches inside a worktree.
+7. One-click remediation composes existing flows: fetch failing check logs
    and review comments natively, write them into a prompt file and launch a
    fix agent in the same worktree.
 
@@ -590,9 +600,12 @@ deletion keeping every conversation attributed to its repository. View rendering
 host and in CI only, not inside the sandbox.
 
 CI ("GitHub Actions CI" in `.github/workflows/tests.yml`) runs the style
-checks on every push and pull request. The build, test and analyze job runs
-on GitHub's Xcode 27 public-preview image (`runs-on: xcode-27`, arm64 only)
-and asserts Xcode 27 is present, failing rather than skipping, so a green run
+checks on every push and pull request. The build-and-test job and the
+analyze job run in parallel on GitHub's Xcode 27 public-preview image
+(`runs-on: xcode-27`, arm64 only), each restoring its own cache of the
+derived data and Swift build directories keyed on `Package.resolved` and
+`project.yml`, and both assert Xcode 27 is present, failing rather than
+skipping, so a green run
 always means the app built, the tests passed and static analysis was
 clean (R2).
 

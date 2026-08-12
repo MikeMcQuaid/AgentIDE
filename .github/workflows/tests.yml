@@ -81,6 +81,17 @@ jobs:
       - name: Download Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
+      - name: Cache Swift build state
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .DerivedData
+            .build
+          key: ${{ runner.os }}-swift-tests-${{ hashFiles('Package.resolved', 'project.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-swift-tests-${{ hashFiles('Package.resolved', 'project.yml') }}-
+            ${{ runner.os }}-swift-tests-
+
       - name: Bootstrap
         run: script/bootstrap
 
@@ -90,12 +101,62 @@ jobs:
       - name: Test
         run: script/test
 
+  analyze:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        with:
+          core: false
+          cask: false
+          test-bot: false
+
+      - name: Cache Homebrew prefix
+        uses: Homebrew/actions/cache-homebrew-prefix@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        with:
+          brewfile: true
+          uninstall: true
+
+      - name: Select Xcode 27
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::Xcode 27 is not installed on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      - name: Download Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      # The analyzer's own clean build discards cached products, but
+      # restoring `.DerivedData` still spares the package fetches.
+      - name: Cache Swift build state
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .DerivedData
+          key: ${{ runner.os }}-swift-analyze-${{ hashFiles('Package.resolved', 'project.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-swift-analyze-${{ hashFiles('Package.resolved', 'project.yml') }}-
+            ${{ runner.os }}-swift-analyze-
+
+      - name: Bootstrap
+        run: script/bootstrap
+
       - name: Analyze
         run: script/analyze
 
-# `style` and `tests` always run, so they are the required checks in
-# branch protection directly. If any job ever becomes conditionally
-# skipped (a job-level `if:`, a path filter, or a matrix), add back an
-# aggregating `check` job with `if: always()` that fails unless every
-# `needs` job succeeded and require that instead: branch protection
-# handles a skipped required-by-name check poorly.
+# `style`, `tests` and `analyze` always run, so they are the required
+# checks in branch protection directly. If any job ever becomes
+# conditionally skipped (a job-level `if:`, a path filter, or a
+# matrix), add back an aggregating `check` job with `if: always()`
+# that fails unless every `needs` job succeeded and require that
+# instead: branch protection handles a skipped required-by-name check
+# poorly.

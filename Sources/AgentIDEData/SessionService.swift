@@ -1,6 +1,28 @@
 import AgentIDEDomain
 import Foundation
 
+// MARK: - SessionServiceError
+
+/// A user-facing service failure with a plain message.
+struct SessionServiceError: Error, LocalizedError {
+    // MARK: Lifecycle
+
+    /// Creates an error with its displayed message.
+    init(_ message: String) {
+        self.message = message
+    }
+
+    // MARK: Internal
+
+    let message: String
+
+    var errorDescription: String? {
+        message
+    }
+}
+
+// MARK: - SessionService
+
 /// Orchestrates the core loop: worktrees, sessions, review actions
 /// and lifecycle. Feature models call this; it composes the clients.
 /// Deletion and the repository sessions browser live in their own

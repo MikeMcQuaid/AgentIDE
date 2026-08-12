@@ -22,21 +22,6 @@ public extension SessionService {
         transcripts.entries(in: URL(fileURLWithPath: past.path))
     }
 
-    /// Pushes the branch to origin without opening anything.
-    func push(worktree: Worktree) async throws {
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-    }
-
-    /// Pushes the branch and opens a pull request; returns its URL.
-    func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
-            .split(separator: "\n")
-            .first
-            .map(String.init) ?? ""
-        return try await github.createPullRequest(worktreePath: worktree.path, title: title)
-    }
-
     /// The argv that attaches a terminal to a session.
     func attachCommand(sessionName: String) -> [String] {
         tmux.attachCommand(sessionName: sessionName)
@@ -63,7 +48,7 @@ public extension SessionService {
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
-            ";", "set", "-g", "set-clipboard", "on",
+            ";", "set", "-s", "set-clipboard", "on",
             ";", "set", "-as", "terminal-features", "xterm-256color:clipboard",
         ]
     }

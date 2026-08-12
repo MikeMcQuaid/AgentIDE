@@ -320,6 +320,25 @@ public struct GitClient: Sendable {
         try await git(["branch", "-D", branch], in: repository.path)
     }
 
+    // MARK: Internal
+
+    /// Runs git with the hardening flags prepended; internal so the
+    /// cross-file length-split extensions can reach it.
+    @discardableResult
+    func git(
+        _ arguments: [String],
+        in directory: String?,
+        allowFailure: Bool = false,
+    ) async throws -> ProcessResult {
+        let argv = ["git"] + Self.hardening + arguments
+        let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
+        guard result.succeeded || allowFailure else {
+            throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)
+        }
+
+        return result
+    }
+
     // MARK: Private
 
     /// Config a compromised repository could abuse, forced off, plus
@@ -336,19 +355,4 @@ public struct GitClient: Sendable {
     ]
 
     private let runner: any ProcessRunner
-
-    @discardableResult
-    private func git(
-        _ arguments: [String],
-        in directory: String?,
-        allowFailure: Bool = false,
-    ) async throws -> ProcessResult {
-        let argv = ["git"] + Self.hardening + arguments
-        let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
-        guard result.succeeded || allowFailure else {
-            throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)
-        }
-
-        return result
-    }
 }

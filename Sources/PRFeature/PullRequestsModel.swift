@@ -40,6 +40,25 @@ final class PullRequestsModel {
         fetchRemediationContext = { number in
             await github.remediationContext(repositoryPath: repository.path, number: number)
         }
+        fetchCurrentBranch = { path in
+            await service.currentBranch(worktreePath: path)
+        }
+        checkDraft = { worktree in
+            service.hasPullRequestDraft(worktree: worktree)
+        }
+        prepareDraft = { worktree, disclosure in
+            try await service.preparePullRequestDraft(worktree: worktree, disclosure: disclosure)
+        }
+        createFromDraft = { worktree in
+            try await service.createPullRequestFromDraft(worktree: worktree)
+        }
+        performPush = { worktree in
+            try await service.push(worktree: worktree)
+        }
+        performRebase = { worktree in
+            try await service.rebaseSigned(worktree: worktree)
+        }
+        currentBranch = branch
     }
 
     deinit {
@@ -48,6 +67,14 @@ final class PullRequestsModel {
 
     // MARK: Internal
 
+    /// What Open PR resolved to, so the view can route the outcome.
+    enum ShipOutcome {
+        case drafted(relativePath: String)
+        case created
+        case failed
+        case unavailable
+    }
+
     let repository: Repository
     let branch: String?
 
@@ -55,9 +82,19 @@ final class PullRequestsModel {
     let github: GitHubClient
     let store: MetadataStore
 
-    /// The repository's worktree items, refreshed by the view as the
-    /// dashboard polls, so push and rebase states stay current.
-    var items: [WorktreeItem]
+    /// The branch actually checked out in the worktree, refreshed on
+    /// reload; agents sometimes switch branches inside a worktree.
+    private(set) var currentBranch: String?
+
+    /// True after an in-app push succeeds, dimming Push until the
+    /// next item refresh proves new commits. Written only by the
+    /// actions extension.
+    var isPushed = false
+
+    /// Whether the worktree holds an unsent pull request draft, so
+    /// Open PR reads Create PR. Written only by the actions
+    /// extension and reload.
+    var hasDraft = false
 
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
@@ -69,13 +106,34 @@ final class PullRequestsModel {
     private(set) var isLoading = false
     private(set) var fetchedLimit = 0
     private(set) var hasMergeQueue = false
-    private(set) var status: String?
 
-    /// Test seams: the live client by default, fakes in tests.
+    /// The footer's status line. Written only by the actions
+    /// extension.
+    var status: String?
+
+    /// Test seams: the live client and service by default, fakes in
+    /// tests.
     var fetchList: (GitHubClient.ListScope, Int) async throws -> [PullRequestSummary]
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
     var fetchRemediationContext: (Int) async -> String
+    var fetchCurrentBranch: (String) async -> String?
+    var checkDraft: (Worktree) -> Bool
+    var prepareDraft: (Worktree, String?) async throws -> String
+    var createFromDraft: (Worktree) async throws -> String
+    var performPush: (Worktree) async throws -> Void
+    var performRebase: (Worktree) async throws -> Void
+
+    let service: SessionService
+
+    /// The repository's worktree items, refreshed by the view as the
+    /// dashboard polls; fresh counts also clear the local pushed
+    /// mark, so new commits light Push up again.
+    var items: [WorktreeItem] {
+        didSet {
+            isPushed = false
+        }
+    }
 
     /// The visible page; visiting the lookahead page refetches with
     /// a higher limit.
@@ -91,11 +149,6 @@ final class PullRequestsModel {
         }
     }
 
-    /// The scope's identity, part of the reload task identity.
-    var scopeIdentity: String {
-        String(describing: scope)
-    }
-
     /// Whether the last fetch filled its limit, so more pages may
     /// exist beyond what is loaded.
     var hasMore: Bool {
@@ -106,21 +159,21 @@ final class PullRequestsModel {
         items.first { $0.worktree.branch == branch }
     }
 
-    /// Push makes sense with unpushed commits; nil upstream means
-    /// nothing was ever pushed.
+    /// Push makes sense with unpushed commits that this tab has not
+    /// already pushed; nil upstream means nothing was ever pushed.
     var canPush: Bool {
-        guard let item = branchItem else {
+        guard let item = branchItem, isPushed == false else {
             return false
         }
 
         return (item.aheadOfUpstream ?? 1) > 0
     }
 
-    /// Opening a pull request makes sense until one is open; it
-    /// pushes first when needed.
+    /// Opening a pull request makes sense until one is open for the
+    /// checked-out branch; it pushes first when needed.
     var canOpenPullRequest: Bool {
         branchItem != nil
-            && summaries.contains { $0.headBranch == branch && $0.state == "OPEN" } == false
+            && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
     }
 
     func loadMergeQueue() async {
@@ -134,6 +187,12 @@ final class PullRequestsModel {
     func reload(keepingSelection: Bool = false, extending: Bool = false) async {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
+        if let worktree = branchItem?.worktree {
+            hasDraft = checkDraft(worktree)
+            if let live = await fetchCurrentBranch(worktree.path) {
+                currentBranch = live
+            }
+        }
         if extending == false {
             page = 0
             selected = nil
@@ -146,7 +205,7 @@ final class PullRequestsModel {
         let requested = cacheKey
         do {
             let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
-            let fetched = try await fetchList(scope.listScope(branch: branch), limit)
+            let fetched = try await fetchList(scope.listScope(branch: listedBranch), limit)
             guard Task.isCancelled == false, requested == cacheKey else {
                 return
             }
@@ -198,88 +257,19 @@ final class PullRequestsModel {
         items.first { $0.worktree.branch == summary.headBranch }?.worktree
     }
 
-    func ship() async {
-        guard let item = branchItem else {
-            return
-        }
-
-        do {
-            status = try await service.pushAndCreatePullRequest(worktree: item.worktree)
-            await reload(keepingSelection: true)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    func push() async {
-        guard let item = branchItem else {
-            return
-        }
-
-        do {
-            try await service.push(worktree: item.worktree)
-            status = "Pushed."
-            await reload(keepingSelection: true)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    /// Rebases onto origin with signed commits; false means the
-    /// rebase aborted and the errors tab should open with the cause.
-    func rebaseSigned() async -> Bool {
-        guard let item = branchItem else {
-            return true
-        }
-
-        do {
-            try await service.rebaseSigned(worktree: item.worktree)
-            status = "Rebased onto origin."
-            await reload(keepingSelection: true)
-            return true
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-            return false
-        }
-    }
-
-    func remediate(_ summary: PullRequestSummary) async throws {
-        guard let worktree = worktree(for: summary) else {
-            return
-        }
-
-        let context = await fetchRemediationContext(summary.number)
-        let prompt = """
-        Address the following review comments and failing checks on pull request #\(summary.number), \
-        then commit your fixes. Do not push.
-
-        \(context)
-        """
-        _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: .claudeCode)
-        status = "Fix agent launched for #\(summary.number)."
-    }
-
-    func act(_ work: @escaping () async throws -> Void) {
-        Task {
-            do {
-                try await work()
-                status = "Done."
-                await reload(keepingSelection: true)
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-        }
-    }
-
     // MARK: Private
 
     /// Fetches stay one page ahead of the visible one, so the pager
     /// knows whether a next page exists.
     private static let pageLookahead = 2
 
-    private let service: SessionService
+    /// The branch the tab lists and compares against: the checked
+    /// out one when known, the worktree's recorded one otherwise.
+    private var listedBranch: String? {
+        currentBranch ?? branch
+    }
 
     private var cacheKey: String {
-        repository.path + "#" + scopeIdentity + "#" + (branch ?? "")
+        repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
     }
 }

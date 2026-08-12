@@ -69,8 +69,10 @@ before shipping.
 ### Ship
 
 - Pushes branches and opens one or more pull requests, stacked if needed,
-  across public and private repositories using their templates (so shipping
-  matches how each project already works)
+  across public and private repositories: the title and body draft in the
+  built-in editor from each repository's template, checkboxes prechecked
+  and any AI disclosure filled in (so shipping matches how each project
+  already works without retyping its boilerplate)
 - Addresses automated and human review comments, fixes failing CI, resolves
   merge conflicts and enables automerge or merges, each with one click (so
   the last mile is not the slowest)

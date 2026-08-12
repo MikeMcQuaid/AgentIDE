@@ -177,7 +177,7 @@ public struct TranscriptReader: Sendable {
 
         case "function_call":
             if let name = payload.name {
-                let detail = payload.arguments.map { ": " + $0 } ?? ""
+                let detail = payload.arguments.flatMap { $0.isEmpty ? nil : ": " + $0 } ?? ""
                 results.append(TranscriptEntry(id: results.count, role: .tool, text: name + detail))
             }
 

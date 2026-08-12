@@ -84,13 +84,15 @@ struct TranscriptReaderTests {
         {"type":"response_item","payload":{"type":"user_message","message":"fix it"}}
         {"type":"response_item","payload":{"type":"function_call","name":"shell",\
         "arguments":"ls"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"noargs",\
+        "arguments":""}}
         {"type":"response_item","payload":{"type":"agent_message","message":"done"}}
         {"type":"response_item","payload":{"type":"reasoning"}}
         """
         try lines.write(toFile: transcript, atomically: true, encoding: .utf8)
 
         let entries = TranscriptReader().entries(in: URL(fileURLWithPath: transcript))
-        #expect(entries.map(\.role) == [.user, .tool, .assistant])
-        #expect(entries.map(\.text) == ["fix it", "shell: ls", "done"])
+        #expect(entries.map(\.role) == [.user, .tool, .tool, .assistant])
+        #expect(entries.map(\.text) == ["fix it", "shell: ls", "noargs", "done"])
     }
 }
