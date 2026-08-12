@@ -130,6 +130,10 @@ public struct SessionService: Sendable {
     /// ripgrep output splits into path, line and text.
     static let searchFieldSplits = 2
 
+    /// Finds Codex conversations by their embedded working
+    /// directory; stateless, so no init parameter is needed.
+    let codexIndex: CodexTranscriptIndex = .init()
+
     let paths: WorkspacePaths
     let git: GitClient
     let tmux: TmuxClient

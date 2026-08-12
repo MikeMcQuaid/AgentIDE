@@ -64,6 +64,7 @@ public struct TranscriptLogView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .textSelection(.enabled)
         }
     }
 }

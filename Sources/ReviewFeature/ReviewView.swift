@@ -45,30 +45,6 @@ public struct ReviewView: View {
 
     // MARK: Private
 
-    /// How the file list shows: Default hides generated files and
-    /// expands the rest, Hide All collapses everything and Show All
-    /// expands everything, generated included.
-    private enum FileDisplay: CaseIterable {
-        case standard
-        case hideAll
-        case showAll
-
-        // MARK: Internal
-
-        var title: String {
-            switch self {
-            case .standard:
-                "Default"
-
-            case .hideAll:
-                "Hide All"
-
-            case .showAll:
-                "Show All"
-            }
-        }
-    }
-
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
     private static let dividerHeight: CGFloat = 14
@@ -85,7 +61,7 @@ public struct ReviewView: View {
     private static let bodyLimit = 72
 
     @State private var model: ReviewModel
-    @State private var display: FileDisplay = .standard
+    @State private var display: ReviewFileDisplay = .standard
     @State private var collapseOverrides: [String: Bool] = [:]
 
     private let worktreePath: String
@@ -167,7 +143,10 @@ public struct ReviewView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Self.commitLineSpacing) {
                         ForEach(model.branchCommits, id: \.self) { commit in
-                            Text(commit).font(.caption.monospaced()).lineLimit(1)
+                            Text(commit)
+                                .font(.caption.monospaced())
+                                .lineLimit(1)
+                                .textSelection(.enabled)
                         }
                         if model.branchCommits.isEmpty {
                             Text("No commits beyond the base branch.")
@@ -294,7 +273,7 @@ public struct ReviewView: View {
     /// Cycles Default, Hide All and Show All; generated files show
     /// outside the default mode and manual carets reset.
     private func cycleDisplay() {
-        let all = FileDisplay.allCases
+        let all = ReviewFileDisplay.allCases
         let next = ((all.firstIndex(of: display) ?? 0) + 1) % all.count
         display = all[next]
         collapseOverrides = [:]

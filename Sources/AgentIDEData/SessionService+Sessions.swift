@@ -299,7 +299,7 @@ public extension SessionService {
         of workingDirectory: String,
         liveSession: AgentSession?,
     ) -> [TranscriptSession] {
-        runners
+        let scoped = runners
             .filter(\.scopesTranscriptsByWorkingDirectory)
             .flatMap { runner -> [TranscriptSession] in
                 guard let directory = runner.transcriptDirectory(
@@ -313,6 +313,15 @@ public extension SessionService {
                 let hidesNewest = liveSession?.agent == runner.kind
                 return hidesNewest ? Array(sessions.dropFirst()) : sessions
             }
+        // Codex keeps one flat date tree with the working directory
+        // embedded per session, so its conversations come from the
+        // index rather than a per-worktree directory.
+        let codex = codexIndex.sessions(
+            inRoot: paths.sandboxHome + "/.codex/sessions",
+            workingDirectory: workingDirectory,
+        )
+        let hidesNewestCodex = liveSession?.agent == .codexCLI
+        return scoped + (hidesNewestCodex ? Array(codex.dropFirst()) : codex)
     }
 
     /// Conversations whose worktree no longer exists, attributed to

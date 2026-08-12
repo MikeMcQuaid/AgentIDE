@@ -3,6 +3,32 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - ReviewFileDisplay
+
+/// How the review file list shows: Default hides generated files
+/// and expands the rest, Hide All collapses everything and Show All
+/// expands everything, generated included.
+enum ReviewFileDisplay: CaseIterable {
+    case standard
+    case hideAll
+    case showAll
+
+    // MARK: Internal
+
+    var title: String {
+        switch self {
+        case .standard:
+            "Default"
+
+        case .hideAll:
+            "Hide All"
+
+        case .showAll:
+            "Show All"
+        }
+    }
+}
+
 // MARK: - FileCollapseCaret
 
 /// The one caret that hides or shows a file's body in review lists.
@@ -76,6 +102,7 @@ struct DiffFileView: View {
             Text("@@ -\(hunk.oldStart) +\(hunk.newStart) @@")
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
+                .textSelection(.enabled)
             ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
                 DiffLineView(
                     line: entry.line,
@@ -227,6 +254,7 @@ struct DiffLineView: View {
     var body: some View {
         let text = (numberText + Text(prefix) + content)
             .font(CodeStyle.font)
+            .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(background)
             .overlay(alignment: .leading) {
@@ -235,7 +263,8 @@ struct DiffLineView: View {
                 }
             }
         // Only changed lines are tappable, so only they carry the
-        // button gesture and accessibility trait.
+        // button gesture and accessibility trait; dragging still
+        // selects text for copying on every line.
         if line.kind == .context {
             text
         } else {
