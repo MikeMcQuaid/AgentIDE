@@ -101,7 +101,7 @@ struct FileEditorView: View {
 
     private func load() {
         guard let safePath else {
-            status = "Refusing to open a path outside the worktree."
+            ErrorLog.shared.report("Refusing to open a path outside the worktree.")
             return
         }
 
@@ -112,7 +112,7 @@ struct FileEditorView: View {
 
     private func save() {
         guard let safePath else {
-            status = "Refusing to write a path outside the worktree."
+            ErrorLog.shared.report("Refusing to write a path outside the worktree.")
             return
         }
 
@@ -123,7 +123,7 @@ struct FileEditorView: View {
             status = Self.savedStatus
             reloadChangedLines()
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 

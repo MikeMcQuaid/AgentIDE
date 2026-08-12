@@ -8,8 +8,12 @@ struct UtilityTabStrip: View {
     // MARK: Internal
 
     var body: some View {
+        // The errors tab hides until the first failure of the
+        // session, then sticks around even across a clear.
         ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
-            button(tab, at: index)
+            if tab != .errors || errorLog.everReported {
+                button(tab, at: index)
+            }
         }
     }
 
@@ -21,6 +25,8 @@ struct UtilityTabStrip: View {
 
     @AppStorage("utilityTabIndex")
     private var utilityTabIndex = 0
+
+    private var errorLog: ErrorLog = .shared
 
     private func button(_ tab: UtilityTab, at index: Int) -> some View {
         Button {

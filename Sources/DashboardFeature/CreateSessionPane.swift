@@ -7,11 +7,21 @@ import SwiftUI
 public struct CreateSessionPane: View {
     // MARK: Lifecycle
 
-    /// Creates the pane; `onStarted` runs after a successful launch.
+    /// Creates the pane; `canResume` offers `onResume` for the
+    /// worktree's most recent conversation and `onStarted` runs
+    /// after a successful launch.
     @preconcurrency
-    public init(worktree: Worktree, model: DashboardModel, onStarted: @escaping @MainActor () async -> Void) {
+    public init(
+        worktree: Worktree,
+        model: DashboardModel,
+        canResume: Bool,
+        onResume: @escaping @MainActor () async -> Void,
+        onStarted: @escaping @MainActor () async -> Void,
+    ) {
         self.worktree = worktree
         self.model = model
+        self.canResume = canResume
+        self.onResume = onResume
         self.onStarted = onStarted
     }
 
@@ -21,9 +31,21 @@ public struct CreateSessionPane: View {
     /// pane's top like the repository page.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("Start an agent in \(target)")
-                .font(.subheadline.weight(.semibold))
-                .padding(.top, Self.headerTopPadding)
+            HStack {
+                Text("Start an agent in \(target)")
+                    .font(.subheadline.weight(.semibold))
+                if isResuming {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                if canResume {
+                    Button("Resume last session") { resume() }
+                        .controlSize(.small)
+                        .disabled(isResuming)
+                        .hoverHelp("Continue this worktree's most recent conversation instead of starting fresh")
+                }
+            }
+            .padding(.top, Self.headerTopPadding)
             AgentSessionForm(
                 model: model,
                 repository: repository,
@@ -40,8 +62,13 @@ public struct CreateSessionPane: View {
     private static let spacing: CGFloat = 8
     private static let headerTopPadding: CGFloat = 3
 
+    /// Instant feedback while a resume launches.
+    @State private var isResuming = false
+
     private let worktree: Worktree
     private let model: DashboardModel
+    private let canResume: Bool
+    private let onResume: @MainActor () async -> Void
     private let onStarted: @MainActor () async -> Void
 
     private var repository: Repository {
@@ -50,6 +77,14 @@ public struct CreateSessionPane: View {
 
     private var target: String {
         worktree.repositoryName + ": " + worktree.branch
+    }
+
+    private func resume() {
+        isResuming = true
+        Task {
+            await onResume()
+            isResuming = false
+        }
     }
 
     private func start(_ submission: AgentSessionForm.Submission) async {

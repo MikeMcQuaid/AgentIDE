@@ -7,7 +7,10 @@ cd "$(dirname "$0")/.."
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
-  exec swift test --disable-sandbox
+  # Capped parallelism: full-width builds inside the sandbox have
+  # triggered resource kills that tore down the whole sandbox user,
+  # taking the production tmux server and its agents with it.
+  exec nice swift test --disable-sandbox --jobs 6
 fi
 
 exec swift test

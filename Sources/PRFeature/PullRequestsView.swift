@@ -201,7 +201,7 @@ public struct PullRequestsView: View {
             status = try await service.pushAndCreatePullRequest(worktree: item.worktree)
             await reload(keepingSelection: true)
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 
@@ -279,7 +279,7 @@ public struct PullRequestsView: View {
                 }
             }
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 
@@ -306,7 +306,7 @@ public struct PullRequestsView: View {
                 status = "Done."
                 await reload(keepingSelection: true)
             } catch {
-                status = error.localizedDescription
+                ErrorLog.shared.report(error.localizedDescription)
             }
         }
     }

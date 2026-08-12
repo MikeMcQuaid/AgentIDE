@@ -251,6 +251,13 @@ public struct GitClient: Sendable {
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 
+    /// Fetches origin and hard-resets the checkout to its default
+    /// branch, for main checkouts that should mirror the remote.
+    public func fetchAndReset(repositoryPath: String) async throws {
+        try await git(["fetch", "origin"], in: repositoryPath)
+        try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
+    }
+
     /// Reverse-applies a patch to the index and worktree together.
     public func applyReverse(patch: String, worktreePath: String) async throws {
         let url = FileManager.default

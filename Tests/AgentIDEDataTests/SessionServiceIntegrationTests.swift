@@ -258,9 +258,10 @@ struct SessionServiceIntegrationTests {
         #expect(command.contains("-A"))
         let name = try #require(command.drop { $0 != "-s" }.dropFirst().first)
         // Names the repository and branch, never the worktree uuid;
-        // the path digest keeps same-named repositories apart.
+        // the path digest keeps same-named repositories apart and
+        // the dev prefix keeps tests away from production shells.
         let digest = SessionName.pathDigest(world.repository.path)
-        #expect(name == "agentide-shell--my-repo-" + digest + "--agent-fix-thing")
+        #expect(name == "agentide-shell-dev--my-repo-" + digest + "--agent-fix-thing")
         let directoryFlag = try #require(command.firstIndex(of: "-c"))
         #expect(command[directoryFlag + 1] == worktree.path)
         // The host server reads no config file, so the wheel-scroll

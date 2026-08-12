@@ -3,6 +3,20 @@ import Foundation
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
+    /// Host shells share the host tmux server across flavours, so
+    /// dev builds and tests get their own name prefix and can never
+    /// list or kill production shells.
+    internal static let hostShellPrefix = WorkspacePaths.isProductionBuild
+        ? "agentide-shell--"
+        : "agentide-shell-dev--"
+
+    /// The host's tmux binary; Homebrew's location is not on a GUI
+    /// app's default PATH.
+    internal static var hostTmuxPath: String {
+        ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "tmux"
+    }
+
     /// The displayable conversation log of a past session.
     func transcriptEntries(for past: TranscriptSession) -> [TranscriptEntry] {
         transcripts.entries(in: URL(fileURLWithPath: past.path))
@@ -34,7 +48,7 @@ public extension SessionService {
     /// wheel-scrolls-history behaviour as the sandbox one, whose
     /// config file it does not read.
     func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = "agentide-shell--"
+        let name = Self.hostShellPrefix
             + SessionName.slug(worktree.repositoryName) + "-"
             + SessionName.pathDigest(worktree.repositoryPath) + "--"
             + SessionName.slug(worktree.branch)
@@ -63,7 +77,7 @@ public extension SessionService {
         let shells = (list?.standardOutput ?? "")
             .split(separator: "\n")
             .map(String.init)
-            .filter { $0.hasPrefix("agentide-shell--") }
+            .filter { $0.hasPrefix(Self.hostShellPrefix) }
         for name in shells where seen.insert(name).inserted {
             results.append((name, true))
         }
@@ -124,6 +138,82 @@ public extension SessionService {
     func closeSession(sessionName: String, worktreePath: String) async throws {
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
         try await tmux.killSession(name: sessionName)
+    }
+
+    /// Whether a closed session is recorded for a worktree, so panes
+    /// can offer resuming even when no transcript lists under it.
+    func hasRecordedSession(worktreePath: String) -> Bool {
+        store.load().sessionsByWorktree[worktreePath] != nil
+    }
+
+    /// Deletes a past conversation's transcript, removing it from
+    /// every listing; only an explicit user action calls this.
+    /// Transcripts belong to the sandbox user and the host user can
+    /// only read them, so when a direct removal is refused the
+    /// deletion runs again as their owner through the launcher.
+    func deleteConversation(_ past: TranscriptSession) async throws {
+        if (try? FileManager.default.removeItem(atPath: past.path)) != nil {
+            return
+        }
+
+        let quoted = "'" + past.path.replacing("'", with: "'\\''") + "'"
+        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
+        let command = launcher.command(
+            payload: "rm -f " + quoted,
+            initialDirectory: launcher.sharedWorkspace,
+            sessionID: UUID().uuidString,
+            sessionName: "agentide-delete",
+        )
+        let result = try await processes.run(command, workingDirectory: nil, environment: [:])
+        guard result.succeeded else {
+            throw CommandError(command: "rm -f " + past.path, result: result)
+        }
+    }
+
+    /// Copies a dropped file into the shared workspace, where the
+    /// sandboxed agent can read it, returning the staged path.
+    func stageDroppedFile(at url: URL) throws -> String {
+        let directory = paths.sharedWorkspace + "/tmp"
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let destination = directory + "/drop-" + UUID().uuidString + "-" + url.lastPathComponent
+        try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: destination))
+        return destination
+    }
+
+    /// Types text into a session's terminal, as pasted input.
+    func typeText(_ text: String, sessionName: String) async throws {
+        try await tmux.typeText(text, sessionName: sessionName)
+    }
+
+    /// Resumes the session last recorded in a worktree, whether or
+    /// not a live tmux session still names it.
+    func resumeWorktree(_ worktree: Worktree) async throws {
+        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
+            throw CommandError(
+                command: "resume " + worktree.path,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
+            )
+        }
+        guard let agent = agentKind(of: sessionName) else {
+            throw CommandError(
+                command: "resume " + sessionName,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
+            )
+        }
+
+        let metadata = store.load()
+        let arguments = metadata.arguments[sessionName] ?? ""
+        if let resumeID = metadata.resumeIDs[sessionName] {
+            let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
+            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+        } else {
+            let command = runner(for: agent).launchCommand(extraArguments: arguments)
+            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
+            if FileManager.default.fileExists(atPath: promptFile) {
+                try await tmux.sendPromptFile(promptFile, to: sessionName)
+            }
+        }
     }
 
     /// Relaunches a past conversation in its own worktree, replacing

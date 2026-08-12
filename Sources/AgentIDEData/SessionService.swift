@@ -81,10 +81,12 @@ public struct SessionService: Sendable {
             groups.append(RepositoryGroup(repository: named, items: sorted))
         }
         // Repositories order by their worktrees' activity; the main
-        // checkout's own churn deliberately does not count.
+        // checkout's own churn deliberately does not count, except
+        // while a session runs there, so resuming on the repository
+        // page bumps its repository to the top like a worktree does.
         groups.sort { first, second in
-            let firstActivity = first.items.dropFirst().map(\.lastActivityAt).max() ?? 0
-            let secondActivity = second.items.dropFirst().map(\.lastActivityAt).max() ?? 0
+            let firstActivity = Self.repositoryActivity(of: first)
+            let secondActivity = Self.repositoryActivity(of: second)
             return firstActivity == secondActivity
                 ? first.repository.name < second.repository.name
                 : firstActivity > secondActivity
@@ -127,13 +129,6 @@ public struct SessionService: Sendable {
 
     /// ripgrep output splits into path, line and text.
     static let searchFieldSplits = 2
-
-    /// The host's tmux binary; Homebrew's location is not on a GUI
-    /// app's default PATH.
-    static var hostTmuxPath: String {
-        ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "tmux"
-    }
 
     let paths: WorkspacePaths
     let git: GitClient
@@ -266,8 +261,13 @@ public struct SessionService: Sendable {
         activity: [String: Date],
         metadata: AppMetadata,
     ) async -> WorktreeItem {
+        // Matched by the recorded session name first: the pane's
+        // current path drifts when the agent changes directory,
+        // which made live sessions vanish from the UI.
+        let recorded = metadata.sessionsByWorktree[worktree.path]
         let pane = panes.first { pane in
-            SessionName.isAgentIDE(pane.sessionName) && pane.currentPath == worktree.path
+            SessionName.isAgentIDE(pane.sessionName)
+                && (pane.sessionName == recorded || pane.currentPath == worktree.path)
         }
         let session = pane.map { pane in
             AgentSession(

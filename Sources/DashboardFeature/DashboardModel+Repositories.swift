@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import TerminalUI
 
 /// The repository finder's model surface: listing everything the
 /// user can reach on GitHub and jumping to or cloning a pick.
@@ -69,7 +70,7 @@ public extension DashboardModel {
             showsRepositoryFinder = false
             status = nil
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 

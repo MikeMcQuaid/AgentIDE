@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import TerminalUI
 
 /// Session creation: every entry point funnels through one runner
 /// that closes the form, refreshes and selects the new worktree.
@@ -102,7 +103,7 @@ public extension DashboardModel {
                 selection = created
             }
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 }

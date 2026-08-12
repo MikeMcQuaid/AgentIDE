@@ -3,42 +3,54 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-/// The repository page: every conversation that ever ran in this
-/// repository, whichever worktree it used and whether or not that
-/// worktree still exists. Selecting one shows its log; any of them
-/// can resume into a fresh worktree.
+/// The one conversations UI: every conversation of a repository, or
+/// of a single worktree when scoped, whether or not its worktree
+/// still exists. Selecting one shows its log; any of them can
+/// resume here or into a fresh worktree.
 public struct RepositorySessionsView: View {
     // MARK: Lifecycle
 
-    /// Creates the browser; `onResumed` runs after a resume launches.
+    /// Creates the browser; `worktreePath` scopes the list to one
+    /// worktree, `onNewSession` opens the new session page and
+    /// `onResumed` runs after a resume launches.
     @preconcurrency
     public init(
         repository: Repository,
         service: SessionService,
+        worktreePath: String? = nil,
+        onNewSession: (@MainActor () -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
         self.repository = repository
         self.service = service
+        self.worktreePath = worktreePath
+        self.onNewSession = onNewSession
         self.onResumed = onResumed
     }
 
     // MARK: Public
 
-    /// The session list over the selected conversation's log.
+    /// The session list over the selected conversation's log, or a
+    /// pane-filling progress state while a resume launches.
     public var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
-            if sessions.isEmpty {
-                ContentUnavailableView(
-                    "No conversations yet",
-                    systemImage: "clock.arrow.circlepath",
-                    description: Text("Every agent conversation in this repository appears here, resumable."),
-                )
+            if isResuming {
+                ProgressView("Resuming conversation…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                list
+                header
                 Divider()
-                log
+                if sessions.isEmpty {
+                    ContentUnavailableView(
+                        "No conversations yet",
+                        systemImage: "clock.arrow.circlepath",
+                        description: Text("Every agent conversation in this repository appears here, resumable."),
+                    )
+                } else {
+                    list
+                    Divider()
+                    log
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -55,24 +67,47 @@ public struct RepositorySessionsView: View {
 
     @State private var sessions: [(session: TranscriptSession, worktreePath: String)] = []
     @State private var selected: TranscriptSession?
-    @State private var status: String?
+    /// Fills the pane with progress the moment a resume starts.
+    @State private var isResuming = false
 
     private let repository: Repository
     private let service: SessionService
+    private let worktreePath: String?
+    private let onNewSession: (@MainActor () -> Void)?
     private let onResumed: @MainActor () async -> Void
 
     private var selectionBinding: Binding<TranscriptSession?> {
         Binding(get: { selected }, set: { selected = $0 })
     }
 
+    /// The selected conversation's worktree, when it still exists.
+    private var selectedWorktreePath: String? {
+        guard let selected,
+              let path = sessions.first(where: { $0.session.id == selected.id })?.worktreePath,
+              FileManager.default.fileExists(atPath: path)
+        else {
+            return nil
+        }
+
+        return path
+    }
+
     private var header: some View {
         HStack {
-            Text("Conversations in \(repository.name)")
+            Text(worktreePath == nil ? "Conversations in \(repository.name)" : "Conversations in this worktree")
                 .font(.subheadline.weight(.semibold))
-            if let status {
-                Text(status).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
             Spacer()
+            if let onNewSession {
+                Button("New session", action: onNewSession)
+                    .controlSize(.small)
+                    .hoverHelp("Start a fresh agent session in this repository instead of resuming")
+            }
+            Button("Resume here") { resumeSelectedHere() }
+                .controlSize(.small)
+                .disabled(selectedWorktreePath == nil)
+                .hoverHelp(
+                    "Continue the selected conversation in the worktree it ran in; dimmed when that worktree is gone",
+                )
             Button("Resume in new worktree") { resumeSelected() }
                 .controlSize(.small)
                 .disabled(selected == nil)
@@ -110,6 +145,10 @@ public struct RepositorySessionsView: View {
                 }
             }
             .tag(entry.session)
+            .contextMenu {
+                Button("Delete conversation") { delete(entry.session) }
+                    .hoverHelp("Remove this conversation's transcript permanently")
+            }
         }
         .listStyle(.plain)
         .frame(height: Self.listHeight)
@@ -136,8 +175,24 @@ public struct RepositorySessionsView: View {
     }
 
     private func reload() async {
-        sessions = await service.repositorySessions(for: repository)
+        var all = await service.repositorySessions(for: repository)
+        if let worktreePath {
+            all = all.filter { $0.worktreePath == worktreePath }
+        }
+        sessions = all
         selected = sessions.first?.session
+    }
+
+    /// Removes a conversation's transcript for good.
+    private func delete(_ past: TranscriptSession) {
+        Task {
+            do {
+                try await service.deleteConversation(past)
+                await reload()
+            } catch {
+                ErrorLog.shared.report(error.localizedDescription)
+            }
+        }
     }
 
     private func resumeSelected() {
@@ -145,13 +200,42 @@ public struct RepositorySessionsView: View {
             return
         }
 
+        isResuming = true
         Task {
             do {
                 _ = try await service.resumeInNewWorktree(selected, repository: repository)
                 await onResumed()
             } catch {
-                status = error.localizedDescription
+                ErrorLog.shared.report(error.localizedDescription)
             }
+            isResuming = false
+        }
+    }
+
+    /// Resumes the selected conversation in the worktree it ran in;
+    /// the branch only names the tmux session, so the path's last
+    /// component serves.
+    private func resumeSelectedHere() {
+        guard let selected, let path = selectedWorktreePath else {
+            return
+        }
+
+        isResuming = true
+        Task {
+            do {
+                let branch = path.split(separator: "/").last.map(String.init) ?? repository.name
+                let worktree = Worktree(
+                    repositoryName: repository.name,
+                    repositoryPath: repository.path,
+                    branch: branch,
+                    path: path,
+                )
+                _ = try await service.resumePast(selected, worktree: worktree)
+                await onResumed()
+            } catch {
+                ErrorLog.shared.report(error.localizedDescription)
+            }
+            isResuming = false
         }
     }
 }

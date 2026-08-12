@@ -17,6 +17,10 @@ struct RootView: View {
     @AppStorage("utilityTabIndex")
     var utilityTabIndex = 0
 
+    /// Internal so the extension file's toggle button can drive it.
+    @AppStorage("showsUtilityPane")
+    var showsUtilityPane = true
+
     var body: some View {
         // Plain panes with our own dividers: the navigation split
         // view's floating toggle covered nearby controls and split
@@ -48,6 +52,31 @@ struct RootView: View {
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
+        // Idle sleep is blocked while any agent or shell runs, since
+        // the machine sleeping mid-response cuts them off.
+        .onChange(of: hasLiveWork, initial: true) {
+            sleepInhibitor.update(hasLiveWork: hasLiveWork)
+        }
+        // Reopening the app resumes the restored worktree's most
+        // recent conversation: the default workflow is picking up
+        // where the last session left off. Only the launch's
+        // restored selection qualifies, never later clicks.
+        .onChange(of: dependencies.dashboard.selection?.id) {
+            guard hasAutoResumed == false, let item = dependencies.dashboard.selection else {
+                return
+            }
+
+            hasAutoResumed = true
+            let stored = UserDefaults.standard.string(forKey: "selectedWorktreePath")
+            guard item.worktree.path == stored, item.session == nil,
+                  item.pastSessions.isEmpty == false
+                  || dependencies.service.hasRecordedSession(worktreePath: item.worktree.path)
+            else {
+                return
+            }
+
+            Task { await resumeLatest(in: item) }
+        }
     }
 
     // MARK: Private
@@ -64,7 +93,13 @@ struct RootView: View {
     /// so hiding the pane never moves it.
     private static let toggleRowHeight: CGFloat = 30
 
-    @State private var sessionTab: String = Self.activeTabID
+    /// Whether the launch's one automatic resume has run, so later
+    /// selection changes never launch anything by themselves.
+    @State private var hasAutoResumed = false
+
+    /// Blocks idle sleep while agents or shells run, since sleeping
+    /// mid-response cuts agents off.
+    @State private var sleepInhibitor: SleepInhibitor = .init()
 
     /// Focus requests from the finder menu items, cleared at launch
     /// so a request from the previous run cannot fire.
@@ -90,8 +125,6 @@ struct RootView: View {
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
     @State private var visitedBrowsers: Set<String> = []
-    @AppStorage("showsUtilityPane")
-    private var showsUtilityPane = true
 
     /// Pane widths, persisted so the layout restores on relaunch;
     /// the dividers write them directly.
@@ -99,6 +132,13 @@ struct RootView: View {
     private var sidebarWidth = 300.0
     @AppStorage("utilityPaneWidth")
     private var utilityPaneWidth = 480.0
+
+    /// Whether anything is running that idle sleep would interrupt.
+    private var hasLiveWork: Bool {
+        runningShells.isEmpty == false || dependencies.dashboard.groups.contains { group in
+            group.items.contains { $0.session?.status == .running }
+        }
+    }
 
     @ViewBuilder private var detail: some View {
         if dependencies.dashboard.showsNewSession {
@@ -108,7 +148,6 @@ struct RootView: View {
             RepositoryFinderPane(model: dependencies.dashboard)
         } else if let item = dependencies.dashboard.selection {
             split(for: item)
-                .onChange(of: item.id) { sessionTab = initialTab(for: item) }
         } else {
             ContentUnavailableView(
                 "No worktree selected",
@@ -118,42 +157,10 @@ struct RootView: View {
         }
     }
 
-    private var utilityToggleButton: some View {
-        Button {
-            showsUtilityPane.toggle()
-        } label: {
-            Label("Toggle utility pane", systemImage: "sidebar.right")
-                .labelStyle(.iconOnly)
-        }
-        .buttonStyle(.plain)
-        .hoverHelp(
-            showsUtilityPane
-                ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
-                : "Show the utility pane",
-        )
-    }
-
-    /// The tab bubbles and the pane toggle.
-    private var utilityHeader: some View {
-        HStack(spacing: Self.stripSpacing) {
-            // The tabs scroll when the pane narrows, so the toggle
-            // beside them can never be squeezed out.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip()
-                }
-            }
-            Spacer(minLength: 0)
-            utilityToggleButton
-                .fixedSize()
-        }
-        .padding(Self.stripSpacing)
-    }
-
     private func split(for item: WorktreeItem) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                sessionStrip(for: item, selection: $sessionTab)
+                sessionStrip(for: item)
                 primary(for: item)
             }
             // With the utility pane hidden its toggle overlays the
@@ -209,35 +216,44 @@ struct RootView: View {
         }
     }
 
+    /// One conversations UI everywhere: a live session shows its
+    /// terminal; anything else shows the conversation list, scoped
+    /// to the worktree or covering the whole repository on its page;
+    /// a worktree with nothing to list offers the new session form.
     @ViewBuilder
     private func primary(for item: WorktreeItem) -> some View {
-        if sessionTab == Self.activeTabID, let session = item.session {
+        if let session = item.session {
             TerminalPaneView(command: dependencies.service.attachCommand(sessionName: session.name))
                 .id(session.name)
-        } else if let past = item.pastSessions.first(where: { $0.id == sessionTab }) {
-            PastSessionPane(
-                past: past,
-                item: item,
-                onResumedHere: { await sessionStarted() },
-                dependencies: dependencies,
-            )
+                // Dropped files stage into the shared workspace (the
+                // sandbox cannot read host paths) and their staged
+                // paths type into the agent.
+                .dropDestination(for: URL.self) { urls, _ in
+                    dropFiles(urls, into: session.name)
+                }
         } else if item.worktree.path == item.worktree.repositoryPath {
-            // The repository page: its whole conversation history.
-            // It stays inside the top safe area: rising into the
-            // toolbar row left the header covered by the tab strip.
             RepositorySessionsView(
-                repository: Repository(
-                    name: item.worktree.repositoryName,
-                    path: item.worktree.repositoryPath,
-                    fullName: nil,
-                ),
+                repository: repository(of: item),
                 service: dependencies.service,
-            ) { await dependencies.dashboard.refresh() }
+                onNewSession: { newSession(for: item) },
+                onResumed: { await dependencies.dashboard.refresh() },
+            )
+        } else if item.pastSessions.isEmpty == false {
+            RepositorySessionsView(
+                repository: repository(of: item),
+                service: dependencies.service,
+                worktreePath: item.worktree.path,
+                onNewSession: { newSession(for: item) },
+                onResumed: { await sessionStarted() },
+            )
         } else {
             CreateSessionPane(
                 worktree: item.worktree,
                 model: dependencies.dashboard,
-            ) { await sessionStarted() }
+                canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
+                onResume: { await resumeLatest(in: item) },
+                onStarted: { await sessionStarted() },
+            )
         }
     }
 
@@ -314,10 +330,5 @@ struct RootView: View {
         }
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
-    }
-
-    private func sessionStarted() async {
-        await dependencies.dashboard.refresh()
-        sessionTab = Self.activeTabID
     }
 }

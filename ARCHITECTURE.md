@@ -134,7 +134,12 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
 
 - `TMUX_TMPDIR` is pinned to a fixed directory in the sandbox user's home,
   so every invocation finds the same server socket and nothing lives in
-  world-writable `/tmp`. The config is written by that same payload: a
+  world-writable `/tmp`. Development builds and test runners (anything
+  but the installed /Applications/AgentIDE.app) use
+  `~/.agentide/tmux-dev` and a `-dev` host shell name prefix instead,
+  and tests use throwaway per-run sockets, so building, testing and
+  development can never list or kill the installed app's sessions.
+  The config is written by that same payload: a
   file written by the host user would be unreadable across the sudo
   boundary. Its newlines travel as printf escapes, because `sudo --login`
   rebuilds the command line and collapses literal newlines.

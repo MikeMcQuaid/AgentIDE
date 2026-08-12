@@ -41,7 +41,10 @@ public struct TmuxClient: Sendable {
         self.runner = runner
         self.launcher = launcher
         self.isInsideSandbox = isInsideSandbox
-        self.socketDirectory = socketDirectory ?? launcher.sandboxHome + "/.agentide/tmux"
+        // Dev builds and tests get their own server socket, so they
+        // can never touch the installed app's sessions.
+        self.socketDirectory = socketDirectory ?? launcher.sandboxHome
+            + (WorkspacePaths.isProductionBuild ? "/.agentide/tmux" : "/.agentide/tmux-dev")
     }
 
     // MARK: Public
@@ -111,10 +114,9 @@ public struct TmuxClient: Sendable {
         try await tmux(["kill-session", "-t", name])
     }
 
-    // periphery:ignore - reserved for the planned emergency stop.
-    /// Kills the whole server.
-    public func killServer() async {
-        _ = try? await tmux(["kill-server"], allowFailure: true)
+    /// Types literal text into a session, as pasted input.
+    public func typeText(_ text: String, sessionName: String) async throws {
+        try await tmux(["send-keys", "-l", "-t", sessionName, text])
     }
 
     /// The argv a terminal view should spawn to attach interactively.
