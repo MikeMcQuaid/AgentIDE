@@ -134,10 +134,30 @@ public extension SessionService {
     }
 
     /// Kills the tmux session; worktree, transcript and metadata
-    /// survive so it stays resumable.
+    /// survive so it stays resumable. The deliberate close is
+    /// recorded so automatic resumes leave this worktree alone.
     func closeSession(sessionName: String, worktreePath: String) async throws {
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
+        var metadata = store.load()
+        if metadata.intentionallyClosed.contains(worktreePath) == false {
+            metadata.intentionallyClosed.append(worktreePath)
+        }
+        store.save(metadata)
         try await tmux.killSession(name: sessionName)
+    }
+
+    /// Whether the worktree's last session ended by explicit close,
+    /// so automatic resumes skip it.
+    func wasIntentionallyClosed(worktreePath: String) -> Bool {
+        store.load().intentionallyClosed.contains(worktreePath)
+    }
+
+    /// A session starting or resuming clears the deliberate-close
+    /// mark, so automatic resumes apply again afterwards.
+    internal func clearIntentionalClose(worktreePath: String) {
+        var metadata = store.load()
+        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
+        store.save(metadata)
     }
 
     /// Whether a closed session is recorded for a worktree, so panes
@@ -214,6 +234,7 @@ public extension SessionService {
                 try await tmux.sendPromptFile(promptFile, to: sessionName)
             }
         }
+        clearIntentionalClose(worktreePath: worktree.path)
     }
 
     /// Relaunches a past conversation in its own worktree, replacing
@@ -334,6 +355,7 @@ public extension SessionService {
         metadata.resumeIDs[sessionName] = resumeID
         metadata.sessionsByWorktree[worktreePath] = sessionName
         metadata.seenAt[worktreePath] = Date()
+        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
         store.save(metadata)
     }
 }

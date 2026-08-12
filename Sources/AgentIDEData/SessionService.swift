@@ -194,6 +194,7 @@ public struct SessionService: Sendable {
         metadata.arguments[sessionName] = arguments
         metadata.seenAt[slot.path] = Date()
         metadata.sessionsByWorktree[slot.path] = sessionName
+        metadata.intentionallyClosed.removeAll { $0 == slot.path }
         store.save(metadata)
         return sessionName
     }

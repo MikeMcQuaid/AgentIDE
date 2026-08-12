@@ -99,6 +99,24 @@ extension RootView {
         await dependencies.dashboard.refresh()
     }
 
+    /// Worktrees with a running session right now.
+    var runningWorktreePaths: Set<String> {
+        let items = dependencies.dashboard.groups.flatMap(\.items)
+        return Set(items.filter { $0.session?.status == .running }.map(\.worktree.path))
+    }
+
+    /// Resumes each session that was running at sleep and died with
+    /// it; the snapshot means surviving sessions stay untouched.
+    func resumeKilled(sleepSnapshot: Set<String>) async {
+        await dependencies.dashboard.refresh()
+        let items = dependencies.dashboard.groups.flatMap(\.items)
+        for path in sleepSnapshot.subtracting(runningWorktreePaths) {
+            if let item = items.first(where: { $0.worktree.path == path }) {
+                await resumeLatest(in: item)
+            }
+        }
+    }
+
     /// Stages dropped files where the sandbox can read them and
     /// types the staged paths into the session, ready to send.
     func dropFiles(_ urls: [URL], into sessionName: String) -> Bool {

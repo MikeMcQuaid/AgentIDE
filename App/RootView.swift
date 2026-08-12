@@ -47,10 +47,22 @@ struct RootView: View {
             }
         }
         .task {
+            FlavourIcon.apply()
             finderFocusRequest = 0
             runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
+        }
+        // Sleep sometimes kills the sandbox tmux server; sessions
+        // running at sleep that are gone at wake resume themselves,
+        // while surviving or deliberately closed ones are left alone.
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in
+            sessionsBeforeSleep = runningWorktreePaths
+        }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+            let snapshot = sessionsBeforeSleep
+            sessionsBeforeSleep = []
+            Task { await resumeKilled(sleepSnapshot: snapshot) }
         }
         // Idle sleep is blocked while any agent or shell runs, since
         // the machine sleeping mid-response cuts them off.
@@ -69,6 +81,7 @@ struct RootView: View {
             hasAutoResumed = true
             let stored = UserDefaults.standard.string(forKey: "selectedWorktreePath")
             guard item.worktree.path == stored, item.session == nil,
+                  dependencies.service.wasIntentionallyClosed(worktreePath: item.worktree.path) == false,
                   item.pastSessions.isEmpty == false
                   || dependencies.service.hasRecordedSession(worktreePath: item.worktree.path)
             else {
@@ -96,6 +109,10 @@ struct RootView: View {
     /// Whether the launch's one automatic resume has run, so later
     /// selection changes never launch anything by themselves.
     @State private var hasAutoResumed = false
+
+    /// The worktrees with running sessions when the machine slept,
+    /// so wake can resume exactly the ones sleep killed.
+    @State private var sessionsBeforeSleep: Set<String> = []
 
     /// Blocks idle sleep while agents or shells run, since sleeping
     /// mid-response cuts agents off.
@@ -135,9 +152,7 @@ struct RootView: View {
 
     /// Whether anything is running that idle sleep would interrupt.
     private var hasLiveWork: Bool {
-        runningShells.isEmpty == false || dependencies.dashboard.groups.contains { group in
-            group.items.contains { $0.session?.status == .running }
-        }
+        runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
     }
 
     @ViewBuilder private var detail: some View {
