@@ -602,10 +602,11 @@ host and in CI only, not inside the sandbox.
 CI ("GitHub Actions CI" in `.github/workflows/tests.yml`) runs the style
 checks on every push and pull request. The build-and-test job and the
 analyze job run in parallel on GitHub's Xcode 27 public-preview image
-(`runs-on: xcode-27`, arm64 only), each restoring its own cache of the
-derived data and Swift build directories keyed on `Package.resolved` and
-`project.yml`, and both assert Xcode 27 is present, failing rather than
-skipping, so a green run
+(`runs-on: xcode-27`, arm64 only), sharing one cache of the Swift package
+dependency checkouts keyed on `Package.resolved` (Homebrew formulae install
+uncached: the prefix is so large that saving and restoring it costs more
+than `brew install`), and both assert Xcode 27 is present, failing rather
+than skipping, so a green run
 always means the app built, the tests passed and static analysis was
 clean (R2).
 

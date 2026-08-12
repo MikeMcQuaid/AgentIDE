@@ -34,12 +34,6 @@ jobs:
           cask: false
           test-bot: false
 
-      - name: Cache Homebrew prefix
-        uses: Homebrew/actions/cache-homebrew-prefix@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
-        with:
-          brewfile: true
-          uninstall: true
-
       - name: Bootstrap
         run: script/bootstrap
 
@@ -62,12 +56,6 @@ jobs:
           cask: false
           test-bot: false
 
-      - name: Cache Homebrew prefix
-        uses: Homebrew/actions/cache-homebrew-prefix@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
-        with:
-          brewfile: true
-          uninstall: true
-
       - name: Select Xcode 27
         run: |
           xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
@@ -81,16 +69,15 @@ jobs:
       - name: Download Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
-      - name: Cache Swift build state
+      - name: Cache Swift package dependencies
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
-            .DerivedData
-            .build
-          key: ${{ runner.os }}-swift-tests-${{ hashFiles('Package.resolved', 'project.yml') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-swift-tests-${{ hashFiles('Package.resolved', 'project.yml') }}-
-            ${{ runner.os }}-swift-tests-
+            ~/Library/Caches/org.swift.swiftpm
+            .DerivedData/SourcePackages
+            .build/checkouts
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-
 
       - name: Bootstrap
         run: script/bootstrap
@@ -117,12 +104,6 @@ jobs:
           cask: false
           test-bot: false
 
-      - name: Cache Homebrew prefix
-        uses: Homebrew/actions/cache-homebrew-prefix@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
-        with:
-          brewfile: true
-          uninstall: true
-
       - name: Select Xcode 27
         run: |
           xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
@@ -136,16 +117,15 @@ jobs:
       - name: Download Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
-      # The analyzer's own clean build discards cached products, but
-      # restoring `.DerivedData` still spares the package fetches.
-      - name: Cache Swift build state
+      - name: Cache Swift package dependencies
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: .DerivedData
-          key: ${{ runner.os }}-swift-analyze-${{ hashFiles('Package.resolved', 'project.yml') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-swift-analyze-${{ hashFiles('Package.resolved', 'project.yml') }}-
-            ${{ runner.os }}-swift-analyze-
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .DerivedData/SourcePackages
+            .build/checkouts
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-
 
       - name: Bootstrap
         run: script/bootstrap
