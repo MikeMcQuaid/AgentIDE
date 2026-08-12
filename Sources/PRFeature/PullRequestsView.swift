@@ -4,7 +4,8 @@ import SwiftUI
 import TerminalUI
 
 /// The repository's pull requests: a paginated title list clicking
-/// through to each pull request's conversation and actions.
+/// through to each pull request's conversation and actions. The
+/// view renders and binds; PullRequestsModel owns the behaviour.
 public struct PullRequestsView: View {
     // MARK: Lifecycle
 
@@ -19,12 +20,19 @@ public struct PullRequestsView: View {
         store: MetadataStore,
         branch: String? = nil,
     ) {
-        self.repository = repository
         self.items = items
-        self.github = github
-        self.service = service
-        self.store = store
-        self.branch = branch
+        identity = repository.id + "#" + (branch ?? "")
+        makeModel = {
+            PullRequestsModel(
+                repository: repository,
+                branch: branch,
+                items: items,
+                github: github,
+                service: service,
+                store: store,
+            )
+        }
+        _model = State(initialValue: makeModel())
     }
 
     // MARK: Public
@@ -32,28 +40,35 @@ public struct PullRequestsView: View {
     /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
-            PullRequestScopePicker(scope: $scope)
+            PullRequestScopePicker(scope: $model.scope)
             Divider()
-            if let selected {
+            if let selected = model.selected {
                 conversation(for: selected)
             } else {
                 listView
             }
         }
         .safeAreaInset(edge: .bottom) { footer }
-        // The branch joins the identity so switching worktrees in
-        // the same repository reloads the list.
-        .task(id: repository.id + scopeIdentity + (branch ?? "")) { await reload() }
-        .task(id: repository.id) {
-            hasMergeQueue = await github.hasMergeQueue(repositoryPath: repository.path)
+        // The model is rebuilt whenever the repository or branch
+        // changes: state objects outlive view re-initialisation, so
+        // the last worktree's list would otherwise linger.
+        .task(id: identity) {
+            model = makeModel()
+            await model.loadMergeQueue()
         }
+        // The scope joins the reload identity so switching scopes
+        // refetches without rebuilding the model.
+        .task(id: identity + model.scopeIdentity) { await model.reload() }
+        .onChange(of: items) { model.items = items }
     }
 
-    // MARK: Private
+    // MARK: Internal
 
-    /// Fetches stay one page ahead of the visible one, so the pager
-    /// knows whether a next page exists.
-    private static let pageLookahead = 2
+    /// The repository's worktree items, forwarded into the model as
+    /// the dashboard polls so push and rebase states stay current.
+    let items: [WorktreeItem]
+
+    // MARK: Private
 
     /// The errors tab's position in the utility tab order, driven
     /// through the storage signal bus.
@@ -63,253 +78,70 @@ public struct PullRequestsView: View {
     @AppStorage("utilityTabIndex")
     private var utilityTabIndex = 0
 
-    @State private var scope: PullRequestScope = .worktree
-    @State private var summaries: [PullRequestSummary] = []
-    @State private var selected: PullRequestSummary?
-    @State private var isLoading = false
-    @State private var page = 0
-    @State private var fetchedLimit = 0
-    @State private var hasMergeQueue = false
-    @State private var status: String?
+    @State private var model: PullRequestsModel
 
-    private let repository: Repository
-    private let items: [WorktreeItem]
-    private let github: GitHubClient
-    private let service: SessionService
-    private let store: MetadataStore
-    private let branch: String?
+    /// The repository and branch as a task identity: it comes from
+    /// the view's own inputs, never the persisted model, so a
+    /// repository switch always rebuilds.
+    private let identity: String
 
-    private var cacheKey: String {
-        repository.path + "#" + scopeIdentity + "#" + (branch ?? "")
-    }
-
-    private var scopeIdentity: String {
-        String(describing: scope)
-    }
-
-    private var branchItem: WorktreeItem? {
-        items.first { $0.worktree.branch == branch }
-    }
-
-    /// Push makes sense with unpushed commits; nil upstream means
-    /// nothing was ever pushed.
-    private var canPush: Bool {
-        guard let item = branchItem else {
-            return false
-        }
-
-        return (item.aheadOfUpstream ?? 1) > 0
-    }
-
-    /// Opening a pull request makes sense until one is open; it
-    /// pushes first when needed.
-    private var canOpenPullRequest: Bool {
-        branchItem != nil
-            && summaries.contains { $0.headBranch == branch && $0.state == "OPEN" } == false
-    }
+    private let makeModel: () -> PullRequestsModel
 
     private var listView: some View {
         PullRequestListView(
-            summaries: summaries,
-            isLoading: isLoading,
-            hasMore: summaries.isEmpty == false && summaries.count == fetchedLimit,
-            stackDepth: { stackDepth(for: $0) },
-            onSelect: { select($0) },
-            page: $page,
+            summaries: model.summaries,
+            isLoading: model.isLoading,
+            hasMore: model.hasMore,
+            stackDepth: { model.stackDepth(for: $0) },
+            onSelect: { model.select($0) },
+            page: $model.page,
         )
-        // Visiting a page beyond the fetched data refetches with a
-        // higher limit; a short answer means there is no more.
-        .onChange(of: page) {
-            guard summaries.count == fetchedLimit,
-                  (page + 1) * PullRequestListView.pageSize >= summaries.count
-            else {
-                return
-            }
-
-            Task { await reload(extending: true) }
-        }
     }
 
     private var footer: some View {
         PullRequestFooterView(
-            canPush: canPush,
-            canOpenPullRequest: canOpenPullRequest,
-            canRebase: branchItem != nil,
-            status: status,
-            onPush: { Task { await push() } },
-            onOpenPullRequest: { Task { await ship() } },
-            onRebase: { Task { await rebaseSigned() } },
-            onRefresh: { Task { await reload(keepingSelection: true) } },
+            canPush: model.canPush,
+            canOpenPullRequest: model.canOpenPullRequest,
+            canRebase: model.branchItem != nil,
+            status: model.status,
+            onPush: { Task { await model.push() } },
+            onOpenPullRequest: { Task { await model.ship() } },
+            onRebase: {
+                Task {
+                    if await model.rebaseSigned() == false {
+                        utilityTabIndex = Self.errorsTabIndex
+                    }
+                }
+            },
+            onRefresh: { Task { await model.reload(keepingSelection: true) } },
         )
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
         PullRequestConversationPane(
             summary: summary,
-            canRemediate: worktree(for: summary) != nil,
-            stackDepth: stackDepth(for: summary),
-            hasMergeQueue: hasMergeQueue,
-            github: github,
-            repositoryPath: repository.path,
-            store: store,
-            onBack: { selected = nil },
+            canRemediate: model.worktree(for: summary) != nil,
+            stackDepth: model.stackDepth(for: summary),
+            hasMergeQueue: model.hasMergeQueue,
+            github: model.github,
+            repositoryPath: model.repository.path,
+            store: model.store,
+            onBack: { model.selected = nil },
             onAutomerge: {
-                act { try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number) }
+                model.act { try await model.github.enableAutomerge(
+                    repositoryPath: model.repository.path,
+                    number: summary.number,
+                )
+                }
             },
             onMerge: {
-                act { try await github.merge(repositoryPath: repository.path, number: summary.number) }
-            },
-            onRemediate: { act { try await remediate(summary) } },
-        )
-    }
-
-    private func ship() async {
-        guard let item = branchItem else {
-            return
-        }
-
-        do {
-            status = try await service.pushAndCreatePullRequest(worktree: item.worktree)
-            await reload(keepingSelection: true)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    private func push() async {
-        guard let item = branchItem else {
-            return
-        }
-
-        do {
-            try await service.push(worktree: item.worktree)
-            status = "Pushed."
-            await reload(keepingSelection: true)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    /// Rebases onto origin with signed commits; a failure aborted
-    /// the rebase already, so the errors tab opens with the cause.
-    private func rebaseSigned() async {
-        guard let item = branchItem else {
-            return
-        }
-
-        do {
-            try await service.rebaseSigned(worktree: item.worktree)
-            status = "Rebased onto origin."
-            await reload(keepingSelection: true)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-            utilityTabIndex = Self.errorsTabIndex
-        }
-    }
-
-    private func worktree(for summary: PullRequestSummary) -> Worktree? {
-        items.first { $0.worktree.branch == summary.headBranch }?.worktree
-    }
-
-    /// Opens a conversation and refreshes its header: the open
-    /// scope's light rows gain their status icons here.
-    private func select(_ summary: PullRequestSummary) {
-        selected = summary
-        Task {
-            let full = try? await github.pullRequestSummary(
-                repositoryPath: repository.path,
-                number: summary.number,
-            )
-            if let full, selected?.number == full.number {
-                selected = full
-            }
-        }
-    }
-
-    /// The stack size, following base branches that are other listed
-    /// pull requests' heads.
-    private func stackDepth(for summary: PullRequestSummary) -> Int {
-        let byHead = Dictionary(summaries.map { ($0.headBranch, $0) }) { first, _ in first }
-        var current = summary
-        var depth = 1
-        var seen = Set([current.headBranch])
-        while let next = byHead[current.baseBranch], seen.insert(next.headBranch).inserted {
-            depth += 1
-            current = next
-        }
-        return depth
-    }
-
-    /// The cached listing paints instantly while the fetch runs; a
-    /// kept selection is re-selected once the fetch answers, and a
-    /// single result opens its conversation directly. Extending
-    /// keeps the current page and raises the fetch limit.
-    private func reload(keepingSelection: Bool = false, extending: Bool = false) async {
-        let previous = keepingSelection ? selected?.number : nil
-        isLoading = true
-        if extending == false {
-            page = 0
-            selected = nil
-            summaries = store.load().pullRequestListsCache[cacheKey]?.summaries ?? []
-        }
-        defer { isLoading = false }
-        // Captured before the await: a slow answer for an already
-        // switched scope must neither show nor cache under the new
-        // scope's key.
-        let requested = cacheKey
-        do {
-            let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
-            let fetched = try await github.pullRequests(
-                repositoryPath: repository.path,
-                scope: scope.listScope(branch: branch),
-                limit: limit,
-            )
-            guard Task.isCancelled == false, requested == cacheKey else {
-                return
-            }
-
-            summaries = fetched
-            fetchedLimit = limit
-            var metadata = store.load()
-            metadata.pullRequestListsCache[requested] = CachedPullRequestList(summaries: fetched)
-            store.save(metadata)
-            if extending == false {
-                let chosen = fetched.first { $0.number == previous }
-                    ?? (fetched.count == 1 ? fetched.first : nil)
-                if let chosen {
-                    select(chosen)
+                model.act { try await model.github.merge(
+                    repositoryPath: model.repository.path,
+                    number: summary.number,
+                )
                 }
-            }
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    private func remediate(_ summary: PullRequestSummary) async throws {
-        guard let worktree = worktree(for: summary) else {
-            return
-        }
-
-        let context = await github.remediationContext(repositoryPath: repository.path, number: summary.number)
-        let prompt = """
-        Address the following review comments and failing checks on pull request #\(summary.number), \
-        then commit your fixes. Do not push.
-
-        \(context)
-        """
-        _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: .claudeCode)
-        status = "Fix agent launched for #\(summary.number)."
-    }
-
-    private func act(_ work: @escaping () async throws -> Void) {
-        Task {
-            do {
-                try await work()
-                status = "Done."
-                await reload(keepingSelection: true)
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-        }
+            },
+            onRemediate: { model.act { try await model.remediate(summary) } },
+        )
     }
 }

@@ -73,4 +73,24 @@ struct TranscriptReaderTests {
         #expect(entries.map(\.role) == [.user, .tool, .tool, .tool, .assistant])
         #expect(entries.map(\.text) == ["do it", "Bash: git status", "Read: /tmp/a.txt", "Task", "done"])
     }
+
+    @Test
+    func `parses codex rollout payloads into log entries`() throws {
+        let directory = try TestSupport.temporaryDirectory("codex-entries")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let transcript = directory + "/rollout-dddd.jsonl"
+        let lines = """
+        {"type":"session_meta","payload":{"cwd":"/worktrees/one","id":"session-1"}}
+        {"type":"response_item","payload":{"type":"user_message","message":"fix it"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"shell",\
+        "arguments":"ls"}}
+        {"type":"response_item","payload":{"type":"agent_message","message":"done"}}
+        {"type":"response_item","payload":{"type":"reasoning"}}
+        """
+        try lines.write(toFile: transcript, atomically: true, encoding: .utf8)
+
+        let entries = TranscriptReader().entries(in: URL(fileURLWithPath: transcript))
+        #expect(entries.map(\.role) == [.user, .tool, .assistant])
+        #expect(entries.map(\.text) == ["fix it", "shell: ls", "done"])
+    }
 }

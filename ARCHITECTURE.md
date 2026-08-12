@@ -576,8 +576,11 @@ Swift 6 strict concurrency and the type system at compile time; SwiftLint and
 SwiftFormat with every rule enabled at `script/style`; SwiftLint's analyzer
 (`unused_import`) plus periphery for dead code at `script/analyze`; and a
 test suite split into two tiers. Unit tests cover Domain's pure functions
-(`DiffParser`, `PatchBuilder`, `SessionName`) and Data decoders over
-fixtures. Integration tests exercise the real adapters end to end against
+(`DiffParser`, `PatchBuilder`, `SessionName`), Data decoders over fixtures
+and the feature view models, whose fetch and file-system calls are stored
+closures the tests replace with fakes, so listing, pagination, caching and
+button availability test without GitHub, transcripts or a window.
+Integration tests exercise the real adapters end to end against
 real `git` repositories, a real `tmux` server on a private socket and
 temporary workspaces, because the bugs that reach manual testing live in the
 seams: worktree listing under path canonicalisation, reverse-patch

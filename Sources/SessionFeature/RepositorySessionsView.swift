@@ -6,7 +6,8 @@ import TerminalUI
 /// The one conversations UI: every conversation of a repository, or
 /// of a single worktree when scoped, whether or not its worktree
 /// still exists. Selecting one shows its log; any of them can
-/// resume here or into a fresh worktree.
+/// resume here or into a fresh worktree. The view renders and
+/// binds; RepositorySessionsModel owns the behaviour.
 public struct RepositorySessionsView: View {
     // MARK: Lifecycle
 
@@ -21,11 +22,13 @@ public struct RepositorySessionsView: View {
         onNewSession: (@MainActor () -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
-        self.repository = repository
-        self.service = service
-        self.worktreePath = worktreePath
         self.onNewSession = onNewSession
         self.onResumed = onResumed
+        identity = repository.id + "#" + (worktreePath ?? "")
+        makeModel = {
+            RepositorySessionsModel(repository: repository, service: service, worktreePath: worktreePath)
+        }
+        _model = State(initialValue: makeModel())
     }
 
     // MARK: Public
@@ -36,16 +39,16 @@ public struct RepositorySessionsView: View {
     /// message never flashes before conversations arrive.
     public var body: some View {
         VStack(spacing: 0) {
-            if isResuming {
+            if model.isResuming {
                 ProgressView("Resuming conversation…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if hasLoaded == false {
+            } else if model.hasLoaded == false {
                 ProgressView("Loading conversations…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 header
                 Divider()
-                if sessions.isEmpty {
+                if model.sessions.isEmpty {
                     ContentUnavailableView(
                         "No conversations yet",
                         systemImage: "clock.arrow.circlepath",
@@ -59,12 +62,15 @@ public struct RepositorySessionsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // The worktree scope joins the identity, so switching
-        // between worktrees of one repository reloads the list.
-        .task(id: repository.id + (worktreePath ?? "")) {
-            hasLoaded = false
-            await reload()
-            hasLoaded = true
+        // The model is rebuilt whenever the repository or worktree
+        // scope changes: state objects outlive view
+        // re-initialisation, so the last scope's list would
+        // otherwise linger. The identity comes from the view's own
+        // inputs, never the persisted model, so a switch always
+        // rebuilds.
+        .task(id: identity) {
+            model = makeModel()
+            await model.load()
         }
     }
 
@@ -74,58 +80,37 @@ public struct RepositorySessionsView: View {
     private static let headerBottomPadding: CGFloat = 3
     private static let agentIconSize: CGFloat = 7
     private static let listHeight: CGFloat = 200
-    private static let locationComponents = 2
 
-    @State private var sessions: [(session: TranscriptSession, worktreePath: String)] = []
-    @State private var selected: TranscriptSession?
-    /// Fills the pane with progress the moment a resume starts.
-    @State private var isResuming = false
+    @State private var model: RepositorySessionsModel
 
-    /// False until the first listing answers, so the pane shows
-    /// loading rather than an empty message that fills in later.
-    @State private var hasLoaded = false
-
-    private let repository: Repository
-    private let service: SessionService
-    private let worktreePath: String?
+    private let identity: String
     private let onNewSession: (@MainActor () -> Void)?
     private let onResumed: @MainActor () async -> Void
-
-    private var selectionBinding: Binding<TranscriptSession?> {
-        Binding(get: { selected }, set: { selected = $0 })
-    }
-
-    /// The selected conversation's worktree, when it still exists.
-    private var selectedWorktreePath: String? {
-        guard let selected,
-              let path = sessions.first(where: { $0.session.id == selected.id })?.worktreePath,
-              FileManager.default.fileExists(atPath: path)
-        else {
-            return nil
-        }
-
-        return path
-    }
+    private let makeModel: () -> RepositorySessionsModel
 
     private var header: some View {
         HStack {
-            Text(worktreePath == nil ? "Conversations in \(repository.name)" : "Conversations in this worktree")
-                .font(.subheadline.weight(.semibold))
+            Text(
+                model.worktreePath == nil
+                    ? "Conversations in \(model.repository.name)"
+                    : "Conversations in this worktree",
+            )
+            .font(.subheadline.weight(.semibold))
             Spacer()
             if let onNewSession {
                 Button("New session", action: onNewSession)
                     .controlSize(.small)
                     .hoverHelp("Start a fresh agent session in this repository instead of resuming")
             }
-            Button("Resume here") { resumeSelectedHere() }
+            Button("Resume here") { model.resumeSelectedHere(onResumed: onResumed) }
                 .controlSize(.small)
-                .disabled(selectedWorktreePath == nil)
+                .disabled(model.selectedWorktreePath == nil)
                 .hoverHelp(
                     "Continue the selected conversation in the worktree it ran in; dimmed when that worktree is gone",
                 )
-            Button("Resume in new worktree") { resumeSelected() }
+            Button("Resume in new worktree") { model.resumeSelected(onResumed: onResumed) }
                 .controlSize(.small)
-                .disabled(selected == nil)
+                .disabled(model.selected == nil)
                 .hoverHelp("Create a fresh worktree and branch and continue the selected conversation there")
         }
         // Flush with the window's top: the page ignores the toolbar
@@ -136,7 +121,7 @@ public struct RepositorySessionsView: View {
     }
 
     private var list: some View {
-        List(sessions, id: \.session.id, selection: selectionBinding) { entry in
+        List(model.sessions, id: \.session.id, selection: $model.selected) { entry in
             HStack(spacing: Self.padding) {
                 Image(entry.session.agent.iconAssetName)
                     .resizable()
@@ -146,14 +131,14 @@ public struct RepositorySessionsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     // Untitled conversations borrow their worktree's
                     // name, never the transcript uuid.
-                    Text(title(of: entry))
+                    Text(model.title(of: entry))
                         .lineLimit(1)
                     HStack(spacing: Self.padding) {
                         Text(
                             Date(timeIntervalSince1970: TimeInterval(entry.session.modifiedAt)),
                             format: .relative(presentation: .named),
                         )
-                        Text(location(of: entry.worktreePath))
+                        Text(model.location(of: entry.worktreePath))
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -161,7 +146,7 @@ public struct RepositorySessionsView: View {
             }
             .tag(entry.session)
             .contextMenu {
-                Button("Delete conversation") { delete(entry.session) }
+                Button("Delete conversation") { model.delete(entry.session) }
                     .hoverHelp("Remove this conversation's transcript permanently")
             }
         }
@@ -171,96 +156,14 @@ public struct RepositorySessionsView: View {
     }
 
     @ViewBuilder private var log: some View {
-        if let selected {
-            TranscriptLogView(entries: service.transcriptEntries(for: selected))
+        if let selected = model.selected {
+            TranscriptLogView(entries: model.service.transcriptEntries(for: selected))
         } else {
             ContentUnavailableView(
                 "No conversation selected",
                 systemImage: "text.bubble",
                 description: Text("Pick a conversation above to read it."),
             )
-        }
-    }
-
-    /// The first user prompt, or the worktree's directory name for
-    /// untitled conversations.
-    private func title(of entry: (session: TranscriptSession, worktreePath: String)) -> String {
-        guard entry.session.title.isEmpty else {
-            return entry.session.title
-        }
-
-        return entry.worktreePath.split(separator: "/").last.map(String.init) ?? "Untitled conversation"
-    }
-
-    /// The worktree's readable tail; deleted locations are marked.
-    private func location(of path: String) -> String {
-        let tail = path.split(separator: "/").suffix(Self.locationComponents).joined(separator: "/")
-        let exists = FileManager.default.fileExists(atPath: path)
-        return exists ? tail : tail + " (deleted)"
-    }
-
-    private func reload() async {
-        var all = await service.repositorySessions(for: repository)
-        if let worktreePath {
-            all = all.filter { $0.worktreePath == worktreePath }
-        }
-        sessions = all
-        selected = sessions.first?.session
-    }
-
-    /// Removes a conversation's transcript for good.
-    private func delete(_ past: TranscriptSession) {
-        Task {
-            do {
-                try await service.deleteConversation(past)
-                await reload()
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-        }
-    }
-
-    private func resumeSelected() {
-        guard let selected else {
-            return
-        }
-
-        isResuming = true
-        Task {
-            do {
-                _ = try await service.resumeInNewWorktree(selected, repository: repository)
-                await onResumed()
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-            isResuming = false
-        }
-    }
-
-    /// Resumes the selected conversation in the worktree it ran in;
-    /// the branch only names the tmux session, so the path's last
-    /// component serves.
-    private func resumeSelectedHere() {
-        guard let selected, let path = selectedWorktreePath else {
-            return
-        }
-
-        isResuming = true
-        Task {
-            do {
-                let branch = path.split(separator: "/").last.map(String.init) ?? repository.name
-                let worktree = Worktree(
-                    repositoryName: repository.name,
-                    repositoryPath: repository.path,
-                    branch: branch,
-                    path: path,
-                )
-                _ = try await service.resumePast(selected, worktree: worktree)
-                await onResumed()
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-            isResuming = false
         }
     }
 }
