@@ -231,6 +231,7 @@ struct TerminalRepresentable: NSViewRepresentable {
         private var wheelMonitor: Any?
         private var started = false
         private var lastCursorRow = -1
+        private var candidateRow = -1
         private var userScrolledAt: Date = .distantPast
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
@@ -257,7 +258,19 @@ struct TerminalRepresentable: NSViewRepresentable {
 
             let terminal = terminalView.getTerminal()
             let row = terminal.getCursorLocation().y
-            guard row != lastCursorRow, terminal.rows > 0 else {
+            guard terminal.rows > 0 else {
+                return
+            }
+
+            // Full-screen programs park the cursor all over the
+            // screen mid-repaint, which typing triggers constantly;
+            // only a row seen on two consecutive samples counts as
+            // where output actually settled.
+            guard row == candidateRow else {
+                candidateRow = row
+                return
+            }
+            guard row != lastCursorRow else {
                 return
             }
 
