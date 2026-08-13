@@ -144,8 +144,8 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
   boundary. Its newlines travel as printf escapes, because `sudo --login`
   rebuilds the command line and collapses literal newlines.
 - The config sets `remain-on-exit on`, so a finished agent leaves a dead
-  pane whose exit status and scrollback remain inspectable, `mouse off`,
-  so the terminal view owns the mouse, and a 50000-line history limit.
+  pane whose exit status and scrollback remain inspectable, `mouse on`,
+  so the wheel scrolls tmux's history, and a 50000-line history limit.
 - Session names follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
   append `-2` to the branch component and tmux's forbidden `.` and `:` are
@@ -169,17 +169,11 @@ PTY:
   like the sidebar. tmux starts the user's default login
   shell, and because the server outlives its clients the shell survives
   pane switches and app restarts exactly like agent sessions do. In both,
-  tmux mouse reporting is off and the terminal view owns the mouse:
-  dragging selects natively and Cmd-C copies (agent panes reflow
-  multi-line copies for prose), with none of tmux's modal copy-mode.
-  The terminal is deliberately taller than the visible pane inside a
-  native scroll view: tmux believes the pane is that tall, so recent
-  history stays on the live screen where the wheel scrolls and selection
-  reaches it directly; the scrollable range ends where content ends,
-  growing as output does, and a viewport at the bottom sticks to it while
-  one scrolled away never moves by itself. History beyond that band
-  remains in
-  tmux, reachable with keyboard copy-mode (prefix then `[`). Both
+  the mouse belongs to tmux: the wheel scrolls tmux history (the
+  alternate screen leaves the outer terminal nothing to scroll), a drag
+  copies through copy-mode and OSC 52 (agent panes reflow multi-line
+  copies for prose) and Shift-drag falls back to a local selection with
+  Cmd-C; that is the price of sessions that outlive the app. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.

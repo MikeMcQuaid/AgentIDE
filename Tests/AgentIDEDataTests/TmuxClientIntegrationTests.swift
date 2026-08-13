@@ -14,7 +14,7 @@ struct TmuxClientIntegrationTests {
 
         #expect(prelude.contains("\n") == false)
         #expect(prelude.contains("\\n"))
-        #expect(prelude.contains("mouse off"))
+        #expect(prelude.contains("mouse on"))
         #expect(prelude.contains("history-limit"))
     }
 

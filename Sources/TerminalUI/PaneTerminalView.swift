@@ -32,22 +32,3 @@ final class PaneTerminalView: LocalProcessTerminalView {
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
     }
 }
-
-// MARK: - TerminalClipView
-
-/// The scroll view's document: a flipped, clipping window onto the
-/// top of the taller terminal, so the scrollable range ends where
-/// content ends instead of exposing the blank rows below it.
-final class TerminalClipView: NSView {
-    // MARK: Lifecycle
-
-    deinit {
-        // Nothing beyond subviews to release.
-    }
-
-    // MARK: Internal
-
-    override var isFlipped: Bool {
-        true
-    }
-}

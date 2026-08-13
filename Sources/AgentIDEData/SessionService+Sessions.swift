@@ -46,10 +46,11 @@ public extension SessionService {
         return [
             Self.hostTmuxPath, "-f", hostTmuxConfigFile(),
             "new-session", "-A", "-s", name, "-c", worktree.path,
-            ";", "set", "-g", "mouse", "off",
+            ";", "set", "-g", "mouse", "on",
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
+            ";", "set", "-s", "set-clipboard", "on",
         ]
     }
 
@@ -69,11 +70,12 @@ public extension SessionService {
         let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
         let file = directory + "/host-tmux.conf"
         let content = """
-        set -g mouse off
+        set -g mouse on
         set -g history-limit 50000
         set -g default-terminal xterm-256color
         set -g status off
         set -s set-clipboard on
+        set -as terminal-features xterm-256color:clipboard
         """
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try? content.write(toFile: file, atomically: true, encoding: .utf8)

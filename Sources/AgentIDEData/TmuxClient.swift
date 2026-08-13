@@ -111,20 +111,22 @@ public struct TmuxClient: Sendable {
 
     /// The argv a terminal view should spawn to attach interactively.
     /// Servers outlive app updates and only read their config file
-    /// at start, so the attach chain turns mouse reporting off live:
-    /// the terminal view owns selection, copying and wheel routing
-    /// natively, and tmux's modal copy-mode stays out of the way.
+    /// at start, so the attach chain applies the mouse and clipboard
+    /// options live and idempotently: the wheel scrolls tmux history
+    /// and copy-mode drags reach the macOS clipboard through OSC 52.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
             [
                 "tmux",
-                "set", "-g", "mouse", "off",
+                "set", "-g", "mouse", "on",
+                ";", "set", "-s", "set-clipboard", "on",
                 ";", "attach-session", "-t", sessionName,
             ]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux set -g mouse off ';'"
+                    + "; exec tmux set -g mouse on ';'"
+                    + " set -s set-clipboard on ';'"
                     + " attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
@@ -156,19 +158,20 @@ public struct TmuxClient: Sendable {
     private static let paneFormat =
         "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_current_path}"
 
-    /// The server's config: dead panes stay inspectable and the
-    /// history is deep enough to review a whole session. Mouse
-    /// reporting stays off: the terminal view owns selection,
-    /// copying and scrolling natively. `set-clipboard` keeps the
-    /// keyboard copy-mode escape hatch's yanks reaching the macOS
-    /// clipboard through OSC 52.
+    /// The server's config: dead panes stay inspectable, the mouse
+    /// wheel scrolls tmux's own history (the alternate screen leaves
+    /// the outer terminal nothing to scroll) and that history is
+    /// deep enough to review a whole session. `set-clipboard` with
+    /// the clipboard terminal feature makes copy-mode yanks reach
+    /// the macOS clipboard through OSC 52.
     private static let configContent = """
     set -g remain-on-exit on
-    set -g mouse off
+    set -g mouse on
     set -g history-limit 50000
     set -g default-terminal xterm-256color
     set -g status off
     set -s set-clipboard on
+    set -as terminal-features xterm-256color:clipboard
     """
 
     private let runner: any ProcessRunner
