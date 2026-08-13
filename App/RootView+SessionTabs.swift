@@ -211,6 +211,30 @@ extension RootView {
 // MARK: Utility tab content
 
 extension RootView {
+    /// The agent terminal: copies are prose, so multi-line copies
+    /// reflow for pasting into chat and pull request bodies.
+    func agentTerminal(for session: AgentSession) -> TerminalPaneView {
+        TerminalPaneView(
+            command: dependencies.service.attachCommand(sessionName: session.name),
+            reflowsCopies: true,
+            history: { await dependencies.service.captureAgentPane(sessionName: session.name) },
+            pagerProbe: { await dependencies.service.agentPaneIsPaging(sessionName: session.name) },
+        )
+    }
+
+    /// The host shell terminal; copies stay verbatim for code.
+    func shellTerminal(
+        for worktree: Worktree,
+        onExit: @escaping @MainActor () -> Void,
+    ) -> TerminalPaneView {
+        TerminalPaneView(
+            command: dependencies.service.hostShellCommand(worktree: worktree),
+            history: { await dependencies.service.captureHostShell(worktree: worktree) },
+            pagerProbe: { await dependencies.service.hostShellIsPaging(worktree: worktree) },
+            onProcessTerminated: onExit,
+        )
+    }
+
     /// The worktree the review surfaces describe: on the repository
     /// page, the conversation selected in the list wins, so clicking
     /// around conversations retargets Review and PRs.

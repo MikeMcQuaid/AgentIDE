@@ -133,7 +133,7 @@ public enum CodeHighlighter {
     /// linked into whichever image carries this code: the app, or a
     /// test bundle.
     private static let bundleContainers: [URL] = {
-        let anchor = Bundle(for: TerminalPaneView.Coordinator.self)
+        let anchor = Bundle(for: TerminalRepresentable.Coordinator.self)
         var containers = [URL]()
         if let resources = anchor.resourceURL {
             containers.append(resources)

@@ -257,20 +257,14 @@ struct RootView: View {
             ProgressView("Resuming conversation…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let session = item.session {
-            // Agent copies are prose, so multi-line yanks reflow for
-            // pasting into chat and pull request bodies; the host
-            // shell keeps its copies verbatim for code.
-            TerminalPaneView(
-                command: dependencies.service.attachCommand(sessionName: session.name),
-                reflowsCopies: true,
-            )
-            .id(session.name)
-            // Dropped files stage into the shared workspace (the
-            // sandbox cannot read host paths) and their staged
-            // paths type into the agent.
-            .dropDestination(for: URL.self) { urls, _ in
-                dropFiles(urls, into: session.name)
-            }
+            agentTerminal(for: session)
+                .id(session.name)
+                // Dropped files stage into the shared workspace (the
+                // sandbox cannot read host paths) and their staged
+                // paths type into the agent.
+                .dropDestination(for: URL.self) { urls, _ in
+                    dropFiles(urls, into: session.name)
+                }
         } else if item.worktree.path == item.worktree.repositoryPath {
             RepositorySessionsView(
                 repository: repository(of: item),
@@ -351,9 +345,7 @@ struct RootView: View {
     private func shellLayer(for item: WorktreeItem) -> some View {
         let path = item.worktree.path
         if runningShells.contains(path) {
-            TerminalPaneView(
-                command: dependencies.service.hostShellCommand(worktree: item.worktree),
-            ) {
+            shellTerminal(for: item.worktree) {
                 runningShells.remove(path)
                 runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }

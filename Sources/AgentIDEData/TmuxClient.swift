@@ -111,32 +111,54 @@ public struct TmuxClient: Sendable {
 
     /// The argv a terminal view should spawn to attach interactively.
     /// Servers outlive app updates and only read their config file
-    /// at start, so options added since the server began would never
-    /// apply; the attach chain applies the copy behaviour live and
-    /// idempotently: the clipboard option lets copy-mode yanks reach
-    /// the macOS clipboard, and drag-end copies without cancelling,
-    /// so selecting scrolled-back text does not snap to the bottom.
+    /// at start, so the attach chain turns mouse reporting off live:
+    /// the terminal view owns selection, copying and wheel routing
+    /// natively, and tmux's modal copy-mode stays out of the way.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
             [
                 "tmux",
-                "set", "-s", "set-clipboard", "on",
-                ";", "bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
-                ";", "bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
+                "set", "-g", "mouse", "off",
                 ";", "attach-session", "-t", sessionName,
             ]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux set -s set-clipboard on ';'"
-                    + " bind -T copy-mode MouseDragEnd1Pane send-keys -X copy-selection ';'"
-                    + " bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection ';'"
+                    + "; exec tmux set -g mouse off ';'"
                     + " attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
                 sessionName: sessionName,
             )
         }
+    }
+
+    /// The pane's whole text: visible screen plus scrollback, with
+    /// wrapped lines rejoined so copies paste cleanly. Feeds the
+    /// native scrollback viewer.
+    public func capturePane(sessionName: String) async -> String {
+        let result = try? await tmux(
+            ["capture-pane", "-p", "-J", "-S", "-50000", "-t", sessionName],
+            allowFailure: true,
+        )
+        guard let result, result.succeeded else {
+            return ""
+        }
+
+        return result.standardOutput
+    }
+
+    /// The command currently running in the pane, for wheel routing.
+    public func currentCommand(sessionName: String) async -> String? {
+        let result = try? await tmux(
+            ["display-message", "-p", "-t", sessionName, "#{pane_current_command}"],
+            allowFailure: true,
+        )
+        guard let result, result.succeeded else {
+            return nil
+        }
+
+        return result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: Internal
@@ -162,23 +184,17 @@ public struct TmuxClient: Sendable {
     private static let paneFormat =
         "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_current_path}"
 
-    /// The server's config: dead panes stay inspectable, the mouse
-    /// wheel scrolls tmux's own history (the alternate screen leaves
-    /// the outer terminal nothing to scroll) and that history is
-    /// deep enough to review a whole session.
-    /// `set-clipboard` with the clipboard terminal feature makes
-    /// copy-mode yanks (including mouse drags) reach the macOS
-    /// clipboard through OSC 52, which the terminal view forwards.
+    /// The server's config: dead panes stay inspectable and the
+    /// history is deep enough to review a whole session. Mouse
+    /// reporting stays off: the terminal view owns selection,
+    /// copying and wheel routing natively, and the scrollback viewer
+    /// reads history through `capture-pane`.
     private static let configContent = """
     set -g remain-on-exit on
-    set -g mouse on
+    set -g mouse off
     set -g history-limit 50000
     set -g default-terminal xterm-256color
     set -g status off
-    set -s set-clipboard on
-    set -as terminal-features xterm-256color:clipboard
-    bind -T copy-mode MouseDragEnd1Pane send-keys -X copy-selection
-    bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection
     """
 
     private let runner: any ProcessRunner

@@ -169,10 +169,15 @@ PTY:
   like the sidebar. tmux starts the user's default login
   shell, and because the server outlives its clients the shell survives
   pane switches and app restarts exactly like agent sessions do. In both,
-  scrollback is tmux's: the alternate screen leaves the outer terminal
-  nothing to scroll, so the mouse wheel scrolls tmux history (`mouse on`)
-  rather than a native scroller; that is the price of sessions that
-  outlive the app. Both
+  tmux mouse reporting is off and the terminal view owns the mouse:
+  dragging selects natively and Cmd-C copies (agent panes reflow
+  multi-line copies for prose), with none of tmux's modal copy-mode.
+  Scrollback is still tmux's (the alternate screen leaves the outer
+  terminal nothing to scroll), so wheel-up opens a native, selectable
+  scrollback viewer over the pane, read through `capture-pane` and
+  refreshable while the session keeps running underneath; while a pager
+  like `less` or `delta` is frontmost the wheel reaches it as arrow keys
+  instead. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.

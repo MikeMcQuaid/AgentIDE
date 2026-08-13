@@ -38,27 +38,28 @@ public extension SessionService {
     /// wheel-scrolls-history behaviour as the sandbox one, whose
     /// config file it does not read.
     func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = Self.hostShellPrefix
-            + SessionName.slug(worktree.repositoryName) + "-"
-            + SessionName.pathDigest(worktree.repositoryPath) + "--"
-            + SessionName.slug(worktree.branch)
-        // The config applies at server birth, before the first
-        // client connects and computes its terminal features; the
-        // chained commands repeat the options because a long-running
-        // server never rereads config. `-f` also keeps the user's
-        // own tmux config out of these app-managed sessions.
+        let name = hostShellName(worktree: worktree)
+        // The config applies at server birth; the chained commands
+        // repeat the options because a long-running server never
+        // rereads config. `-f` also keeps the user's own tmux config
+        // out of these app-managed sessions.
         return [
             Self.hostTmuxPath, "-f", hostTmuxConfigFile(),
             "new-session", "-A", "-s", name, "-c", worktree.path,
-            ";", "set", "-g", "mouse", "on",
+            ";", "set", "-g", "mouse", "off",
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
-            ";", "set", "-s", "set-clipboard", "on",
-            ";", "set", "-as", "terminal-features", "xterm-256color:clipboard",
-            ";", "bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
-            ";", "bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
         ]
+    }
+
+    /// The host tmux session name a worktree's shell uses, shared by
+    /// the attach command and the scrollback capture.
+    func hostShellName(worktree: Worktree) -> String {
+        Self.hostShellPrefix
+            + SessionName.slug(worktree.repositoryName) + "-"
+            + SessionName.pathDigest(worktree.repositoryPath) + "--"
+            + SessionName.slug(worktree.branch)
     }
 
     /// Writes the host shell server's config beside the app's other
@@ -68,14 +69,10 @@ public extension SessionService {
         let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
         let file = directory + "/host-tmux.conf"
         let content = """
-        set -g mouse on
+        set -g mouse off
         set -g history-limit 50000
         set -g default-terminal xterm-256color
         set -g status off
-        set -s set-clipboard on
-        set -as terminal-features xterm-256color:clipboard
-        bind -T copy-mode MouseDragEnd1Pane send-keys -X copy-selection
-        bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection
         """
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try? content.write(toFile: file, atomically: true, encoding: .utf8)
