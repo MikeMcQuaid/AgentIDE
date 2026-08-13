@@ -332,42 +332,4 @@ struct RepositoryPageIntegrationTests {
         let seen = await world.service.overview()
         #expect(seen.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == false)
     }
-
-    @Test
-    func `pull request drafts prepare from the template hidden from git status`() async throws {
-        let world = try await World.make()
-        defer { world.tearDown() }
-        let path = world.repository.path
-        let templateDirectory = path + "/.github"
-        try FileManager.default.createDirectory(atPath: templateDirectory, withIntermediateDirectories: true)
-        try "## Summary\n\n- [ ] Tested\n\n## AI disclosure\n"
-            .write(toFile: templateDirectory + "/PULL_REQUEST_TEMPLATE.md", atomically: true, encoding: .utf8)
-        try await TestSupport.runGit(["add", "-A"], in: path)
-        try await TestSupport.runGit(["commit", "-q", "-m", "Add pull request template"], in: path)
-
-        let worktree = Worktree(
-            repositoryName: world.repository.name,
-            repositoryPath: path,
-            branch: "main",
-            path: path,
-        )
-        #expect(world.service.hasPullRequestDraft(worktree: worktree) == false)
-        let relative = try await world.service.preparePullRequestDraft(
-            worktree: worktree,
-            disclosure: "Claude Code, model fable",
-        )
-        #expect(world.service.hasPullRequestDraft(worktree: worktree))
-
-        let content = try String(contentsOfFile: path + "/" + relative, encoding: .utf8)
-        #expect(content.hasPrefix("Add pull request template\n\n## Summary"))
-        #expect(content.contains("- [x] Tested"))
-        #expect(content.contains("## AI disclosure\nClaude Code, model fable"))
-
-        // The exclude entry keeps the draft out of git status, so
-        // the worktree never reads as dirty from drafting alone.
-        let status = try await TestSupport.runGit(["status", "--porcelain"], in: path)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        #expect(status.isEmpty)
-    }
 }

@@ -435,6 +435,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
 7. One-click remediation composes existing flows: fetch failing check logs
    and review comments natively, write them into a prompt file and launch a
    fix agent in the same worktree.
+8. Push and rebase together enforce that every pushed commit is GPG
+   signed: agents in the sandbox cannot sign or push and a local hook
+   blocks unsigned pushes, so the host is where signatures happen. Push
+   dims until the tip commit verifies and the service refuses regardless.
+   The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
+   base to sign the minimum: the branch's own origin ref when it exists,
+   every commit unique to it verifies and only new local commits need
+   signatures, keeping pushed history's hashes; otherwise origin/HEAD,
+   re-signing the whole branch.
 
 ### Cleanup (Tidy up)
 

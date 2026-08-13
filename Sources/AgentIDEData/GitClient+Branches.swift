@@ -17,6 +17,50 @@ public extension GitClient {
         return name
     }
 
+    /// Whether a commit carries a verifying GPG signature: good, or
+    /// good from a key git does not trust. Unsigned, bad and
+    /// unverifiable signatures all fail, keeping the push gate shut
+    /// when in doubt.
+    func isCommitSigned(worktreePath: String, ref: String = "HEAD") async -> Bool {
+        let state = try? await git(["log", "-1", "--format=%G?", ref], in: worktreePath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.signedStates.contains(state ?? "")
+    }
+
+    /// Whether every commit in a range carries a verifying
+    /// signature; an empty range counts as signed and an unreadable
+    /// one does not.
+    func allCommitsSigned(worktreePath: String, range: String) async -> Bool {
+        guard let output = try? await git(["log", "--format=%G?", range], in: worktreePath)
+            .standardOutput
+        else {
+            return false
+        }
+
+        return output.split(separator: "\n").allSatisfy { Self.signedStates.contains(String($0)) }
+    }
+
+    /// Whether origin already carries the branch, after a fetch.
+    func remoteBranchExists(worktreePath: String, branch: String) async -> Bool {
+        let result = try? await git(
+            ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return result?.succeeded ?? false
+    }
+
+    /// How many commits a range spans, nil when unreadable.
+    func commitCount(worktreePath: String, range: String) async -> Int? {
+        let result = try? await git(["rev-list", "--count", range], in: worktreePath, allowFailure: true)
+        guard let result, result.succeeded else {
+            return nil
+        }
+
+        return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     /// Hides a path from git status for this clone only: the exclude
     /// file lives in the common git directory, shared by every
     /// worktree, and nothing tracked changes.
@@ -34,5 +78,11 @@ public extension GitClient {
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let separator = existing.isEmpty || existing.hasSuffix("\n") ? "" : "\n"
         try (existing + separator + pattern + "\n").write(toFile: file, atomically: true, encoding: .utf8)
+    }
+
+    /// The `%G?` states that count as signed: a good signature, or a
+    /// good one from an untrusted key.
+    private static var signedStates: Set<String> {
+        ["G", "U"]
     }
 }

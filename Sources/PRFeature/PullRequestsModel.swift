@@ -58,6 +58,9 @@ final class PullRequestsModel {
         performRebase = { worktree in
             try await service.rebaseSigned(worktree: worktree)
         }
+        checkTipSigned = { path in
+            await service.isTipSigned(worktreePath: path)
+        }
         currentBranch = branch
     }
 
@@ -96,6 +99,11 @@ final class PullRequestsModel {
     /// extension and reload.
     var hasDraft = false
 
+    /// Whether the tip commit is GPG signed, refreshed on reload;
+    /// pushing unsigned commits is never allowed, so Push dims until
+    /// Rebase on origin signs the branch.
+    private(set) var isTipSigned = true
+
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
 
@@ -123,6 +131,7 @@ final class PullRequestsModel {
     var createFromDraft: (Worktree) async throws -> String
     var performPush: (Worktree) async throws -> Void
     var performRebase: (Worktree) async throws -> Void
+    var checkTipSigned: (String) async -> Bool
 
     let service: SessionService
 
@@ -160,13 +169,25 @@ final class PullRequestsModel {
     }
 
     /// Push makes sense with unpushed commits that this tab has not
-    /// already pushed; nil upstream means nothing was ever pushed.
+    /// already pushed and a GPG-signed tip; nil upstream means
+    /// nothing was ever pushed.
     var canPush: Bool {
-        guard let item = branchItem, isPushed == false else {
+        guard let item = branchItem, isPushed == false, isTipSigned else {
             return false
         }
 
         return (item.aheadOfUpstream ?? 1) > 0
+    }
+
+    /// Why Push is in its current state, for the button's hover.
+    var pushHelp: String {
+        guard isTipSigned else {
+            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
+        }
+
+        return canPush
+            ? "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
+            : "Everything is already pushed"
     }
 
     /// Opening a pull request makes sense until one is open for the
@@ -189,6 +210,7 @@ final class PullRequestsModel {
         isLoading = true
         if let worktree = branchItem?.worktree {
             hasDraft = checkDraft(worktree)
+            isTipSigned = await checkTipSigned(worktree.path)
             if let live = await fetchCurrentBranch(worktree.path) {
                 currentBranch = live
             }

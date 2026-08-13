@@ -113,6 +113,7 @@ public struct PullRequestsView: View {
             canOpenPullRequest: model.canOpenPullRequest,
             canRebase: model.branchItem != nil,
             hasDraft: model.hasDraft,
+            pushHelp: model.pushHelp,
             status: model.status,
             onRebase: {
                 Task {

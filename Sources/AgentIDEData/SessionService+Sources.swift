@@ -142,10 +142,34 @@ public extension SessionService {
         try await git.fetchAndReset(repositoryPath: repository.path)
     }
 
-    /// Rebases the worktree onto origin's default branch with every
-    /// commit re-signed, aborting cleanly on conflict.
+    /// Fetches, then rebases the worktree onto the signed-rebase
+    /// target with every replayed commit re-signed, aborting cleanly
+    /// on conflict. This is how unsigned agent commits become
+    /// pushable: the sandbox cannot sign and a hook blocks unsigned
+    /// pushes, so signing always happens here on the host.
     func rebaseSigned(worktree: Worktree) async throws {
-        try await git.rebaseSignedOntoOrigin(worktreePath: worktree.path)
+        try await git.fetch(repositoryPath: worktree.path)
+        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+        let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
+        try await git.rebaseSigned(worktreePath: worktree.path, onto: target)
+    }
+
+    /// The ref a signed rebase lands on. The branch's own origin ref
+    /// wins when it exists, every commit unique to it verifies and
+    /// local commits sit on top needing signatures: rebasing there
+    /// signs only the new commits, so pushed history keeps its
+    /// hashes. Anything else falls back to origin/HEAD, re-signing
+    /// the whole branch.
+    func signedRebaseTarget(worktreePath: String, branch: String) async -> String {
+        let remote = "origin/" + branch
+        guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch),
+              await git.allCommitsSigned(worktreePath: worktreePath, range: "origin/HEAD.." + remote),
+              await (git.commitCount(worktreePath: worktreePath, range: remote + "..HEAD") ?? 0) > 0
+        else {
+            return "origin/HEAD"
+        }
+
+        return remote
     }
 
     /// A repository's recency for sidebar ordering: its worktrees
