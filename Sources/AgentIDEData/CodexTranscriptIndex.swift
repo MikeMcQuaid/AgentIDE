@@ -44,16 +44,25 @@ struct CodexTranscriptIndex {
     }
 
     private struct Payload: Decodable {
+        // Absent from the JSON when a payload carries no content.
+        // swiftlint:disable:next discouraged_optional_collection
+        let content: [Content]?
         let type: String?
+        let role: String?
         let cwd: String?
         let id: String?
         let sessionID: String?
         let message: String?
     }
 
-    /// Heads are enough for the metadata and the first user message;
-    /// whole rollout files can be large.
-    private static let headBytes = 65_536
+    private struct Content: Decodable {
+        let text: String?
+    }
+
+    /// Heads are enough for the metadata and the first typed user
+    /// message, which sits after Codex's large injected instruction
+    /// and world-state lines; whole rollout files are larger still.
+    private static let headBytes = 262_144
 
     /// The most sessions kept indexed, newest first.
     private static let entryCap = 2_000
@@ -87,8 +96,8 @@ struct CodexTranscriptIndex {
                 workingDirectory = payload.cwd
                 sessionID = payload.id ?? payload.sessionID
             }
-            if line.payload?.type == "user_message", let message = line.payload?.message {
-                title = message
+            if let typed = Self.typedUserMessage(line.payload) {
+                title = typed
                     .split(separator: "\n")
                     .first
                     .map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
@@ -105,6 +114,30 @@ struct CodexTranscriptIndex {
             sessionID: sessionID,
             title: title,
         )
+    }
+
+    /// The text the user actually typed, from either rollout
+    /// generation: current `message` payloads with a user role and
+    /// content array, or the older flat `user_message`; Codex's
+    /// injected instruction preambles do not count.
+    private static func typedUserMessage(_ payload: Payload?) -> String? {
+        guard let payload else {
+            return nil
+        }
+
+        if payload.type == "user_message", let message = payload.message {
+            return message
+        }
+        guard payload.type == "message", payload.role == "user" else {
+            return nil
+        }
+
+        let text = (payload.content ?? []).compactMap(\.text).joined(separator: "\n")
+        guard text.isEmpty == false, TranscriptReader.isInjectedCodexContext(text) == false else {
+            return nil
+        }
+
+        return text
     }
 
     /// Every session file under the root, parsed or served from the

@@ -79,20 +79,37 @@ struct TranscriptReaderTests {
         let directory = try TestSupport.temporaryDirectory("codex-entries")
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let transcript = directory + "/rollout-dddd.jsonl"
+        // The first half is the current rollout generation, the
+        // second the older flat one; both stay readable.
         let lines = """
         {"type":"session_meta","payload":{"cwd":"/worktrees/one","id":"session-1"}}
-        {"type":"response_item","payload":{"type":"user_message","message":"fix it"}}
+        {"type":"response_item","payload":{"type":"message","role":"developer",\
+        "content":[{"type":"input_text","text":"skills preamble"}]}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"# AGENTS.md instructions for /w\\ninjected"}]}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"fix it"}]}}
+        {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec",\
+        "input":"pwd && ls\\nsecond line"}}
+        {"type":"response_item","payload":{"type":"custom_tool_call_output","output":"files"}}
+        {"type":"response_item","payload":{"type":"message","role":"assistant",\
+        "content":[{"type":"output_text","text":"done"}]}}
+        {"type":"response_item","payload":{"type":"reasoning"}}
+        {"type":"event_msg","payload":{"type":"token_count"}}
+        {"type":"response_item","payload":{"type":"user_message","message":"legacy prompt"}}
         {"type":"response_item","payload":{"type":"function_call","name":"shell",\
         "arguments":"ls"}}
         {"type":"response_item","payload":{"type":"function_call","name":"noargs",\
         "arguments":""}}
-        {"type":"response_item","payload":{"type":"agent_message","message":"done"}}
-        {"type":"response_item","payload":{"type":"reasoning"}}
+        {"type":"response_item","payload":{"type":"agent_message","message":"legacy done"}}
         """
         try lines.write(toFile: transcript, atomically: true, encoding: .utf8)
 
         let entries = TranscriptReader().entries(in: URL(fileURLWithPath: transcript))
-        #expect(entries.map(\.role) == [.user, .tool, .tool, .assistant])
-        #expect(entries.map(\.text) == ["fix it", "shell: ls", "noargs", "done"])
+        #expect(entries.map(\.role) == [.user, .tool, .assistant, .user, .tool, .tool, .assistant])
+        #expect(entries.map(\.text) == [
+            "fix it", "exec: pwd && ls", "done",
+            "legacy prompt", "shell: ls", "noargs", "legacy done",
+        ])
     }
 }
