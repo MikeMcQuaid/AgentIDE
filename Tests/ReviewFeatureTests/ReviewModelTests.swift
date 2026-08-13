@@ -35,6 +35,37 @@ struct ReviewModelTests {
         #expect(model.showsUncommitted)
     }
 
+    @Test
+    func `upstream scope gates on a pushed branch and diffs against it`() async throws {
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-upstream-" + UUID().uuidString, isDirectory: true)
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+
+        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        model.scope = .upstream
+        await model.reload()
+        #expect(model.hasUpstream == false)
+        #expect(model.files.isEmpty)
+        #expect(model.status == "This branch has not been pushed yet.")
+
+        let bare = path + "-origin.git"
+        defer { try? FileManager.default.removeItem(atPath: bare) }
+        try await runGit(["init", "-q", "--bare", bare], in: path)
+        try await runGit(["remote", "add", "origin", bare], in: path)
+        try await runGit(["push", "-q", "-u", "origin", "main"], in: path)
+        try "unpushed\n".write(toFile: path + "/unpushed.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+        try await runGit(["commit", "-q", "-m", "Add unpushed file"], in: path)
+
+        await model.reload()
+        #expect(model.hasUpstream)
+        #expect(model.files.map(\.path) == ["unpushed.txt"])
+        #expect(model.branchCommits.count == 1)
+    }
+
     // MARK: Private
 
     private func makeRepository(at path: String) async throws {

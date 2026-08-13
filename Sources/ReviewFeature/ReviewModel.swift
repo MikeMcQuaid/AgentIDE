@@ -32,6 +32,9 @@ final class ReviewModel {
         case uncommitted
         /// The last commit.
         case lastCommit
+        /// Commits not yet on the branch's own origin ref; only
+        /// available once the branch has been pushed.
+        case upstream
         /// Every commit on the branch against its merge base: the
         /// open pull request's base branch, or the default branch.
         case branch
@@ -68,6 +71,11 @@ final class ReviewModel {
     /// The branch scope's commits, newest first, one line each.
     private(set) var branchCommits: [String] = []
 
+    /// Whether the checked-out branch has its own origin ref, so
+    /// the upstream scope has something to diff against; refreshed
+    /// on every reload.
+    private(set) var hasUpstream = false
+
     /// The files to display, generated ones filtered unless revealed.
     var visibleFiles: [DiffFile] {
         showsGenerated ? files : files.filter { isGenerated($0.path) == false }
@@ -81,6 +89,13 @@ final class ReviewModel {
     /// Loads the scope's diff.
     func reload() async {
         selections = [:]
+        let currentBranch = await git.currentBranch(worktreePath: worktreePath)
+        hasUpstream =
+            if let currentBranch {
+                await git.remoteBranchExists(worktreePath: worktreePath, branch: currentBranch)
+            } else {
+                false
+            }
         do {
             switch scope {
             case .uncommitted:
@@ -90,6 +105,19 @@ final class ReviewModel {
             case .lastCommit:
                 showsUncommitted = false
                 files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
+
+            case .upstream:
+                showsUncommitted = false
+                branchCommits = []
+                guard let currentBranch, hasUpstream else {
+                    status = "This branch has not been pushed yet."
+                    files = []
+                    return
+                }
+
+                let upstreamRef = "origin/" + currentBranch
+                branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: upstreamRef)
+                files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: upstreamRef))
 
             case .branch:
                 showsUncommitted = false

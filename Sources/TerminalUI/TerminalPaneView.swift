@@ -8,12 +8,19 @@ public struct TerminalPaneView: NSViewRepresentable {
     // MARK: Lifecycle
 
     /// Creates a terminal that runs an argv; the argv itself decides
-    /// its working directory. `onProcessTerminated` fires on the main
-    /// actor when the process exits, letting owners show a restart
-    /// affordance instead of a dead pane.
+    /// its working directory. `reflowsCopies` reflows multi-line
+    /// clipboard yanks for pasting into prose tools, for panes whose
+    /// copies are prose rather than code. `onProcessTerminated`
+    /// fires on the main actor when the process exits, letting
+    /// owners show a restart affordance instead of a dead pane.
     @preconcurrency
-    public init(command: [String], onProcessTerminated: (@MainActor () -> Void)? = nil) {
+    public init(
+        command: [String],
+        reflowsCopies: Bool = false,
+        onProcessTerminated: (@MainActor () -> Void)? = nil,
+    ) {
         self.command = command
+        self.reflowsCopies = reflowsCopies
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -67,6 +74,10 @@ public struct TerminalPaneView: NSViewRepresentable {
         /// What the observer starts once the view has real bounds.
         weak var pendingView: LocalProcessTerminalView?
         var pendingCommand: [String] = []
+
+        /// Retains the copy reflower the view only holds weakly as
+        /// its delegate; deliberately strong for exactly that reason.
+        var copyReflower: ReflowingCopyDelegate?
 
         let onProcessTerminated: (@MainActor () -> Void)?
 
@@ -136,6 +147,13 @@ public struct TerminalPaneView: NSViewRepresentable {
         let view = LocalProcessTerminalView(frame: .zero)
         view.processDelegate = context.coordinator
         view.font = CodeStyle.nsFont
+        if reflowsCopies {
+            // The delegate is weakly held by the view, so the
+            // coordinator keeps it alive.
+            let reflower = ReflowingCopyDelegate(base: view)
+            context.coordinator.copyReflower = reflower
+            view.terminalDelegate = reflower
+        }
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(command, in: view)
         return view
@@ -156,6 +174,7 @@ public struct TerminalPaneView: NSViewRepresentable {
     // MARK: Private
 
     private let command: [String]
+    private let reflowsCopies: Bool
     private let onProcessTerminated: (@MainActor () -> Void)?
 
     /// Black on white in light mode, white on black in dark mode; the

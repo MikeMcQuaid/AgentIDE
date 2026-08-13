@@ -91,6 +91,15 @@ public struct ReviewView: View {
             help: "Review the last commit",
         )
         scopeButton(
+            .upstream,
+            systemImage: "icloud.and.arrow.up",
+            title: "Upstream",
+            help: model.hasUpstream
+                ? "Review commits not yet pushed to this branch's origin ref"
+                : "Dimmed until this branch has been pushed",
+            disabled: model.hasUpstream == false,
+        )
+        scopeButton(
             .branch,
             systemImage: "arrow.triangle.branch",
             title: "Branch",
@@ -107,7 +116,8 @@ public struct ReviewView: View {
         iconButton(
             "arrow.uturn.backward",
             help: "Reject the selected lines: reverse-apply them and amend the commit",
-            disabled: model.selections.values.allSatisfy(\.isEmpty) || model.scope == .branch,
+            disabled: model.selections.values.allSatisfy(\.isEmpty)
+                || model.scope == .branch || model.scope == .upstream,
         ) { Task { await model.rejectSelected() } }
         iconButton("arrow.clockwise", help: "Reload the diff from git") {
             Task { await model.reload() }
@@ -131,10 +141,10 @@ public struct ReviewView: View {
         }
     }
 
-    /// Last commit scope edits the message; branch scope lists every
-    /// commit under review instead.
+    /// Last commit scope edits the message; the multi-commit scopes
+    /// list every commit under review instead.
     @ViewBuilder private var footer: some View {
-        if model.scope == .branch {
+        if model.scope == .branch || model.scope == .upstream {
             VStack(alignment: .leading, spacing: Self.commitListSpacing) {
                 Text("Commits under review").font(.headline)
                 ScrollView {
@@ -225,8 +235,9 @@ public struct ReviewView: View {
         systemImage: String,
         title: String,
         help: String,
+        disabled: Bool = false,
     ) -> some View {
-        iconButton(systemImage, help: help, title: title, isOn: model.scope == scope) {
+        iconButton(systemImage, help: help, title: title, isOn: model.scope == scope, disabled: disabled) {
             model.scope = scope
             collapseOverrides = [:]
             Task { await model.reload() }

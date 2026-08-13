@@ -1,10 +1,10 @@
 /// The tabs of the utility pane beside the agent.
 enum UtilityTab: CaseIterable {
-    case shell
     case review
     case pullRequests
-    case editor
     case browser
+    case editor
+    case shell
     case errors
 
     // MARK: Internal

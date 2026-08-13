@@ -17,7 +17,7 @@ extension RootView {
 
     var utilityTab: UtilityTab {
         let tabs = UtilityTab.allCases
-        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .shell
+        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .review
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
