@@ -44,10 +44,7 @@ public extension SessionService {
     /// prechecked and any AI disclosure filled. Returns the draft's
     /// worktree-relative path.
     func preparePullRequestDraft(worktree: Worktree, disclosure: String?) async throws -> String {
-        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
-            .split(separator: "\n")
-            .first
-            .map(String.init) ?? ""
+        let title = await pullRequestDraftTitle(worktree: worktree)
         let template = GitHubClient.pullRequestTemplate(in: worktree.path)
             .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
         let content = PullRequestDraft.compose(title: title, template: template, disclosure: disclosure)
@@ -58,6 +55,23 @@ public extension SessionService {
         )
         try await git.excludeLocally(pattern: Self.pullRequestDraftFile, worktreePath: worktree.path)
         return Self.pullRequestDraftFile
+    }
+
+    /// The draft's starting title: a branch with several commits
+    /// gets the on-device model's summary of their subjects, and
+    /// anything else (a single commit, no origin, no model) gets the
+    /// most recent commit's subject.
+    private func pullRequestDraftTitle(worktree: Worktree) async -> String {
+        let lastSubject = await (try? git.lastCommitMessage(worktreePath: worktree.path))?
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+        let subjects = await git.commitSubjects(worktreePath: worktree.path, baseRef: "origin/HEAD")
+        guard subjects.count > 1 else {
+            return subjects.first ?? lastSubject
+        }
+
+        return await summariser.pullRequestTitle(for: subjects) ?? subjects.first ?? lastSubject
     }
 
     /// Pushes and opens the pull request from the saved draft,

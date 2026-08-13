@@ -80,6 +80,22 @@ public extension GitClient {
         try (existing + separator + pattern + "\n").write(toFile: file, atomically: true, encoding: .utf8)
     }
 
+    /// The branch's commit subjects beyond a base ref, newest
+    /// first; empty when the base is unknown, as on a repository
+    /// never pushed.
+    func commitSubjects(worktreePath: String, baseRef: String) async -> [String] {
+        let result = try? await git(
+            ["log", "--format=%s", baseRef + "..HEAD"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        guard let result, result.succeeded else {
+            return []
+        }
+
+        return result.standardOutput.split(separator: "\n").map(String.init)
+    }
+
     /// The branch's commits beyond the base ref, newest first, one
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {

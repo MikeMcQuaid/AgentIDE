@@ -6,17 +6,17 @@ public enum PasteableText {
     // MARK: Public
 
     /// The reflowed text; single lines just lose surrounding
-    /// whitespace.
+    /// whitespace and gutter marks.
     public static func reflow(_ text: String) -> String {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.contains("\n") else {
-            return content
+            return strippingGutter(content)
         }
 
         var blocks = [(text: String, isListItem: Bool)]()
         var current: (text: String, isListItem: Bool)?
         for raw in content.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = raw.trimmingCharacters(in: .whitespaces)
+            let line = strippingGutter(String(raw))
             if line.isEmpty {
                 if let block = current {
                     blocks.append(block)
@@ -51,13 +51,28 @@ public enum PasteableText {
         return result
     }
 
+    /// A line without its leading gutter marks (the block glyphs
+    /// terminal interfaces draw down their left edge) or
+    /// surrounding whitespace.
+    public static func strippingGutter(_ line: String) -> String {
+        var trimmed = line.trimmingCharacters(in: .whitespaces)
+        while let first = trimmed.first, Self.gutterMarks.contains(first) {
+            trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+        return trimmed
+    }
+
     // MARK: Private
+
+    /// The block glyphs terminal interfaces use as gutters and
+    /// borders.
+    private static let gutterMarks: Set<Character> = ["▎", "▏", "▍", "│", "┃"]
 
     /// Bullets, quotes and numbered items start their own lines and
     /// swallow their wrapped continuations.
     private static func isListItem(_ line: String) -> Bool {
-        for marker in ["- ", "* ", "+ ", "• ", "· ", "◦ ", "▸ ", "☐ ", "☒ ", "> "]
-            where line.hasPrefix(marker) {
+        let markers = ["- ", "* ", "+ ", "• ", "· ", "◦ ", "▸ ", "☐ ", "☒ ", "> "]
+        if markers.contains(where: { line.hasPrefix($0) }) {
             return true
         }
         let digits = line.prefix(while: \.isNumber)

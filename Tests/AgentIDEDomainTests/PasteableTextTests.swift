@@ -43,6 +43,14 @@ struct PasteableTextTests {
     }
 
     @Test
+    func `gutter marks trim from lines and single copies`() {
+        #expect(PasteableText.strippingGutter("\u{258E} hello") == "hello")
+        #expect(PasteableText.strippingGutter("\u{258E}\u{258E} nested") == "nested")
+        #expect(PasteableText.reflow("\u{258E} first line\n\u{258E} second line") == "first line second line")
+        #expect(PasteableText.reflow("  \u{258E} one liner  ") == "one liner")
+    }
+
+    @Test
     func `blank runs collapse to one paragraph break`() {
         #expect(PasteableText.reflow("a\n\n\n\nb") == "a\n\nb")
     }

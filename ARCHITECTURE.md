@@ -172,8 +172,9 @@ PTY:
   the mouse belongs to tmux: the wheel scrolls tmux history (the
   alternate screen leaves the outer terminal nothing to scroll), a drag
   copies through copy-mode and OSC 52 (agent panes reflow multi-line
-  copies for prose) and Shift-drag falls back to a local selection with
-  Cmd-C; that is the price of sessions that outlive the app. Both
+  copies for prose), Shift-drag falls back to a local selection with
+  Cmd-C and Option-drag copies a rectangle with gutter marks trimmed;
+  that is the price of sessions that outlive the app. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.
@@ -431,9 +432,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
 5. Opening a pull request is two-phase: the first click writes a draft file
-   in the worktree (the last commit's subject over the repository template,
-   checkboxes prechecked, any AI disclosure line filled with the session's
-   agent, model and effort) and opens it in the editor tab, hidden from git
+   in the worktree (the title summarises the branch's commit subjects
+   through the on-device model when there are several, else the last
+   commit's subject, over the repository template with checkboxes
+   prechecked and any AI disclosure line filled with the session's agent,
+   model and effort) and opens it in the editor tab, hidden from git
    status through the repository-local exclude file; the second click, now
    Create PR, pushes and runs `gh pr create` with the draft's edited title
    and body, then deletes the draft.

@@ -44,6 +44,22 @@ public struct FoundationModelClient: Sendable {
         return Self.branchName(fromModelAnswer: raw)
     }
 
+    /// A pull request title summarising a branch's commit subjects,
+    /// nil when the model cannot help.
+    public func pullRequestTitle(for subjects: [String]) async -> String? {
+        let instructions = """
+        Summarise these git commit subjects into one pull request title: \
+        sentence case, imperative mood, under seventy characters, no \
+        prefixes and no quotes. Answer with the title alone.
+        """
+        guard let raw = await respond(instructions: instructions, to: subjects.joined(separator: "\n"))
+        else {
+            return nil
+        }
+
+        return Self.title(fromModelAnswer: raw)
+    }
+
     // MARK: Internal
 
     /// Normalises a model answer into a safe branch name, nil when
@@ -71,7 +87,26 @@ public struct FoundationModelClient: Sendable {
         return name
     }
 
+    /// Normalises a model answer into a usable title, nil when
+    /// nothing usable remains; models sometimes wrap answers in
+    /// quotes or add commentary lines.
+    static func title(fromModelAnswer raw: String) -> String? {
+        let first = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+        let cleaned = first
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+            .trimmingCharacters(in: .whitespaces)
+        let capped = String(cleaned.prefix(Self.titleLimit)).trimmingCharacters(in: .whitespaces)
+        return capped.isEmpty ? nil : capped
+    }
+
     // MARK: Private
+
+    /// GitHub truncates long titles in most listings.
+    private static let titleLimit = 72
 
     /// Enough prompt for a name without paying for a whole spec.
     private static let promptLimit = 500

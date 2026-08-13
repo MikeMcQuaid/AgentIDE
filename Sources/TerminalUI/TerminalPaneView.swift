@@ -74,6 +74,35 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// its delegate; deliberately strong for exactly that reason.
         var copyReflower: ReflowingCopyDelegate?
 
+        /// Installs the Option-drag rectangular selection: its
+        /// events arrive through a monitor because SwiftTerm's
+        /// mouse handling is not overridable.
+        func installBlockSelection(on view: PaneTerminalView) {
+            guard blockMonitor == nil else {
+                return
+            }
+
+            let selector = BlockSelector(view: view)
+            blockSelector = selector
+            blockMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp],
+            ) { [weak view] event in
+                guard let view, event.window === view.window else {
+                    return event
+                }
+
+                return selector.handle(event)
+            }
+        }
+
+        /// Removes the event monitor with the view.
+        func tearDown() {
+            if let blockMonitor {
+                NSEvent.removeMonitor(blockMonitor)
+            }
+            blockMonitor = nil
+        }
+
         func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
             // The window owns sizing.
         }
@@ -110,6 +139,8 @@ struct TerminalRepresentable: NSViewRepresentable {
 
         private let onProcessTerminated: (@MainActor () -> Void)?
         private var started = false
+        private var blockSelector: BlockSelector?
+        private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
         private weak var pendingView: LocalProcessTerminalView?
         private var pendingCommand: [String] = []
@@ -159,6 +190,11 @@ struct TerminalRepresentable: NSViewRepresentable {
     let reflowsCopies: Bool
     let onProcessTerminated: (@MainActor () -> Void)?
 
+    /// Removes the coordinator's event monitor with the view.
+    static func dismantleNSView(_: PaneTerminalView, coordinator: Coordinator) {
+        coordinator.tearDown()
+    }
+
     /// Builds the SwiftTerm view and themes it; the process starts
     /// as soon as layout gives the view its real size.
     func makeNSView(context: Context) -> PaneTerminalView {
@@ -173,6 +209,7 @@ struct TerminalRepresentable: NSViewRepresentable {
             context.coordinator.copyReflower = reflower
             view.terminalDelegate = reflower
         }
+        context.coordinator.installBlockSelection(on: view)
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(command, in: view)
         return view
