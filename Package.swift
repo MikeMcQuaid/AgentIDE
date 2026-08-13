@@ -104,5 +104,15 @@ let package = Package(
             dependencies: ["ReviewFeature"],
             swiftSettings: mainActorByDefault,
         ),
+        .testTarget(
+            name: "SessionFeatureTests",
+            dependencies: ["SessionFeature"],
+            swiftSettings: mainActorByDefault,
+        ),
+        .testTarget(
+            name: "PRFeatureTests",
+            dependencies: ["PRFeature"],
+            swiftSettings: mainActorByDefault,
+        ),
     ],
 )

@@ -3,19 +3,23 @@ import Foundation
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
+    /// Host shells share the host tmux server across flavours, so
+    /// dev builds and tests get their own name prefix and can never
+    /// list or kill production shells.
+    internal static let hostShellPrefix = WorkspacePaths.isProductionBuild
+        ? "agentide-shell--"
+        : "agentide-shell-dev--"
+
+    /// The host's tmux binary; Homebrew's location is not on a GUI
+    /// app's default PATH.
+    internal static var hostTmuxPath: String {
+        ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "tmux"
+    }
+
     /// The displayable conversation log of a past session.
     func transcriptEntries(for past: TranscriptSession) -> [TranscriptEntry] {
         transcripts.entries(in: URL(fileURLWithPath: past.path))
-    }
-
-    /// Pushes the branch and opens a pull request; returns its URL.
-    func pushAndCreatePullRequest(worktree: Worktree) async throws -> String {
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
-        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
-            .split(separator: "\n")
-            .first
-            .map(String.init) ?? ""
-        return try await github.createPullRequest(worktreePath: worktree.path, title: title)
     }
 
     /// The argv that attaches a terminal to a session.
@@ -34,7 +38,7 @@ public extension SessionService {
     /// wheel-scrolls-history behaviour as the sandbox one, whose
     /// config file it does not read.
     func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = "agentide-shell--"
+        let name = Self.hostShellPrefix
             + SessionName.slug(worktree.repositoryName) + "-"
             + SessionName.pathDigest(worktree.repositoryPath) + "--"
             + SessionName.slug(worktree.branch)
@@ -44,6 +48,8 @@ public extension SessionService {
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
+            ";", "set", "-s", "set-clipboard", "on",
+            ";", "set", "-as", "terminal-features", "xterm-256color:clipboard",
         ]
     }
 
@@ -63,7 +69,7 @@ public extension SessionService {
         let shells = (list?.standardOutput ?? "")
             .split(separator: "\n")
             .map(String.init)
-            .filter { $0.hasPrefix("agentide-shell--") }
+            .filter { $0.hasPrefix(Self.hostShellPrefix) }
         for name in shells where seen.insert(name).inserted {
             results.append((name, true))
         }
@@ -120,10 +126,107 @@ public extension SessionService {
     }
 
     /// Kills the tmux session; worktree, transcript and metadata
-    /// survive so it stays resumable.
+    /// survive so it stays resumable. The deliberate close is
+    /// recorded so automatic resumes leave this worktree alone.
     func closeSession(sessionName: String, worktreePath: String) async throws {
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
+        var metadata = store.load()
+        if metadata.intentionallyClosed.contains(worktreePath) == false {
+            metadata.intentionallyClosed.append(worktreePath)
+        }
+        store.save(metadata)
         try await tmux.killSession(name: sessionName)
+    }
+
+    /// Whether the worktree's last session ended by explicit close,
+    /// so automatic resumes skip it.
+    func wasIntentionallyClosed(worktreePath: String) -> Bool {
+        store.load().intentionallyClosed.contains(worktreePath)
+    }
+
+    /// A session starting or resuming clears the deliberate-close
+    /// mark, so automatic resumes apply again afterwards.
+    internal func clearIntentionalClose(worktreePath: String) {
+        var metadata = store.load()
+        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
+        store.save(metadata)
+    }
+
+    /// Whether a closed session is recorded for a worktree, so panes
+    /// can offer resuming even when no transcript lists under it.
+    func hasRecordedSession(worktreePath: String) -> Bool {
+        store.load().sessionsByWorktree[worktreePath] != nil
+    }
+
+    /// Deletes a past conversation's transcript, removing it from
+    /// every listing; only an explicit user action calls this.
+    /// Transcripts belong to the sandbox user and the host user can
+    /// only read them, so when a direct removal is refused the
+    /// deletion runs again as their owner through the launcher.
+    func deleteConversation(_ past: TranscriptSession) async throws {
+        if (try? FileManager.default.removeItem(atPath: past.path)) != nil {
+            return
+        }
+
+        let quoted = "'" + past.path.replacing("'", with: "'\\''") + "'"
+        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
+        let command = launcher.command(
+            payload: "rm -f " + quoted,
+            initialDirectory: launcher.sharedWorkspace,
+            sessionID: UUID().uuidString,
+            sessionName: "agentide-delete",
+        )
+        let result = try await processes.run(command, workingDirectory: nil, environment: [:])
+        guard result.succeeded else {
+            throw CommandError(command: "rm -f " + past.path, result: result)
+        }
+    }
+
+    /// Copies a dropped file into the shared workspace, where the
+    /// sandboxed agent can read it, returning the staged path.
+    func stageDroppedFile(at url: URL) throws -> String {
+        let directory = paths.sharedWorkspace + "/tmp"
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let destination = directory + "/drop-" + UUID().uuidString + "-" + url.lastPathComponent
+        try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: destination))
+        return destination
+    }
+
+    /// Types text into a session's terminal, as pasted input.
+    func typeText(_ text: String, sessionName: String) async throws {
+        try await tmux.typeText(text, sessionName: sessionName)
+    }
+
+    /// Resumes the session last recorded in a worktree, whether or
+    /// not a live tmux session still names it.
+    func resumeWorktree(_ worktree: Worktree) async throws {
+        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
+            throw CommandError(
+                command: "resume " + worktree.path,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
+            )
+        }
+        guard let agent = agentKind(of: sessionName) else {
+            throw CommandError(
+                command: "resume " + sessionName,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
+            )
+        }
+
+        let metadata = store.load()
+        let arguments = metadata.arguments[sessionName] ?? ""
+        if let resumeID = metadata.resumeIDs[sessionName] {
+            let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
+            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+        } else {
+            let command = runner(for: agent).launchCommand(extraArguments: arguments)
+            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
+            if FileManager.default.fileExists(atPath: promptFile) {
+                try await tmux.sendPromptFile(promptFile, to: sessionName)
+            }
+        }
+        clearIntentionalClose(worktreePath: worktree.path)
     }
 
     /// Relaunches a past conversation in its own worktree, replacing
@@ -188,7 +291,7 @@ public extension SessionService {
         of workingDirectory: String,
         liveSession: AgentSession?,
     ) -> [TranscriptSession] {
-        runners
+        let scoped = runners
             .filter(\.scopesTranscriptsByWorkingDirectory)
             .flatMap { runner -> [TranscriptSession] in
                 guard let directory = runner.transcriptDirectory(
@@ -202,6 +305,15 @@ public extension SessionService {
                 let hidesNewest = liveSession?.agent == runner.kind
                 return hidesNewest ? Array(sessions.dropFirst()) : sessions
             }
+        // Codex keeps one flat date tree with the working directory
+        // embedded per session, so its conversations come from the
+        // index rather than a per-worktree directory.
+        let codex = codexIndex.sessions(
+            inRoot: paths.sandboxHome + "/.codex/sessions",
+            workingDirectory: workingDirectory,
+        )
+        let hidesNewestCodex = liveSession?.agent == .codexCLI
+        return scoped + (hidesNewestCodex ? Array(codex.dropFirst()) : codex)
     }
 
     /// Conversations whose worktree no longer exists, attributed to
@@ -244,6 +356,7 @@ public extension SessionService {
         metadata.resumeIDs[sessionName] = resumeID
         metadata.sessionsByWorktree[worktreePath] = sessionName
         metadata.seenAt[worktreePath] = Date()
+        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
         store.save(metadata)
     }
 }

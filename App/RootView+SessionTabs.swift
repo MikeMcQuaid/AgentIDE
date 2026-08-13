@@ -8,9 +8,6 @@ import TerminalUI
 
 /// The session tab identities, titles and capsule strip.
 extension RootView {
-    static let activeTabID = "active"
-    static let newTabID = "new"
-
     var sessionManagerBinding: Binding<Bool> {
         Binding(
             get: { dependencies.dashboard.showsSessionManager },
@@ -35,53 +32,138 @@ extension RootView {
         return state + " " + (session.agent?.displayName ?? "Agent")
     }
 
-    /// A short date and time; never the transcript's uuid, which
-    /// reads as noise.
-    func pastTitle(for past: TranscriptSession) -> String {
-        let date = Date(timeIntervalSince1970: TimeInterval(past.modifiedAt))
-            .formatted(.dateTime.day().month().hour().minute())
-        guard past.title.isEmpty else {
-            return date + " " + String(past.title.prefix(Self.tabTitleLength))
+    var utilityToggleButton: some View {
+        Button {
+            showsUtilityPane.toggle()
+        } label: {
+            Label("Toggle utility pane", systemImage: "sidebar.right")
+                .labelStyle(.iconOnly)
         }
-
-        return date
+        .buttonStyle(.plain)
+        .hoverHelp(
+            showsUtilityPane
+                ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
+                : "Show the utility pane",
+        )
     }
 
-    func initialTab(for item: WorktreeItem) -> String {
-        if item.session != nil {
-            Self.activeTabID
-        } else if let past = item.pastSessions.first {
-            past.id
-        } else {
-            Self.newTabID
-        }
-    }
-
-    /// The worktree's sessions as capsule tabs at the top of the
-    /// primary pane; hidden when there is nothing to pick between.
-    /// In-pane rather than in the window toolbar, whose items
-    /// reflowed across the split on this OS. The selection rides a
-    /// binding, because the state itself stays private to the view.
-    @ViewBuilder
-    func sessionStrip(for item: WorktreeItem, selection: Binding<String>) -> some View {
-        if item.session != nil || item.pastSessions.isEmpty == false {
+    /// The tab bubbles and the pane toggle.
+    var utilityHeader: some View {
+        HStack(spacing: Self.stripSpacing) {
+            // The tabs scroll when the pane narrows, so the toggle
+            // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    if let session = item.session {
-                        sessionTabButton(
-                            title: sessionTitle(for: session),
-                            id: Self.activeTabID,
-                            selection: selection,
-                        )
-                        closeSessionButton(session, in: item)
-                    }
-                    ForEach(item.pastSessions) { past in
-                        sessionTabButton(title: pastTitle(for: past), id: past.id, selection: selection)
-                    }
+                    UtilityTabStrip()
                 }
-                .padding(Self.stripSpacing)
             }
-            .hoverHelp("The worktree's sessions: the live one and past conversations")
+            Spacer(minLength: 0)
+            utilityToggleButton
+                .fixedSize()
+        }
+        .padding(Self.stripSpacing)
+    }
+
+    func repository(of item: WorktreeItem) -> Repository {
+        Repository(
+            name: item.worktree.repositoryName,
+            path: item.worktree.repositoryPath,
+            fullName: nil,
+        )
+    }
+
+    /// Opens the new session form preset to the item's repository.
+    func newSession(for item: WorktreeItem) {
+        dependencies.dashboard.newSessionRepository = repository(of: item)
+        dependencies.dashboard.showsNewSession = true
+    }
+
+    /// Continues the worktree's most recent conversation: the newest
+    /// transcript when one lists here, otherwise the recorded closed
+    /// session. The state refreshes first, so a stale cached item
+    /// never resumes over a session that is already live (tmux would
+    /// try to attach without a terminal). Failures surface in the
+    /// error log, so a resume that cannot launch says why.
+    func resumeLatest(in item: WorktreeItem) async {
+        await dependencies.dashboard.refresh()
+        let fresh = dependencies.dashboard.groups.flatMap(\.items).first { $0.id == item.id } ?? item
+        guard fresh.session == nil else {
+            return
+        }
+
+        do {
+            if let past = fresh.pastSessions.first {
+                _ = try await dependencies.service.resumePast(past, worktree: fresh.worktree)
+            } else {
+                try await dependencies.service.resumeWorktree(fresh.worktree)
+            }
+        } catch {
+            dependencies.dashboard.report(error.localizedDescription)
+        }
+        await sessionStarted()
+    }
+
+    func sessionStarted() async {
+        await dependencies.dashboard.refresh()
+    }
+
+    /// Worktrees with a running session right now.
+    var runningWorktreePaths: Set<String> {
+        let items = dependencies.dashboard.groups.flatMap(\.items)
+        return Set(items.filter { $0.session?.status == .running }.map(\.worktree.path))
+    }
+
+    /// Resumes each session that was running at sleep and died with
+    /// it; the snapshot means surviving sessions stay untouched.
+    func resumeKilled(sleepSnapshot: Set<String>) async {
+        await dependencies.dashboard.refresh()
+        let items = dependencies.dashboard.groups.flatMap(\.items)
+        for path in sleepSnapshot.subtracting(runningWorktreePaths) {
+            if let item = items.first(where: { $0.worktree.path == path }) {
+                await resumeLatest(in: item)
+            }
+        }
+    }
+
+    /// Stages dropped files where the sandbox can read them and
+    /// types the staged paths into the session, ready to send.
+    func dropFiles(_ urls: [URL], into sessionName: String) -> Bool {
+        guard urls.isEmpty == false else {
+            return false
+        }
+
+        Task {
+            do {
+                for url in urls {
+                    let staged = try dependencies.service.stageDroppedFile(at: url)
+                    try await dependencies.service.typeText(staged + " ", sessionName: sessionName)
+                }
+            } catch {
+                dependencies.dashboard.report(error.localizedDescription)
+            }
+        }
+        return true
+    }
+
+    /// The live session's status row at the top of the primary pane:
+    /// its state and agent beside the close button. Past
+    /// conversations live in the conversation list instead, so this
+    /// only shows while a session runs. In-pane rather than in the
+    /// window toolbar, whose items reflowed across the split on
+    /// this OS.
+    @ViewBuilder
+    func sessionStrip(for item: WorktreeItem) -> some View {
+        if let session = item.session {
+            HStack(spacing: Self.stripSpacing) {
+                Text(sessionTitle(for: session))
+                    .font(.callout)
+                    .padding(.horizontal, Self.tabHorizontalPadding)
+                    .padding(.vertical, Self.tabVerticalPadding)
+                closeSessionButton(session, in: item)
+                Spacer(minLength: 0)
+            }
+            .padding(Self.stripSpacing)
+            .hoverHelp("The live session; closing keeps the conversation resumable")
             Divider()
         }
     }
@@ -100,34 +182,11 @@ extension RootView {
 
     // MARK: Private
 
-    private static let tabTitleLength = 24
     private static let stripSpacing: CGFloat = 4
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
-    private static let tabSelectedOpacity = 0.25
 
-    private func sessionTabButton(title: String, id: String, selection: Binding<String>) -> some View {
-        Button {
-            selection.wrappedValue = id
-        } label: {
-            Text(title)
-                .font(.callout)
-                .lineLimit(1)
-                .padding(.horizontal, Self.tabHorizontalPadding)
-                .padding(.vertical, Self.tabVerticalPadding)
-                .background(
-                    Capsule().fill(
-                        selection.wrappedValue == id
-                            ? Color.accentColor.opacity(Self.tabSelectedOpacity)
-                            : .clear,
-                    ),
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Beside the live session's tab, since that is what it closes.
+    /// Beside the live session's title, since that is what it closes.
     private func closeSessionButton(_ session: AgentSession, in item: WorktreeItem) -> some View {
         Button {
             Task { await close(session, in: item) }
@@ -177,6 +236,9 @@ extension RootView {
 
         case .browser:
             BrowserView()
+
+        case .errors:
+            ErrorsPane()
         }
     }
 }

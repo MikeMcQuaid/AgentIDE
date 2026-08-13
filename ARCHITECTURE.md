@@ -134,7 +134,12 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
 
 - `TMUX_TMPDIR` is pinned to a fixed directory in the sandbox user's home,
   so every invocation finds the same server socket and nothing lives in
-  world-writable `/tmp`. The config is written by that same payload: a
+  world-writable `/tmp`. Development builds and test runners (anything
+  but the installed /Applications/AgentIDE.app) use
+  `~/.agentide/tmux-dev` and a `-dev` host shell name prefix instead,
+  and tests use throwaway per-run sockets, so building, testing and
+  development can never list or kill the installed app's sessions.
+  The config is written by that same payload: a
   file written by the host user would be unreadable across the sudo
   boundary. Its newlines travel as printf escapes, because `sudo --login`
   rebuilds the command line and collapses literal newlines.
@@ -415,9 +420,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
    poll rarely. Selecting a worktree jumps its branch to the front, and a
    failed poll keeps the cached answer.
 4. Native versus shell: polling, dashboards and review threads are native
-   URLSession; `gh pr create` (templates and stacking), `gh pr merge --auto`
-   and other one-shots shell out as the host user.
-5. One-click remediation composes existing flows: fetch failing check logs
+   URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
+   shell out as the host user.
+5. Opening a pull request is two-phase: the first click writes a draft file
+   in the worktree (the last commit's subject over the repository template,
+   checkboxes prechecked, any AI disclosure line filled with the session's
+   agent, model and effort) and opens it in the editor tab, hidden from git
+   status through the repository-local exclude file; the second click, now
+   Create PR, pushes and runs `gh pr create` with the draft's edited title
+   and body, then deletes the draft.
+6. The listing and the footer act on the branch actually checked out in the
+   worktree, asked of git on each reload, because agents sometimes switch
+   branches inside a worktree.
+7. One-click remediation composes existing flows: fetch failing check logs
    and review comments natively, write them into a prompt file and launch a
    fix agent in the same worktree.
 
@@ -571,8 +586,11 @@ Swift 6 strict concurrency and the type system at compile time; SwiftLint and
 SwiftFormat with every rule enabled at `script/style`; SwiftLint's analyzer
 (`unused_import`) plus periphery for dead code at `script/analyze`; and a
 test suite split into two tiers. Unit tests cover Domain's pure functions
-(`DiffParser`, `PatchBuilder`, `SessionName`) and Data decoders over
-fixtures. Integration tests exercise the real adapters end to end against
+(`DiffParser`, `PatchBuilder`, `SessionName`), Data decoders over fixtures
+and the feature view models, whose fetch and file-system calls are stored
+closures the tests replace with fakes, so listing, pagination, caching and
+button availability test without GitHub, transcripts or a window.
+Integration tests exercise the real adapters end to end against
 real `git` repositories, a real `tmux` server on a private socket and
 temporary workspaces, because the bugs that reach manual testing live in the
 seams: worktree listing under path canonicalisation, reverse-patch
@@ -582,9 +600,13 @@ deletion keeping every conversation attributed to its repository. View rendering
 host and in CI only, not inside the sandbox.
 
 CI ("GitHub Actions CI" in `.github/workflows/tests.yml`) runs the style
-checks on every push and pull request. The build, test and analyze job runs
-on GitHub's Xcode 27 public-preview image (`runs-on: xcode-27`, arm64 only)
-and asserts Xcode 27 is present, failing rather than skipping, so a green run
+checks on every push and pull request. The build-and-test job and the
+analyze job run in parallel on GitHub's Xcode 27 public-preview image
+(`runs-on: xcode-27`, arm64 only), sharing one cache of the Swift package
+dependency checkouts keyed on `Package.resolved` (Homebrew formulae install
+uncached: the prefix is so large that saving and restoring it costs more
+than `brew install`), and both assert Xcode 27 is present, failing rather
+than skipping, so a green run
 always means the app built, the tests passed and static analysis was
 clean (R2).
 

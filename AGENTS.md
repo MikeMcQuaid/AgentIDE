@@ -53,6 +53,18 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - Keep comments minimal; prefer self-documenting code
 - Two-space indentation, four-space for Swift (see `.editorconfig`)
 
+### UI Principles
+
+- One implementation per concern: terminals, editors, conversation
+  views, markdown rendering, git access and GitHub access each have
+  exactly one shared component or client. Before adding a second
+  approach to any such concern, or duplicating behaviour that an
+  existing surface already provides, get explicit confirmation.
+- Transitions that wait on anything (resuming a session, fetching
+  remote data) show a loading state that fills the pane instantly;
+  never leave the old content interactive so that the result pops
+  over it later.
+
 ### Platform Notes
 
 Hard-won on macOS 27 beta; check before assuming they expired.

@@ -251,6 +251,26 @@ public struct GitClient: Sendable {
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 
+    /// Fetches origin and hard-resets the checkout to its default
+    /// branch, for main checkouts that should mirror the remote.
+    public func fetchAndReset(repositoryPath: String) async throws {
+        try await git(["fetch", "origin"], in: repositoryPath)
+        try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
+    }
+
+    /// Fetches origin and rebases the worktree onto its default
+    /// branch, re-signing every commit; failure or conflict aborts
+    /// the rebase so the worktree is left exactly as it was.
+    public func rebaseSignedOntoOrigin(worktreePath: String) async throws {
+        try await git(["fetch", "origin"], in: worktreePath)
+        do {
+            try await git(["rebase", "--force-rebase", "--gpg-sign", "origin/HEAD"], in: worktreePath)
+        } catch {
+            try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
+            throw error
+        }
+    }
+
     /// Reverse-applies a patch to the index and worktree together.
     public func applyReverse(patch: String, worktreePath: String) async throws {
         let url = FileManager.default
@@ -300,6 +320,25 @@ public struct GitClient: Sendable {
         try await git(["branch", "-D", branch], in: repository.path)
     }
 
+    // MARK: Internal
+
+    /// Runs git with the hardening flags prepended; internal so the
+    /// cross-file length-split extensions can reach it.
+    @discardableResult
+    func git(
+        _ arguments: [String],
+        in directory: String?,
+        allowFailure: Bool = false,
+    ) async throws -> ProcessResult {
+        let argv = ["git"] + Self.hardening + arguments
+        let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
+        guard result.succeeded || allowFailure else {
+            throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)
+        }
+
+        return result
+    }
+
     // MARK: Private
 
     /// Config a compromised repository could abuse, forced off, plus
@@ -316,19 +355,4 @@ public struct GitClient: Sendable {
     ]
 
     private let runner: any ProcessRunner
-
-    @discardableResult
-    private func git(
-        _ arguments: [String],
-        in directory: String?,
-        allowFailure: Bool = false,
-    ) async throws -> ProcessResult {
-        let argv = ["git"] + Self.hardening + arguments
-        let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
-        guard result.succeeded || allowFailure else {
-            throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)
-        }
-
-        return result
-    }
 }

@@ -6,18 +6,18 @@ import TerminalUI
 /// terminals: black on white in light mode, white on black in dark.
 /// Assistant prose renders as Markdown and fenced code blocks are
 /// syntax highlighted.
-public struct TranscriptLogView: View {
+struct TranscriptLogView: View {
     // MARK: Lifecycle
 
     /// Creates a log view over parsed transcript entries.
-    public init(entries: [TranscriptEntry]) {
+    init(entries: [TranscriptEntry]) {
         self.entries = entries
     }
 
-    // MARK: Public
+    // MARK: Internal
 
     /// The scrolling log.
-    public var body: some View {
+    var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Self.spacing) {
                 ForEach(entries) { entry in
@@ -64,6 +64,7 @@ public struct TranscriptLogView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .textSelection(.enabled)
         }
     }
 }

@@ -44,6 +44,32 @@ struct MetadataStoreTests {
     }
 
     @Test
+    func `saving evicts the oldest cache entries beyond each cap`() throws {
+        let root = try TestSupport.temporaryDirectory("store-caps")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        var metadata = AppMetadata()
+        for age in 0 ... 80 {
+            metadata.conversationCache["conversation-\(age)"] =
+                CachedConversation(savedAt: Date(timeIntervalSince1970: TimeInterval(age)))
+        }
+        for age in 0 ... 40 {
+            metadata.pullRequestListsCache["listing-\(age)"] =
+                CachedPullRequestList(summaries: [], savedAt: Date(timeIntervalSince1970: TimeInterval(age)))
+        }
+        store.save(metadata)
+
+        let loaded = store.load()
+        #expect(loaded.conversationCache.count == 80)
+        #expect(loaded.conversationCache["conversation-0"] == nil)
+        #expect(loaded.conversationCache["conversation-80"] != nil)
+        #expect(loaded.pullRequestListsCache.count == 40)
+        #expect(loaded.pullRequestListsCache["listing-0"] == nil)
+        #expect(loaded.pullRequestListsCache["listing-40"] != nil)
+    }
+
+    @Test
     func `round trips the cached sidebar snapshot`() throws {
         let root = try TestSupport.temporaryDirectory("store-cache")
         defer { try? FileManager.default.removeItem(atPath: root) }

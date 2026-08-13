@@ -27,9 +27,4 @@ public nonisolated enum CodeStyle {
     public static var whitespaceNSColour: NSColor {
         .quaternaryLabelColor
     }
-
-    /// The SwiftUI form of the whitespace tone.
-    public static var whitespaceColour: Color {
-        Color(nsColor: whitespaceNSColour)
-    }
 }

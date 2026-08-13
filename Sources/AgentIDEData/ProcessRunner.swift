@@ -124,6 +124,14 @@ public struct FoundationProcessRunner: ProcessRunner {
         var environment = ProcessInfo.processInfo.environment
         let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
+        // When this process itself runs inside a tmux pane, the
+        // inherited TMUX variable makes every child tmux command
+        // target the surrounding server regardless of TMUX_TMPDIR;
+        // a test teardown's kill-server then killed the production
+        // server and every agent on it. Servers are only ever
+        // selected explicitly here.
+        environment["TMUX"] = nil
+        environment["TMUX_PANE"] = nil
         environment.merge(extraEnvironment) { _, new in new }
         process.environment = environment
         process.standardOutput = try FileHandle(forWritingTo: outputURL)

@@ -83,18 +83,10 @@ public struct GitHubClient: Sendable {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
-    /// Opens a pull request from the worktree's branch. With a
-    /// repository pull request template the body comes from it
-    /// (which `--fill` would ignore) and the title from `title`;
-    /// without one `--fill` takes both from the commits.
-    public func createPullRequest(worktreePath: String, title: String) async throws -> String {
-        var arguments = ["pr", "create"]
-        if let template = Self.pullRequestTemplate(in: worktreePath), title.isEmpty == false {
-            arguments += ["--title", title, "--body-file", template]
-        } else {
-            arguments += ["--fill"]
-        }
-        return try await gh(arguments, in: worktreePath)
+    /// Opens a pull request from the worktree's branch with an
+    /// edited title and body; returns its URL.
+    public func createPullRequest(worktreePath: String, title: String, bodyFile: String) async throws -> String {
+        try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

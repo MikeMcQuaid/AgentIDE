@@ -66,9 +66,16 @@ public struct TranscriptReader: Sendable {
         var results = [TranscriptEntry]()
         for line in content.split(separator: "\n") {
             guard let data = line.data(using: .utf8),
-                  let parsed = try? decoder.decode(TranscriptLine.self, from: data),
-                  let role = role(of: parsed.type)
+                  let parsed = try? decoder.decode(TranscriptLine.self, from: data)
             else {
+                continue
+            }
+
+            if let payload = parsed.payload {
+                appendCodexEntry(payload, to: &results)
+                continue
+            }
+            guard let role = role(of: parsed.type) else {
                 continue
             }
 
@@ -90,6 +97,16 @@ public struct TranscriptReader: Sendable {
     private struct TranscriptLine: Decodable {
         let type: String?
         let message: TranscriptMessage?
+        let payload: CodexPayload?
+    }
+
+    /// The Codex rollout format wraps everything in typed payloads
+    /// rather than messages with content arrays.
+    private struct CodexPayload: Decodable {
+        let type: String?
+        let message: String?
+        let name: String?
+        let arguments: String?
     }
 
     private struct TranscriptMessage: Decodable {
@@ -142,6 +159,31 @@ public struct TranscriptReader: Sendable {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
+    }
+
+    /// Maps one Codex payload onto a log entry: user and agent
+    /// messages read as prose, function calls as tool lines.
+    private func appendCodexEntry(_ payload: CodexPayload, to results: inout [TranscriptEntry]) {
+        switch payload.type {
+        case "user_message":
+            if let message = payload.message, message.isEmpty == false {
+                results.append(TranscriptEntry(id: results.count, role: .user, text: message))
+            }
+
+        case "agent_message":
+            if let message = payload.message, message.isEmpty == false {
+                results.append(TranscriptEntry(id: results.count, role: .assistant, text: message))
+            }
+
+        case "function_call":
+            if let name = payload.name {
+                let detail = payload.arguments.flatMap { $0.isEmpty ? nil : ": " + $0 } ?? ""
+                results.append(TranscriptEntry(id: results.count, role: .tool, text: name + detail))
+            }
+
+        default:
+            break
+        }
     }
 
     private func role(of type: String?) -> TranscriptEntry.Role? {

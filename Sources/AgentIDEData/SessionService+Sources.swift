@@ -136,6 +136,32 @@ public extension SessionService {
         try await git.fetch(repositoryPath: repository.path)
     }
 
+    /// Fetches origin and hard-resets the main checkout to its
+    /// default branch.
+    func fetchAndReset(repository: Repository) async throws {
+        try await git.fetchAndReset(repositoryPath: repository.path)
+    }
+
+    /// Rebases the worktree onto origin's default branch with every
+    /// commit re-signed, aborting cleanly on conflict.
+    func rebaseSigned(worktree: Worktree) async throws {
+        try await git.rebaseSignedOntoOrigin(worktreePath: worktree.path)
+    }
+
+    /// A repository's recency for sidebar ordering: its worktrees
+    /// always count, the main checkout only while a session runs in
+    /// it, so resuming on the repository page bumps the repository
+    /// without its everyday churn reordering anything. Here rather
+    /// than the main file for length; internal, unlike the extension.
+    internal static func repositoryActivity(of group: RepositoryGroup) -> Int {
+        let worktrees = group.items.dropFirst().map(\.lastActivityAt).max() ?? 0
+        guard let main = group.items.first, main.session != nil else {
+            return worktrees
+        }
+
+        return max(worktrees, main.lastActivityAt)
+    }
+
     /// The repository's open issues, for the issue source picker.
     func openIssues(repository: Repository) async -> [IssueSummary] {
         await github.openIssues(repositoryPath: repository.path)

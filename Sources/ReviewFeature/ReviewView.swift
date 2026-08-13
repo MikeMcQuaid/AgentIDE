@@ -61,6 +61,8 @@ public struct ReviewView: View {
     private static let bodyLimit = 72
 
     @State private var model: ReviewModel
+    @State private var display: ReviewFileDisplay = .standard
+    @State private var collapseOverrides: [String: Bool] = [:]
 
     private let worktreePath: String
     private let service: SessionService
@@ -71,12 +73,9 @@ public struct ReviewView: View {
         HStack(spacing: Self.captionSpacing) {
             scopeButtons
             Divider().frame(height: Self.dividerHeight)
-            iconButton(
-                "doc.badge.gearshape",
-                help: "Reveal files hidden as generated: lockfiles, Xcode projects and similar",
-                title: "Generated",
-                isOn: model.showsGenerated,
-            ) { model.showsGenerated.toggle() }
+            displayButton(.standard, systemImage: "doc.badge.gearshape", help: "Hide generated files, expand the rest")
+            displayButton(.hideAll, systemImage: "eye.slash", help: "Collapse every file to its name")
+            displayButton(.showAll, systemImage: "eye", help: "Expand every file, generated included")
             Spacer()
             actionButtons
         }
@@ -115,23 +114,20 @@ public struct ReviewView: View {
         }
     }
 
-    /// Editing a file jumps to the Editor tab rather than opening a
-    /// duplicate editor surface; Cmd-click opens the external editor.
+    /// The collapsible file list; the uncommitted scope embeds the
+    /// shared editor per file so fixes are typed directly.
     @ViewBuilder private var diffList: some View {
         if model.visibleFiles.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                    ForEach(model.visibleFiles) { file in
-                        DiffFileView(file: file, model: model) {
-                            FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
-                        }
-                    }
-                }
-                .padding(Self.spacing)
-            }
+            ReviewFileListView(
+                model: model,
+                worktreePath: worktreePath,
+                service: service,
+                hideAllByDefault: display == .hideAll,
+                collapseOverrides: $collapseOverrides,
+            )
         }
     }
 
@@ -144,7 +140,10 @@ public struct ReviewView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Self.commitLineSpacing) {
                         ForEach(model.branchCommits, id: \.self) { commit in
-                            Text(commit).font(.caption.monospaced()).lineLimit(1)
+                            Text(commit)
+                                .font(.caption.monospaced())
+                                .lineLimit(1)
+                                .textSelection(.enabled)
                         }
                         if model.branchCommits.isEmpty {
                             Text("No commits beyond the base branch.")
@@ -229,6 +228,7 @@ public struct ReviewView: View {
     ) -> some View {
         iconButton(systemImage, help: help, title: title, isOn: model.scope == scope) {
             model.scope = scope
+            collapseOverrides = [:]
             Task { await model.reload() }
         }
     }
@@ -265,6 +265,21 @@ public struct ReviewView: View {
         // The colour fill alone is invisible to VoiceOver.
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
+    }
+
+    /// One bubble per display mode, like the scope toggles;
+    /// generated files show outside the default mode and manual
+    /// carets reset on every switch.
+    private func displayButton(
+        _ mode: ReviewFileDisplay,
+        systemImage: String,
+        help: String,
+    ) -> some View {
+        iconButton(systemImage, help: help, title: mode.title, isOn: display == mode) {
+            display = mode
+            collapseOverrides = [:]
+            model.showsGenerated = mode != .standard
+        }
     }
 
     private func commitOutstanding() async {

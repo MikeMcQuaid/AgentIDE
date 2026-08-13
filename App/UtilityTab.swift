@@ -5,6 +5,7 @@ enum UtilityTab: CaseIterable {
     case pullRequests
     case editor
     case browser
+    case errors
 
     // MARK: Internal
 
@@ -24,6 +25,9 @@ enum UtilityTab: CaseIterable {
 
         case .browser:
             "Browser"
+
+        case .errors:
+            "Errors"
         }
     }
 
@@ -43,6 +47,9 @@ enum UtilityTab: CaseIterable {
 
         case .browser:
             "An embedded browser for dev servers the agent starts and pull request pages; logins persist"
+
+        case .errors:
+            "Every failure reported this session, in full and copyable; appears on the first error"
         }
     }
 }

@@ -6,12 +6,18 @@ cd "$(dirname "$0")/.."
 
 [[ -d AgentIDE.xcodeproj ]] || script/bootstrap
 
+# Capped parallelism inside the sandbox: full-width builds have
+# triggered resource kills that tore down the whole sandbox user,
+# taking the production tmux server and its agents with it.
+JOBS="$(sysctl -n hw.ncpu)"
+[[ -n "${SV_SESSION_ID:-}" ]] && JOBS=6
+
 ARGS=(
   -project AgentIDE.xcodeproj
   -scheme AgentIDEApp
   -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
   -derivedDataPath .DerivedData
-  -jobs "$(sysctl -n hw.ncpu)"
+  -jobs "${JOBS}"
 )
 
 # The About panel's build number counts the default branch's

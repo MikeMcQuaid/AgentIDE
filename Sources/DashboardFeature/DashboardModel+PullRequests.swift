@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import TerminalUI
 
 /// GitHub pull request polling, tiered by attention: the selected
 /// worktree refreshes far more often than its repository's other
@@ -46,7 +47,7 @@ extension DashboardModel {
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
                 } catch {
-                    status = "Pull requests for \(group.repository.name): " + error.localizedDescription
+                    ErrorLog.shared.report("Pull requests for \(group.repository.name): " + error.localizedDescription)
                 }
             }
         }

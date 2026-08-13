@@ -122,8 +122,8 @@ struct PullRequestConversationView: View {
                 metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
                 store.save(metadata)
             } catch {
-                // The painted cache stays; a transient failure must
-                // not replace or overwrite it.
+                // The painted cache stays; the failure only logs.
+                ErrorLog.shared.report(error.localizedDescription)
             }
         }
     }

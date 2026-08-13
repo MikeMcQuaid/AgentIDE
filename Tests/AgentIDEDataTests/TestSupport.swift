@@ -104,6 +104,11 @@ enum TestSupport {
         process.executableURL = URL(filePath: "/usr/bin/env")
         process.arguments = argv
         var merged = ProcessInfo.processInfo.environment
+        // An inherited TMUX variable (tests running inside a tmux
+        // pane) would make tmux ignore TMUX_TMPDIR and aim these
+        // teardown kills at the surrounding production server.
+        merged["TMUX"] = nil
+        merged["TMUX_PANE"] = nil
         for (key, value) in environment {
             merged[key] = value
         }

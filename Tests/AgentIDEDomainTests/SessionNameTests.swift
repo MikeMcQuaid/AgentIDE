@@ -24,6 +24,15 @@ struct SessionNameTests {
     }
 
     @Test
+    func `path digests are stable and distinguish same-named repositories`() {
+        let digest = SessionName.pathDigest("/owners/first/repo")
+        #expect(digest == SessionName.pathDigest("/owners/first/repo"))
+        #expect(digest != SessionName.pathDigest("/owners/second/repo"))
+        #expect(digest.count <= 6)
+        #expect(digest.allSatisfy { $0.isLowercase || $0.isNumber })
+    }
+
+    @Test
     func `rejects foreign and malformed session names`() {
         #expect(SessionName.isAgentIDE("boulder-airedale") == false)
         #expect(SessionName.isAgentIDE("agentide") == false)

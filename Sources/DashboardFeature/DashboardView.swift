@@ -210,6 +210,12 @@ public struct DashboardView: View {
     private func contextActions(for item: WorktreeItem) -> some View {
         Button("Fetch") { Task { await model.fetch(item: item) } }
             .hoverHelp("git fetch all remotes of this repository")
+        if item.worktree.path == item.worktree.repositoryPath {
+            Button("Fetch and Reset") { Task { await model.fetchAndReset(item: item) } }
+                .hoverHelp(
+                    "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
+                )
+        }
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")
         if item.worktree.path != item.worktree.repositoryPath {

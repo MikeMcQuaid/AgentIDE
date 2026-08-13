@@ -1,6 +1,7 @@
 import AgentIDEData
 import AgentIDEDomain
 import Observation
+import TerminalUI
 
 /// Loads a worktree's diff, tracks per-line selections and applies
 /// rejections and amendments.
@@ -106,14 +107,14 @@ final class ReviewModel {
             }
             commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
         } catch {
-            status = error.localizedDescription
+            report(error.localizedDescription)
         }
     }
 
-    /// Shows an action's failure in the status line, for actions the
-    /// view runs against services the model does not hold.
+    /// Reports a failure into the app-wide error log; the local
+    /// status line keeps success reports only.
     func report(_ message: String) {
-        status = message
+        ErrorLog.shared.report(message)
     }
 
     /// Toggles one line's selection.
@@ -144,7 +145,7 @@ final class ReviewModel {
             status = "Rejected selected lines."
             await reload()
         } catch {
-            status = error.localizedDescription
+            report(error.localizedDescription)
         }
     }
 
@@ -154,7 +155,7 @@ final class ReviewModel {
             try await git.amend(worktreePath: worktreePath, message: commitMessage)
             status = "Commit message updated."
         } catch {
-            status = error.localizedDescription
+            report(error.localizedDescription)
         }
     }
 

@@ -2,6 +2,7 @@ import AgentIDEData
 import AgentIDEDomain
 import Foundation
 import Observation
+import TerminalUI
 import UserNotifications
 
 // MARK: - DashboardModel
@@ -104,6 +105,12 @@ public final class DashboardModel {
         service.repositories()
     }
 
+    /// Reports an action's failure into the app-wide error log, for
+    /// actions views run against services directly.
+    public func report(_ message: String) {
+        ErrorLog.shared.report(message)
+    }
+
     /// Selecting from the sidebar is a middle-pane action, so it
     /// cancels any form the middle pane is showing.
     public func select(_ item: WorktreeItem) {
@@ -168,7 +175,7 @@ public final class DashboardModel {
             }
             await refresh()
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 
@@ -216,7 +223,23 @@ public final class DashboardModel {
             status = "Fetched \(repository.name)."
             await refresh()
         } catch {
-            status = error.localizedDescription
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Fetches origin and hard-resets the main checkout to its
+    /// default branch, then refreshes.
+    public func fetchAndReset(item: WorktreeItem) async {
+        do {
+            let repository = Repository(
+                name: item.worktree.repositoryName,
+                path: item.worktree.repositoryPath,
+            )
+            try await service.fetchAndReset(repository: repository)
+            status = "Reset \(repository.name) to origin."
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 

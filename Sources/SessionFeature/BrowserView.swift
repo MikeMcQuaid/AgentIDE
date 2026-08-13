@@ -22,21 +22,32 @@ public struct BrowserView: View {
     /// keystroke of a partial address would otherwise navigate.
     public var body: some View {
         VStack(spacing: 0) {
-            TextField("http://localhost:3000", text: $address)
-                .textFieldStyle(.roundedBorder)
-                .focused($editingAddress)
-                .onSubmit { load() }
-                .padding(Self.padding)
-                .hoverHelp("Enter an address and press return; useful for dev servers the agent starts")
+            HStack(spacing: Self.padding) {
+                TextField("http://localhost:3000", text: $address)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($editingAddress)
+                    .onSubmit { load() }
+                    .hoverHelp("Enter an address and press return; useful for dev servers the agent starts")
+                Button("Reset browser", systemImage: "xmark.circle") { reset() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .disabled(request == nil && address.isEmpty)
+                    .hoverHelp("Close the page and clear the address, back to the empty browser")
+            }
+            .padding(Self.padding)
             Divider()
             ZStack {
                 WebPane(request: $request)
-                if request == nil {
+                if request == nil || (address.isEmpty && editingAddress == false) {
                     ContentUnavailableView(
                         "Nothing loaded",
                         systemImage: "safari",
                         description: Text("Preview what the agent built: enter a local dev server address above."),
                     )
+                    // Opaque: it covers a reset page fully, in both
+                    // colour schemes.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.background, ignoresSafeAreaEdges: [])
                 }
             }
         }
@@ -64,6 +75,13 @@ public struct BrowserView: View {
         }
 
         request = URLRequest(url: url)
+    }
+
+    /// Back to the default empty page: a blank load replaces the
+    /// page and the placeholder covers it.
+    private func reset() {
+        address = ""
+        request = URL(string: "about:blank").map { URLRequest(url: $0) }
     }
 }
 
