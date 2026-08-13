@@ -133,34 +133,6 @@ public struct TmuxClient: Sendable {
         }
     }
 
-    /// The pane's whole text: visible screen plus scrollback, with
-    /// wrapped lines rejoined so copies paste cleanly and styling
-    /// kept as escapes. Feeds the native scrollback viewer.
-    public func capturePane(sessionName: String) async -> String {
-        let result = try? await tmux(
-            ["capture-pane", "-p", "-e", "-J", "-S", "-50000", "-t", sessionName],
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return ""
-        }
-
-        return result.standardOutput
-    }
-
-    /// The command currently running in the pane, for wheel routing.
-    public func currentCommand(sessionName: String) async -> String? {
-        let result = try? await tmux(
-            ["display-message", "-p", "-t", sessionName, "#{pane_current_command}"],
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return nil
-        }
-
-        return result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     // MARK: Internal
 
     /// The shell prelude ensuring the socket directory and config
@@ -187,14 +159,16 @@ public struct TmuxClient: Sendable {
     /// The server's config: dead panes stay inspectable and the
     /// history is deep enough to review a whole session. Mouse
     /// reporting stays off: the terminal view owns selection,
-    /// copying and wheel routing natively, and the scrollback viewer
-    /// reads history through `capture-pane`.
+    /// copying and scrolling natively. `set-clipboard` keeps the
+    /// keyboard copy-mode escape hatch's yanks reaching the macOS
+    /// clipboard through OSC 52.
     private static let configContent = """
     set -g remain-on-exit on
     set -g mouse off
     set -g history-limit 50000
     set -g default-terminal xterm-256color
     set -g status off
+    set -s set-clipboard on
     """
 
     private let runner: any ProcessRunner

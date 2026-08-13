@@ -172,13 +172,12 @@ PTY:
   tmux mouse reporting is off and the terminal view owns the mouse:
   dragging selects natively and Cmd-C copies (agent panes reflow
   multi-line copies for prose), with none of tmux's modal copy-mode.
-  Scrollback is still tmux's (the alternate screen leaves the outer
-  terminal nothing to scroll), so wheel-up opens a native, selectable
-  scrollback viewer over the pane, read through `capture-pane` with the
-  pane's colours kept and refreshable while the session keeps running
-  underneath; while a pager
-  like `less` or `delta` is frontmost the wheel reaches it as arrow keys
-  instead. Both
+  The terminal is deliberately taller than the visible pane inside a
+  native scroll view: tmux believes the pane is that tall, so recent
+  history stays on the live screen where the wheel scrolls and selection
+  reaches it directly, and the view follows the cursor as output arrives
+  unless the user has scrolled away. History beyond that band remains in
+  tmux, reachable with keyboard copy-mode (prefix then `[`). Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.

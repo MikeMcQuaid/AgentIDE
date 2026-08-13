@@ -4,79 +4,59 @@ import SwiftUI
 
 // MARK: - TerminalPaneView
 
-/// An embedded terminal running an argv on a local PTY, with an
-/// optional native scrollback viewer. Closing the view only
-/// disconnects this client; tmux sessions keep running.
+/// An embedded terminal running an argv on a local PTY. Closing the
+/// view only disconnects this client; tmux sessions keep running.
 ///
-/// Selection, copying and the wheel are native: tmux mouse reporting
-/// is off, so dragging selects like any Mac text and Cmd-C copies.
-/// Wheel-up opens the scrollback viewer (tmux draws on the alternate
-/// screen, so the terminal itself has no scrollback to show), except
-/// while a pager runs, when wheel events reach it as arrow keys.
+/// The terminal is deliberately taller than the visible pane and
+/// sits in a scroll view: tmux believes the pane is that tall, so
+/// recent history stays on the live screen where the wheel scrolls
+/// it natively and dragging selects it like any Mac text, with no
+/// modal copy-mode and no separate viewer. The view follows the
+/// cursor as output arrives unless the user has scrolled away.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
     /// Creates a terminal that runs an argv; the argv itself decides
     /// its working directory. `reflowsCopies` reflows multi-line
-    /// copies for pasting into prose tools. `history` enables the
-    /// scrollback viewer; `pagerProbe` reports whether a pager is
-    /// frontmost, routing wheel events to it instead.
-    /// `onProcessTerminated` fires on the main actor when the
-    /// process exits, letting owners show a restart affordance.
+    /// copies for pasting into prose tools. `onProcessTerminated`
+    /// fires on the main actor when the process exits, letting
+    /// owners show a restart affordance instead of a dead pane.
     @preconcurrency
     public init(
         command: [String],
         reflowsCopies: Bool = false,
-        history: (@MainActor () async -> String)? = nil,
-        pagerProbe: (@MainActor () async -> Bool)? = nil,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
         self.command = command
         self.reflowsCopies = reflowsCopies
-        self.history = history
-        self.pagerProbe = pagerProbe
         self.onProcessTerminated = onProcessTerminated
     }
 
     // MARK: Public
 
     public var body: some View {
-        ZStack {
-            TerminalRepresentable(
-                command: command,
-                reflowsCopies: reflowsCopies,
-                historyShowing: showsHistory,
-                pagerProbe: pagerProbe,
-                onHistoryRequest: history == nil ? nil : { showsHistory = true },
-                onProcessTerminated: onProcessTerminated,
-            )
-            if showsHistory, let history {
-                TerminalHistoryView(capture: history) { showsHistory = false }
-            }
-        }
+        TerminalRepresentable(
+            command: command,
+            reflowsCopies: reflowsCopies,
+            onProcessTerminated: onProcessTerminated,
+        )
     }
 
     // MARK: Private
 
-    @State private var showsHistory = false
-
     private let command: [String]
     private let reflowsCopies: Bool
-    private let history: (@MainActor () async -> String)?
-    private let pagerProbe: (@MainActor () async -> Bool)?
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
 
 // MARK: - PaneTerminalView
 
-/// The SwiftTerm view with the pane's own copy behaviour; wheel
-/// routing lives in the coordinator's event monitor, because
-/// SwiftTerm's scroll handling is not overridable.
+/// The SwiftTerm view with the pane's own copy behaviour.
 final class PaneTerminalView: LocalProcessTerminalView {
     // MARK: Lifecycle
 
     deinit {
-        // The coordinator owns the event monitor.
+        // The PTY dies with the view.
     }
 
     // MARK: Internal
@@ -102,28 +82,22 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
 // MARK: - TerminalRepresentable
 
-/// Bridges the SwiftTerm view into SwiftUI and owns the process
-/// lifecycle.
+/// Bridges the scrolling terminal into SwiftUI and owns the process
+/// lifecycle, sizing and cursor following.
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
-    /// Bridges process termination and wheel probing.
+    /// Owns layout, spawn timing and the cursor-follow timer.
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         // MARK: Lifecycle
 
-        init(
-            pagerProbe: (@MainActor () async -> Bool)?,
-            onHistoryRequest: (() -> Void)?,
-            onProcessTerminated: (@MainActor () -> Void)?,
-        ) {
-            self.pagerProbe = pagerProbe
-            self.onHistoryRequest = onHistoryRequest
+        init(command: [String], onProcessTerminated: (@MainActor () -> Void)?) {
+            self.command = command
             self.onProcessTerminated = onProcessTerminated
         }
 
         deinit {
-            // The PTY is owned by the terminal view; the wheel
-            // monitor is removed on dismantle.
+            // Cleanup happens in dismantleNSView, on the main actor.
         }
 
         // MARK: Internal
@@ -132,27 +106,10 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
 
-        /// Whether the process has been spawned; it waits for real
-        /// bounds so tmux sizes to the pane, not a placeholder frame.
-        var started = false
-
-        /// Watches for the first real layout, so the start is
-        /// immediate rather than waiting for an unrelated SwiftUI
-        /// update.
-        var frameObserver: NSObjectProtocol?
-
-        /// What the observer starts once the view has real bounds.
-        weak var pendingView: LocalProcessTerminalView?
-        var pendingCommand: [String] = []
-
-        let onProcessTerminated: (@MainActor () -> Void)?
-
-        /// Whether the scrollback viewer covers the pane; wheel
-        /// events then pass straight through so the viewer scrolls.
-        var historyShowing = false
+        weak var terminalView: PaneTerminalView?
 
         func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
-            // The window owns sizing.
+            // The scroll view owns sizing.
         }
 
         func setTerminalTitle(source _: LocalProcessTerminalView, title _: String) {
@@ -167,71 +124,87 @@ struct TerminalRepresentable: NSViewRepresentable {
             onProcessTerminated?()
         }
 
-        /// Intercepts wheel events over the terminal: while a pager
-        /// runs they pass through (SwiftTerm's alternate-screen
-        /// handling turns them into arrow keys); otherwise wheel-up
-        /// accumulates to a threshold and opens the scrollback
-        /// viewer, and everything else is swallowed so shells and
-        /// agent composers never receive surprise arrow keys.
-        func installWheelMonitor(for view: PaneTerminalView) {
-            guard wheelMonitor == nil, onHistoryRequest != nil else {
+        /// Hooks the scroll view once and watches its size: the
+        /// terminal is kept one scrollback taller than the viewport,
+        /// and the process starts on the first real layout so tmux
+        /// sizes to the pane, not a placeholder frame.
+        func configure(scrollView: NSScrollView) {
+            guard self.scrollView == nil else {
                 return
             }
 
-            wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self, weak view] event in
-                guard let self, let view, historyShowing == false,
-                      event.window === view.window
-                else {
-                    return event
+            self.scrollView = scrollView
+            scrollView.postsFrameChangedNotifications = true
+            frameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: scrollView,
+                queue: .main,
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.layout()
                 }
-
-                let point = view.convert(event.locationInWindow, from: nil)
-                guard view.bounds.contains(point) else {
-                    return event
+            }
+            followTimer = Timer.scheduledTimer(withTimeInterval: Self.followInterval, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.followCursor()
                 }
-
-                return route(event, in: view)
             }
         }
 
-        func removeWheelMonitor() {
-            if let wheelMonitor {
-                NSEvent.removeMonitor(wheelMonitor)
+        /// Stops the follow timer and frame observation with the
+        /// view.
+        func tearDown() {
+            followTimer?.invalidate()
+            followTimer = nil
+            if let frameObserver {
+                NotificationCenter.default.removeObserver(frameObserver)
             }
-            wheelMonitor = nil
+            frameObserver = nil
         }
 
-        /// Spawns the process on the first nonzero layout, exactly
-        /// once.
-        func startWhenSized(_ command: [String], in view: LocalProcessTerminalView) {
-            guard started == false else {
+        /// Sizes the terminal to the viewport plus the scrollback
+        /// band and spawns the process once the size is real.
+        func layout() {
+            guard let scrollView, let terminalView else {
                 return
             }
 
-            if view.frame.size.width > 1, view.frame.size.height > 1 {
+            let viewport = scrollView.bounds.size
+            guard viewport.width > 1, viewport.height > 1 else {
+                return
+            }
+
+            let target = NSSize(width: viewport.width, height: viewport.height + Self.scrollbackHeight)
+            if terminalView.frame.size != target {
+                terminalView.setFrameSize(target)
+            }
+            if started == false {
                 started = true
-                Self.start(command, in: view)
-            } else {
-                observeFrame(command, in: view)
+                Self.start(command, in: terminalView)
+                lastCursorRow = -1
             }
         }
 
         // MARK: Private
 
-        /// Roughly two wheel notches, so a stray tick does not open
-        /// the viewer.
-        private static let historyThreshold: CGFloat = 40
+        /// The extra height tmux believes the pane has: the live
+        /// screen doubles as natively scrollable history. Roughly
+        /// 250 rows; taller makes full-screen redraws costlier.
+        private static let scrollbackHeight: CGFloat = 4_000
 
-        private let pagerProbe: (@MainActor () async -> Bool)?
-        private let onHistoryRequest: (() -> Void)?
-        private var lastProbeAt: Date = .distantPast
-        private var pagerFrontmost = false
-        private var historyAccumulator: CGFloat = 0
-        private var wheelMonitor: Any?
+        private static let followInterval: TimeInterval = 0.5
+
+        private let command: [String]
+        private let onProcessTerminated: (@MainActor () -> Void)?
+        private weak var scrollView: NSScrollView?
+        private var frameObserver: NSObjectProtocol?
+        private var followTimer: Timer?
+        private var started = false
+        private var lastCursorRow = -1
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
-            // Non-absolute commands (sudo, tmux) resolve through env:
-            // spawning needs a path, not a name.
+            // Non-absolute commands (sudo, tmux) resolve through
+            // env: spawning needs a path, not a name.
             let resolved = command.first?.hasPrefix("/") == true ? command : ["/usr/bin/env"] + command
             view.startProcess(
                 executable: resolved.first ?? "/bin/zsh",
@@ -241,102 +214,87 @@ struct TerminalRepresentable: NSViewRepresentable {
             )
         }
 
-        /// Refreshes the pager answer, throttled so wheel streams
-        /// cost one query a second.
-        private func route(_ event: NSEvent, in _: PaneTerminalView) -> NSEvent? {
-            if let pagerProbe, Date().timeIntervalSince(lastProbeAt) > 1 {
-                lastProbeAt = Date()
-                Task { [weak self] in
-                    self?.pagerFrontmost = await pagerProbe()
-                }
-            }
-            guard pagerFrontmost == false else {
-                return event
-            }
-            guard event.scrollingDeltaY > 0 else {
-                historyAccumulator = 0
-                return nil
+        /// Scrolls the cursor's row into view when it moves, unless
+        /// the user has scrolled away from where it last was; coming
+        /// back re-engages following on the next move.
+        private func followCursor() {
+            guard started, let scrollView, let terminalView else {
+                return
             }
 
-            historyAccumulator += event.scrollingDeltaY
-            if historyAccumulator > Self.historyThreshold {
-                historyAccumulator = 0
-                onHistoryRequest?()
+            let terminal = terminalView.getTerminal()
+            let row = terminal.getCursorLocation().y
+            guard row != lastCursorRow, terminal.rows > 0 else {
+                return
             }
-            return nil
+
+            let wasFollowing = lastCursorRow < 0
+                || scrollView.documentVisibleRect.intersects(rect(ofRow: lastCursorRow))
+            lastCursorRow = row
+            if wasFollowing {
+                terminalView.scrollToVisible(rect(ofRow: row))
+            }
         }
 
-        private func observeFrame(_ command: [String], in view: LocalProcessTerminalView) {
-            pendingView = view
-            pendingCommand = command
-            view.postsFrameChangedNotifications = true
-            frameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: view,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.started == false, let sized = self.pendingView,
-                          sized.frame.size.width > 1, sized.frame.size.height > 1
-                    else {
-                        return
-                    }
-
-                    // startWhenSized marks `started` itself; setting
-                    // it here first made its guard bail and no
-                    // process ever spawned.
-                    if let observer = self.frameObserver {
-                        NotificationCenter.default.removeObserver(observer)
-                        self.frameObserver = nil
-                    }
-                    self.startWhenSized(self.pendingCommand, in: sized)
-                }
+        /// One row's rectangle in the terminal view's coordinates,
+        /// which have their origin at the bottom.
+        private func rect(ofRow row: Int) -> CGRect {
+            guard let terminalView else {
+                return .zero
             }
+
+            let rows = max(terminalView.getTerminal().rows, 1)
+            let height = terminalView.frame.height / CGFloat(rows)
+            let fromTop = CGFloat(row) * height
+            return CGRect(
+                x: 0,
+                y: terminalView.frame.height - fromTop - height,
+                width: 1,
+                height: height,
+            )
         }
     }
 
     let command: [String]
     let reflowsCopies: Bool
-    let historyShowing: Bool
-    let pagerProbe: (@MainActor () async -> Bool)?
-    let onHistoryRequest: (() -> Void)?
     let onProcessTerminated: (@MainActor () -> Void)?
 
-    /// Removes the wheel monitor with the view.
-    static func dismantleNSView(_: PaneTerminalView, coordinator: Coordinator) {
-        coordinator.removeWheelMonitor()
+    /// Stops the coordinator's timer and observers with the view.
+    static func dismantleNSView(_: NSScrollView, coordinator: Coordinator) {
+        coordinator.tearDown()
     }
 
-    /// Builds the SwiftTerm view and themes it; the process starts
-    /// as soon as layout gives the view its real size, otherwise
-    /// tmux sized itself to the placeholder frame and drew half a
-    /// pane until something forced a resize.
-    func makeNSView(context: Context) -> PaneTerminalView {
-        let view = PaneTerminalView(frame: .zero)
-        view.processDelegate = context.coordinator
-        view.font = CodeStyle.nsFont
-        view.reflowsCopies = reflowsCopies
-        context.coordinator.installWheelMonitor(for: view)
-        applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
-        return view
+    /// Builds the terminal inside a scroll view and themes it.
+    func makeNSView(context: Context) -> NSScrollView {
+        let terminal = PaneTerminalView(frame: .zero)
+        terminal.processDelegate = context.coordinator
+        terminal.font = CodeStyle.nsFont
+        terminal.reflowsCopies = reflowsCopies
+        context.coordinator.terminalView = terminal
+
+        let scrollView = NSScrollView()
+        scrollView.documentView = terminal
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        context.coordinator.configure(scrollView: scrollView)
+        applyTheme(to: terminal, context: context)
+        context.coordinator.layout()
+        return scrollView
     }
 
-    /// Re-themes when the appearance actually changes; the start
-    /// also retries here as a fallback.
-    func updateNSView(_ view: PaneTerminalView, context: Context) {
-        context.coordinator.historyShowing = historyShowing
-        applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
+    /// Re-themes when the appearance actually changes; layout also
+    /// retries here as a fallback.
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        if let terminal = scrollView.documentView as? PaneTerminalView {
+            applyTheme(to: terminal, context: context)
+        }
+        context.coordinator.layout()
     }
 
-    /// Creates the process-lifecycle coordinator.
+    /// Creates the lifecycle coordinator.
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            pagerProbe: pagerProbe,
-            onHistoryRequest: onHistoryRequest,
-            onProcessTerminated: onProcessTerminated,
-        )
+        Coordinator(command: command, onProcessTerminated: onProcessTerminated)
     }
 
     // MARK: Private

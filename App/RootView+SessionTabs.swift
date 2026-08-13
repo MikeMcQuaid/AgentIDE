@@ -217,8 +217,6 @@ extension RootView {
         TerminalPaneView(
             command: dependencies.service.attachCommand(sessionName: session.name),
             reflowsCopies: true,
-            history: { await dependencies.service.captureAgentPane(sessionName: session.name) },
-            pagerProbe: { await dependencies.service.agentPaneIsPaging(sessionName: session.name) },
         )
     }
 
@@ -229,8 +227,6 @@ extension RootView {
     ) -> TerminalPaneView {
         TerminalPaneView(
             command: dependencies.service.hostShellCommand(worktree: worktree),
-            history: { await dependencies.service.captureHostShell(worktree: worktree) },
-            pagerProbe: { await dependencies.service.hostShellIsPaging(worktree: worktree) },
             onProcessTerminated: onExit,
         )
     }
