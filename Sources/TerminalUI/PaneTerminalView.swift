@@ -1,6 +1,6 @@
 import AgentIDEDomain
+import AppKit
 import SwiftTerm
-import SwiftUI
 
 // MARK: - PaneTerminalView
 

@@ -1,4 +1,3 @@
-import AgentIDEDomain
 import SwiftTerm
 import SwiftUI
 
@@ -70,8 +69,10 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
 
-        /// Retains the copy reflower the view only holds weakly as
-        /// its delegate; deliberately strong for exactly that reason.
+        // Retains the copy reflower the view only holds weakly as
+        // its delegate; that retention is its whole use, which
+        // periphery's assign-only check cannot see.
+        // periphery:ignore
         var copyReflower: ReflowingCopyDelegate?
 
         /// Installs the Option-drag rectangular selection: its
@@ -82,8 +83,9 @@ struct TerminalRepresentable: NSViewRepresentable {
                 return
             }
 
+            // The monitor's closure is the selector's owner: it
+            // captures it strongly and tearDown releases both.
             let selector = BlockSelector(view: view)
-            blockSelector = selector
             blockMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp],
             ) { [weak view] event in
@@ -139,7 +141,6 @@ struct TerminalRepresentable: NSViewRepresentable {
 
         private let onProcessTerminated: (@MainActor () -> Void)?
         private var started = false
-        private var blockSelector: BlockSelector?
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
         private weak var pendingView: LocalProcessTerminalView?

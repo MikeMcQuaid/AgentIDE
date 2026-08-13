@@ -628,7 +628,10 @@ uncached: the prefix is so large that saving and restoring it costs more
 than `brew install`), and both assert Xcode 27 is present, failing rather
 than skipping, so a green run
 always means the app built, the tests passed and static analysis was
-clean (R2).
+clean (R2). The preview image boots an older macOS than the SDK it builds
+with, so AgentIDEData weak-links FoundationModels: a hard link aborted
+every test bundle at load over symbols the runner's OS lacks, while the
+client already guards every call on the model's availability.
 
 ## Risks and open questions
 

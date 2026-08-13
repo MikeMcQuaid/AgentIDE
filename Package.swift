@@ -43,6 +43,14 @@ let package = Package(
             name: "AgentIDEData",
             dependencies: ["AgentIDEDomain"],
             swiftSettings: approachableConcurrency,
+            linkerSettings: [
+                // CI's runners boot an older macOS than the 27.0 SDK
+                // they build with, so a hard link aborts every test
+                // bundle at load over missing FoundationModels
+                // symbols; weak linking defers to the availability
+                // guard in FoundationModelClient.
+                .unsafeFlags(["-Xlinker", "-weak_framework", "-Xlinker", "FoundationModels"]),
+            ],
         ),
         .target(
             name: "DashboardFeature",

@@ -1,4 +1,3 @@
-import Foundation
 import FoundationModels
 
 /// The on-device Apple foundation model, kept behind one client so
@@ -96,9 +95,11 @@ public struct FoundationModelClient: Sendable {
             .split(separator: "\n")
             .first
             .map(String.init) ?? ""
-        let cleaned = first
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
-            .trimmingCharacters(in: .whitespaces)
+        let quoteMarks: Set<Character> = ["\"", "'", "`"]
+        let cleaned = String(
+            first.drop(while: quoteMarks.contains).reversed().drop(while: quoteMarks.contains).reversed(),
+        )
+        .trimmingCharacters(in: .whitespaces)
         let capped = String(cleaned.prefix(Self.titleLimit)).trimmingCharacters(in: .whitespaces)
         return capped.isEmpty ? nil : capped
     }
