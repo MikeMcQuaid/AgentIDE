@@ -174,8 +174,9 @@ PTY:
   multi-line copies for prose), with none of tmux's modal copy-mode.
   Scrollback is still tmux's (the alternate screen leaves the outer
   terminal nothing to scroll), so wheel-up opens a native, selectable
-  scrollback viewer over the pane, read through `capture-pane` and
-  refreshable while the session keeps running underneath; while a pager
+  scrollback viewer over the pane, read through `capture-pane` with the
+  pane's colours kept and refreshable while the session keeps running
+  underneath; while a pager
   like `less` or `delta` is frontmost the wheel reaches it as arrow keys
   instead. Both
   terminals share one theme (black on white in light mode, white on

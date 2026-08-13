@@ -33,7 +33,7 @@ struct TerminalHistoryView: View {
 
     private static let padding: CGFloat = 6
 
-    @State private var content = ""
+    @State private var content: AttributedString = .init()
     @State private var truncated = false
     @State private var hasLoaded = false
 
@@ -61,7 +61,7 @@ struct TerminalHistoryView: View {
         ScrollViewReader { proxy in
             ScrollView([.vertical, .horizontal]) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(content.isEmpty ? "No scrollback yet." : content)
+                    Text(content.characters.isEmpty ? AttributedString("No scrollback yet.") : content)
                         .font(CodeStyle.font)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: true, vertical: false)
@@ -79,12 +79,13 @@ struct TerminalHistoryView: View {
         let captured = await capture()
         var lines = captured.split(separator: "\n", omittingEmptySubsequences: false)
         // tmux pads the capture with trailing blank lines to the
-        // pane height.
-        while lines.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
+        // pane height; a blank line may still carry style escapes.
+        while let last = lines.last,
+              ANSIText.plain(String(last)).trimmingCharacters(in: .whitespaces).isEmpty {
             lines.removeLast()
         }
         truncated = lines.count > Self.lineLimit
-        content = lines.suffix(Self.lineLimit).joined(separator: "\n")
+        content = ANSIText.attributed(lines.suffix(Self.lineLimit).joined(separator: "\n"))
         hasLoaded = true
     }
 }

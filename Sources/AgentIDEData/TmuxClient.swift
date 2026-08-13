@@ -134,11 +134,11 @@ public struct TmuxClient: Sendable {
     }
 
     /// The pane's whole text: visible screen plus scrollback, with
-    /// wrapped lines rejoined so copies paste cleanly. Feeds the
-    /// native scrollback viewer.
+    /// wrapped lines rejoined so copies paste cleanly and styling
+    /// kept as escapes. Feeds the native scrollback viewer.
     public func capturePane(sessionName: String) async -> String {
         let result = try? await tmux(
-            ["capture-pane", "-p", "-J", "-S", "-50000", "-t", sessionName],
+            ["capture-pane", "-p", "-e", "-J", "-S", "-50000", "-t", sessionName],
             allowFailure: true,
         )
         guard let result, result.succeeded else {

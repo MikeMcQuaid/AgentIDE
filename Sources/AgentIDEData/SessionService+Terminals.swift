@@ -28,7 +28,7 @@ public extension SessionService {
     func captureHostShell(worktree: Worktree) async -> String {
         let result = try? await processes.run(
             [
-                Self.hostTmuxPath, "capture-pane", "-p", "-J", "-S", "-50000",
+                Self.hostTmuxPath, "capture-pane", "-p", "-e", "-J", "-S", "-50000",
                 "-t", hostShellName(worktree: worktree),
             ],
             workingDirectory: nil,
