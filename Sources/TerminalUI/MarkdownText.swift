@@ -36,12 +36,6 @@ public struct MarkdownText: View {
 
     // MARK: Private
 
-    private struct Segment {
-        let text: String
-        let isCode: Bool
-        var language: SyntaxLanguage?
-    }
-
     /// A top-level run of markdown, either plain or one details
     /// block folded behind its summary.
     private struct Chunk {
@@ -49,23 +43,8 @@ public struct MarkdownText: View {
         let detailsSummary: String?
     }
 
-    /// One structural piece of prose: GitHub comments mix headings,
-    /// horizontal rules and pipe tables into their markdown.
-    private enum ProseBlock {
-        case heading(String)
-        case rule
-        case table(header: [String], rows: [[String]])
-        case text(String)
-    }
-
     private static let spacing: CGFloat = 4
     private static let tableSpacing: CGFloat = 12
-
-    /// The shortest run of `-` or `*` that reads as a rule.
-    private static let ruleMinimumLength = 3
-
-    /// A table needs a header row and a separator row.
-    private static let tableHeaderRows = 2
     private static let codePadding: CGFloat = 6
     private static let codeCornerRadius: CGFloat = 5
     private static let codeBackgroundOpacity = 0.5
@@ -148,7 +127,13 @@ public struct MarkdownText: View {
         }
     }
 
+    /// Wide tables scroll within the pane instead of demanding
+    /// their full width and squeezing the panes around them.
     private func table(header: [String], rows: [[String]]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) { tableGrid(header: header, rows: rows) }
+    }
+
+    private func tableGrid(header: [String], rows: [[String]]) -> some View {
         Grid(alignment: .leading, horizontalSpacing: Self.tableSpacing, verticalSpacing: Self.spacing) {
             if header.isEmpty == false {
                 GridRow {
@@ -166,131 +151,6 @@ public struct MarkdownText: View {
                 }
             }
         }
-    }
-
-    private static func proseBlocks(_ text: String) -> [ProseBlock] {
-        var blocks = [ProseBlock]()
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var index = 0
-        while index < lines.count {
-            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                index += 1
-            } else if trimmed.hasPrefix("#") {
-                blocks.append(.heading(trimmed.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)))
-                index += 1
-            } else if isRule(trimmed) {
-                blocks.append(.rule)
-                index += 1
-            } else if trimmed.hasPrefix("|") {
-                var rows = [[String]]()
-                while index < lines.count {
-                    let row = lines[index].trimmingCharacters(in: .whitespaces)
-                    guard row.hasPrefix("|") else {
-                        break
-                    }
-
-                    rows.append(cells(of: row))
-                    index += 1
-                }
-                if rows.count >= Self.tableHeaderRows, isSeparatorRow(rows[1]) {
-                    blocks.append(.table(header: rows[0], rows: Array(rows.dropFirst(Self.tableHeaderRows))))
-                } else {
-                    blocks.append(.table(header: [], rows: rows))
-                }
-            } else {
-                blocks.append(.text(lines[index]))
-                index += 1
-            }
-        }
-        return blocks
-    }
-
-    /// Whether a line is a `---` or `***` horizontal rule.
-    private static func isRule(_ trimmed: String) -> Bool {
-        trimmed.count >= ruleMinimumLength
-            && (Set(trimmed).isSubset(of: ["-"]) || Set(trimmed).isSubset(of: ["*"]))
-    }
-
-    /// The trimmed cells of one `| a | b |` row.
-    private static func cells(of row: String) -> [String] {
-        row.trimmingCharacters(in: CharacterSet(charactersIn: "|"))
-            .split(separator: "|", omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-    }
-
-    /// Whether a row is the `|---|:--|` header separator.
-    private static func isSeparatorRow(_ cells: [String]) -> Bool {
-        cells.isEmpty == false && cells.allSatisfy { cell in
-            cell.isEmpty == false && cell.allSatisfy { $0 == "-" || $0 == ":" }
-        }
-    }
-
-    /// The fence tag's language, tolerating common aliases.
-    private static func syntaxLanguage(for tag: String) -> SyntaxLanguage? {
-        switch tag.trimmingCharacters(in: .whitespaces).lowercased() {
-        case "swift":
-            .swift
-
-        case "rb",
-             "ruby":
-            .ruby
-
-        case "bash",
-             "sh",
-             "shell",
-             "zsh":
-            .shell
-
-        case "py",
-             "python":
-            .python
-
-        case "json":
-            .json
-
-        case "dockerfile":
-            .dockerfile
-
-        case "ts",
-             "tsx",
-             "typescript":
-            .typescript
-
-        case "yaml",
-             "yml":
-            .yaml
-
-        case "markdown",
-             "md":
-            .markdown
-
-        default:
-            nil
-        }
-    }
-
-    /// Drops HTML comments, unwraps the details and summary tags
-    /// bots fold their reports into, and converts anchors and line
-    /// breaks to their markdown equivalents.
-    private static func strippingHTML(_ text: String) -> String {
-        var stripped = text.replacing(/<!--[\s\S]*?-->/, with: "")
-        stripped = stripped.replacing(/<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/) { match in
-            "[" + String(match.output.2) + "](" + String(match.output.1) + ")"
-        }
-        stripped = stripped.replacing(/<br\s*\/?>/, with: "\n")
-        stripped = stripped.replacing(/<img[^>]*>/, with: "")
-        for tag in ["<details>", "</details>", "<summary>", "</summary>"] {
-            stripped = stripped.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        return stripped
-    }
-
-    private static func inline(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace,
-        )
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
     /// The text split on ``` fences after stripping the HTML wrapper

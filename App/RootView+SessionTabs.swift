@@ -17,7 +17,7 @@ extension RootView {
 
     var utilityTab: UtilityTab {
         let tabs = UtilityTab.allCases
-        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .shell
+        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .review
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
@@ -211,27 +211,62 @@ extension RootView {
 // MARK: Utility tab content
 
 extension RootView {
+    /// The agent terminal: copies are prose, so multi-line copies
+    /// reflow for pasting into chat and pull request bodies.
+    func agentTerminal(for session: AgentSession) -> TerminalPaneView {
+        TerminalPaneView(
+            command: dependencies.service.attachCommand(sessionName: session.name),
+            reflowsCopies: true,
+        )
+    }
+
+    /// The host shell terminal; copies stay verbatim for code.
+    func shellTerminal(
+        for worktree: Worktree,
+        onExit: @escaping @MainActor () -> Void,
+    ) -> TerminalPaneView {
+        TerminalPaneView(
+            command: dependencies.service.hostShellCommand(worktree: worktree),
+            onProcessTerminated: onExit,
+        )
+    }
+
+    /// The worktree the review surfaces describe: on the repository
+    /// page, the conversation selected in the list wins, so clicking
+    /// around conversations retargets Review and PRs.
+    func reviewTarget(for item: WorktreeItem, conversationPath: String?) -> WorktreeItem {
+        guard item.worktree.path == item.worktree.repositoryPath,
+              let path = conversationPath,
+              let match = repositoryItems(for: item).first(where: { $0.worktree.path == path })
+        else {
+            return item
+        }
+
+        return match
+    }
+
     /// The non-terminal utility tabs' content.
     @ViewBuilder
-    func switchedUtility(for item: WorktreeItem) -> some View {
+    func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
+        let target = reviewTarget(for: item, conversationPath: conversationPath)
         switch utilityTab {
         case .shell:
             EmptyView()
 
         case .review:
-            ReviewView(worktree: item.worktree, git: dependencies.git, service: dependencies.service)
+            ReviewView(worktree: target.worktree, git: dependencies.git, service: dependencies.service)
 
         case .editor:
             EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
 
         case .pullRequests:
             PullRequestsView(
-                repository: Repository(name: item.worktree.repositoryName, path: item.worktree.repositoryPath),
+                repository: Repository(name: target.worktree.repositoryName, path: target.worktree.repositoryPath),
                 items: repositoryItems(for: item),
                 github: dependencies.github,
                 service: dependencies.service,
                 store: dependencies.store,
-                branch: item.worktree.branch,
+                branch: target.worktree.branch,
             )
 
         case .browser:

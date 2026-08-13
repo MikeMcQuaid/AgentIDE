@@ -50,7 +50,8 @@ public struct CreateSessionPane: View {
                 model: model,
                 repository: repository,
                 submitTitle: "Start agent",
-                submitHelp: "Launch the agent in this worktree; a pull request pick checks out its own worktree",
+                submitHelp: "Launch the agent in this worktree (Cmd-Return); "
+                    + "a pull request pick checks out its own worktree",
             ) { submission in await start(submission) }
             Spacer()
         }

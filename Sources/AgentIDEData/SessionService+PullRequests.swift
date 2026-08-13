@@ -9,9 +9,23 @@ public extension SessionService {
     /// it, hidden from git status through the local exclude file.
     static let pullRequestDraftFile = ".agentide-pull-request.md"
 
-    /// Pushes the branch to origin without opening anything.
+    /// Pushes the branch to origin without opening anything. An
+    /// unsigned tip refuses: every pushed commit must be GPG signed
+    /// (a local hook enforces the same), and Rebase on origin is the
+    /// signing path.
     func push(worktree: Worktree) async throws {
+        guard await git.isCommitSigned(worktreePath: worktree.path) else {
+            throw SessionServiceError(
+                "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
+            )
+        }
+
         try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+    }
+
+    /// Whether the worktree's tip commit is GPG signed, gating Push.
+    func isTipSigned(worktreePath: String) async -> Bool {
+        await git.isCommitSigned(worktreePath: worktreePath)
     }
 
     /// The branch actually checked out in a worktree, nil when
@@ -30,10 +44,7 @@ public extension SessionService {
     /// prechecked and any AI disclosure filled. Returns the draft's
     /// worktree-relative path.
     func preparePullRequestDraft(worktree: Worktree, disclosure: String?) async throws -> String {
-        let title = try await git.lastCommitMessage(worktreePath: worktree.path)
-            .split(separator: "\n")
-            .first
-            .map(String.init) ?? ""
+        let title = await pullRequestDraftTitle(worktree: worktree)
         let template = GitHubClient.pullRequestTemplate(in: worktree.path)
             .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
         let content = PullRequestDraft.compose(title: title, template: template, disclosure: disclosure)
@@ -46,6 +57,23 @@ public extension SessionService {
         return Self.pullRequestDraftFile
     }
 
+    /// The draft's starting title: a branch with several commits
+    /// gets the on-device model's summary of their subjects, and
+    /// anything else (a single commit, no origin, no model) gets the
+    /// most recent commit's subject.
+    private func pullRequestDraftTitle(worktree: Worktree) async -> String {
+        let lastSubject = await (try? git.lastCommitMessage(worktreePath: worktree.path))?
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+        let subjects = await git.commitSubjects(worktreePath: worktree.path, baseRef: "origin/HEAD")
+        guard subjects.count > 1 else {
+            return subjects.first ?? lastSubject
+        }
+
+        return await summariser.pullRequestTitle(for: subjects) ?? subjects.first ?? lastSubject
+    }
+
     /// Pushes and opens the pull request from the saved draft,
     /// deleting the draft on success; returns the URL.
     func createPullRequestFromDraft(worktree: Worktree) async throws -> String {
@@ -56,7 +84,7 @@ public extension SessionService {
             throw SessionServiceError("The pull request draft needs a title on its first line.")
         }
 
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+        try await push(worktree: worktree)
         let bodyFile = FileManager.default
             .temporaryDirectory
             .appendingPathComponent("agentide-pr-body-" + UUID().uuidString + ".md")

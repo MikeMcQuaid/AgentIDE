@@ -72,10 +72,7 @@ struct AgentSessionForm: View {
                         .controlSize(.small)
                         .hoverHelp("Creating the worktree and starting the agent")
                 }
-                Button(isStarting ? "Starting…" : submitTitle) { submit() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(submitDisabled || isStarting)
-                    .hoverHelp(submitHelp)
+                submitButton
             }
         }
         .task(id: repository?.id ?? "") { await reloadSources() }
@@ -119,6 +116,22 @@ struct AgentSessionForm: View {
              .pullRequest:
             return number == nil
         }
+    }
+
+    /// The submit button; Cmd-Return also submits from inside the
+    /// prompt editor, where plain Return types a newline, via a
+    /// hidden button carrying the second shortcut.
+    private var submitButton: some View {
+        Button(isStarting ? "Starting…" : submitTitle) { submit() }
+            .keyboardShortcut(.defaultAction)
+            .disabled(submitDisabled || isStarting)
+            .hoverHelp(submitHelp)
+            .background(
+                Button("Start with Cmd-Return") { submit() }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(submitDisabled || isStarting)
+                    .hidden(),
+            )
     }
 
     @ViewBuilder private var sourceFields: some View {

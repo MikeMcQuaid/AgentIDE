@@ -115,6 +115,7 @@ struct PullRequestFooterView: View {
     let canOpenPullRequest: Bool
     let canRebase: Bool
     let hasDraft: Bool
+    let pushHelp: String
     let status: String?
     let onRebase: () -> Void
     let onPush: () -> Void
@@ -126,16 +127,14 @@ struct PullRequestFooterView: View {
             Button("Rebase on origin", action: onRebase)
                 .disabled(canRebase == false)
                 .hoverHelp(
-                    "git fetch origin, then rebase this branch onto origin/HEAD re-signing every commit; "
+                    "Fetch, then rebase with --force-rebase --gpg-sign: onto this branch's own origin ref "
+                        + "when that is fully signed and only new commits need signatures, "
+                        + "otherwise onto origin/HEAD re-signing everything; "
                         + "a conflict aborts and reports to the Errors tab",
                 )
             Button("Push", action: onPush)
                 .disabled(canPush == false)
-                .hoverHelp(
-                    canPush
-                        ? "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
-                        : "Everything is already pushed",
-                )
+                .hoverHelp(pushHelp)
             Button(hasDraft ? "Create PR" : "Open PR", action: onOpenPullRequest)
                 .disabled(canOpenPullRequest == false)
                 .hoverHelp(openHelp)

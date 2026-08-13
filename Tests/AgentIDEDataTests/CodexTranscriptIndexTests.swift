@@ -39,11 +39,29 @@ struct CodexTranscriptIndexTests {
         // No metadata line: the file cannot be resumed, so it hides.
         try #"{"type":"response_item","payload":{"type":"user_message","message":"orphan"}}"#
             .write(toFile: day + "/rollout-broken.jsonl", atomically: true, encoding: .utf8)
+        // The current rollout generation: role-and-content messages,
+        // with Codex's injected preamble before the typed prompt.
+        let current = """
+        {"type":"session_meta","payload":{"cwd":"/worktrees/three","id":"session-current"}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"# AGENTS.md instructions for /w\\ninjected"}]}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"ship the feature\\nplease"}]}}
+        """
+        try (current + "\n").write(toFile: day + "/rollout-current.jsonl", atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 4)],
+            ofItemAtPath: day + "/rollout-current.jsonl",
+        )
 
         let sessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/one")
         #expect(sessions.map(\.id) == ["session-new", "session-old"])
         #expect(sessions.first?.title == "fix the crash")
         #expect(sessions.allSatisfy { $0.agent == .codexCLI })
+
+        let currentSessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/three")
+        #expect(currentSessions.map(\.id) == ["session-current"])
+        #expect(currentSessions.first?.title == "ship the feature")
     }
 
     // MARK: Private

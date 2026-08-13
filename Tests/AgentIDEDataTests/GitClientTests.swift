@@ -1,8 +1,20 @@
-import AgentIDEData
+@testable import AgentIDEData
 import Foundation
 import Testing
 
 struct GitClientTests {
+    @Test
+    func `base decorations keep remote and default names only`() {
+        #expect(
+            GitClient.filteredBaseDecorations("abc123 (HEAD -> main, origin/main, main, stale-branch) Subject")
+                == "abc123 (HEAD -> main, origin/main, main) Subject",
+        )
+        #expect(
+            GitClient.filteredBaseDecorations("abc123 (stale-branch) Subject") == "abc123 Subject",
+        )
+        #expect(GitClient.filteredBaseDecorations("abc123 Subject") == "abc123 Subject")
+    }
+
     @Test
     func `repository listing skips symlinked aliases and plain directories`() throws {
         let manager = FileManager.default

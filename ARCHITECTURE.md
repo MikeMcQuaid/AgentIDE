@@ -169,10 +169,12 @@ PTY:
   like the sidebar. tmux starts the user's default login
   shell, and because the server outlives its clients the shell survives
   pane switches and app restarts exactly like agent sessions do. In both,
-  scrollback is tmux's: the alternate screen leaves the outer terminal
-  nothing to scroll, so the mouse wheel scrolls tmux history (`mouse on`)
-  rather than a native scroller; that is the price of sessions that
-  outlive the app. Both
+  the mouse belongs to tmux: the wheel scrolls tmux history (the
+  alternate screen leaves the outer terminal nothing to scroll), a drag
+  copies through copy-mode and OSC 52 (agent panes reflow multi-line
+  copies for prose), Shift-drag falls back to a local selection with
+  Cmd-C and Option-drag copies a rectangle with gutter marks trimmed;
+  that is the price of sessions that outlive the app. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane.
@@ -240,8 +242,10 @@ flowchart TD
   paths later), `SandvaultLauncher`, `TmuxClient`, `TranscriptReader`,
   `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
   outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
-  later) and `AgentRunner` with `ClaudeCodeRunner` and `CodexRunner`. One
-  module, split only if boundary violations appear.
+  later), `FoundationModelClient` (the on-device Apple foundation model
+  behind one reusable summarisation seam) and `AgentRunner` with
+  `ClaudeCodeRunner` and `CodexRunner`. One module, split only if boundary
+  violations appear.
 - **Feature targets** (`DashboardFeature`, `SessionFeature`, `ReviewFeature`
   and `PRFeature`): SwiftUI views and `@Observable` view models, MainActor by
   default, given ports via injection. `SessionFeature` owns the WKWebView
@@ -318,8 +322,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
-2. The branch name comes from a per-repository template, default
-   `agent/<slug>`.
+2. The branch name summarises the prompt: the on-device Apple foundation
+   model (behind `FoundationModelClient`, one reusable client so later
+   features can summarise commits or draft pull request bodies) answers a
+   short underscore-separated name; when the model is unavailable the
+   prompt's first words serve in the same style. No prefix.
 3. Host-side `GitClient` fetches, then runs `git worktree add` under
    `/Users/Shared/sv-<user>/worktrees/<uuid>/<branch>`. This layout is kept
    byte-compatible with what existing tooling already creates: the
@@ -343,10 +350,12 @@ Sendable` and `nonisolated(unsafe)` are banned.
    arguments appended verbatim (sandvault's wrappers add the agent's
    permission-skipping flag inside the sandbox), and the session launches
    through the tmux payload above.
-8. The prompt is delivered as terminal input, not as a command argument:
-   tmux `load-buffer` then `paste-buffer` types the prompt file into the
-   agent after launch. The pane's `INITIAL_DIR` is pinned to the worktree so
-   the sandbox's zshenv cannot redirect the agent elsewhere.
+8. The prompt travels inside the launch command, read from its file as the
+   agent starts (`"$(cat …)"` evaluated in the sandbox): pasting it as
+   terminal input after launch raced the agent's terminal setup, which
+   flushed pending input and lost the prompt. The pane's `INITIAL_DIR` is
+   pinned to the worktree so the sandbox's zshenv cannot redirect the agent
+   elsewhere.
 9. The session is recorded in the metadata store, with the agent-native
    resume id captured as soon as the transcript appears.
 
@@ -423,9 +432,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
 5. Opening a pull request is two-phase: the first click writes a draft file
-   in the worktree (the last commit's subject over the repository template,
-   checkboxes prechecked, any AI disclosure line filled with the session's
-   agent, model and effort) and opens it in the editor tab, hidden from git
+   in the worktree (the title summarises the branch's commit subjects
+   through the on-device model when there are several, else the last
+   commit's subject, over the repository template with checkboxes
+   prechecked and any AI disclosure line filled with the session's agent,
+   model and effort) and opens it in the editor tab, hidden from git
    status through the repository-local exclude file; the second click, now
    Create PR, pushes and runs `gh pr create` with the draft's edited title
    and body, then deletes the draft.
@@ -435,6 +446,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
 7. One-click remediation composes existing flows: fetch failing check logs
    and review comments natively, write them into a prompt file and launch a
    fix agent in the same worktree.
+8. Push and rebase together enforce that every pushed commit is GPG
+   signed: agents in the sandbox cannot sign or push and a local hook
+   blocks unsigned pushes, so the host is where signatures happen. Push
+   dims until the tip commit verifies and the service refuses regardless.
+   The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
+   base to sign the minimum: the branch's own origin ref when it exists,
+   every commit unique to it verifies and only new local commits need
+   signatures, keeping pushed history's hashes; otherwise origin/HEAD,
+   re-signing the whole branch.
 
 ### Cleanup (Tidy up)
 
@@ -608,7 +628,10 @@ uncached: the prefix is so large that saving and restoring it costs more
 than `brew install`), and both assert Xcode 27 is present, failing rather
 than skipping, so a green run
 always means the app built, the tests passed and static analysis was
-clean (R2).
+clean (R2). The preview image boots an older macOS than the SDK it builds
+with, so AgentIDEData weak-links FoundationModels: a hard link aborted
+every test bundle at load over symbols the runner's OS lacks, while the
+client already guards every call on the model's availability.
 
 ## Risks and open questions
 

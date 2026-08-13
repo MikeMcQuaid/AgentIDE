@@ -112,6 +112,11 @@ struct RootView: View {
     /// so hiding the pane never moves it.
     private static let toggleRowHeight: CGFloat = 30
 
+    /// The selected conversation's worktree on the repository page,
+    /// nil when none exists; the review surfaces follow it. Internal
+    /// so the extension file's tabs can read it.
+    @State private var conversationWorktreePath: String?
+
     /// Whether the launch's one automatic resume has run, so later
     /// selection changes never launch anything by themselves.
     @State private var hasAutoResumed = false
@@ -228,9 +233,10 @@ struct RootView: View {
             utilityContent(for: item)
         }
         .task(id: item.worktree.path) {
-            if let remembered = rememberedTabs[item.worktree.path] {
-                utilityTabIndex = remembered
-            }
+            // A stale conversation focus must not survive switching
+            // to another sidebar item.
+            conversationWorktreePath = nil
+            utilityTabIndex = rememberedTabs[item.worktree.path] ?? utilityTabIndex
         }
         .onChange(of: utilityTabIndex) {
             rememberedTabs[item.worktree.path] = utilityTabIndex
@@ -251,7 +257,7 @@ struct RootView: View {
             ProgressView("Resuming conversation…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let session = item.session {
-            TerminalPaneView(command: dependencies.service.attachCommand(sessionName: session.name))
+            agentTerminal(for: session)
                 .id(session.name)
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged
@@ -264,6 +270,10 @@ struct RootView: View {
                 repository: repository(of: item),
                 service: dependencies.service,
                 onNewSession: { newSession(for: item) },
+                // The review surfaces follow the selected
+                // conversation's worktree, so clicking around the
+                // repository page retargets Review and PRs.
+                onWorktreeFocus: { conversationWorktreePath = $0 },
                 onResumed: { await dependencies.dashboard.refresh() },
             )
         } else if item.pastSessions.isEmpty == false {
@@ -306,7 +316,7 @@ struct RootView: View {
                 // backgrounds must not expand into the ignored
                 // titlebar safe area, where they would paint over
                 // the tab header above.
-                switchedUtility(for: item)
+                switchedUtility(for: item, conversationPath: conversationWorktreePath)
                     .id("utility-" + path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(.background, ignoresSafeAreaEdges: [])
@@ -335,9 +345,7 @@ struct RootView: View {
     private func shellLayer(for item: WorktreeItem) -> some View {
         let path = item.worktree.path
         if runningShells.contains(path) {
-            TerminalPaneView(
-                command: dependencies.service.hostShellCommand(worktree: item.worktree),
-            ) {
+            shellTerminal(for: item.worktree) {
                 runningShells.remove(path)
                 runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }

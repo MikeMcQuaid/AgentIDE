@@ -38,19 +38,54 @@ public extension SessionService {
     /// wheel-scrolls-history behaviour as the sandbox one, whose
     /// config file it does not read.
     func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = Self.hostShellPrefix
-            + SessionName.slug(worktree.repositoryName) + "-"
-            + SessionName.pathDigest(worktree.repositoryPath) + "--"
-            + SessionName.slug(worktree.branch)
+        let name = hostShellName(worktree: worktree)
+        // The config applies at server birth; the chained commands
+        // repeat the options because a long-running server never
+        // rereads config. `-f` also keeps the user's own tmux config
+        // out of these app-managed sessions.
         return [
-            Self.hostTmuxPath, "new-session", "-A", "-s", name, "-c", worktree.path,
+            Self.hostTmuxPath, "-f", hostTmuxConfigFile(),
+            "new-session", "-A", "-s", name, "-c", worktree.path,
             ";", "set", "-g", "mouse", "on",
             ";", "set", "-g", "history-limit", "50000",
             ";", "set", "-g", "default-terminal", "xterm-256color",
             ";", "set", "-g", "status", "off",
             ";", "set", "-s", "set-clipboard", "on",
-            ";", "set", "-as", "terminal-features", "xterm-256color:clipboard",
         ]
+    }
+
+    /// The host tmux session name a worktree's shell uses, shared by
+    /// the attach command and the scrollback capture.
+    func hostShellName(worktree: Worktree) -> String {
+        Self.hostShellPrefix
+            + SessionName.slug(worktree.repositoryName) + "-"
+            + SessionName.pathDigest(worktree.repositoryPath) + "--"
+            + SessionName.slug(worktree.branch)
+    }
+
+    /// Writes the host shell server's config beside the app's other
+    /// state and returns its path; matching the sandbox server's
+    /// copy behaviour, present from the server's first moment.
+    private func hostTmuxConfigFile() -> String {
+        let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
+        let file = directory + "/host-tmux.conf"
+        let content = """
+        set -g mouse on
+        set -g history-limit 50000
+        set -g default-terminal xterm-256color
+        set -g status off
+        set -s set-clipboard on
+        set -as terminal-features xterm-256color:clipboard
+        """
+        do {
+            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            try content.write(toFile: file, atomically: true, encoding: .utf8)
+        } catch {
+            // tmux errors on a missing config path; /dev/null reads
+            // as empty and the chained commands still apply.
+            return "/dev/null"
+        }
+        return file
     }
 
     /// Every AgentIDE tmux session for the session manager: the
@@ -219,12 +254,10 @@ public extension SessionService {
             let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         } else {
-            let command = runner(for: agent).launchCommand(extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
             let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
-            if FileManager.default.fileExists(atPath: promptFile) {
-                try await tmux.sendPromptFile(promptFile, to: sessionName)
-            }
+            let existing = FileManager.default.fileExists(atPath: promptFile) ? promptFile : nil
+            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: existing)
+            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         }
         clearIntentionalClose(worktreePath: worktree.path)
     }

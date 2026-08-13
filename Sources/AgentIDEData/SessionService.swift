@@ -42,6 +42,7 @@ public struct SessionService: Sendable {
         runners: [any AgentRunner],
         processes: any ProcessRunner = FoundationProcessRunner(),
         launcher: SandvaultLauncher? = nil,
+        summariser: FoundationModelClient = FoundationModelClient(),
     ) {
         self.paths = paths
         self.git = git
@@ -53,6 +54,7 @@ public struct SessionService: Sendable {
         self.runners = runners
         self.processes = processes
         self.launcher = launcher ?? SandvaultLauncher(hostUser: paths.hostUser)
+        self.summariser = summariser
     }
 
     // MARK: Public
@@ -80,12 +82,7 @@ public struct SessionService: Sendable {
             // The main checkout always appears, so repositories show
             // with no worktrees and orphaned conversations stay
             // reachable.
-            let mainCheckout = Worktree(
-                repositoryName: repository.name,
-                repositoryPath: repository.path,
-                branch: baseRef?.split(separator: "/").last.map(String.init) ?? "main",
-                path: repository.path,
-            )
+            let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
             var items = [WorktreeItem]()
             var seenPaths = Set<String>()
             for worktree in [mainCheckout] + worktrees where seenPaths.insert(worktree.path).inserted {
@@ -127,8 +124,8 @@ public struct SessionService: Sendable {
     }
 
     /// Creates a worktree and branch for a prompt and starts the
-    /// agent in tmux with the picked model and effort, then pastes
-    /// the prompt into it. Returns the session name.
+    /// agent in tmux with the picked model, effort and the prompt as
+    /// its initial message. Returns the session name.
     public func createSession(
         repository: Repository,
         prompt: String,
@@ -155,6 +152,9 @@ public struct SessionService: Sendable {
     /// Finds Codex conversations by their embedded working
     /// directory; stateless, so no init parameter is needed.
     let codexIndex: CodexTranscriptIndex = .init()
+
+    /// Names branches from prompts on device.
+    let summariser: FoundationModelClient
 
     let paths: WorkspacePaths
     let git: GitClient
@@ -208,12 +208,16 @@ public struct SessionService: Sendable {
         let promptFile = try writePrompt(prompt, sessionName: sessionName)
         addFriendlySymlink(repository: slot.repository, branch: slot.branch, worktreePath: slot.path)
 
+        // The prompt travels inside the launch command, read from
+        // its file as the agent starts: pasting it after launch
+        // raced the agent's terminal setup, which flushed pending
+        // input and lost the prompt (Codex reliably, Claude Code
+        // sometimes).
         try await tmux.newSession(
             name: sessionName,
             directory: slot.path,
-            command: runner(for: agent).launchCommand(extraArguments: arguments),
+            command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
         )
-        try await tmux.sendPromptFile(promptFile, to: sessionName)
 
         var metadata = store.load()
         metadata.prompts[sessionName] = prompt
@@ -238,19 +242,6 @@ public struct SessionService: Sendable {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try? FileManager.default.removeItem(atPath: link)
         try? FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: worktreePath)
-    }
-
-    func availableBranch(repository: Repository, prompt: String) async -> String {
-        let base = "agent/" + SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
-        guard await git.branchExists(repository: repository, branch: base) else {
-            return base
-        }
-
-        var attempt = 2
-        while await git.branchExists(repository: repository, branch: "\(base)-\(attempt)") {
-            attempt += 1
-        }
-        return "\(base)-\(attempt)"
     }
 
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
@@ -278,8 +269,18 @@ public struct SessionService: Sendable {
 
     // MARK: Private
 
-    /// How much of the prompt seeds the branch name.
-    private static let branchSlugLength = 40
+    /// The repository's own checkout as a worktree: its branch is
+    /// whatever is actually checked out, so a feature branch in the
+    /// main checkout still matches its pull request in the listing.
+    private func mainCheckout(of repository: Repository, baseRef: String?) async -> Worktree {
+        await Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: git.currentBranch(worktreePath: repository.path)
+                ?? baseRef?.split(separator: "/").last.map(String.init) ?? "main",
+            path: repository.path,
+        )
+    }
 
     private func item(
         worktree: Worktree,

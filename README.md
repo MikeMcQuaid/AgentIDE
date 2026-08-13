@@ -49,6 +49,10 @@ before shipping.
   revisit (so you always know where you are needed)
 - Notifies you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
+- Reflows multi-line copies from agent terminals: indentation, gutter
+  marks and hard line breaks go while paragraphs and lists survive, and
+  Option-drag copies a rectangle (so answers paste cleanly into chat,
+  notes and pull request bodies)
 - Commits work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
 - Lets you SSH into any session from an iOS SSH client (so you can steer or

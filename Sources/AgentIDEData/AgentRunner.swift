@@ -5,15 +5,17 @@ import Foundation
 
 /// Everything agent-specific: how to launch, resume and find the
 /// transcripts of one agent CLI. All other code speaks this seam.
-/// Prompts are never passed as arguments; they arrive through the
-/// terminal via tmux paste after launch.
+/// The initial prompt is read from a file at launch: pasting it
+/// after launch raced the agent's terminal setup, which flushed
+/// pending input and lost the prompt.
 public protocol AgentRunner: Sendable {
     /// The agent this runner drives.
     var kind: AgentKind { get }
 
     /// The shell command that starts the agent interactively, with
-    /// caller-supplied extra arguments appended verbatim.
-    func launchCommand(extraArguments: String) -> String
+    /// caller-supplied extra arguments appended verbatim and the
+    /// prompt file's content as the initial message when given.
+    func launchCommand(extraArguments: String, promptFile: String?) -> String
 
     /// The shell command that resumes a previous conversation.
     func resumeCommand(resumeID: String, extraArguments: String) -> String
@@ -46,10 +48,18 @@ public protocol AgentRunner: Sendable {
 }
 
 extension AgentRunner {
-    /// Joins a base command with verbatim extra arguments.
-    func command(_ base: String, _ extraArguments: String) -> String {
+    /// Joins a base command, verbatim extra arguments and an
+    /// optional initial prompt read from a file at launch time,
+    /// inside the sandbox where the shared workspace is readable.
+    func command(_ base: String, _ extraArguments: String, promptFile: String? = nil) -> String {
         let trimmed = extraArguments.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty ? base : base + " " + trimmed
+        var joined = trimmed.isEmpty ? base : base + " " + trimmed
+        if let promptFile {
+            // The path is single-quoted for the shell, so any single
+            // quotes in it must be escaped out of the quoting.
+            joined += " \"$(cat '" + promptFile.replacing("'", with: "'\\''") + "')\""
+        }
+        return joined
     }
 
     /// Extracts model names from a listing's output, tolerating ANSI
@@ -150,8 +160,8 @@ public struct ClaudeCodeRunner: AgentRunner {
 
     /// Starts Claude Code interactively; the sandbox's wrapper adds
     /// its permission flag.
-    public func launchCommand(extraArguments: String) -> String {
-        command("claude", extraArguments)
+    public func launchCommand(extraArguments: String, promptFile: String?) -> String {
+        command("claude", extraArguments, promptFile: promptFile)
     }
 
     /// Resumes a conversation by its session id.
@@ -192,14 +202,20 @@ public struct CodexRunner: AgentRunner {
         false
     }
 
-    /// The Codex model names offered when discovery fails.
+    /// The Codex model ids offered when discovery fails; the bare
+    /// nicknames are not ids `--model` accepts.
     public var models: [String] {
-        ["sol", "terra", "luna", "gpt-5.5", "gpt-5.4"]
+        ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4"]
     }
 
-    /// Codex's model listing.
+    /// Codex has no listing subcommand (a bare argument becomes an
+    /// interactive prompt), but it caches the server's model list in
+    /// its home; the slugs are exactly what `--model` accepts.
     public var modelListingCommand: [String] {
-        ["codex", "models"]
+        [
+            "grep -o '\"slug\": *\"[^\"]*\"' ~/.codex/models_cache.json"
+                + " | cut -d '\"' -f4 | grep -v codex-auto-review",
+        ]
     }
 
     /// Codex's reasoning effort levels.
@@ -220,8 +236,8 @@ public struct CodexRunner: AgentRunner {
     }
 
     /// Starts Codex interactively.
-    public func launchCommand(extraArguments: String) -> String {
-        command("codex", extraArguments)
+    public func launchCommand(extraArguments: String, promptFile: String?) -> String {
+        command("codex", extraArguments, promptFile: promptFile)
     }
 
     /// Resumes a conversation by its session id.

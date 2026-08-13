@@ -61,9 +61,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   approach to any such concern, or duplicating behaviour that an
   existing surface already provides, get explicit confirmation.
 - Transitions that wait on anything (resuming a session, fetching
-  remote data) show a loading state that fills the pane instantly;
-  never leave the old content interactive so that the result pops
-  over it later.
+  remote data, cloning) show a loading state that fills the pane
+  instantly; never leave the old content interactive so that the
+  result pops over it later. The bar is any actual or possible
+  delay over half a second.
 
 ### Platform Notes
 
@@ -105,6 +106,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 
 - Run `script/style --fix` and resolve anything it cannot fix
 - Run `script/test` and `script/analyze` when Swift changed
+- Run `script/analyze` again before opening or updating a pull
+  request; unused imports and dead code otherwise surface in CI
+  first (sandboxed runs skip periphery, so dead-code findings
+  still need the host or CI)
 - Reread changed documentation for UK English, working links and
   72-column wrapping of this file
 - Confirm `README.md` and `ARCHITECTURE.md` still describe behaviour

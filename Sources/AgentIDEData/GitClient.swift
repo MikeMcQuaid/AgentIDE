@@ -192,33 +192,6 @@ public struct GitClient: Sendable {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// The worktree's uncommitted diff against `HEAD`.
-    public func uncommittedDiff(worktreePath: String) async throws -> String {
-        try await git(["diff", "HEAD"], in: worktreePath).standardOutput
-    }
-
-    /// The last commit's diff.
-    public func lastCommitDiff(worktreePath: String) async throws -> String {
-        try await git(["show", "--format=", "--patch", "HEAD"], in: worktreePath).standardOutput
-    }
-
-    /// Every commit on the branch against its merge base with a base
-    /// ref, the whole-branch review.
-    public func branchDiff(worktreePath: String, baseRef: String) async throws -> String {
-        try await git(["diff", baseRef + "...HEAD"], in: worktreePath).standardOutput
-    }
-
-    /// The branch's commits beyond the base ref, newest first, one
-    /// line each.
-    public func branchCommits(worktreePath: String, baseRef: String) async -> [String] {
-        let result = try? await git(
-            ["log", "--format=%h %s", baseRef + "..HEAD"],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
-    }
-
     /// The one-based line numbers of a file changed against HEAD,
     /// staged or not, for the editor's gutter markers.
     public func changedLineNumbers(worktreePath: String, file: String) async -> Set<Int> {
@@ -258,13 +231,13 @@ public struct GitClient: Sendable {
         try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
     }
 
-    /// Fetches origin and rebases the worktree onto its default
-    /// branch, re-signing every commit; failure or conflict aborts
-    /// the rebase so the worktree is left exactly as it was.
-    public func rebaseSignedOntoOrigin(worktreePath: String) async throws {
-        try await git(["fetch", "origin"], in: worktreePath)
+    /// Rebases the worktree onto a ref, re-signing every replayed
+    /// commit; failure or conflict aborts the rebase so the worktree
+    /// is left exactly as it was. The caller fetches first and picks
+    /// the ref.
+    public func rebaseSigned(worktreePath: String, onto ref: String) async throws {
         do {
-            try await git(["rebase", "--force-rebase", "--gpg-sign", "origin/HEAD"], in: worktreePath)
+            try await git(["rebase", "--force-rebase", "--gpg-sign", ref], in: worktreePath)
         } catch {
             try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error

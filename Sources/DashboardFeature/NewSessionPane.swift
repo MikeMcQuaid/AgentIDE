@@ -43,7 +43,7 @@ public struct NewSessionPane: View {
                 model: model,
                 repository: repository,
                 submitTitle: "Start agent",
-                submitHelp: "Create a worktree and branch and launch the agent in it",
+                submitHelp: "Create a worktree and branch and launch the agent in it (Cmd-Return)",
             ) { submission in await start(submission) }
             Spacer()
         }

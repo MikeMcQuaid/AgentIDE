@@ -33,6 +33,46 @@ struct ReviewModelTests {
         await model.reload()
         #expect(model.files.map(\.path) == ["dirty.txt"])
         #expect(model.showsUncommitted)
+
+        // Untracked files show as new-file diffs, so committing can
+        // include them.
+        try "loose\n".write(toFile: path + "/untracked.txt", atomically: true, encoding: .utf8)
+        await model.reload()
+        #expect(model.files.map(\.path).sorted() == ["dirty.txt", "untracked.txt"])
+    }
+
+    @Test
+    func `upstream scope gates on a pushed branch and diffs against it`() async throws {
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-upstream-" + UUID().uuidString, isDirectory: true)
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+
+        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        model.scope = .upstream
+        await model.reload()
+        #expect(model.hasUpstream == false)
+        #expect(model.files.isEmpty)
+        #expect(model.status == "This branch has not been pushed yet.")
+
+        let bare = path + "-origin.git"
+        defer { try? FileManager.default.removeItem(atPath: bare) }
+        try await runGit(["init", "-q", "--bare", bare], in: path)
+        try await runGit(["remote", "add", "origin", bare], in: path)
+        try await runGit(["push", "-q", "-u", "origin", "main"], in: path)
+        try "unpushed\n".write(toFile: path + "/unpushed.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+        try await runGit(["commit", "-q", "-m", "Add unpushed file"], in: path)
+
+        await model.reload()
+        #expect(model.hasUpstream)
+        #expect(model.files.map(\.path) == ["unpushed.txt"])
+        // The unpushed commit plus the decorated base row.
+        #expect(model.branchCommits.count == 2)
+        #expect(model.branchCommits.first?.contains("Add unpushed file") == true)
+        #expect(model.branchCommits.last?.contains("origin/main") == true)
     }
 
     // MARK: Private

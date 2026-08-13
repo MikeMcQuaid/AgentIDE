@@ -7,7 +7,7 @@ import Foundation
 /// system browser when the command key is held.
 public enum LinkOpener {
     /// The Browser tab's position in the utility tab strip.
-    public static let browserTabIndex = 4
+    public static let browserTabIndex = 2
 
     /// Routes an address by the command key.
     @preconcurrency

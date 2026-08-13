@@ -99,16 +99,6 @@ public struct TmuxClient: Sendable {
         ])
     }
 
-    /// Pastes a file's content into a session's terminal and presses
-    /// return, so prompts reach agents as input rather than argv.
-    public func sendPromptFile(_ file: String, to sessionName: String) async throws {
-        try await tmux([
-            "load-buffer", file,
-            ";", "paste-buffer", "-d", "-p", "-t", sessionName,
-            ";", "send-keys", "-t", sessionName, "Enter",
-        ])
-    }
-
     /// Kills one session, leaving the server and its siblings alone.
     public func killSession(name: String) async throws {
         try await tmux(["kill-session", "-t", name])
@@ -121,21 +111,22 @@ public struct TmuxClient: Sendable {
 
     /// The argv a terminal view should spawn to attach interactively.
     /// Servers outlive app updates and only read their config file
-    /// at start, so options added since the server began would never
-    /// apply; the attach chain sets the clipboard option live and
-    /// idempotently, which is what lets copy-mode yanks reach the
-    /// macOS clipboard on long-running servers.
+    /// at start, so the attach chain applies the mouse and clipboard
+    /// options live and idempotently: the wheel scrolls tmux history
+    /// and copy-mode drags reach the macOS clipboard through OSC 52.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
             [
                 "tmux",
-                "set", "-s", "set-clipboard", "on",
+                "set", "-g", "mouse", "on",
+                ";", "set", "-s", "set-clipboard", "on",
                 ";", "attach-session", "-t", sessionName,
             ]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux set -s set-clipboard on ';'"
+                    + "; exec tmux set -g mouse on ';'"
+                    + " set -s set-clipboard on ';'"
                     + " attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
@@ -170,10 +161,9 @@ public struct TmuxClient: Sendable {
     /// The server's config: dead panes stay inspectable, the mouse
     /// wheel scrolls tmux's own history (the alternate screen leaves
     /// the outer terminal nothing to scroll) and that history is
-    /// deep enough to review a whole session.
-    /// `set-clipboard` with the clipboard terminal feature makes
-    /// copy-mode yanks (including mouse drags) reach the macOS
-    /// clipboard through OSC 52, which the terminal view forwards.
+    /// deep enough to review a whole session. `set-clipboard` with
+    /// the clipboard terminal feature makes copy-mode yanks reach
+    /// the macOS clipboard through OSC 52.
     private static let configContent = """
     set -g remain-on-exit on
     set -g mouse on

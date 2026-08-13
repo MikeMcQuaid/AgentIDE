@@ -78,7 +78,7 @@ extension PullRequestsModel {
 
         do {
             try await performRebase(worktree)
-            status = "Rebased onto origin."
+            status = "Rebased and signed."
             await reload(keepingSelection: true)
             return true
         } catch {
