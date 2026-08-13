@@ -144,8 +144,8 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
   boundary. Its newlines travel as printf escapes, because `sudo --login`
   rebuilds the command line and collapses literal newlines.
 - The config sets `remain-on-exit on`, so a finished agent leaves a dead
-  pane whose exit status and scrollback remain inspectable, `mouse on`,
-  so the wheel scrolls tmux's history, and a 50000-line history limit.
+  pane whose exit status and scrollback remain inspectable, `mouse off`,
+  so the terminal view owns the mouse, and a 50000-line history limit.
 - Session names follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
   append `-2` to the branch component and tmux's forbidden `.` and `:` are
@@ -175,8 +175,9 @@ PTY:
   The terminal is deliberately taller than the visible pane inside a
   native scroll view: tmux believes the pane is that tall, so recent
   history stays on the live screen where the wheel scrolls and selection
-  reaches it directly, and the view follows the cursor as output arrives
-  unless the user has scrolled away. History beyond that band remains in
+  reaches it directly; the view positions itself once where the cursor
+  settles, sticks to the bottom across resizes when already there and
+  otherwise never scrolls by itself. History beyond that band remains in
   tmux, reachable with keyboard copy-mode (prefix then `[`). Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent

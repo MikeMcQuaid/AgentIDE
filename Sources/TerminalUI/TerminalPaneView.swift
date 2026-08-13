@@ -11,8 +11,10 @@ import SwiftUI
 /// sits in a scroll view: tmux believes the pane is that tall, so
 /// recent history stays on the live screen where the wheel scrolls
 /// it natively and dragging selects it like any Mac text, with no
-/// modal copy-mode and no separate viewer. The view follows the
-/// cursor as output arrives unless the user has scrolled away.
+/// modal copy-mode and no separate viewer. The view positions
+/// itself once where the cursor settles after launch, sticks to the
+/// bottom across resizes when already there, and otherwise never
+/// scrolls by itself.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
@@ -83,11 +85,11 @@ final class PaneTerminalView: LocalProcessTerminalView {
 // MARK: - TerminalRepresentable
 
 /// Bridges the scrolling terminal into SwiftUI and owns the process
-/// lifecycle, sizing and cursor following.
+/// lifecycle, sizing and the one-shot initial position.
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
-    /// Owns layout, spawn timing and the cursor-follow timer.
+    /// Owns layout, spawn timing and the initial-position timer.
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         // MARK: Lifecycle
 
@@ -144,9 +146,12 @@ struct TerminalRepresentable: NSViewRepresentable {
                     self?.layout()
                 }
             }
-            followTimer = Timer.scheduledTimer(withTimeInterval: Self.followInterval, repeats: true) { [weak self] _ in
+            positionTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.settleInterval,
+                repeats: true,
+            ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.followCursor()
+                    self?.settleInitialPosition()
                 }
             }
             // The terminal view's own wheel handling turns scrolling
@@ -167,16 +172,15 @@ struct TerminalRepresentable: NSViewRepresentable {
                 }
 
                 scrollView.scrollWheel(with: event)
-                userScrolledAt = Date()
                 return nil
             }
         }
 
-        /// Stops the follow timer and frame observation with the
-        /// view.
+        /// Stops the position timer and frame observation with
+        /// the view.
         func tearDown() {
-            followTimer?.invalidate()
-            followTimer = nil
+            positionTimer?.invalidate()
+            positionTimer = nil
             if let frameObserver {
                 NotificationCenter.default.removeObserver(frameObserver)
             }
@@ -201,12 +205,19 @@ struct TerminalRepresentable: NSViewRepresentable {
 
             let target = NSSize(width: viewport.width, height: viewport.height * Self.heightMultiplier)
             if terminalView.frame.size != target {
+                // The document's bottom is y zero: resizing keeps a
+                // bottom-pinned viewport pinned, and otherwise the
+                // viewport never moves by itself.
+                let wasAtBottom = scrollView.documentVisibleRect.minY <= Self.bottomTolerance
                 terminalView.setFrameSize(target)
+                if wasAtBottom {
+                    scrollView.contentView.scroll(to: NSPoint(x: 0, y: 0))
+                    scrollView.reflectScrolledClipView(scrollView.contentView)
+                }
             }
             if started == false {
                 started = true
                 Self.start(command, in: terminalView)
-                lastCursorRow = -1
             }
         }
 
@@ -217,22 +228,20 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// history. Taller makes full-screen redraws costlier.
         private static let heightMultiplier: CGFloat = 10
 
-        private static let followInterval: TimeInterval = 0.5
+        private static let settleInterval: TimeInterval = 0.5
 
-        /// How long after a manual scroll the cursor follow stays
-        /// paused, so reading is never yanked back down.
-        private static let followPause: TimeInterval = 1
+        /// How close to the document's bottom still counts as
+        /// pinned there.
+        private static let bottomTolerance: CGFloat = 4
 
         private let command: [String]
         private let onProcessTerminated: (@MainActor () -> Void)?
         private weak var scrollView: NSScrollView?
         private var frameObserver: NSObjectProtocol?
-        private var followTimer: Timer?
+        private var positionTimer: Timer?
         private var wheelMonitor: Any?
         private var started = false
-        private var lastCursorRow = -1
         private var candidateRow = -1
-        private var userScrolledAt: Date = .distantPast
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
             // Non-absolute commands (sudo, tmux) resolve through
@@ -249,10 +258,14 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// Scrolls the cursor's row into view when it moves, unless
         /// the user has scrolled away from where it last was; coming
         /// back re-engages following on the next move.
-        private func followCursor() {
-            guard started, let scrollView, let terminalView,
-                  Date().timeIntervalSince(userScrolledAt) > Self.followPause
-            else {
+        /// Scrolls once to wherever the cursor settles after the
+        /// process starts (an agent's composer, a shell's prompt),
+        /// then stops: scrolling afterwards belongs to the user
+        /// alone. Full-screen programs park the cursor all over the
+        /// screen mid-repaint, so a row must appear on two
+        /// consecutive samples to count as settled.
+        private func settleInitialPosition() {
+            guard started, let terminalView else {
                 return
             }
 
@@ -261,25 +274,14 @@ struct TerminalRepresentable: NSViewRepresentable {
             guard terminal.rows > 0 else {
                 return
             }
-
-            // Full-screen programs park the cursor all over the
-            // screen mid-repaint, which typing triggers constantly;
-            // only a row seen on two consecutive samples counts as
-            // where output actually settled.
             guard row == candidateRow else {
                 candidateRow = row
                 return
             }
-            guard row != lastCursorRow else {
-                return
-            }
 
-            let wasFollowing = lastCursorRow < 0
-                || scrollView.documentVisibleRect.intersects(rect(ofRow: lastCursorRow))
-            lastCursorRow = row
-            if wasFollowing {
-                terminalView.scrollToVisible(rect(ofRow: row))
-            }
+            terminalView.scrollToVisible(rect(ofRow: row))
+            positionTimer?.invalidate()
+            positionTimer = nil
         }
 
         /// One row's rectangle in the terminal view's coordinates,
