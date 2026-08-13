@@ -175,9 +175,10 @@ PTY:
   The terminal is deliberately taller than the visible pane inside a
   native scroll view: tmux believes the pane is that tall, so recent
   history stays on the live screen where the wheel scrolls and selection
-  reaches it directly; the view positions itself once where the cursor
-  settles, sticks to the bottom across resizes when already there and
-  otherwise never scrolls by itself. History beyond that band remains in
+  reaches it directly; the scrollable range ends where content ends,
+  growing as output does, and a viewport at the bottom sticks to it while
+  one scrolled away never moves by itself. History beyond that band
+  remains in
   tmux, reachable with keyboard copy-mode (prefix then `[`). Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent

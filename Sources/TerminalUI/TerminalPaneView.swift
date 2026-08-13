@@ -11,10 +11,9 @@ import SwiftUI
 /// sits in a scroll view: tmux believes the pane is that tall, so
 /// recent history stays on the live screen where the wheel scrolls
 /// it natively and dragging selects it like any Mac text, with no
-/// modal copy-mode and no separate viewer. The view positions
-/// itself once where the cursor settles after launch, sticks to the
-/// bottom across resizes when already there, and otherwise never
-/// scrolls by itself.
+/// modal copy-mode and no separate viewer. The scrollable range ends
+/// where content ends, growing as output does; a viewport at the
+/// bottom sticks to it, and one scrolled away never moves by itself.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
@@ -51,45 +50,14 @@ public struct TerminalPaneView: View {
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
 
-// MARK: - PaneTerminalView
-
-/// The SwiftTerm view with the pane's own copy behaviour.
-final class PaneTerminalView: LocalProcessTerminalView {
-    // MARK: Lifecycle
-
-    deinit {
-        // The PTY dies with the view.
-    }
-
-    // MARK: Internal
-
-    /// Reflows multi-line copies for pasting into prose tools.
-    var reflowsCopies = false
-
-    /// Native selection copy, reflowed for prose panes.
-    override func copy(_ sender: Any) {
-        super.copy(sender)
-        guard reflowsCopies,
-              let text = NSPasteboard.general.string(forType: .string),
-              text.contains("\n")
-        else {
-            return
-        }
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(PasteableText.reflow(text), forType: .string)
-    }
-}
-
 // MARK: - TerminalRepresentable
 
 /// Bridges the scrolling terminal into SwiftUI and owns the process
-/// lifecycle, sizing and the one-shot initial position.
+/// lifecycle, sizing and the content-extent tracking.
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
-    /// Owns layout, spawn timing and the initial-position timer.
+    /// Owns layout, spawn timing and the content-extent timer.
     final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
         // MARK: Lifecycle
 
@@ -109,6 +77,7 @@ struct TerminalRepresentable: NSViewRepresentable {
         var appliedScheme: ColorScheme?
 
         weak var terminalView: PaneTerminalView?
+        weak var containerView: TerminalClipView?
 
         func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
             // The scroll view owns sizing.
@@ -126,10 +95,9 @@ struct TerminalRepresentable: NSViewRepresentable {
             onProcessTerminated?()
         }
 
-        /// Hooks the scroll view once and watches its size: the
-        /// terminal is kept one scrollback taller than the viewport,
-        /// and the process starts on the first real layout so tmux
-        /// sizes to the pane, not a placeholder frame.
+        /// Hooks the scroll view once and watches its size, so the
+        /// process starts on the first real layout and tmux sizes to
+        /// the pane, not a placeholder frame.
         func configure(scrollView: NSScrollView) {
             guard self.scrollView == nil else {
                 return
@@ -146,12 +114,12 @@ struct TerminalRepresentable: NSViewRepresentable {
                     self?.layout()
                 }
             }
-            positionTimer = Timer.scheduledTimer(
-                withTimeInterval: Self.settleInterval,
+            extentTimer = Timer.scheduledTimer(
+                withTimeInterval: Self.extentInterval,
                 repeats: true,
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    self?.settleInitialPosition()
+                    self?.trackContent()
                 }
             }
             // The terminal view's own wheel handling turns scrolling
@@ -176,11 +144,10 @@ struct TerminalRepresentable: NSViewRepresentable {
             }
         }
 
-        /// Stops the position timer and frame observation with
-        /// the view.
+        /// Stops the extent timer and observers with the view.
         func tearDown() {
-            positionTimer?.invalidate()
-            positionTimer = nil
+            extentTimer?.invalidate()
+            extentTimer = nil
             if let frameObserver {
                 NotificationCenter.default.removeObserver(frameObserver)
             }
@@ -191,10 +158,12 @@ struct TerminalRepresentable: NSViewRepresentable {
             wheelMonitor = nil
         }
 
-        /// Sizes the terminal to the viewport plus the scrollback
-        /// band and spawns the process once the size is real.
+        /// Sizes the terminal to a multiple of the viewport inside
+        /// its clipping container and spawns the process once the
+        /// size is real; a bottom-pinned viewport stays pinned
+        /// across resizes.
         func layout() {
-            guard let scrollView, let terminalView else {
+            guard let scrollView, let terminalView, let containerView else {
                 return
             }
 
@@ -203,16 +172,14 @@ struct TerminalRepresentable: NSViewRepresentable {
                 return
             }
 
-            let target = NSSize(width: viewport.width, height: viewport.height * Self.heightMultiplier)
-            if terminalView.frame.size != target {
-                // The document's bottom is y zero: resizing keeps a
-                // bottom-pinned viewport pinned, and otherwise the
-                // viewport never moves by itself.
-                let wasAtBottom = scrollView.documentVisibleRect.minY <= Self.bottomTolerance
-                terminalView.setFrameSize(target)
-                if wasAtBottom {
-                    scrollView.contentView.scroll(to: NSPoint(x: 0, y: 0))
-                    scrollView.reflectScrolledClipView(scrollView.contentView)
+            let tall = NSSize(width: viewport.width, height: viewport.height * Self.heightMultiplier)
+            if terminalView.frame.size != tall {
+                let pinned = isAtBottom
+                terminalView.frame = CGRect(origin: .zero, size: tall)
+                let height = min(max(containerView.frame.height, viewport.height), tall.height)
+                containerView.setFrameSize(NSSize(width: viewport.width, height: height))
+                if pinned {
+                    scrollToBottom()
                 }
             }
             if started == false {
@@ -228,20 +195,33 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// history. Taller makes full-screen redraws costlier.
         private static let heightMultiplier: CGFloat = 10
 
-        private static let settleInterval: TimeInterval = 0.5
+        private static let extentInterval: TimeInterval = 0.5
 
-        /// How close to the document's bottom still counts as
-        /// pinned there.
+        /// Rows kept visible below the cursor: composer borders and
+        /// status lines sit just under it.
+        private static let extentPaddingRows = 4
+
+        /// How close to the content's end still counts as pinned
+        /// there.
         private static let bottomTolerance: CGFloat = 4
 
         private let command: [String]
         private let onProcessTerminated: (@MainActor () -> Void)?
         private weak var scrollView: NSScrollView?
         private var frameObserver: NSObjectProtocol?
-        private var positionTimer: Timer?
+        private var extentTimer: Timer?
         private var wheelMonitor: Any?
         private var started = false
         private var candidateRow = -1
+        private var positioned = false
+
+        private var isAtBottom: Bool {
+            guard let scrollView, let containerView else {
+                return true
+            }
+
+            return scrollView.documentVisibleRect.maxY >= containerView.frame.height - Self.bottomTolerance
+        }
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
             // Non-absolute commands (sudo, tmux) resolve through
@@ -255,17 +235,15 @@ struct TerminalRepresentable: NSViewRepresentable {
             )
         }
 
-        /// Scrolls the cursor's row into view when it moves, unless
-        /// the user has scrolled away from where it last was; coming
-        /// back re-engages following on the next move.
-        /// Scrolls once to wherever the cursor settles after the
-        /// process starts (an agent's composer, a shell's prompt),
-        /// then stops: scrolling afterwards belongs to the user
-        /// alone. Full-screen programs park the cursor all over the
-        /// screen mid-repaint, so a row must appear on two
-        /// consecutive samples to count as settled.
-        private func settleInitialPosition() {
-            guard started, let terminalView else {
+        /// Grows and shrinks the scrollable range to where content
+        /// ends, judged by where the cursor settles (full-screen
+        /// programs park it all over the screen mid-repaint, so a
+        /// row must repeat on two samples to count). A viewport at
+        /// the bottom sticks to the growing end; one scrolled away
+        /// never moves. The first settled row also positions the
+        /// viewport once.
+        private func trackContent() {
+            guard started, let scrollView, let terminalView, let containerView else {
                 return
             }
 
@@ -279,27 +257,33 @@ struct TerminalRepresentable: NSViewRepresentable {
                 return
             }
 
-            terminalView.scrollToVisible(rect(ofRow: row))
-            positionTimer?.invalidate()
-            positionTimer = nil
+            let rowHeight = terminalView.frame.height / CGFloat(terminal.rows)
+            let viewport = scrollView.bounds.size
+            let content = CGFloat(row + Self.extentPaddingRows) * rowHeight
+            let target = min(max(content, viewport.height), terminalView.frame.height)
+            if abs(target - containerView.frame.height) > rowHeight {
+                let pinned = isAtBottom
+                containerView.setFrameSize(NSSize(width: viewport.width, height: target))
+                if pinned {
+                    scrollToBottom()
+                }
+            }
+            if positioned == false {
+                positioned = true
+                containerView.scrollToVisible(
+                    CGRect(x: 0, y: CGFloat(row) * rowHeight, width: 1, height: rowHeight),
+                )
+            }
         }
 
-        /// One row's rectangle in the terminal view's coordinates,
-        /// which have their origin at the bottom.
-        private func rect(ofRow row: Int) -> CGRect {
-            guard let terminalView else {
-                return .zero
+        private func scrollToBottom() {
+            guard let scrollView, let containerView else {
+                return
             }
 
-            let rows = max(terminalView.getTerminal().rows, 1)
-            let height = terminalView.frame.height / CGFloat(rows)
-            let fromTop = CGFloat(row) * height
-            return CGRect(
-                x: 0,
-                y: terminalView.frame.height - fromTop - height,
-                width: 1,
-                height: height,
-            )
+            let offset = max(0, containerView.frame.height - scrollView.bounds.height)
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: offset))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
     }
 
@@ -312,7 +296,8 @@ struct TerminalRepresentable: NSViewRepresentable {
         coordinator.tearDown()
     }
 
-    /// Builds the terminal inside a scroll view and themes it.
+    /// Builds the terminal inside its clipping container inside a
+    /// scroll view, and themes it.
     func makeNSView(context: Context) -> NSScrollView {
         let terminal = PaneTerminalView(frame: .zero)
         terminal.processDelegate = context.coordinator
@@ -320,8 +305,13 @@ struct TerminalRepresentable: NSViewRepresentable {
         terminal.reflowsCopies = reflowsCopies
         context.coordinator.terminalView = terminal
 
+        let container = TerminalClipView(frame: .zero)
+        container.clipsToBounds = true
+        container.addSubview(terminal)
+        context.coordinator.containerView = container
+
         let scrollView = NSScrollView()
-        scrollView.documentView = terminal
+        scrollView.documentView = container
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
@@ -333,8 +323,8 @@ struct TerminalRepresentable: NSViewRepresentable {
 
     /// Re-themes when the appearance actually changes; layout also
     /// retries here as a fallback.
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        if let terminal = scrollView.documentView as? PaneTerminalView {
+    func updateNSView(_: NSScrollView, context: Context) {
+        if let terminal = context.coordinator.terminalView {
             applyTheme(to: terminal, context: context)
         }
         context.coordinator.layout()
