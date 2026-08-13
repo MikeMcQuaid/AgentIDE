@@ -230,14 +230,13 @@ struct TerminalRepresentable: NSViewRepresentable {
         private var wheelMonitor: Any?
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
-            guard let executable = command.first else {
-                return
-            }
-
+            // Non-absolute commands (sudo, tmux) resolve through env:
+            // spawning needs a path, not a name.
+            let resolved = command.first?.hasPrefix("/") == true ? command : ["/usr/bin/env"] + command
             view.startProcess(
-                executable: executable,
-                args: Array(command.dropFirst()),
-                environment: Terminal.getEnvironmentVariables(termName: "xterm-256color"),
+                executable: resolved.first ?? "/bin/zsh",
+                args: Array(resolved.dropFirst()),
+                environment: nil,
                 execName: nil,
             )
         }
