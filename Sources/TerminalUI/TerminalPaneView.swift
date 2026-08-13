@@ -283,9 +283,12 @@ struct TerminalRepresentable: NSViewRepresentable {
                         return
                     }
 
-                    self.started = true
+                    // startWhenSized marks `started` itself; setting
+                    // it here first made its guard bail and no
+                    // process ever spawned.
                     if let observer = self.frameObserver {
                         NotificationCenter.default.removeObserver(observer)
+                        self.frameObserver = nil
                     }
                     self.startWhenSized(self.pendingCommand, in: sized)
                 }
