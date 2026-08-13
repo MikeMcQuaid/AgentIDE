@@ -1,7 +1,7 @@
 /// Reflows terminal copies for pasting into prose tools like chat,
 /// notes and pull request bodies: indentation and the hard line
-/// breaks terminal width forced go, blank lines keep paragraphs
-/// apart and list items keep their own lines.
+/// breaks forced by the terminal's width are removed, blank lines
+/// keep paragraphs apart and list items keep their own lines.
 public enum PasteableText {
     // MARK: Public
 

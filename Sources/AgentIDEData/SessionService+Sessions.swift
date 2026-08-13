@@ -77,8 +77,14 @@ public extension SessionService {
         set -s set-clipboard on
         set -as terminal-features xterm-256color:clipboard
         """
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? content.write(toFile: file, atomically: true, encoding: .utf8)
+        do {
+            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            try content.write(toFile: file, atomically: true, encoding: .utf8)
+        } catch {
+            // tmux errors on a missing config path; /dev/null reads
+            // as empty and the chained commands still apply.
+            return "/dev/null"
+        }
         return file
     }
 

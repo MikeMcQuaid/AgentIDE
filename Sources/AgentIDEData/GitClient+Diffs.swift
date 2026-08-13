@@ -1,5 +1,3 @@
-import Foundation
-
 /// The review surfaces' diffs, split from the client body for
 /// length.
 public extension GitClient {
@@ -36,5 +34,12 @@ public extension GitClient {
     /// ref, the whole-branch review.
     func branchDiff(worktreePath: String, baseRef: String) async throws -> String {
         try await git(["diff", baseRef + "...HEAD"], in: worktreePath).standardOutput
+    }
+
+    /// Exactly what pushing would add to an upstream ref: a two-dot
+    /// diff, so commits already upstream subtract instead of
+    /// widening it the way a merge-base diff would.
+    func upstreamDiff(worktreePath: String, upstreamRef: String) async throws -> String {
+        try await git(["diff", upstreamRef + "..HEAD"], in: worktreePath).standardOutput
     }
 }

@@ -179,15 +179,18 @@ final class PullRequestsModel {
         return (item.aheadOfUpstream ?? 1) > 0
     }
 
-    /// Why Push is in its current state, for the button's hover.
+    /// Why Push is in its current state, for the button's hover:
+    /// with nothing to push that is the whole story, and signing
+    /// only matters once commits are waiting.
     var pushHelp: String {
+        guard let item = branchItem, isPushed == false, (item.aheadOfUpstream ?? 1) > 0 else {
+            return "Everything is already pushed"
+        }
         guard isTipSigned else {
             return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
         }
 
-        return canPush
-            ? "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
-            : "Everything is already pushed"
+        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
     }
 
     /// Opening a pull request makes sense until one is open for the

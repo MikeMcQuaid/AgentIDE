@@ -55,7 +55,9 @@ extension AgentRunner {
         let trimmed = extraArguments.trimmingCharacters(in: .whitespaces)
         var joined = trimmed.isEmpty ? base : base + " " + trimmed
         if let promptFile {
-            joined += " \"$(cat '" + promptFile + "')\""
+            // The path is single-quoted for the shell, so any single
+            // quotes in it must be escaped out of the quoting.
+            joined += " \"$(cat '" + promptFile.replacing("'", with: "'\\''") + "')\""
         }
         return joined
     }

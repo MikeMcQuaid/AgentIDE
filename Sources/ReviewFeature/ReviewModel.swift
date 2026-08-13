@@ -117,7 +117,9 @@ final class ReviewModel {
 
                 let upstreamRef = "origin/" + currentBranch
                 branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: upstreamRef)
-                files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: upstreamRef))
+                files = try await DiffParser.parse(
+                    git.upstreamDiff(worktreePath: worktreePath, upstreamRef: upstreamRef),
+                )
 
             case .branch:
                 showsUncommitted = false

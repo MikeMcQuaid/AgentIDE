@@ -142,6 +142,14 @@ struct PullRequestsModelTests {
     }
 
     @Test
+    func `an unsigned tip with nothing to push reads as pushed`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.checkTipSigned = { _ in false }
+        await model.reload()
+        #expect(model.pushHelp.contains("already pushed"))
+    }
+
+    @Test
     func `a failed push reports rather than dimming`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 2)])
         model.performPush = { _ in throw CocoaError(.fileNoSuchFile) }
