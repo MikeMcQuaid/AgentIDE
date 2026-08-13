@@ -149,6 +149,27 @@ struct TerminalRepresentable: NSViewRepresentable {
                     self?.followCursor()
                 }
             }
+            // The terminal view's own wheel handling turns scrolling
+            // into arrow keys on the alternate screen and is not
+            // overridable, so wheel events over the pane are taken
+            // before dispatch and given to the scroll view, which
+            // keeps momentum and elasticity.
+            wheelMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: .scrollWheel,
+            ) { [weak self, weak scrollView] event in
+                guard let self, let scrollView, event.window === scrollView.window else {
+                    return event
+                }
+
+                let point = scrollView.convert(event.locationInWindow, from: nil)
+                guard scrollView.bounds.contains(point) else {
+                    return event
+                }
+
+                scrollView.scrollWheel(with: event)
+                userScrolledAt = Date()
+                return nil
+            }
         }
 
         /// Stops the follow timer and frame observation with the
@@ -160,6 +181,10 @@ struct TerminalRepresentable: NSViewRepresentable {
                 NotificationCenter.default.removeObserver(frameObserver)
             }
             frameObserver = nil
+            if let wheelMonitor {
+                NSEvent.removeMonitor(wheelMonitor)
+            }
+            wheelMonitor = nil
         }
 
         /// Sizes the terminal to the viewport plus the scrollback
@@ -174,7 +199,7 @@ struct TerminalRepresentable: NSViewRepresentable {
                 return
             }
 
-            let target = NSSize(width: viewport.width, height: viewport.height + Self.scrollbackHeight)
+            let target = NSSize(width: viewport.width, height: viewport.height * Self.heightMultiplier)
             if terminalView.frame.size != target {
                 terminalView.setFrameSize(target)
             }
@@ -187,20 +212,26 @@ struct TerminalRepresentable: NSViewRepresentable {
 
         // MARK: Private
 
-        /// The extra height tmux believes the pane has: the live
-        /// screen doubles as natively scrollable history. Roughly
-        /// 250 rows; taller makes full-screen redraws costlier.
-        private static let scrollbackHeight: CGFloat = 4_000
+        /// How much taller than the viewport tmux believes the pane
+        /// is: the live screen doubles as natively scrollable
+        /// history. Taller makes full-screen redraws costlier.
+        private static let heightMultiplier: CGFloat = 10
 
         private static let followInterval: TimeInterval = 0.5
+
+        /// How long after a manual scroll the cursor follow stays
+        /// paused, so reading is never yanked back down.
+        private static let followPause: TimeInterval = 1
 
         private let command: [String]
         private let onProcessTerminated: (@MainActor () -> Void)?
         private weak var scrollView: NSScrollView?
         private var frameObserver: NSObjectProtocol?
         private var followTimer: Timer?
+        private var wheelMonitor: Any?
         private var started = false
         private var lastCursorRow = -1
+        private var userScrolledAt: Date = .distantPast
 
         private static func start(_ command: [String], in view: LocalProcessTerminalView) {
             // Non-absolute commands (sudo, tmux) resolve through
@@ -218,7 +249,9 @@ struct TerminalRepresentable: NSViewRepresentable {
         /// the user has scrolled away from where it last was; coming
         /// back re-engages following on the next move.
         private func followCursor() {
-            guard started, let scrollView, let terminalView else {
+            guard started, let scrollView, let terminalView,
+                  Date().timeIntervalSince(userScrolledAt) > Self.followPause
+            else {
                 return
             }
 
