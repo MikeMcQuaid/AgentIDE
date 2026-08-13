@@ -185,7 +185,8 @@ struct GitClientIntegrationTests {
         #expect(branchDiff.contains("main.txt") == false)
 
         let commits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
-        #expect(commits.count == 1)
+        // The branch's commit plus the decorated base row.
+        #expect(commits.count == 2)
         #expect(commits.first?.contains("Branch work") == true)
         #expect(await git.lastCommitDate(worktreePath: worktreePath) > 0)
     }

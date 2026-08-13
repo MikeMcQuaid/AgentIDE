@@ -16,8 +16,58 @@ public struct RepositoryFinderPane: View {
 
     // MARK: Public
 
-    /// A search field over the current step's fuzzy-ranked list.
+    /// A search field over the current step's fuzzy-ranked list, or
+    /// a pane-filling progress state while a pick clones and opens.
     public var body: some View {
+        if isOpening {
+            ProgressView(model.status ?? "Opening repository…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            finder
+        }
+    }
+
+    // MARK: Private
+
+    private static let spacing: CGFloat = 10
+    private static let rowPadding: CGFloat = 4
+    private static let resultLimit = 15
+    private static let listHeight: CGFloat = 300
+    private static let topPadding: CGFloat = 3
+    private static let maximumWidth: CGFloat = 640
+    private static let highlightOpacity = 0.25
+
+    @State private var query = ""
+
+    /// Fills the pane with progress the moment a pick starts:
+    /// cloning takes seconds and the list must not stay interactive.
+    @State private var isOpening = false
+
+    @State private var owner: String?
+    @State private var owners: [String] = []
+    @State private var repositories: [String] = []
+    @State private var highlighted = 0
+
+    private let model: DashboardModel
+
+    private var fieldPrompt: String {
+        owner == nil
+            ? "Organisation or user; return also accepts any typed owner"
+            : "Find a repository"
+    }
+
+    private var results: [String] {
+        let source = owner == nil ? owners : repositories
+        return query.isEmpty
+            ? Array(source.prefix(Self.resultLimit))
+            : Array(FuzzyMatcher.rank(source, query: query).prefix(Self.resultLimit))
+    }
+
+    private var clonedNames: Set<String> {
+        Set(model.repositories.flatMap { [$0.fullName ?? "", $0.name] })
+    }
+
+    private var finder: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             header
             TextField(fieldPrompt, text: $query)
@@ -56,41 +106,6 @@ public struct RepositoryFinderPane: View {
 
             repositories = fresh
         }
-    }
-
-    // MARK: Private
-
-    private static let spacing: CGFloat = 10
-    private static let rowPadding: CGFloat = 4
-    private static let resultLimit = 15
-    private static let listHeight: CGFloat = 300
-    private static let topPadding: CGFloat = 3
-    private static let maximumWidth: CGFloat = 640
-    private static let highlightOpacity = 0.25
-
-    @State private var query = ""
-    @State private var owner: String?
-    @State private var owners: [String] = []
-    @State private var repositories: [String] = []
-    @State private var highlighted = 0
-
-    private let model: DashboardModel
-
-    private var fieldPrompt: String {
-        owner == nil
-            ? "Organisation or user; return also accepts any typed owner"
-            : "Find a repository"
-    }
-
-    private var results: [String] {
-        let source = owner == nil ? owners : repositories
-        return query.isEmpty
-            ? Array(source.prefix(Self.resultLimit))
-            : Array(FuzzyMatcher.rank(source, query: query).prefix(Self.resultLimit))
-    }
-
-    private var clonedNames: Set<String> {
-        Set(model.repositories.flatMap { [$0.fullName ?? "", $0.name] })
     }
 
     private var header: some View {
@@ -179,7 +194,13 @@ public struct RepositoryFinderPane: View {
 
     private func pick(_ result: String) {
         guard owner == nil else {
-            Task { await model.openRepository(fullName: result) }
+            isOpening = true
+            Task {
+                await model.openRepository(fullName: result)
+                // On success the finder pane closes itself; on
+                // failure the list returns for another try.
+                isOpening = false
+            }
             return
         }
 

@@ -80,6 +80,55 @@ public extension GitClient {
         try (existing + separator + pattern + "\n").write(toFile: file, atomically: true, encoding: .utf8)
     }
 
+    /// The branch's commits beyond the base ref, newest first, one
+    /// line each.
+    func branchCommits(worktreePath: String, baseRef: String) async -> [String] {
+        let result = try? await git(
+            ["log", "--format=%h%d %s", baseRef + "..HEAD"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        var lines = (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
+        // The base commit anchors the list: its ref decorations name
+        // where the branch forks from the local and remote log.
+        // Plain local branches pointing there are already merged, so
+        // only the default and remote names survive the filter.
+        let base = try? await git(
+            ["log", "-1", "--format=%h%d %s", baseRef],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        if let line = base?.standardOutput.split(separator: "\n").first {
+            lines.append(Self.filteredBaseDecorations(String(line)))
+        }
+        return lines
+    }
+
+    /// Rewrites a decorated base log line, dropping local branch
+    /// names other than the default: any branch pointing at the base
+    /// is fully merged there, so only `origin/*`, `main`, `master`
+    /// and `HEAD` arrows orient the reader.
+    internal static func filteredBaseDecorations(_ line: String) -> String {
+        guard let open = line.firstIndex(of: "("),
+              let close = line.firstIndex(of: ")"),
+              open < close
+        else {
+            return line
+        }
+
+        let refs = line[line.index(after: open) ..< close]
+            .components(separatedBy: ", ")
+            .filter { ref in
+                ref.hasPrefix("origin/") || ref == "main" || ref == "master" || ref.contains("HEAD")
+                    || ref.hasPrefix("tag: ")
+            }
+        let decorations = refs.isEmpty ? "" : " (" + refs.joined(separator: ", ") + ")"
+        // %d wraps decorations in " (…)", so the space before the
+        // parenthesis goes with them.
+        let head = line[..<open].hasSuffix(" ") ? String(line[..<open].dropLast()) : String(line[..<open])
+        return head + decorations + String(line[line.index(after: close)...])
+    }
+
     /// The `%G?` states that count as signed: a good signature, or a
     /// good one from an untrusted key.
     private static var signedStates: Set<String> {

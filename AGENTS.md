@@ -61,9 +61,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   approach to any such concern, or duplicating behaviour that an
   existing surface already provides, get explicit confirmation.
 - Transitions that wait on anything (resuming a session, fetching
-  remote data) show a loading state that fills the pane instantly;
-  never leave the old content interactive so that the result pops
-  over it later.
+  remote data, cloning) show a loading state that fills the pane
+  instantly; never leave the old content interactive so that the
+  result pops over it later. The bar is any actual or possible
+  delay over half a second.
 
 ### Platform Notes
 

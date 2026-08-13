@@ -53,7 +53,6 @@ public struct ReviewView: View {
     private static let iconSelectedOpacity = 0.2
     private static let disabledOpacity = 0.4
     private static let commitListSpacing: CGFloat = 4
-    private static let commitLineSpacing: CGFloat = 2
     private static let messageHeight: CGFloat = 88
 
     /// git's conventional commit message widths.
@@ -147,21 +146,22 @@ public struct ReviewView: View {
         if model.scope == .branch || model.scope == .upstream {
             VStack(alignment: .leading, spacing: Self.commitListSpacing) {
                 Text("Commits under review").font(.headline)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Self.commitLineSpacing) {
-                        ForEach(model.branchCommits, id: \.self) { commit in
-                            Text(commit)
-                                .font(.caption.monospaced())
-                                .lineLimit(1)
-                                .textSelection(.enabled)
-                        }
-                        if model.branchCommits.isEmpty {
-                            Text("No commits beyond the base branch.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                ScrollView([.vertical, .horizontal]) {
+                    // One text block, not a row per commit: dragging
+                    // then selects across lines, so hashes and whole
+                    // ranges copy. Decorations name where each commit
+                    // sits in the local and remote log.
+                    if model.branchCommits.isEmpty {
+                        Text("No commits beyond the base branch.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(model.branchCommits.joined(separator: "\n"))
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(height: Self.messageHeight)
             }

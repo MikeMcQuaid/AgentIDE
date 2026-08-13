@@ -63,7 +63,10 @@ struct ReviewModelTests {
         await model.reload()
         #expect(model.hasUpstream)
         #expect(model.files.map(\.path) == ["unpushed.txt"])
-        #expect(model.branchCommits.count == 1)
+        // The unpushed commit plus the decorated base row.
+        #expect(model.branchCommits.count == 2)
+        #expect(model.branchCommits.first?.contains("Add unpushed file") == true)
+        #expect(model.branchCommits.last?.contains("origin/main") == true)
     }
 
     // MARK: Private

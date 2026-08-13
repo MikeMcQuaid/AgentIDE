@@ -208,17 +208,6 @@ public struct GitClient: Sendable {
         try await git(["diff", baseRef + "...HEAD"], in: worktreePath).standardOutput
     }
 
-    /// The branch's commits beyond the base ref, newest first, one
-    /// line each.
-    public func branchCommits(worktreePath: String, baseRef: String) async -> [String] {
-        let result = try? await git(
-            ["log", "--format=%h %s", baseRef + "..HEAD"],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
-    }
-
     /// The one-based line numbers of a file changed against HEAD,
     /// staged or not, for the editor's gutter markers.
     public func changedLineNumbers(worktreePath: String, file: String) async -> Set<Int> {
