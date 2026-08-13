@@ -12,17 +12,21 @@ public struct RepositorySessionsView: View {
     // MARK: Lifecycle
 
     /// Creates the browser; `worktreePath` scopes the list to one
-    /// worktree, `onNewSession` opens the new session page and
-    /// `onResumed` runs after a resume launches.
+    /// worktree, `onNewSession` opens the new session page,
+    /// `onResumed` runs after a resume launches and
+    /// `onWorktreeFocus` reports the selected conversation's still
+    /// existing worktree, so other panes can follow along.
     @preconcurrency
     public init(
         repository: Repository,
         service: SessionService,
         worktreePath: String? = nil,
         onNewSession: (@MainActor () -> Void)? = nil,
+        onWorktreeFocus: (@MainActor (String?) -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
         self.onNewSession = onNewSession
+        self.onWorktreeFocus = onWorktreeFocus
         self.onResumed = onResumed
         identity = repository.id + "#" + (worktreePath ?? "")
         makeModel = {
@@ -71,6 +75,10 @@ public struct RepositorySessionsView: View {
         .task(id: identity) {
             model = makeModel()
             await model.load()
+            onWorktreeFocus?(model.selectedWorktreePath)
+        }
+        .onChange(of: model.selected) {
+            onWorktreeFocus?(model.selectedWorktreePath)
         }
     }
 
@@ -85,6 +93,7 @@ public struct RepositorySessionsView: View {
 
     private let identity: String
     private let onNewSession: (@MainActor () -> Void)?
+    private let onWorktreeFocus: (@MainActor (String?) -> Void)?
     private let onResumed: @MainActor () async -> Void
     private let makeModel: () -> RepositorySessionsModel
 
