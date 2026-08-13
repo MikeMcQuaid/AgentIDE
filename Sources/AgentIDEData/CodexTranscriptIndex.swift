@@ -7,20 +7,13 @@ import Synchronization
 /// conversations even though nothing on disk is keyed by cwd, unlike
 /// the other agent's per-directory transcripts. Heads parse once per
 /// file change and cache, keeping the refresh poll cheap.
-public struct CodexTranscriptIndex: Sendable {
-    // MARK: Lifecycle
-
-    /// Creates an index; the cache is shared process-wide.
-    public init() {
-        // Stateless: the cache is static.
-    }
-
-    // MARK: Public
+struct CodexTranscriptIndex {
+    // MARK: Internal
 
     /// Sessions under `root` whose embedded working directory
     /// matches, newest first. The session id comes from the file's
     /// metadata line: the rollout file name is not the resume id.
-    public func sessions(inRoot root: String, workingDirectory: String) -> [TranscriptSession] {
+    func sessions(inRoot root: String, workingDirectory: String) -> [TranscriptSession] {
         indexedEntries(root: root)
             .filter { $0.value.workingDirectory == workingDirectory }
             .map { path, entry in
