@@ -82,12 +82,7 @@ public struct SessionService: Sendable {
             // The main checkout always appears, so repositories show
             // with no worktrees and orphaned conversations stay
             // reachable.
-            let mainCheckout = Worktree(
-                repositoryName: repository.name,
-                repositoryPath: repository.path,
-                branch: baseRef?.split(separator: "/").last.map(String.init) ?? "main",
-                path: repository.path,
-            )
+            let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
             var items = [WorktreeItem]()
             var seenPaths = Set<String>()
             for worktree in [mainCheckout] + worktrees where seenPaths.insert(worktree.path).inserted {
@@ -273,6 +268,19 @@ public struct SessionService: Sendable {
     }
 
     // MARK: Private
+
+    /// The repository's own checkout as a worktree: its branch is
+    /// whatever is actually checked out, so a feature branch in the
+    /// main checkout still matches its pull request in the listing.
+    private func mainCheckout(of repository: Repository, baseRef: String?) async -> Worktree {
+        await Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: git.currentBranch(worktreePath: repository.path)
+                ?? baseRef?.split(separator: "/").last.map(String.init) ?? "main",
+            path: repository.path,
+        )
+    }
 
     private func item(
         worktree: Worktree,
