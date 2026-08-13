@@ -86,7 +86,7 @@ struct GitHubClientTests {
         let codex = CodexRunner()
         #expect(codex.optionArguments(model: "sol", effort: "high")
             == "--model sol -c model_reasoning_effort=high")
-        #expect(codex.models.contains("sol"))
+        #expect(codex.models.contains("gpt-5.6-sol"))
         #expect(codex.models.contains("gpt-5.4"))
     }
 
@@ -94,16 +94,16 @@ struct GitHubClientTests {
     func `model listings parse through colour codes and bullets`() {
         let output = """
         \u{1B}[1mAvailable models\u{1B}[0m
-        - sol  (default)
-        * terra
-          luna
+        - gpt-5.6-sol  (default)
+        * gpt-5.6-terra
+          gpt-5.6-luna
         gpt-5.5
         Run codex --model <name> to pick one.
         """
         let models = CodexRunner().parseModelList(output)
-        #expect(models.contains("sol"))
-        #expect(models.contains("terra"))
-        #expect(models.contains("luna"))
+        #expect(models.contains("gpt-5.6-sol"))
+        #expect(models.contains("gpt-5.6-terra"))
+        #expect(models.contains("gpt-5.6-luna"))
         #expect(models.contains("gpt-5.5"))
         #expect(models.contains("Available") == false)
     }

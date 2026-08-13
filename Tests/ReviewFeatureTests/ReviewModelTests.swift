@@ -33,6 +33,12 @@ struct ReviewModelTests {
         await model.reload()
         #expect(model.files.map(\.path) == ["dirty.txt"])
         #expect(model.showsUncommitted)
+
+        // Untracked files show as new-file diffs, so committing can
+        // include them.
+        try "loose\n".write(toFile: path + "/untracked.txt", atomically: true, encoding: .utf8)
+        await model.reload()
+        #expect(model.files.map(\.path).sorted() == ["dirty.txt", "untracked.txt"])
     }
 
     @Test

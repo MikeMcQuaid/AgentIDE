@@ -99,16 +99,6 @@ public struct TmuxClient: Sendable {
         ])
     }
 
-    /// Pastes a file's content into a session's terminal and presses
-    /// return, so prompts reach agents as input rather than argv.
-    public func sendPromptFile(_ file: String, to sessionName: String) async throws {
-        try await tmux([
-            "load-buffer", file,
-            ";", "paste-buffer", "-d", "-p", "-t", sessionName,
-            ";", "send-keys", "-t", sessionName, "Enter",
-        ])
-    }
-
     /// Kills one session, leaving the server and its siblings alone.
     public func killSession(name: String) async throws {
         try await tmux(["kill-session", "-t", name])
@@ -122,20 +112,25 @@ public struct TmuxClient: Sendable {
     /// The argv a terminal view should spawn to attach interactively.
     /// Servers outlive app updates and only read their config file
     /// at start, so options added since the server began would never
-    /// apply; the attach chain sets the clipboard option live and
-    /// idempotently, which is what lets copy-mode yanks reach the
-    /// macOS clipboard on long-running servers.
+    /// apply; the attach chain applies the copy behaviour live and
+    /// idempotently: the clipboard option lets copy-mode yanks reach
+    /// the macOS clipboard, and drag-end copies without cancelling,
+    /// so selecting scrolled-back text does not snap to the bottom.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
             [
                 "tmux",
                 "set", "-s", "set-clipboard", "on",
+                ";", "bind", "-T", "copy-mode", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
+                ";", "bind", "-T", "copy-mode-vi", "MouseDragEnd1Pane", "send-keys", "-X", "copy-selection",
                 ";", "attach-session", "-t", sessionName,
             ]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
                     + "; exec tmux set -s set-clipboard on ';'"
+                    + " bind -T copy-mode MouseDragEnd1Pane send-keys -X copy-selection ';'"
+                    + " bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection ';'"
                     + " attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
@@ -182,6 +177,8 @@ public struct TmuxClient: Sendable {
     set -g status off
     set -s set-clipboard on
     set -as terminal-features xterm-256color:clipboard
+    bind -T copy-mode MouseDragEnd1Pane send-keys -X copy-selection
+    bind -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-selection
     """
 
     private let runner: any ProcessRunner

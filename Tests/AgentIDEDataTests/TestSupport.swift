@@ -170,6 +170,10 @@ struct World {
             spool: EventSpool(directory: workspace.eventsDirectory),
             store: MetadataStore(file: workspace.metadataFile),
             runners: [PromptCaptureRunner()],
+            // Disabled so branch names always come from the
+            // deterministic prompt fallback, whatever this machine's
+            // Apple Intelligence state.
+            summariser: FoundationModelClient(isEnabled: false),
         )
         return Self(
             root: base,

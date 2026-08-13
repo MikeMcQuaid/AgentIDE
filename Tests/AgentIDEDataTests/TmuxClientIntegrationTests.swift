@@ -75,26 +75,4 @@ struct TmuxClientIntegrationTests {
         }
         #expect(dead)
     }
-
-    @Test
-    func `prompts arrive as terminal input, not arguments`() async throws {
-        let (tmux, socket) = try TestSupport.makeTmuxClient()
-        let directory = try TestSupport.temporaryDirectory("paste")
-        defer { TestSupport.killServerSync(socketDirectory: socket) }
-
-        try await tmux.newSession(
-            name: "agentide--r--paste--claude",
-            directory: directory,
-            command: "cat > captured.txt",
-        )
-        let promptFile = directory + "/prompt.md"
-        try "review this branch carefully".write(toFile: promptFile, atomically: true, encoding: .utf8)
-        try await tmux.sendPromptFile(promptFile, to: "agentide--r--paste--claude")
-
-        let captured = await TestSupport.poll {
-            let content = try? String(contentsOfFile: directory + "/captured.txt", encoding: .utf8)
-            return content?.contains("review this branch carefully") ?? false
-        }
-        #expect(captured)
-    }
 }

@@ -240,8 +240,10 @@ flowchart TD
   paths later), `SandvaultLauncher`, `TmuxClient`, `TranscriptReader`,
   `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
   outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
-  later) and `AgentRunner` with `ClaudeCodeRunner` and `CodexRunner`. One
-  module, split only if boundary violations appear.
+  later), `FoundationModelClient` (the on-device Apple foundation model
+  behind one reusable summarisation seam) and `AgentRunner` with
+  `ClaudeCodeRunner` and `CodexRunner`. One module, split only if boundary
+  violations appear.
 - **Feature targets** (`DashboardFeature`, `SessionFeature`, `ReviewFeature`
   and `PRFeature`): SwiftUI views and `@Observable` view models, MainActor by
   default, given ports via injection. `SessionFeature` owns the WKWebView
@@ -318,8 +320,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
-2. The branch name comes from a per-repository template, default
-   `agent/<slug>`.
+2. The branch name summarises the prompt: the on-device Apple foundation
+   model (behind `FoundationModelClient`, one reusable client so later
+   features can summarise commits or draft pull request bodies) answers a
+   short underscore-separated name; when the model is unavailable the
+   prompt's first words serve in the same style. No prefix.
 3. Host-side `GitClient` fetches, then runs `git worktree add` under
    `/Users/Shared/sv-<user>/worktrees/<uuid>/<branch>`. This layout is kept
    byte-compatible with what existing tooling already creates: the
@@ -343,10 +348,12 @@ Sendable` and `nonisolated(unsafe)` are banned.
    arguments appended verbatim (sandvault's wrappers add the agent's
    permission-skipping flag inside the sandbox), and the session launches
    through the tmux payload above.
-8. The prompt is delivered as terminal input, not as a command argument:
-   tmux `load-buffer` then `paste-buffer` types the prompt file into the
-   agent after launch. The pane's `INITIAL_DIR` is pinned to the worktree so
-   the sandbox's zshenv cannot redirect the agent elsewhere.
+8. The prompt travels inside the launch command, read from its file as the
+   agent starts (`"$(cat …)"` evaluated in the sandbox): pasting it as
+   terminal input after launch raced the agent's terminal setup, which
+   flushed pending input and lost the prompt. The pane's `INITIAL_DIR` is
+   pinned to the worktree so the sandbox's zshenv cannot redirect the agent
+   elsewhere.
 9. The session is recorded in the metadata store, with the agent-native
    resume id captured as soon as the transcript appears.
 

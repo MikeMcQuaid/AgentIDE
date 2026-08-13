@@ -28,9 +28,10 @@ struct PromptCaptureRunner: AgentRunner {
         ["true"]
     }
 
-    func launchCommand(extraArguments: String) -> String {
+    func launchCommand(extraArguments: String, promptFile: String?) -> String {
         let quoted = "'" + extraArguments.replacing("'", with: "'\\''") + "'"
-        return "printf '%s' " + quoted + " > agent-arguments.txt; cat > agent-prompt.txt"
+        let prompt = promptFile.map { "cat '" + $0 + "' > agent-prompt.txt; " } ?? ""
+        return "printf '%s' " + quoted + " > agent-arguments.txt; " + prompt + "cat > /dev/null"
     }
 
     func resumeCommand(resumeID: String, extraArguments _: String) -> String {
@@ -73,7 +74,7 @@ struct SessionServiceIntegrationTests {
         #expect(SessionName.isAgentIDE(name))
 
         let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("do_the") })
         #expect(item.session?.name == name)
         #expect(item.session?.status == SessionStatus.running)
         let worktreePath = item.worktree.path
@@ -86,7 +87,7 @@ struct SessionServiceIntegrationTests {
         let arguments = try String(contentsOfFile: worktreePath + "/agent-arguments.txt", encoding: .utf8)
         #expect(arguments == "--model fable --effort max")
 
-        let symlink = world.paths.friendlyWorktreesDirectory + "/repo/agent-do-the-thing"
+        let symlink = world.paths.friendlyWorktreesDirectory + "/repo/do_the_thing"
         let destination = try FileManager.default.destinationOfSymbolicLink(atPath: symlink)
         #expect(destination == worktreePath)
     }
@@ -102,7 +103,7 @@ struct SessionServiceIntegrationTests {
             agent: .claudeCode,
         )
         let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("doomed_work") })
         let worktreePath = item.worktree.path
         try await world.service.closeSession(sessionName: sessionName, worktreePath: worktreePath)
 
@@ -138,7 +139,7 @@ struct SessionServiceIntegrationTests {
         )
         let overview = await world.service.overview()
         let worktree = try #require(
-            overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") }?.worktree,
+            overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("original_work") }?.worktree,
         )
         try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
 
@@ -153,7 +154,7 @@ struct SessionServiceIntegrationTests {
         try transcript.write(toFile: directory + "/oldsession.jsonl", atomically: true, encoding: .utf8)
 
         let after = await world.service.overview()
-        let item = try #require(after.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let item = try #require(after.groups.first?.items.first { $0.worktree.branch.hasPrefix("original_work") })
         let past = try #require(item.pastSessions.first { $0.id == "oldsession" })
         #expect(past.title == "old prompt")
         #expect(world.service.transcriptEntries(for: past).first?.text == "old prompt")
@@ -187,7 +188,7 @@ struct SessionServiceIntegrationTests {
                 .groups
                 .first?
                 .items
-                .first { $0.worktree.branch.hasPrefix("agent/") }?
+                .first { $0.worktree.branch.hasPrefix("doomed_worktree") }?
                 .worktree,
         )
         try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
@@ -287,7 +288,7 @@ struct RepositoryPageIntegrationTests {
             agent: .claudeCode,
         )
         let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("agent/") })
+        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("anchor_work") })
         let container = URL(filePath: item.worktree.path).deletingLastPathComponent().path
 
         // A conversation from a worktree another tool created and

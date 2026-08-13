@@ -192,22 +192,6 @@ public struct GitClient: Sendable {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// The worktree's uncommitted diff against `HEAD`.
-    public func uncommittedDiff(worktreePath: String) async throws -> String {
-        try await git(["diff", "HEAD"], in: worktreePath).standardOutput
-    }
-
-    /// The last commit's diff.
-    public func lastCommitDiff(worktreePath: String) async throws -> String {
-        try await git(["show", "--format=", "--patch", "HEAD"], in: worktreePath).standardOutput
-    }
-
-    /// Every commit on the branch against its merge base with a base
-    /// ref, the whole-branch review.
-    public func branchDiff(worktreePath: String, baseRef: String) async throws -> String {
-        try await git(["diff", baseRef + "...HEAD"], in: worktreePath).standardOutput
-    }
-
     /// The one-based line numbers of a file changed against HEAD,
     /// staged or not, for the editor's gutter markers.
     public func changedLineNumbers(worktreePath: String, file: String) async -> Set<Int> {

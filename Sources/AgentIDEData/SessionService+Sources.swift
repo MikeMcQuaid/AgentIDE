@@ -131,6 +131,29 @@ public extension SessionService {
         return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
     }
 
+    /// How much of the prompt seeds the fallback branch name.
+    internal static let branchSlugLength = 40
+
+    /// The branch a new session gets, kept beside the other naming
+    /// helpers for the main file's length.
+    func availableBranch(repository: Repository, prompt: String) async -> String {
+        // The on-device model names the branch from what the task
+        // means; without it the prompt's first words serve, in the
+        // same underscore style.
+        let fallback = SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
+            .replacing("-", with: "_")
+        let base = await summariser.branchName(for: prompt) ?? fallback
+        guard await git.branchExists(repository: repository, branch: base) else {
+            return base
+        }
+
+        var attempt = 2
+        while await git.branchExists(repository: repository, branch: "\(base)-\(attempt)") {
+            attempt += 1
+        }
+        return "\(base)-\(attempt)"
+    }
+
     /// Fetches and prunes the repository's remotes.
     func fetch(repository: Repository) async throws {
         try await git.fetch(repositoryPath: repository.path)
