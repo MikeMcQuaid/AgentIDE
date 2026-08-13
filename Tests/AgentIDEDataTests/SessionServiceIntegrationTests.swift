@@ -257,6 +257,9 @@ struct SessionServiceIntegrationTests {
         #expect(command.first?.hasSuffix("tmux") == true)
         #expect(command.contains("new-session"))
         #expect(command.contains("-A"))
+        // The pane attaches as a control mode client and renders
+        // locally.
+        #expect(command.contains("-C"))
         let name = try #require(command.drop { $0 != "-s" }.dropFirst().first)
         // Names the repository and branch, never the worktree uuid;
         // the path digest keeps same-named repositories apart and
@@ -265,10 +268,6 @@ struct SessionServiceIntegrationTests {
         #expect(name == "agentide-shell-dev--my-repo-" + digest + "--agent-fix-thing")
         let directoryFlag = try #require(command.firstIndex(of: "-c"))
         #expect(command[directoryFlag + 1] == worktree.path)
-        // The host server reads no config file, so the wheel-scroll
-        // options chain onto the command.
-        #expect(command.contains("mouse"))
-        #expect(command.contains("history-limit"))
     }
 }
 

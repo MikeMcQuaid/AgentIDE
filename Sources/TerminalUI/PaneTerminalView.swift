@@ -4,12 +4,14 @@ import SwiftTerm
 
 // MARK: - PaneTerminalView
 
-/// The SwiftTerm view with the pane's own copy behaviour.
-final class PaneTerminalView: LocalProcessTerminalView {
+/// The SwiftTerm view with the pane's own copy behaviour. A plain
+/// terminal view: the pane is fed by a tmux control mode client
+/// rather than owning a process.
+final class PaneTerminalView: TerminalView {
     // MARK: Lifecycle
 
     deinit {
-        // The PTY dies with the view.
+        // The control channel is owned by the coordinator.
     }
 
     // MARK: Internal

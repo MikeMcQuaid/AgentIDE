@@ -30,27 +30,16 @@ public extension SessionService {
     /// The argv for a persistent host-user shell in a worktree: a
     /// host tmux session (attach-or-create) that survives tab
     /// switches and app restarts and starts the user's default login
-    /// shell. Named `agentide-shell--<repository>-<digest>--<branch>`
+    /// shell, attached as a control mode client so the pane renders
+    /// locally. Named `agentide-shell--<repository>-<digest>--<branch>`
     /// so `tmux ls` reads like the sidebar rather than worktree
     /// uuids; the path digest keeps same-named repositories under
-    /// different owners from attaching to each other's shells.
-    /// The chained `set` commands give the host server the same
-    /// wheel-scrolls-history behaviour as the sandbox one, whose
-    /// config file it does not read.
+    /// different owners from attaching to each other's shells. `-f`
+    /// keeps the user's own tmux config out of app-managed sessions.
     func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = hostShellName(worktree: worktree)
-        // The config applies at server birth; the chained commands
-        // repeat the options because a long-running server never
-        // rereads config. `-f` also keeps the user's own tmux config
-        // out of these app-managed sessions.
-        return [
-            Self.hostTmuxPath, "-f", hostTmuxConfigFile(),
-            "new-session", "-A", "-s", name, "-c", worktree.path,
-            ";", "set", "-g", "mouse", "on",
-            ";", "set", "-g", "history-limit", "50000",
-            ";", "set", "-g", "default-terminal", "xterm-256color",
-            ";", "set", "-g", "status", "off",
-            ";", "set", "-s", "set-clipboard", "on",
+        [
+            Self.hostTmuxPath, "-f", hostTmuxConfigFile(), "-C",
+            "new-session", "-A", "-s", hostShellName(worktree: worktree), "-c", worktree.path,
         ]
     }
 

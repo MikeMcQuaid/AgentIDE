@@ -49,6 +49,10 @@ before shipping.
   revisit (so you always know where you are needed)
 - Notifies you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
+- Renders terminals locally from a tmux control mode client, so selecting,
+  copying, wheel scrolling and scrollback behave like any other text on
+  your Mac while the sessions keep running in tmux (so native terminal
+  feel costs no session survival)
 - Reflows multi-line copies from agent terminals: indentation, gutter
   marks and hard line breaks go while paragraphs and lists survive, and
   Option-drag copies a rectangle (so answers paste cleanly into chat,

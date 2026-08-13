@@ -155,29 +155,39 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
 
 ### Terminals
 
-Two visually unmistakable flavours, both rendered by SwiftTerm on a local
-PTY:
+Both terminal panes attach to tmux as control mode clients
+(`tmux -C attach-session`, the textual protocol in tmux(1)'s CONTROL
+MODE section) rather than drawing a remote screen over a PTY. tmux
+streams pane output as `%output` events which the pane decodes
+(`TmuxControlParser` in Domain, `TmuxControlChannel` in DataAccess) and
+feeds into a local SwiftTerm view; keystrokes, pastes and resizes go
+back as `send-keys -H` and `refresh-client -C` commands. On attach the
+pane seeds its local buffer from `capture-pane -S -`, then nudges the
+client size so full-screen interfaces repaint. Because the screen and
+scrollback are local, selection, copying, the mouse wheel and
+scrollback behave like a native text view while the sessions still
+outlive the app; agent panes additionally reflow multi-line copies for
+prose and Option-drag copies a rectangle with gutter marks trimmed.
+
+Two visually unmistakable flavours ride that one client:
 
 - **Sandbox terminal**: the launch shape with payload
-  `exec tmux attach-session -t <name>`. The attaching client runs inside the
-  sandbox too; tmux sockets are owner-only, so no attach path can skip sudo.
-  Closing the view detaches and never kills the session.
+  `exec tmux -C attach-session -t <name>`. The attaching client runs
+  inside the sandbox too; tmux sockets are owner-only, so no attach
+  path can skip sudo. Closing the view detaches and never kills the
+  session.
 - **Host terminal** (Review): a host tmux session per worktree
   (`new-session -A`, so attach-or-create) as the host user, no sudo, no
   sandbox, full `gh` credentials. Named
   `agentide-shell--<repo>--<branch-slug>`, so `tmux ls` on the host reads
   like the sidebar. tmux starts the user's default login
   shell, and because the server outlives its clients the shell survives
-  pane switches and app restarts exactly like agent sessions do. In both,
-  the mouse belongs to tmux: the wheel scrolls tmux history (the
-  alternate screen leaves the outer terminal nothing to scroll), a drag
-  copies through copy-mode and OSC 52 (agent panes reflow multi-line
-  copies for prose), Shift-drag falls back to a local selection with
-  Cmd-C and Option-drag copies a rectangle with gutter marks trimmed;
-  that is the price of sessions that outlive the app. Both
+  pane switches and app restarts exactly like agent sessions do. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
-  pane on the left and the shell in the utility pane.
+  pane on the left and the shell in the utility pane. External attaches
+  (SSH, `script/attach`) still get tmux-native mouse scrolling and
+  OSC 52 copying from the server config.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
@@ -224,6 +234,7 @@ flowchart TD
     Review --> Domain
     PR --> Domain
     Session --> Terminal
+    Terminal --> Data
     Dashboard -.->|ports| Data
     Session -.->|ports| Data
     Review -.->|ports| Data
@@ -239,7 +250,8 @@ flowchart TD
   database APIs are banned.
 - **AgentIDEData**: protocol ports with adapter implementations: `GitClient`,
   `GitHubClient` (`gh` shell-outs today, native URLSession GraphQL for hot
-  paths later), `SandvaultLauncher`, `TmuxClient`, `TranscriptReader`,
+  paths later), `SandvaultLauncher`, `TmuxClient`, `TmuxControlChannel`
+  (a live `tmux -C` client on pipes), `TranscriptReader`,
   `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
   outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
   later), `FoundationModelClient` (the on-device Apple foundation model
@@ -253,7 +265,8 @@ flowchart TD
   and an attributed NSTextView today, STTextView as the review slice
   deepens).
 - **TerminalUI**: shared UI components, not a feature: the SwiftTerm
-  wrapper (command specification in, PTY view out), the AppKit-backed
+  wrapper (a `tmux -C` argv in, a locally rendered pane out, via
+  DataAccess's control mode channel), the AppKit-backed
   tooltips and the syntax highlighting engine. Highlighting parses with
   tree-sitter grammars and falls back to a pure-Swift line tokenizer in
   the Domain for text without a loaded grammar, such as fragmentary diff

@@ -76,6 +76,7 @@ let package = Package(
             name: "TerminalUI",
             dependencies: [
                 "AgentIDEDomain",
+                "AgentIDEData",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
                 .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),

@@ -109,25 +109,18 @@ public struct TmuxClient: Sendable {
         try await tmux(["send-keys", "-l", "-t", sessionName, text])
     }
 
-    /// The argv a terminal view should spawn to attach interactively.
-    /// Servers outlive app updates and only read their config file
-    /// at start, so the attach chain applies the mouse and clipboard
-    /// options live and idempotently: the wheel scrolls tmux history
-    /// and copy-mode drags reach the macOS clipboard through OSC 52.
+    /// The argv a terminal pane spawns to attach as a control mode
+    /// client: `-C` speaks the textual protocol over the pipes, so
+    /// the pane renders locally and this client never needs a
+    /// terminal. External SSH attaches still get mouse and OSC 52
+    /// copying from the server config.
     public func attachCommand(sessionName: String) -> [String] {
         if isInsideSandbox {
-            [
-                "tmux",
-                "set", "-g", "mouse", "on",
-                ";", "set", "-s", "set-clipboard", "on",
-                ";", "attach-session", "-t", sessionName,
-            ]
+            ["tmux", "-C", "attach-session", "-t", sessionName]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux set -g mouse on ';'"
-                    + " set -s set-clipboard on ';'"
-                    + " attach-session -t " + shellQuote(sessionName),
+                    + "; exec tmux -C attach-session -t " + shellQuote(sessionName),
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
                 sessionName: sessionName,
