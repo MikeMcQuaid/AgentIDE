@@ -27,4 +27,11 @@ public nonisolated enum CodeStyle {
     public static var whitespaceNSColour: NSColor {
         .quaternaryLabelColor
     }
+
+    /// The SwiftUI tint marking whitespace in diff lines: a
+    /// background rather than substitute glyphs, so copied diff
+    /// text stays character-exact.
+    public static var whitespaceColour: Color {
+        Color(nsColor: .tertiaryLabelColor)
+    }
 }

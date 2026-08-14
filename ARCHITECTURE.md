@@ -416,7 +416,9 @@ Sendable` and `nonisolated(unsafe)` are banned.
 3. Rendering highlights with tree-sitter grammars (Swift, Ruby and Bash
    today; JavaScript, TypeScript, Markdown, JSON and YAML as the review
    slice deepens, alongside the move to STTextView), with line numbers
-   and visible whitespace in both the diff and the editor.
+   and visible whitespace in both the diff (tabs and trailing whitespace
+   carry a background tint, so copied diff text stays character-exact)
+   and the editor (substitute glyphs).
 4. Rejecting selected lines builds a minimal reverse patch with
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and

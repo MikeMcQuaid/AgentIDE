@@ -151,7 +151,10 @@ public struct ReviewView: View {
                     // then selects across lines, so hashes and whole
                     // ranges copy. Decorations name where each commit
                     // sits in the local and remote log.
-                    if model.branchCommits.isEmpty {
+                    // The listing always carries the base commit as
+                    // its final row, so one row means no commits of
+                    // the branch's own.
+                    if model.branchCommits.count <= 1 {
                         Text("No commits beyond the base branch.")
                             .font(.caption)
                             .foregroundStyle(.secondary)

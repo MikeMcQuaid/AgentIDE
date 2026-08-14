@@ -190,37 +190,76 @@ struct DiffFileView: View {
         return String(repeating: " ", count: max(0, numberWidth - text.count)) + text
     }
 
+    /// Splits a token into runs, marked when a character is a tab or
+    /// sits in the line's trailing whitespace.
+    private static func whitespaceRuns(
+        of text: String,
+        from offset: Int,
+        trailingStart: Int,
+    ) -> [(text: String, isMarked: Bool)] {
+        var runs = [(text: String, isMarked: Bool)]()
+        for (position, character) in text.enumerated() {
+            let isWhitespace = character == " " || character == "\t"
+            let marked = character == "\t" || (isWhitespace && offset + position >= trailingStart)
+            if var last = runs.last, last.isMarked == marked {
+                last.text.append(character)
+                runs[runs.count - 1] = last
+            } else {
+                runs.append((String(character), marked))
+            }
+        }
+        return runs
+    }
+
     /// The hunk's code as one attributed string: syntax colours per
     /// token and change backgrounds per line, markers excluded so
     /// copies paste cleanly.
     private func hunkText(_ hunk: DiffHunk) -> AttributedString {
         var result = AttributedString()
         for (index, line) in hunk.lines.enumerated() {
-            var content = AttributedString()
-            for token in CodeHighlighter.tokens(for: line.content, language: language) {
-                var piece = AttributedString(token.text)
-                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
-                content += piece
-            }
-            if content.characters.isEmpty {
-                content = AttributedString(" ")
-            }
-            switch line.kind {
-            case .addition:
-                content.backgroundColor = Color.green.opacity(Self.changeOpacity)
-
-            case .deletion:
-                content.backgroundColor = Color.red.opacity(Self.changeOpacity)
-
-            case .context:
-                break
-            }
-            result += content
+            result += lineText(line)
             if index < hunk.lines.count - 1 {
                 result += AttributedString("\n")
             }
         }
         return result
+    }
+
+    /// One line's text: a whitespace tint covers tabs and the
+    /// trailing whitespace run, so whitespace-only changes stay
+    /// reviewable while copies remain character-exact (a background
+    /// rather than the substitute glyphs the editor uses).
+    private func lineText(_ line: DiffLine) -> AttributedString {
+        let base: Color? =
+            switch line.kind {
+            case .addition:
+                Color.green.opacity(Self.changeOpacity)
+
+            case .deletion:
+                Color.red.opacity(Self.changeOpacity)
+
+            case .context:
+                nil
+            }
+        let trailingStart = line.content.count
+            - line.content.reversed().prefix { $0 == " " || $0 == "\t" }.count
+        var content = AttributedString()
+        var offset = 0
+        for token in CodeHighlighter.tokens(for: line.content, language: language) {
+            for run in Self.whitespaceRuns(of: token.text, from: offset, trailingStart: trailingStart) {
+                var piece = AttributedString(run.text)
+                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
+                piece.backgroundColor = run.isMarked ? CodeStyle.whitespaceColour : base
+                content += piece
+            }
+            offset += token.text.count
+        }
+        if content.characters.isEmpty {
+            var blank = AttributedString(" ")
+            blank.backgroundColor = base
+            content = blank
+        }
+        return content
     }
 
     /// Joins each line with its old and new line numbers; deletions
