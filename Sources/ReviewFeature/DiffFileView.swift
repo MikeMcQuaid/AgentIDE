@@ -55,12 +55,31 @@ struct FileCollapseCaret: View {
     private static let expandedDegrees: Double = 90
 }
 
+// MARK: - DiffStatText
+
+/// The compact `+n −n` insertion and deletion counts shown beside
+/// diffs, green and red like every diffstat.
+struct DiffStatText: View {
+    let additions: Int
+    let deletions: Int
+
+    var body: some View {
+        HStack(spacing: DiffFileView.statSpacing) {
+            Text("+" + String(additions)).foregroundStyle(.green)
+            Text("\u{2212}" + String(deletions)).foregroundStyle(.red)
+        }
+        .font(.caption.monospaced())
+    }
+}
+
 // MARK: - DiffFileView
 
 /// One file's hunks with tappable, selectable changed lines, hidden
 /// behind the caret when collapsed.
 struct DiffFileView: View {
     // MARK: Internal
+
+    static let statSpacing: CGFloat = 4
 
     let file: DiffFile
     let model: ReviewModel
@@ -78,6 +97,7 @@ struct DiffFileView: View {
             HStack {
                 FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
                 Text(file.path).font(.headline.monospaced())
+                DiffStatText(additions: file.additions, deletions: file.deletions)
                 Spacer()
                 Button("Edit file", action: onEdit)
                     .hoverHelp("Open this file in the built-in editor for review-time fixes")

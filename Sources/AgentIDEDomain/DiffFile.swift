@@ -78,4 +78,14 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     public var id: String {
         path
     }
+
+    /// Added line count across the file's hunks, for diffstats.
+    public var additions: Int {
+        hunks.flatMap(\.lines).count { $0.kind == .addition }
+    }
+
+    /// Deleted line count across the file's hunks, for diffstats.
+    public var deletions: Int {
+        hunks.flatMap(\.lines).count { $0.kind == .deletion }
+    }
 }

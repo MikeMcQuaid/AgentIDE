@@ -31,8 +31,7 @@ public struct ReviewView: View {
             toolbar
             Divider()
             diffList
-            Divider()
-            footer
+            ReviewFooterView(model: model)
         }
         // The model is rebuilt whenever the worktree changes: state
         // survives the view struct's re-initialisation, so the first
@@ -52,12 +51,6 @@ public struct ReviewView: View {
     private static let iconCornerRadius: CGFloat = 5
     private static let iconSelectedOpacity = 0.2
     private static let disabledOpacity = 0.4
-    private static let commitListSpacing: CGFloat = 4
-    private static let messageHeight: CGFloat = 88
-
-    /// git's conventional commit message widths.
-    private static let subjectLimit = 50
-    private static let bodyLimit = 72
 
     @State private var model: ReviewModel
     @State private var display: ReviewFileDisplay = .standard
@@ -75,7 +68,22 @@ public struct ReviewView: View {
             displayButton(.standard, systemImage: "doc.badge.gearshape", help: "Hide generated files, expand the rest")
             displayButton(.hideAll, systemImage: "eye.slash", help: "Collapse every file to its name")
             displayButton(.showAll, systemImage: "eye", help: "Expand every file, generated included")
+            iconButton(
+                "textformat",
+                help: model.hidesWhitespace
+                    ? "Whitespace-only changes are hidden; click to show them"
+                    : "Hide whitespace-only changes from the diff",
+                isOn: model.hidesWhitespace,
+            ) {
+                model.hidesWhitespace.toggle()
+                Task { await model.reload() }
+            }
             Spacer()
+            DiffStatText(
+                additions: model.visibleFiles.map(\.additions).reduce(0, +),
+                deletions: model.visibleFiles.map(\.deletions).reduce(0, +),
+            )
+            .hoverHelp("Lines added and deleted across the visible files")
             actionButtons
         }
         .padding(Self.spacing)
@@ -138,99 +146,6 @@ public struct ReviewView: View {
                 collapseOverrides: $collapseOverrides,
             )
         }
-    }
-
-    /// Last commit scope edits the message; the multi-commit scopes
-    /// list every commit under review instead.
-    @ViewBuilder private var footer: some View {
-        if model.scope == .branch || model.scope == .upstream {
-            VStack(alignment: .leading, spacing: Self.commitListSpacing) {
-                Text("Commits under review").font(.headline)
-                ScrollView([.vertical, .horizontal]) {
-                    // One text block, not a row per commit: dragging
-                    // then selects across lines, so hashes and whole
-                    // ranges copy. Decorations name where each commit
-                    // sits in the local and remote log.
-                    // The listing always carries the base commit as
-                    // its final row, so one row means no commits of
-                    // the branch's own.
-                    if model.branchCommits.count <= 1 {
-                        Text("No commits beyond the base branch.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(model.branchCommits.joined(separator: "\n"))
-                            .font(.caption.monospaced())
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .frame(height: Self.messageHeight)
-            }
-            .padding(Self.spacing)
-        } else {
-            VStack(alignment: .leading, spacing: Self.spacing) {
-                TextEditor(text: $model.commitMessage)
-                    .font(.body.monospaced())
-                    .frame(height: Self.messageHeight)
-                    .border(.separator)
-                    .overlay(alignment: .topLeading) { messageGuides }
-                    .hoverHelp(
-                        "The full commit message; the guides mark 50 columns for the subject and 72 for the body",
-                    )
-                HStack {
-                    Button("Amend message") { Task { await model.saveCommitMessage() } }
-                        .disabled(model.showsUncommitted)
-                        .hoverHelp("Rewrite the last commit's message")
-                    messageLengths
-                    if let status = model.status {
-                        // Selectable so failures can be copied out.
-                        Text(status)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .textSelection(.enabled)
-                    }
-                    Spacer()
-                }
-            }
-            .padding(Self.spacing)
-        }
-    }
-
-    /// Vertical rules at git's conventional 50 and 72 column widths,
-    /// positioned by the editor's monospaced character width.
-    private var messageGuides: some View {
-        let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        // Text measurement is an AppKit API; NSString is its input.
-        // swiftlint:disable:next legacy_objc_type
-        let characterWidth = ("M" as NSString).size(withAttributes: [.font: font]).width
-        let inset: CGFloat = 5
-        return ZStack(alignment: .topLeading) {
-            ForEach([Self.subjectLimit, Self.bodyLimit], id: \.self) { columns in
-                Rectangle()
-                    .fill(.separator)
-                    .frame(width: 1)
-                    .offset(x: inset + characterWidth * CGFloat(columns))
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    /// Live counts against the conventional widths, red when over.
-    private var messageLengths: some View {
-        let lines = model.commitMessage.split(separator: "\n", omittingEmptySubsequences: false)
-        let subject = lines.first.map(String.init) ?? ""
-        let widestBody = lines.dropFirst().map(\.count).max() ?? 0
-        return HStack(spacing: Self.spacing) {
-            Text("subject \(subject.count)/\(Self.subjectLimit)")
-                .foregroundStyle(subject.count > Self.subjectLimit ? .red : .secondary)
-            Text("body \(widestBody)/\(Self.bodyLimit)")
-                .foregroundStyle(widestBody > Self.bodyLimit ? .red : .secondary)
-        }
-        .font(.caption.monospaced())
-        .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
     }
 
     private func scopeButton(
