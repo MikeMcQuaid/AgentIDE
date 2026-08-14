@@ -1,11 +1,19 @@
-/// The tabs of the utility pane beside the agent.
-enum UtilityTab: CaseIterable {
+/// The tabs of the utility pane beside the agent. The raw values
+/// are the persisted selection and the cross-module signal values,
+/// so reordering cases can never repoint a saved tab the way the
+/// old stored indices did.
+enum UtilityTab: String, CaseIterable {
+    // The case names are the persisted values (SwiftFormat strips
+    // explicit raw values), so renaming a case renames what is
+    // stored: keep names stable or migrate deliberately.
+    // swiftlint:disable explicit_enum_raw_value
     case review
     case pullRequests
     case browser
     case editor
     case shell
     case errors
+    // swiftlint:enable explicit_enum_raw_value
 
     // MARK: Internal
 

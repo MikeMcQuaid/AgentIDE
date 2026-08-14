@@ -1,14 +1,31 @@
 import AppKit
 import Foundation
 
+// MARK: - UtilityTabTarget
+
+/// The utility tab names modules write to the `utilityTab` storage
+/// key. They match `UtilityTab`'s raw values in the app; names
+/// survive tab reordering, which silently repointed the integer
+/// indices this bus used to carry.
+public enum UtilityTabTarget {
+    /// The cross-module storage key that switches the utility tab.
+    public static let key = "utilityTab"
+
+    /// The embedded browser tab.
+    public static let browser = "browser"
+
+    /// The editor tab.
+    public static let editor = "editor"
+
+    /// The errors tab.
+    public static let errors = "errors"
+}
+
 // MARK: - LinkOpener
 
 /// Opens web links: in the embedded Browser tab by default, in the
 /// system browser when the command key is held.
 public enum LinkOpener {
-    /// The Browser tab's position in the utility tab strip.
-    public static let browserTabIndex = 2
-
     /// Routes an address by the command key.
     @preconcurrency
     @MainActor
@@ -19,7 +36,7 @@ public enum LinkOpener {
             }
         } else {
             UserDefaults.standard.set(address, forKey: "browserAddress")
-            UserDefaults.standard.set(browserTabIndex, forKey: "utilityTabIndex")
+            UserDefaults.standard.set(UtilityTabTarget.browser, forKey: UtilityTabTarget.key)
         }
     }
 }
@@ -32,9 +49,6 @@ public enum LinkOpener {
 /// back to the system's default application.
 public enum FileOpener {
     // MARK: Public
-
-    /// The Editor tab's position in the utility tab strip.
-    public static let editorTabIndex = 3
 
     /// Routes a worktree-relative file by the command key. Paths
     /// that resolve outside the worktree are refused: a hostile
@@ -51,7 +65,7 @@ public enum FileOpener {
             defaults.set(line ?? 0, forKey: "editorFileLine")
             defaults.set(worktreePath, forKey: "editorFileWorktree")
             defaults.set(defaults.integer(forKey: "editorFileRequest") + 1, forKey: "editorFileRequest")
-            defaults.set(editorTabIndex, forKey: "utilityTabIndex")
+            defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
             return
         }
 

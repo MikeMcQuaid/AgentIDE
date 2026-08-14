@@ -12,10 +12,11 @@ struct RootView: View {
 
     let dependencies: AppDependencies
 
-    /// Persisted as an index so the menu commands can drive it too;
+    /// Persisted as the tab's name rather than an index, so
+    /// reordering the tabs can never repoint a saved selection;
     /// internal so the extension file can read it.
-    @AppStorage("utilityTabIndex")
-    var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    var utilityTabName = UtilityTab.review.rawValue
 
     /// Internal so the extension file's toggle button can drive it.
     @AppStorage("showsUtilityPane")
@@ -149,10 +150,10 @@ struct RootView: View {
     private var runningShellPaths = ""
 
     /// Each worktree's last utility tab, persisted as
-    /// path-tab-index lines so panes stay per-worktree.
+    /// path-tab-name lines so panes stay per-worktree.
     @AppStorage("worktreeTabs")
     private var worktreeTabs = ""
-    @State private var rememberedTabs: [String: Int] = [:]
+    @State private var rememberedTabs: [String: String] = [:]
 
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
@@ -236,12 +237,12 @@ struct RootView: View {
             // A stale conversation focus must not survive switching
             // to another sidebar item.
             conversationWorktreePath = nil
-            utilityTabIndex = rememberedTabs[item.worktree.path] ?? utilityTabIndex
+            utilityTabName = rememberedTabs[item.worktree.path] ?? utilityTabName
         }
-        .onChange(of: utilityTabIndex) {
-            rememberedTabs[item.worktree.path] = utilityTabIndex
+        .onChange(of: utilityTabName) {
+            rememberedTabs[item.worktree.path] = utilityTabName
             worktreeTabs = rememberedTabs
-                .map { $0.key + "\t" + String($0.value) }
+                .map { $0.key + "\t" + $0.value }
                 .sorted()
                 .joined(separator: "\n")
         }
@@ -332,7 +333,7 @@ struct RootView: View {
                     .allowsHitTesting(showsBrowser)
             }
         }
-        .task(id: item.id + String(utilityTabIndex)) {
+        .task(id: item.id + utilityTabName) {
             if utilityTab == .browser {
                 visitedBrowsers.insert(path)
             }

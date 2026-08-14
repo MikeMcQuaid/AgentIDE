@@ -16,8 +16,7 @@ extension RootView {
     }
 
     var utilityTab: UtilityTab {
-        let tabs = UtilityTab.allCases
-        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .review
+        UtilityTab(rawValue: utilityTabName) ?? .review
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
@@ -168,13 +167,15 @@ extension RootView {
         }
     }
 
-    /// Parses the persisted path-tab lines.
-    static func decodeTabs(_ stored: String) -> [String: Int] {
-        var tabs = [String: Int]()
+    /// Parses the persisted path-tab lines; values are tab names
+    /// (unknown ones, including this store's old integer form, fall
+    /// back to the default tab when read).
+    static func decodeTabs(_ stored: String) -> [String: String] {
+        var tabs = [String: String]()
         for line in stored.split(separator: "\n") {
             let parts = line.split(separator: "\t")
-            if let path = parts.first, let index = parts.last.flatMap({ Int($0) }), parts.first != parts.last {
-                tabs[String(path)] = index
+            if let path = parts.first, let name = parts.last, path != name {
+                tabs[String(path)] = String(name)
             }
         }
         return tabs

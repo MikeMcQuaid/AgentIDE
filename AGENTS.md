@@ -98,7 +98,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   checks, mergeability and review decision: wide listings fetch
   light fields only and enrich one pull request on selection.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
-  index, finder mode and focus, browser address).
+  name, finder mode and focus, browser address); tabs travel by
+  name, never index, so reordering cannot repoint them.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
 

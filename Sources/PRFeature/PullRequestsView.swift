@@ -72,13 +72,9 @@ public struct PullRequestsView: View {
 
     // MARK: Private
 
-    /// The errors tab's position in the utility tab order, driven
-    /// through the storage signal bus.
-    private static let errorsTabIndex = 5
-
     /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTabIndex")
-    private var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    private var utilityTab = ""
 
     /// The new session form's last choices, naming what wrote the
     /// change in the draft's AI disclosure.
@@ -118,14 +114,14 @@ public struct PullRequestsView: View {
             onRebase: {
                 Task {
                     if await model.rebaseSigned() == false {
-                        utilityTabIndex = Self.errorsTabIndex
+                        utilityTab = UtilityTabTarget.errors
                     }
                 }
             },
             onPush: {
                 Task {
                     if await model.push() == false {
-                        utilityTabIndex = Self.errorsTabIndex
+                        utilityTab = UtilityTabTarget.errors
                     }
                 }
             },
@@ -178,7 +174,7 @@ public struct PullRequestsView: View {
             }
 
         case .failed:
-            utilityTabIndex = Self.errorsTabIndex
+            utilityTab = UtilityTabTarget.errors
 
         case .created,
              .unavailable:

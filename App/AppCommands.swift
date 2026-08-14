@@ -32,7 +32,7 @@ struct AppCommands: Commands {
             .keyboardShortcut("u", modifiers: [.command, .shift])
             Divider()
             ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
-                Button(tab.title) { show(tabAt: index) }
+                Button(tab.title) { show(tab) }
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
             }
             Divider()
@@ -47,23 +47,22 @@ struct AppCommands: Commands {
 
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
-    @AppStorage("utilityTabIndex")
-    private var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    private var utilityTab = UtilityTab.review.rawValue
     @AppStorage("finderSearchesContents")
     private var finderSearchesContents = false
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
 
-    private func show(tabAt index: Int) {
+    private func show(_ tab: UtilityTab) {
         showsUtilityPane = true
-        utilityTabIndex = index
+        utilityTab = tab.rawValue
     }
 
     /// Jumps to the editor tab's finder in the chosen mode; the pane
     /// consumes the focus request once it is on screen.
     private func openFinder(searchingContents: Bool) {
-        showsUtilityPane = true
-        utilityTabIndex = UtilityTab.allCases.firstIndex(of: .editor) ?? 0
+        show(.editor)
         finderSearchesContents = searchingContents
         finderFocusRequest += 1
     }
