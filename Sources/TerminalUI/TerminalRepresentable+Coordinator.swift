@@ -6,11 +6,12 @@ import SwiftUI
 // MARK: - TerminalRepresentable.Coordinator
 
 extension TerminalRepresentable {
-    /// Runs the control mode conversation: seeds the local
-    /// scrollback from the pane's history, feeds live output into
-    /// the view and forwards keystrokes, pastes and resizes back to
-    /// tmux.
-    final class Coordinator: NSObject, TerminalViewDelegate {
+    /// Runs the pane's transport. For agent panes that is the
+    /// control mode conversation: seeding local scrollback from the
+    /// pane's history, feeding live output into the view and
+    /// forwarding keystrokes, pastes and resizes back to tmux. For
+    /// the shell pane it just watches the local process.
+    final class Coordinator: NSObject, TerminalViewDelegate, LocalProcessTerminalViewDelegate {
         // MARK: Lifecycle
 
         init(onProcessTerminated: (@MainActor () -> Void)?) {
@@ -98,12 +99,12 @@ extension TerminalRepresentable {
         }
 
         /// Attaches on the first nonzero layout, exactly once per
-        /// command, so the tmux client sizes to the pane rather than
-        /// a placeholder frame. SwiftUI can reuse the view for a
-        /// different command (a restarted shell keeps its identity);
-        /// the old client is discarded and the new one attaches.
-        func startWhenSized(_ command: [String], in view: PaneTerminalView) {
-            if started, command != startedCommand {
+        /// transport, so the tmux client or shell sizes to the pane
+        /// rather than a placeholder frame. SwiftUI can reuse the
+        /// view for a different command; the old client is
+        /// discarded and the new one attaches.
+        func startWhenSized(_ transport: TerminalTransport, in view: PaneTerminalView) {
+            if started, transport != startedTransport {
                 discardClient(of: view)
             }
             guard started == false else {
@@ -112,10 +113,10 @@ extension TerminalRepresentable {
 
             if view.frame.size.width > 1, view.frame.size.height > 1 {
                 started = true
-                startedCommand = command
-                start(command, in: view)
+                startedTransport = transport
+                start(transport, in: view)
             } else {
-                observeFrame(command, in: view)
+                observeFrame(transport, in: view)
             }
         }
 
@@ -166,14 +167,29 @@ extension TerminalRepresentable {
             // Rendering is owned by SwiftTerm.
         }
 
+        func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
+            // The local shell's PTY resize is handled by the view.
+        }
+
+        func setTerminalTitle(source _: LocalProcessTerminalView, title _: String) {
+            // Titles are not surfaced.
+        }
+
+        /// The local shell exited; owners show a restart affordance.
+        func processTerminated(source _: TerminalView, exitCode _: Int32?) {
+            let callback = onProcessTerminated
+            onProcessTerminated = nil
+            callback?()
+        }
+
         // MARK: Private
 
         private var started = false
-        private var startedCommand: [String] = []
+        private var startedTransport: TerminalTransport?
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
         private weak var pendingView: PaneTerminalView?
-        private var pendingCommand: [String] = []
+        private var pendingTransport: TerminalTransport?
 
         private var pump: Task<Void, Never>?
 
@@ -204,8 +220,27 @@ extension TerminalRepresentable {
             view.feed(text: "\u{1B}c")
         }
 
-        private func start(_ command: [String], in view: PaneTerminalView) {
+        private func start(_ transport: TerminalTransport, in view: PaneTerminalView) {
             self.view = view
+            switch transport {
+            case let .control(command):
+                startControl(command, in: view)
+
+            case let .shell(directory):
+                // A login interactive shell so the user's own config
+                // applies; the PTY belongs to the view and dies with
+                // it, which is the whole design.
+                view.startProcess(
+                    executable: "/bin/zsh",
+                    args: ["-il"],
+                    environment: nil,
+                    execName: nil,
+                    currentDirectory: directory,
+                )
+            }
+        }
+
+        private func startControl(_ command: [String], in view: PaneTerminalView) {
             let attached = TmuxControlChannel(command: command)
             channel = attached
             pump = Task { [weak self] in
@@ -222,9 +257,9 @@ extension TerminalRepresentable {
             }
         }
 
-        private func observeFrame(_ command: [String], in view: PaneTerminalView) {
+        private func observeFrame(_ transport: TerminalTransport, in view: PaneTerminalView) {
             pendingView = view
-            pendingCommand = command
+            pendingTransport = transport
             view.postsFrameChangedNotifications = true
             frameObserver = NotificationCenter.default.addObserver(
                 forName: NSView.frameDidChangeNotification,
@@ -245,7 +280,9 @@ extension TerminalRepresentable {
                         NotificationCenter.default.removeObserver(observer)
                         self.frameObserver = nil
                     }
-                    self.startWhenSized(self.pendingCommand, in: sized)
+                    if let awaited = self.pendingTransport {
+                        self.startWhenSized(awaited, in: sized)
+                    }
                 }
             }
         }

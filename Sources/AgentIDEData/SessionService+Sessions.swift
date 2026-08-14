@@ -27,63 +27,6 @@ public extension SessionService {
         tmux.attachCommand(sessionName: sessionName)
     }
 
-    /// The argv for a persistent host-user shell in a worktree: a
-    /// host tmux session (attach-or-create) that survives tab
-    /// switches and app restarts and starts the user's default login
-    /// shell, attached as a control mode client so the pane renders
-    /// locally. Named `agentide-shell--<repository>-<digest>--<branch>`
-    /// so `tmux ls` reads like the sidebar rather than worktree
-    /// uuids; the path digest keeps same-named repositories under
-    /// different owners from attaching to each other's shells. `-f`
-    /// keeps the user's own tmux config out of app-managed sessions.
-    /// `-D` detaches any other client of the session: the pane is
-    /// the one legitimate viewer, and clients leaked by an earlier
-    /// app run would otherwise linger attached forever.
-    func hostShellCommand(worktree: Worktree) -> [String] {
-        [
-            Self.hostTmuxPath, "-f", Self.hostTmuxConfigFile, "-C",
-            "new-session", "-A", "-D", "-s", hostShellName(worktree: worktree), "-c", worktree.path,
-        ]
-    }
-
-    /// The host tmux session name a worktree's shell uses, shared by
-    /// the attach command and the scrollback capture.
-    func hostShellName(worktree: Worktree) -> String {
-        Self.hostShellPrefix
-            + SessionName.slug(worktree.repositoryName) + "-"
-            + SessionName.pathDigest(worktree.repositoryPath) + "--"
-            + SessionName.slug(worktree.branch)
-    }
-
-    /// Writes the host shell server's config beside the app's other
-    /// state, once per launch, and keeps its path; matching the
-    /// sandbox server's copy behaviour, present from the server's
-    /// first moment. Computed once because the pane compares its
-    /// argv across view updates: a value that could flip between
-    /// the path and the `/dev/null` fallback re-attached the shell
-    /// in a loop.
-    internal static let hostTmuxConfigFile: String = {
-        let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
-        let file = directory + "/host-tmux.conf"
-        let content = """
-        set -g mouse on
-        set -g history-limit 50000
-        set -g default-terminal xterm-256color
-        set -g status off
-        set -s set-clipboard on
-        set -as terminal-features xterm-256color:clipboard
-        """
-        do {
-            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-            try content.write(toFile: file, atomically: true, encoding: .utf8)
-        } catch {
-            // tmux errors on a missing config path; /dev/null reads
-            // as empty.
-            return "/dev/null"
-        }
-        return file
-    }()
-
     /// Every AgentIDE tmux session for the session manager: the
     /// sandboxed agents and the host shells, deduplicated.
     func allTmuxSessions() async -> [(name: String, isHostShell: Bool)] {

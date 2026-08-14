@@ -46,8 +46,9 @@ extension RootView {
         )
     }
 
-    /// The tab bubbles and the pane toggle.
-    var utilityHeader: some View {
+    /// The tab bubbles and the pane toggle, with the shell's close
+    /// button beside them while the shell tab shows a running shell.
+    func utilityHeader(for item: WorktreeItem) -> some View {
         HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
             // beside them can never be squeezed out.
@@ -57,6 +58,14 @@ extension RootView {
                 }
             }
             Spacer(minLength: 0)
+            if utilityTab == .shell, hasRunningShell(at: item.worktree.path) {
+                Button("Close shell") {
+                    closeShell(at: item.worktree.path)
+                }
+                .controlSize(.small)
+                .fixedSize()
+                .hoverHelp("End this shell and its process immediately")
+            }
             utilityToggleButton
                 .fixedSize()
         }
@@ -221,30 +230,21 @@ extension RootView {
         )
     }
 
-    /// The host shell terminal; copies stay verbatim for code. The
-    /// pane stays mounted behind other tabs, so it reports whether
-    /// it is the visible one and yields keyboard focus otherwise.
+    /// The host shell terminal, a plain local shell on the pane's
+    /// own PTY: no server to wedge and nothing left behind when the
+    /// app quits. Copies stay verbatim for code. The pane stays
+    /// mounted behind other tabs, so it reports whether it is the
+    /// visible one and yields keyboard focus otherwise.
     func shellTerminal(
         for worktree: Worktree,
         isActive: Bool,
         onExit: @escaping @MainActor () -> Void,
     ) -> TerminalPaneView {
         TerminalPaneView(
-            command: dependencies.service.hostShellCommand(worktree: worktree),
+            shellIn: worktree.path,
             isActive: isActive,
             onProcessTerminated: onExit,
         )
-    }
-
-    /// Hard-terminates a worktree's host shell session, for shells
-    /// that cannot be exited from inside.
-    func terminateShell(for worktree: Worktree) {
-        Task {
-            await dependencies.service.killTmuxSession(
-                name: dependencies.service.hostShellName(worktree: worktree),
-                isHostShell: true,
-            )
-        }
     }
 
     /// The worktree the review surfaces describe: on the repository

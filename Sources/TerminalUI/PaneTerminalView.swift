@@ -4,14 +4,15 @@ import SwiftTerm
 
 // MARK: - PaneTerminalView
 
-/// The SwiftTerm view with the pane's own copy behaviour. A plain
-/// terminal view: the pane is fed by a tmux control mode client
-/// rather than owning a process.
-final class PaneTerminalView: TerminalView {
+/// The SwiftTerm view with the pane's own copy behaviour. Agent
+/// panes feed it from a tmux control mode client and never start a
+/// process; the shell pane starts a plain local shell on its PTY.
+final class PaneTerminalView: LocalProcessTerminalView {
     // MARK: Lifecycle
 
     deinit {
-        // The control channel is owned by the coordinator.
+        // A local shell's PTY dies with the view; control channels
+        // are owned by the coordinator.
     }
 
     // MARK: Internal

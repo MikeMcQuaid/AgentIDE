@@ -52,7 +52,6 @@ struct RootView: View {
         .task {
             FlavourIcon.apply()
             finderFocusRequest = 0
-            runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
@@ -101,6 +100,18 @@ struct RootView: View {
         }
     }
 
+    /// Whether a worktree's shell runs; internal accessors because
+    /// the extension file's tab bar cannot see the private state.
+    func hasRunningShell(at path: String) -> Bool {
+        runningShells.contains(path)
+    }
+
+    /// Ends a worktree's shell instantly: unmounting the pane kills
+    /// its PTY, even when the shell has wedged beyond Ctrl-D.
+    func closeShell(at path: String) {
+        runningShells.remove(path)
+    }
+
     // MARK: Private
 
     /// Slim enough for icon-and-truncated-text rows while staying
@@ -109,7 +120,6 @@ struct RootView: View {
     private static let utilityRange = 340.0 ... 1_200.0
     private static let primaryMinimum: CGFloat = 420
     private static let stripSpacing: CGFloat = 4
-    private static let shellClosePadding: CGFloat = 6
 
     /// The utility header row's height: the tab capsules plus the
     /// row's padding. The floating toggle centres in the same height
@@ -143,14 +153,10 @@ struct RootView: View {
     private var finderFocusRequest = 0
 
     /// Worktrees whose shell is running; started explicitly, removed
-    /// when the shell process exits, so a quit shell shows its start
-    /// button again.
+    /// when the shell process exits or is closed, so the start
+    /// button returns. Shells are plain local processes now, so
+    /// nothing persists across launches.
     @State private var runningShells: Set<String> = []
-
-    /// The same set persisted, so shells running at quit reattach
-    /// automatically on the next launch; host tmux kept them alive.
-    @AppStorage("runningShellPaths")
-    private var runningShellPaths = ""
 
     /// Each worktree's last utility tab, persisted as
     /// path-tab-name lines so panes stay per-worktree.
@@ -232,7 +238,7 @@ struct RootView: View {
     /// changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
-            utilityHeader
+            utilityHeader(for: item)
             Divider()
             utilityContent(for: item)
         }
@@ -352,26 +358,12 @@ struct RootView: View {
         if runningShells.contains(path) {
             shellTerminal(for: item.worktree, isActive: utilityTab == .shell) {
                 runningShells.remove(path)
-                runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }
             .id("shell-" + path)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    terminateShell(for: item.worktree)
-                } label: {
-                    Label("Close shell", systemImage: "xmark")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .padding(Self.shellClosePadding)
-                .hoverHelp("Kill this shell's host tmux session; Start shell opens a fresh one")
-            }
         } else {
             StartShellButton {
                 runningShells.insert(path)
-                runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -389,6 +381,6 @@ private struct StartShellButton: View {
             Label("Start shell", systemImage: "terminal")
         }
         .controlSize(.large)
-        .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
+        .hoverHelp("Open a host-user shell here; it lives and dies with the app")
     }
 }

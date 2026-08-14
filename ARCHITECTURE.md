@@ -176,18 +176,19 @@ Two visually unmistakable flavours ride that one client:
   inside the sandbox too; tmux sockets are owner-only, so no attach
   path can skip sudo. Closing the view detaches and never kills the
   session.
-- **Host terminal** (Review): a host tmux session per worktree
-  (`new-session -A`, so attach-or-create) as the host user, no sudo, no
-  sandbox, full `gh` credentials. Named
-  `agentide-shell--<repo>--<branch-slug>`, so `tmux ls` on the host reads
-  like the sidebar. tmux starts the user's default login
-  shell, and because the server outlives its clients the shell survives
-  pane switches and app restarts exactly like agent sessions do. Both
+- **Host terminal** (Review): a plain login shell on the pane's own
+  PTY as the host user, no sudo, no sandbox, full `gh` credentials and
+  no tmux at all: shells stay mounted across tab switches but live and
+  die with the app, a deliberate trade after tmux-backed shells kept
+  wedging their control clients; the tab bar's Close shell ends one
+  instantly. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
-  (SSH, `script/attach`) still get tmux-native mouse scrolling and
-  OSC 52 copying from the server config. A pane attaching detaches any
+  to agent sessions (SSH, `script/attach`) still get tmux-native mouse
+  scrolling and
+  OSC 52 copying from the server config. An agent pane attaching
+  detaches any
   other client of its session (`-d`): clients leaked by an earlier app
   run would otherwise linger forever, so an SSH viewer is dropped when
   the app's pane (re)attaches and simply reattaches when wanted.

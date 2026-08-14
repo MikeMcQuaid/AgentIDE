@@ -96,9 +96,10 @@ before shipping.
 
 ### Resilience
 
-- Keeps sessions in a tmux server owned by the sandbox user rather than the
-  app (so agents and terminals survive AgentIDE quitting, crashing or
-  updating, expectedly or not)
+- Keeps agent sessions in a tmux server owned by the sandbox user rather
+  than the app (so agents survive AgentIDE quitting, crashing or
+  updating, expectedly or not; the host shell tab deliberately does not,
+  living and dying with the app)
 - Defers idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)

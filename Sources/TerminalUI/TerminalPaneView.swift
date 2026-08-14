@@ -3,11 +3,13 @@ import SwiftUI
 
 // MARK: - TerminalPaneView
 
-/// An embedded terminal attached to a tmux session as a control mode
-/// client: tmux streams pane output as protocol events and the view
-/// renders them locally, so selection, copying, wheel scrolling and
-/// scrollback are all native. Closing the view only detaches this
-/// client; the tmux session keeps running.
+/// An embedded terminal. Agent panes attach to a tmux session as a
+/// control mode client: tmux streams pane output as protocol events
+/// and the view renders them locally, so selection, copying, wheel
+/// scrolling and scrollback are all native, and closing the view
+/// only detaches while the session keeps running. The shell pane
+/// runs a plain local shell on the view's own PTY instead: no
+/// server, no client, and the shell dies with the app.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
@@ -26,8 +28,22 @@ public struct TerminalPaneView: View {
         isActive: Bool = true,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
-        self.command = command
+        transport = .control(command: command)
         self.reflowsCopies = reflowsCopies
+        self.isActive = isActive
+        self.onProcessTerminated = onProcessTerminated
+    }
+
+    /// Creates a terminal running the user's login shell in a
+    /// directory on a local PTY.
+    @preconcurrency
+    public init(
+        shellIn directory: String,
+        isActive: Bool = true,
+        onProcessTerminated: (@MainActor () -> Void)? = nil,
+    ) {
+        transport = .shell(directory: directory)
+        reflowsCopies = false
         self.isActive = isActive
         self.onProcessTerminated = onProcessTerminated
     }
@@ -36,7 +52,7 @@ public struct TerminalPaneView: View {
 
     public var body: some View {
         TerminalRepresentable(
-            command: command,
+            transport: transport,
             reflowsCopies: reflowsCopies,
             isActive: isActive,
             onProcessTerminated: onProcessTerminated,
@@ -45,10 +61,19 @@ public struct TerminalPaneView: View {
 
     // MARK: Private
 
-    private let command: [String]
+    private let transport: TerminalTransport
     private let reflowsCopies: Bool
     private let isActive: Bool
     private let onProcessTerminated: (@MainActor () -> Void)?
+}
+
+// MARK: - TerminalTransport
+
+/// What feeds a terminal pane: a tmux control mode client's argv,
+/// or a local shell's working directory.
+enum TerminalTransport: Equatable {
+    case control(command: [String])
+    case shell(directory: String)
 }
 
 // MARK: - TerminalRepresentable
@@ -58,7 +83,7 @@ public struct TerminalPaneView: View {
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
-    let command: [String]
+    let transport: TerminalTransport
     let reflowsCopies: Bool
     let isActive: Bool
     let onProcessTerminated: (@MainActor () -> Void)?
@@ -74,13 +99,19 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// the wheel always scrolls the local scrollback.
     func makeNSView(context: Context) -> PaneTerminalView {
         let view = PaneTerminalView(frame: .zero)
-        view.terminalDelegate = context.coordinator
+        if case .control = transport {
+            // The coordinator speaks the control protocol; a local
+            // shell keeps the view's own PTY wiring instead.
+            view.terminalDelegate = context.coordinator
+        } else {
+            view.processDelegate = context.coordinator
+        }
         view.allowMouseReporting = false
         view.font = CodeStyle.nsFont
         view.reflowsCopies = reflowsCopies
         context.coordinator.installBlockSelection(on: view)
         applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
+        context.coordinator.startWhenSized(transport, in: view)
         return view
     }
 
@@ -89,7 +120,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// reused the view for a different command.
     func updateNSView(_ view: PaneTerminalView, context: Context) {
         applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
+        context.coordinator.startWhenSized(transport, in: view)
         context.coordinator.updateFocus(isActive: isActive, of: view)
     }
 
