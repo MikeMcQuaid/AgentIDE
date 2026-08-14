@@ -28,14 +28,39 @@ public extension SessionService {
         try? await tmux.killSession(name: sessionName)
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
-        try await git.removeWorktree(
-            repository: repository,
-            worktreePath: worktree.path,
-            branch: worktree.branch,
-        )
+        do {
+            try await git.removeWorktree(
+                repository: repository,
+                worktreePath: worktree.path,
+                branch: worktree.branch,
+            )
+        } catch {
+            // Agents create files as the sandbox user (build
+            // products, caches) that the host user cannot delete;
+            // the removal runs again as their owner, then git
+            // forgets the worktree.
+            try await removeAsSandboxUser(path: worktree.path)
+            try await git.forgetWorktree(repository: repository, branch: worktree.branch)
+        }
         let link = paths.friendlyWorktreesDirectory + "/" + worktree.repositoryName
             + "/" + worktree.branch.replacing("/", with: "-")
         try? FileManager.default.removeItem(atPath: link)
+    }
+
+    /// Deletes a path as the sandbox user through the launcher, for
+    /// files the host user does not own.
+    private func removeAsSandboxUser(path: String) async throws {
+        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
+        let command = launcher.command(
+            payload: "rm -rf " + path.shellQuoted,
+            initialDirectory: launcher.sharedWorkspace,
+            sessionID: UUID().uuidString,
+            sessionName: "agentide-delete",
+        )
+        let result = try await processes.run(command, workingDirectory: nil, environment: [:])
+        guard result.succeeded, FileManager.default.fileExists(atPath: path) == false else {
+            throw CommandError(command: "rm -rf " + path, result: result)
+        }
     }
 
     /// Every conversation attributable to the repository, whichever

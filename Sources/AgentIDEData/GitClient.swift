@@ -289,6 +289,13 @@ public struct GitClient: Sendable {
     /// bookkeeping so the listing never shows a removed worktree.
     public func removeWorktree(repository: Repository, worktreePath: String, branch: String) async throws {
         try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
+        try await forgetWorktree(repository: repository, branch: branch)
+    }
+
+    /// Prunes gone worktrees and deletes the branch, the git-side
+    /// half of removal for callers that deleted the files another
+    /// way.
+    public func forgetWorktree(repository: Repository, branch: String) async throws {
         try await git(["worktree", "prune"], in: repository.path)
         try await git(["branch", "-D", branch], in: repository.path)
     }

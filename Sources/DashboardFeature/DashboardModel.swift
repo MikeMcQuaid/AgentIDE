@@ -184,11 +184,13 @@ public final class DashboardModel {
     public func delete(item: WorktreeItem) async {
         deletingPaths.insert(item.worktree.path)
         defer { deletingPaths.remove(item.worktree.path) }
+        // Deselect immediately: the detail pane must not keep
+        // showing, or allow re-entering, a worktree mid-deletion.
+        if selection?.id == item.id {
+            selection = nil
+        }
         do {
             try await service.deleteWorktree(item: item)
-            if selection?.id == item.id {
-                selection = nil
-            }
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

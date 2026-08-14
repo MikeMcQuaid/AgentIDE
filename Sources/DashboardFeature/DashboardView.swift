@@ -183,7 +183,14 @@ public struct DashboardView: View {
     /// matching native sidebar selection.
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
+        let isDeleting = model.deletingPaths.contains(item.worktree.path)
         return Button {
+            // A worktree mid-deletion cannot be re-entered; the row
+            // only becomes selectable again if the deletion fails.
+            guard isDeleting == false else {
+                return
+            }
+
             model.select(item)
         } label: {
             WorktreeRowView(
