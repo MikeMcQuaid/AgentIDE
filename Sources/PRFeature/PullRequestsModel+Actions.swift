@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import TerminalUI
 
 /// The footer's branch actions, split from the model body for
@@ -54,6 +55,8 @@ extension PullRequestsModel {
             try await performPush(worktree)
             isPushed = true
             status = "Pushed."
+            ErrorLog.shared.note("Pushed " + worktree.branch + ".")
+            Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true
         } catch {
@@ -72,6 +75,8 @@ extension PullRequestsModel {
         do {
             try await performRebase(worktree)
             status = "Rebased and signed."
+            ErrorLog.shared.note("Rebased and signed " + worktree.branch + ".")
+            Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true
         } catch {
@@ -104,5 +109,12 @@ extension PullRequestsModel {
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
+    }
+
+    /// Pokes the sidebar to refresh now rather than on its next
+    /// poll, so a push or rebase shows in the counts immediately.
+    static func requestSidebarRefresh() {
+        let key = "dashboardRefreshRequest"
+        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
     }
 }

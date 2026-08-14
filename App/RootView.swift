@@ -71,6 +71,11 @@ struct RootView: View {
         .onChange(of: hasLiveWork, initial: true) {
             sleepInhibitor.update(hasLiveWork: hasLiveWork)
         }
+        // Pushes and rebases poke this counter so their counts show
+        // in the sidebar immediately rather than on the next poll.
+        .onChange(of: dashboardRefreshRequest) {
+            Task { await dependencies.dashboard.refresh() }
+        }
         // Reopening the app resumes the restored worktree's most
         // recent conversation: the default workflow is picking up
         // where the last session left off. Only the launch's
@@ -151,6 +156,10 @@ struct RootView: View {
     /// so a request from the previous run cannot fire.
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
+
+    /// The push and rebase actions' immediate-refresh signal.
+    @AppStorage("dashboardRefreshRequest")
+    private var dashboardRefreshRequest = 0
 
     /// Worktrees whose shell is running; started explicitly, removed
     /// when the shell process exits or is closed, so the start

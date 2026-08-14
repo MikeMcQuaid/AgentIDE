@@ -238,7 +238,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetch(repository: repository)
-            status = "Fetched \(repository.name)."
+            ErrorLog.shared.note("Fetched \(repository.name).")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -254,7 +254,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetchAndReset(repository: repository)
-            status = "Reset \(repository.name) to origin."
+            ErrorLog.shared.note("Reset \(repository.name) to origin.")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

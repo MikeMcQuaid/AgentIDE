@@ -1,8 +1,9 @@
 import SwiftUI
 import TerminalUI
 
-/// The errors tab: every failure reported this session, in full and
-/// selectable, so any of it can be copied straight into a report.
+/// The messages tab: every failure and status message this session,
+/// in full and selectable, so any of it can be copied straight into
+/// a report.
 struct ErrorsPane: View {
     // MARK: Internal
 
@@ -13,7 +14,7 @@ struct ErrorsPane: View {
                 Button("Copy all") { copyAll() }
                     .controlSize(.small)
                     .disabled(log.entries.isEmpty)
-                    .hoverHelp("Copy every logged error to the clipboard")
+                    .hoverHelp("Copy every logged message to the clipboard")
                 Button("Clear") { log.clear() }
                     .controlSize(.small)
                     .disabled(log.entries.isEmpty)
@@ -30,6 +31,7 @@ struct ErrorsPane: View {
     private static let padding: CGFloat = 8
     private static let entrySpacing: CGFloat = 10
     private static let lineSpacing: CGFloat = 2
+    private static let markSpacing: CGFloat = 4
 
     private var log: ErrorLog = .shared
 
@@ -40,7 +42,7 @@ struct ErrorsPane: View {
                     row(entry)
                 }
                 if log.entries.isEmpty {
-                    Text("No errors since the last clear.")
+                    Text("No messages since the last clear.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -53,11 +55,21 @@ struct ErrorsPane: View {
 
     private func row(_ entry: ErrorLog.Entry) -> some View {
         VStack(alignment: .leading, spacing: Self.lineSpacing) {
-            Text(entry.date, format: .dateTime.hour().minute().second())
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack(spacing: Self.markSpacing) {
+                if entry.isError {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("Error")
+                }
+                Text(entry.date, format: .dateTime.hour().minute().second())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            // Failures keep the monospaced command-output look;
+            // status notes read as prose.
             Text(entry.message)
-                .font(.callout.monospaced())
+                .font(entry.isError ? .callout.monospaced() : .callout)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// The app-wide error log: every surface reports failures here, so
-/// they collect in one copyable pane instead of scattering short
-/// status lines around the window.
+/// The app-wide message log: every surface reports failures and
+/// noteworthy statuses here, so they collect in one copyable pane
+/// instead of scattering short status lines around the window.
 @preconcurrency
 @Observable
 @MainActor
@@ -20,38 +20,50 @@ public final class ErrorLog {
 
     // MARK: Public
 
-    /// One reported failure.
+    /// One reported message.
     public struct Entry: Identifiable, Sendable {
         /// The entry's position in the log.
         public let id: Int
 
-        /// When the failure was reported.
+        /// When the message was reported.
         public let date: Date
 
-        /// The failure's full message or output.
+        /// The full message or output.
         public let message: String
+
+        /// Whether the message is a failure; only failures count in
+        /// the tab's badge and summon the tab.
+        public let isError: Bool
     }
 
     /// The one log the whole app reports into.
     public static let shared: ErrorLog = .init()
 
-    /// The failures reported this session, oldest first.
+    /// The messages reported this session, oldest first.
     public private(set) var entries: [Entry] = []
 
-    /// Whether anything was ever reported this session; the errors
-    /// tab appears on the first report and then stays, even across
-    /// a clear.
+    /// Whether a failure was ever reported this session; the
+    /// messages tab appears on the first failure and then stays,
+    /// even across a clear.
     public private(set) var everReported = false
+
+    /// How many failures the log holds, for the tab's badge; plain
+    /// status notes deliberately carry no number.
+    public var errorCount: Int {
+        entries.count { $0.isError }
+    }
 
     /// Appends a failure to the log, dropping the oldest entries
     /// beyond the cap so a noisy session never grows without bound.
     public func report(_ message: String) {
         everReported = true
-        nextID += 1
-        entries.append(Entry(id: nextID, date: Date(), message: message))
-        if entries.count > Self.entryCap {
-            entries.removeFirst(entries.count - Self.entryCap)
-        }
+        append(message, isError: true)
+    }
+
+    /// Appends a status note: visible in the pane, never badged and
+    /// never summoning the tab.
+    public func note(_ message: String) {
+        append(message, isError: false)
     }
 
     /// Empties the log; the errors tab stays for the session.
@@ -66,4 +78,12 @@ public final class ErrorLog {
 
     /// Monotonic, so identities survive the cap dropping entries.
     private var nextID = 0
+
+    private func append(_ message: String, isError: Bool) {
+        nextID += 1
+        entries.append(Entry(id: nextID, date: Date(), message: message, isError: isError))
+        if entries.count > Self.entryCap {
+            entries.removeFirst(entries.count - Self.entryCap)
+        }
+    }
 }

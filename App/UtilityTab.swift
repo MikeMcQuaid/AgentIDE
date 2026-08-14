@@ -35,14 +35,14 @@ enum UtilityTab: String, CaseIterable {
             "Browser"
 
         case .errors:
-            "Errors"
+            "Messages"
         }
     }
 
     var help: String {
         switch self {
         case .shell:
-            "A host-user shell in this worktree; it runs in host tmux, so it survives tab switches and app restarts"
+            "A host-user shell in this worktree; it survives tab switches and lives and dies with the app"
 
         case .review:
             "The worktree's diff with per-line rejection and commit message editing"
@@ -57,7 +57,7 @@ enum UtilityTab: String, CaseIterable {
             "An embedded browser for dev servers the agent starts and pull request pages; logins persist"
 
         case .errors:
-            "Every failure reported this session, in full and copyable; appears on the first error"
+            "Every failure and status message this session, in full and copyable; appears on the first error"
         }
     }
 }
