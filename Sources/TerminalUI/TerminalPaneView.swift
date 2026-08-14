@@ -94,9 +94,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     }
 
     /// Builds the SwiftTerm view and themes it; the client attaches
-    /// as soon as layout gives the view its real size. Mouse
-    /// reporting stays off so dragging always selects locally and
-    /// the wheel always scrolls the local scrollback.
+    /// as soon as layout gives the view its real size.
     func makeNSView(context: Context) -> PaneTerminalView {
         let view = PaneTerminalView(frame: .zero)
         if case .control = transport {
@@ -106,7 +104,11 @@ struct TerminalRepresentable: NSViewRepresentable {
         } else {
             view.processDelegate = context.coordinator
         }
-        view.allowMouseReporting = false
+        // Mouse reporting stays on (SwiftTerm's default): programs
+        // that ask for the mouse, like Claude Code's own transcript
+        // scrolling and pagers, get it, and Shift bypasses to local
+        // selection and scrolling. Programs that leave the mouse
+        // alone scroll and select natively without any modifier.
         view.font = CodeStyle.nsFont
         view.reflowsCopies = reflowsCopies
         context.coordinator.installBlockSelection(on: view)

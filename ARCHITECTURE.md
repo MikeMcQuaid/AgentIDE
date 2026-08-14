@@ -168,6 +168,12 @@ scrollback are local, selection, copying, the mouse wheel and
 scrollback behave like a native text view while the sessions still
 outlive the app; agent panes additionally reflow multi-line copies for
 prose and Option-drag copies a rectangle with gutter marks trimmed.
+Programs that request the mouse get it, matching every terminal:
+Claude Code scrolls its own internal transcript (which never reaches
+scrollback, so no scrollbar can exist for it) and pagers scroll
+natively, with Shift bypassing to local selection and scrolling;
+programs that leave the mouse alone, Codex and plain shells included,
+select and scroll natively with no modifier.
 
 Two visually unmistakable flavours ride that one client:
 
