@@ -13,17 +13,22 @@ public struct TerminalPaneView: View {
 
     /// Creates a terminal that spawns a `tmux -C` argv and renders
     /// the attached session. `reflowsCopies` reflows multi-line
-    /// copies for pasting into prose tools. `onProcessTerminated`
-    /// fires on the main actor when the client exits, letting owners
-    /// show a restart affordance instead of a dead pane.
+    /// copies for pasting into prose tools. `isActive` says whether
+    /// the pane is the one on screen: an invisible mounted pane must
+    /// give up keyboard focus or it swallows keystrokes and pastes
+    /// meant for the visible one. `onProcessTerminated` fires on the
+    /// main actor when the client exits, letting owners show a
+    /// restart affordance instead of a dead pane.
     @preconcurrency
     public init(
         command: [String],
         reflowsCopies: Bool = false,
+        isActive: Bool = true,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
         self.command = command
         self.reflowsCopies = reflowsCopies
+        self.isActive = isActive
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -33,6 +38,7 @@ public struct TerminalPaneView: View {
         TerminalRepresentable(
             command: command,
             reflowsCopies: reflowsCopies,
+            isActive: isActive,
             onProcessTerminated: onProcessTerminated,
         )
     }
@@ -41,6 +47,7 @@ public struct TerminalPaneView: View {
 
     private let command: [String]
     private let reflowsCopies: Bool
+    private let isActive: Bool
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
 
@@ -53,6 +60,7 @@ struct TerminalRepresentable: NSViewRepresentable {
 
     let command: [String]
     let reflowsCopies: Bool
+    let isActive: Bool
     let onProcessTerminated: (@MainActor () -> Void)?
 
     /// Detaches the coordinator's client with the view.
@@ -77,10 +85,12 @@ struct TerminalRepresentable: NSViewRepresentable {
     }
 
     /// Re-themes when the appearance actually changes; the start
-    /// also retries here as a fallback.
+    /// also retries here as a fallback and reattaches when SwiftUI
+    /// reused the view for a different command.
     func updateNSView(_ view: PaneTerminalView, context: Context) {
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(command, in: view)
+        context.coordinator.updateFocus(isActive: isActive, of: view)
     }
 
     /// Creates the control mode coordinator.

@@ -3,15 +3,6 @@ import AgentIDEDomain
 import SwiftTerm
 import SwiftUI
 
-// MARK: - CommandExpectation
-
-/// What each pending command's response means; responses arrive
-/// strictly in command order.
-private enum CommandExpectation {
-    case acknowledgement
-    case history
-}
-
 // MARK: - TerminalRepresentable.Coordinator
 
 extension TerminalRepresentable {
@@ -32,9 +23,37 @@ extension TerminalRepresentable {
 
         // MARK: Internal
 
+        /// How long the pane waits for its history before showing
+        /// live output anyway.
+        static let seedTimeoutSeconds = 3
+
+        /// How many capture asks run before the pane gives up on
+        /// its history and reports.
+        static let seedAttemptLimit = 3
+
         /// The last applied appearance; re-applying identical colours
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
+
+        var onProcessTerminated: (@MainActor () -> Void)?
+        var tornDown = false
+        var exitReason: String?
+        weak var view: PaneTerminalView?
+        var channel: TmuxControlChannel?
+        /// The attach command itself answers with one empty block
+        /// before anything this client sends, so the queue starts
+        /// with that response accounted for.
+        var pending: [CommandExpectation] = [.acknowledgement]
+
+        /// Output arriving before the history seed, replayed after
+        /// it so nothing renders out of order.
+        var queuedOutput: [[UInt8]] = []
+        var seeded = false
+        var seedDeadline: Task<Void, Never>?
+        var seedAttempts = 0
+        var responsesSeen = 0
+        var outputsSeen = 0
+        var notificationsSeen = 0
 
         /// Installs the Option-drag rectangular selection: its
         /// events arrive through a monitor because SwiftTerm's
@@ -78,20 +97,41 @@ extension TerminalRepresentable {
             channel = nil
         }
 
-        /// Attaches on the first nonzero layout, exactly once, so
-        /// the tmux client sizes to the pane rather than a
-        /// placeholder frame.
+        /// Attaches on the first nonzero layout, exactly once per
+        /// command, so the tmux client sizes to the pane rather than
+        /// a placeholder frame. SwiftUI can reuse the view for a
+        /// different command (a restarted shell keeps its identity);
+        /// the old client is discarded and the new one attaches.
         func startWhenSized(_ command: [String], in view: PaneTerminalView) {
+            if started, command != startedCommand {
+                discardClient(of: view)
+            }
             guard started == false else {
                 return
             }
 
             if view.frame.size.width > 1, view.frame.size.height > 1 {
                 started = true
+                startedCommand = command
                 start(command, in: view)
             } else {
                 observeFrame(command, in: view)
             }
+        }
+
+        /// Releases keyboard focus when the pane goes invisible: the
+        /// shell stays mounted behind other tabs to survive
+        /// switches, and a hidden terminal holding first responder
+        /// swallowed keystrokes and pastes meant for the visible
+        /// pane.
+        func updateFocus(isActive: Bool, of view: PaneTerminalView) {
+            guard isActive == false, let window = view.window,
+                  let responder = window.firstResponder as? NSView, responder.isDescendant(of: view)
+            else {
+                return
+            }
+
+            window.makeFirstResponder(nil)
         }
 
         func sizeChanged(source _: TerminalView, newCols: Int, newRows: Int) {
@@ -128,41 +168,41 @@ extension TerminalRepresentable {
 
         // MARK: Private
 
-        /// How long the pane waits for its history before showing
-        /// live output anyway.
-        private static let seedTimeoutSeconds = 3
-
-        /// How many capture asks run before the pane gives up on
-        /// its history and reports.
-        private static let seedAttemptLimit = 3
-
-        private var onProcessTerminated: (@MainActor () -> Void)?
         private var started = false
-        private var tornDown = false
-        private var exitReason: String?
+        private var startedCommand: [String] = []
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
         private weak var pendingView: PaneTerminalView?
         private var pendingCommand: [String] = []
 
-        private weak var view: PaneTerminalView?
-        private var channel: TmuxControlChannel?
         private var pump: Task<Void, Never>?
 
-        /// The attach command itself answers with one empty block
-        /// before anything this client sends, so the queue starts
-        /// with that response accounted for.
-        private var pending: [CommandExpectation] = [.acknowledgement]
-
-        /// Output arriving before the history seed, replayed after
-        /// it so nothing renders out of order.
-        private var queuedOutput: [[UInt8]] = []
-        private var seeded = false
-        private var seedDeadline: Task<Void, Never>?
-        private var seedAttempts = 0
-        private var responsesSeen = 0
-        private var outputsSeen = 0
-        private var notificationsSeen = 0
+        /// Drops the running client and resets the conversation
+        /// state so a new command can attach through the same view;
+        /// the terminal clears via a full reset so the old session's
+        /// screen never shows over the new one.
+        private func discardClient(of view: PaneTerminalView) {
+            seedDeadline?.cancel()
+            seedDeadline = nil
+            pump?.cancel()
+            pump = nil
+            if let channel {
+                Task {
+                    await channel.stop()
+                }
+            }
+            channel = nil
+            pending = [.acknowledgement]
+            queuedOutput = []
+            seeded = false
+            seedAttempts = 0
+            responsesSeen = 0
+            outputsSeen = 0
+            notificationsSeen = 0
+            exitReason = nil
+            started = false
+            view.feed(text: "\u{1B}c")
+        }
 
         private func start(_ command: [String], in view: PaneTerminalView) {
             self.view = view
@@ -170,171 +210,15 @@ extension TerminalRepresentable {
             channel = attached
             pump = Task { [weak self] in
                 guard let stream = try? await attached.start() else {
-                    self?.finish()
+                    self?.finish(for: attached)
                     return
                 }
 
                 self?.requestInitialState(of: view)
                 for await event in stream {
-                    self?.handle(event)
+                    self?.handle(event, from: attached)
                 }
-                self?.finish()
-            }
-        }
-
-        /// The pane appears at its history in one round trip: size
-        /// the client first so tmux settles the pane's dimensions,
-        /// heal the scrollback depth on servers older than their
-        /// config, then capture everything scrollback should hold.
-        private func requestInitialState(of view: PaneTerminalView) {
-            let terminal = view.getTerminal()
-            sendCommand(
-                TmuxControl.resizeCommand(columns: terminal.cols, rows: terminal.rows),
-                expecting: .acknowledgement,
-            )
-            sendCommand(TmuxControl.historyLimitCommand, expecting: .acknowledgement)
-            sendCommand(TmuxControl.historyCommand, expecting: .history)
-            armSeedDeadline()
-        }
-
-        /// A seed that never answers must not hold the pane blank
-        /// forever; the deadline retries and eventually gives up.
-        private func armSeedDeadline() {
-            seedDeadline = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(Self.seedTimeoutSeconds))
-                self?.seedIfStalled()
-            }
-        }
-
-        /// The deadline fired before the history response. A slow
-        /// sudo or sandbox launch answers late rather than never, so
-        /// the capture is asked again before giving up; the final
-        /// report carries enough state to name the failing layer.
-        private func seedIfStalled() {
-            guard seeded == false, tornDown == false else {
-                return
-            }
-
-            seedAttempts += 1
-            if seedAttempts < Self.seedAttemptLimit {
-                sendCommand(TmuxControl.historyCommand, expecting: .history)
-                armSeedDeadline()
-                return
-            }
-
-            let ended = channel
-            let state = "responses \(responsesSeen), outputs \(outputsSeen), "
-                + "notifications \(notificationsSeen), pending \(pending.count)"
-            Task { [weak self] in
-                let running = await ended?.isRunning() ?? false
-                let chain = await ended?.launchChainSnapshot() ?? "gone"
-                ErrorLog.shared.report(
-                    "Terminal: no history after \(Self.seedAttemptLimit) asks"
-                        + " (client running: \(running), \(state); chain: \(chain));"
-                        + " showing live output only",
-                )
-                self?.seed(lines: [])
-            }
-        }
-
-        private func sendCommand(_ line: String, expecting: CommandExpectation) {
-            pending.append(expecting)
-            channel?.send(line)
-        }
-
-        private func handle(_ event: TmuxControlEvent) {
-            switch event {
-            case let .output(_, bytes):
-                outputsSeen += 1
-                if seeded {
-                    view?.feed(byteArray: bytes[...])
-                } else {
-                    queuedOutput.append(bytes)
-                }
-
-            case let .response(lines, isError):
-                responsesSeen += 1
-                guard pending.isEmpty == false, pending.removeFirst() == .history else {
-                    return
-                }
-
-                seed(lines: isError ? [] : lines)
-
-            case let .exited(reason):
-                exitReason = reason
-
-            case .notification:
-                notificationsSeen += 1
-            }
-        }
-
-        /// Feeds the captured history, replays anything queued and
-        /// nudges the pane to repaint so full-screen interfaces
-        /// redraw themselves over the seeded scrollback. A late or
-        /// retried capture answering after the first seed is skipped:
-        /// feeding old history over live output would reorder it.
-        private func seed(lines: [String]) {
-            guard seeded == false else {
-                return
-            }
-
-            let text = TmuxControl.seedText(lines: lines)
-            if text.isEmpty == false {
-                view?.feed(text: text)
-            }
-            for bytes in queuedOutput {
-                view?.feed(byteArray: bytes[...])
-            }
-            queuedOutput = []
-            seeded = true
-            seedDeadline?.cancel()
-            seedDeadline = nil
-            nudgeRepaint()
-        }
-
-        /// A one-row shrink and restore: the resulting window change
-        /// makes full-screen interfaces repaint without tmux needing
-        /// a redraw command.
-        private func nudgeRepaint() {
-            guard let terminal = view?.getTerminal() else {
-                return
-            }
-
-            sendCommand(
-                TmuxControl.resizeCommand(columns: terminal.cols, rows: max(terminal.rows - 1, 1)),
-                expecting: .acknowledgement,
-            )
-            sendCommand(
-                TmuxControl.resizeCommand(columns: terminal.cols, rows: terminal.rows),
-                expecting: .acknowledgement,
-            )
-        }
-
-        /// The stream ended: surface why when it was not a clean
-        /// detach, so a failed attach never renders as a silent
-        /// blank pane, then let the owner react.
-        private func finish() {
-            guard tornDown == false else {
-                return
-            }
-
-            let callback = onProcessTerminated
-            onProcessTerminated = nil
-            let reason = exitReason
-            let wasSeeded = seeded
-            let ended = channel
-            channel = nil
-            Task { [weak self] in
-                let diagnostics = await ended?.collectedErrorText() ?? ""
-                let detail = [reason, diagnostics.isEmpty ? nil : diagnostics]
-                    .compactMap(\.self)
-                    .joined(separator: "; ")
-                if detail.isEmpty == false || wasSeeded == false {
-                    let message = detail.isEmpty ? "the tmux client exited before attaching" : detail
-                    ErrorLog.shared.report("Terminal: " + message)
-                    self?.view?.feed(text: "\r\n[tmux client exited: " + message + "]\r\n")
-                }
-                callback?()
+                self?.finish(for: attached)
             }
         }
 

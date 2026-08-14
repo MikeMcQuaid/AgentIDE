@@ -4,6 +4,8 @@ import SessionFeature
 import SwiftUI
 import TerminalUI
 
+// MARK: - RootView
+
 /// The main window: the dashboard sidebar on the left; on the right,
 /// segmented controls selecting the worktree's sessions over a split
 /// of the sandboxed agent and a collapsible utility pane.
@@ -107,6 +109,7 @@ struct RootView: View {
     private static let utilityRange = 340.0 ... 1_200.0
     private static let primaryMinimum: CGFloat = 420
     private static let stripSpacing: CGFloat = 4
+    private static let shellClosePadding: CGFloat = 6
 
     /// The utility header row's height: the tab capsules plus the
     /// row's padding. The floating toggle centres in the same height
@@ -341,28 +344,48 @@ struct RootView: View {
     }
 
     /// The shell tab's layer, always mounted while its shell runs so
-    /// the terminal survives tab switches at a constant size.
+    /// the terminal survives tab switches at a constant size. The
+    /// close button hard-terminates shells that cannot Ctrl-D out.
     @ViewBuilder
     private func shellLayer(for item: WorktreeItem) -> some View {
         let path = item.worktree.path
         if runningShells.contains(path) {
-            shellTerminal(for: item.worktree) {
+            shellTerminal(for: item.worktree, isActive: utilityTab == .shell) {
                 runningShells.remove(path)
                 runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }
             .id("shell-" + path)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    terminateShell(for: item.worktree)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Terminate shell")
+                }
+                .buttonStyle(.plain)
+                .padding(Self.shellClosePadding)
+                .hoverHelp("Kill this shell's host tmux session; Start shell opens a fresh one")
+            }
         } else {
-            startShellButton(for: path)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            StartShellButton {
+                runningShells.insert(path)
+                runningShellPaths = runningShells.sorted().joined(separator: "\n")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    private func startShellButton(for path: String) -> some View {
-        Button {
-            runningShells.insert(path)
-            runningShellPaths = runningShells.sorted().joined(separator: "\n")
-        } label: {
+// MARK: - StartShellButton
+
+/// The shell tab's empty state: one button that starts the shell.
+private struct StartShellButton: View {
+    let onStart: () -> Void
+
+    var body: some View {
+        Button(action: onStart) {
             Label("Start shell", systemImage: "terminal")
         }
         .controlSize(.large)

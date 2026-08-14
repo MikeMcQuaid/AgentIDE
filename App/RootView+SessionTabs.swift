@@ -221,15 +221,30 @@ extension RootView {
         )
     }
 
-    /// The host shell terminal; copies stay verbatim for code.
+    /// The host shell terminal; copies stay verbatim for code. The
+    /// pane stays mounted behind other tabs, so it reports whether
+    /// it is the visible one and yields keyboard focus otherwise.
     func shellTerminal(
         for worktree: Worktree,
+        isActive: Bool,
         onExit: @escaping @MainActor () -> Void,
     ) -> TerminalPaneView {
         TerminalPaneView(
             command: dependencies.service.hostShellCommand(worktree: worktree),
+            isActive: isActive,
             onProcessTerminated: onExit,
         )
+    }
+
+    /// Hard-terminates a worktree's host shell session, for shells
+    /// that cannot be exited from inside.
+    func terminateShell(for worktree: Worktree) {
+        Task {
+            await dependencies.service.killTmuxSession(
+                name: dependencies.service.hostShellName(worktree: worktree),
+                isHostShell: true,
+            )
+        }
     }
 
     /// The worktree the review surfaces describe: on the repository

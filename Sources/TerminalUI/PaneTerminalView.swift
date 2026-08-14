@@ -19,6 +19,19 @@ final class PaneTerminalView: TerminalView {
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
 
+    /// The right-click menu: Copy and Paste, which terminals
+    /// otherwise lack entirely.
+    override func menu(for _: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "")
+        copyItem.target = self
+        menu.addItem(copyItem)
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "")
+        pasteItem.target = self
+        menu.addItem(pasteItem)
+        return menu
+    }
+
     /// Native selection copy, reflowed for prose panes.
     override func copy(_ sender: Any) {
         super.copy(sender)
