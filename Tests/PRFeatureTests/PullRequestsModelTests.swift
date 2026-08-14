@@ -173,33 +173,14 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `opening a pull request drafts first and creates second`() async {
+    func `opening a pull request pushes then opens the GitHub page`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        var prepared: String?
-        model.prepareDraft = { _, disclosure in
-            prepared = disclosure
-            return ".agentide-pull-request.md"
-        }
-
-        let first = await model.ship(disclosure: "Claude Code")
-        guard case let .drafted(relativePath) = first else {
-            Issue.record("Expected a draft, got \(first)")
-            return
-        }
-
-        #expect(relativePath == ".agentide-pull-request.md")
-        #expect(prepared == "Claude Code")
-        #expect(model.hasDraft)
-
-        let second = await model.ship(disclosure: nil)
-        guard case .created = second else {
-            Issue.record("Expected creation, got \(second)")
-            return
-        }
-
-        #expect(model.hasDraft == false)
+        model.fetchFullName = { "owner/repo" }
+        var pushed = false
+        model.performPush = { _ in pushed = true }
+        #expect(await model.openPullRequestPage())
+        #expect(pushed)
         #expect(model.isPushed)
-        #expect(model.status == "https://example.test/pull/1")
     }
 
     @Test

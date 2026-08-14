@@ -43,14 +43,11 @@ final class PullRequestsModel {
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
-        checkDraft = { worktree in
-            service.hasPullRequestDraft(worktree: worktree)
+        fetchRebaseNeed = { worktree in
+            await service.rebaseNeed(worktree: worktree)
         }
-        prepareDraft = { worktree, disclosure in
-            try await service.preparePullRequestDraft(worktree: worktree, disclosure: disclosure)
-        }
-        createFromDraft = { worktree in
-            try await service.createPullRequestFromDraft(worktree: worktree)
+        fetchFullName = {
+            await github.fullName(repositoryPath: repository.path)
         }
         performPush = { worktree in
             try await service.push(worktree: worktree)
@@ -70,14 +67,6 @@ final class PullRequestsModel {
 
     // MARK: Internal
 
-    /// What Open PR resolved to, so the view can route the outcome.
-    enum ShipOutcome {
-        case drafted(relativePath: String)
-        case created
-        case failed
-        case unavailable
-    }
-
     let repository: Repository
     let branch: String?
 
@@ -94,10 +83,9 @@ final class PullRequestsModel {
     /// actions extension.
     var isPushed = false
 
-    /// Whether the worktree holds an unsent pull request draft, so
-    /// Open PR reads Create PR. Written only by the actions
-    /// extension and reload.
-    var hasDraft = false
+    /// What a signed rebase would change right now, refreshed on
+    /// reload; the button dims and names its work from this.
+    private(set) var rebaseNeed: SessionService.RebaseNeed = .nothing
 
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
@@ -126,9 +114,8 @@ final class PullRequestsModel {
     var fetchHasMergeQueue: () async -> Bool
     var fetchRemediationContext: (Int) async -> String
     var fetchCurrentBranch: (String) async -> String?
-    var checkDraft: (Worktree) -> Bool
-    var prepareDraft: (Worktree, String?) async throws -> String
-    var createFromDraft: (Worktree) async throws -> String
+    var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
+    var fetchFullName: () async -> String?
     var performPush: (Worktree) async throws -> Void
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
@@ -197,11 +184,47 @@ final class PullRequestsModel {
         return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
     }
 
+    /// The rebase button's label names exactly what it would do.
+    var rebaseTitle: String {
+        switch rebaseNeed {
+        case .sign:
+            "Sign commits"
+
+        case .rebaseAndSign:
+            "Rebase and sign"
+
+        case .nothing,
+             .rebase:
+            "Rebase on origin"
+        }
+    }
+
+    /// Rebase only lights up when it would actually change
+    /// something: move the base, sign commits, or both.
+    var canRebase: Bool {
+        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
+    }
+
+    /// Push names how many commits it would send.
+    var pushTitle: String {
+        guard canPush, let ahead = branchItem?.aheadOfUpstream, ahead > 0 else {
+            return "Push"
+        }
+
+        return "Push " + String(ahead)
+    }
+
     /// Opening a pull request makes sense until one is open for the
     /// checked-out branch; it pushes first when needed.
     var canOpenPullRequest: Bool {
         branchItem != nil
             && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
+    }
+
+    /// The branch the tab lists and compares against: the checked
+    /// out one when known, the worktree's recorded one otherwise.
+    var listedBranch: String? {
+        currentBranch ?? branch
     }
 
     func loadMergeQueue() async {
@@ -216,8 +239,8 @@ final class PullRequestsModel {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
         if let worktree = branchItem?.worktree {
-            hasDraft = checkDraft(worktree)
             isTipSigned = await checkTipSigned(worktree.path)
+            rebaseNeed = await fetchRebaseNeed(worktree)
             if let live = await fetchCurrentBranch(worktree.path) {
                 currentBranch = live
             }
@@ -291,12 +314,6 @@ final class PullRequestsModel {
     /// Fetches stay one page ahead of the visible one, so the pager
     /// knows whether a next page exists.
     private static let pageLookahead = 2
-
-    /// The branch the tab lists and compares against: the checked
-    /// out one when known, the worktree's recorded one otherwise.
-    private var listedBranch: String? {
-        currentBranch ?? branch
-    }
 
     private var cacheKey: String {
         repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")

@@ -114,7 +114,8 @@ struct PullRequestFooterView: View {
     let canPush: Bool
     let canOpenPullRequest: Bool
     let canRebase: Bool
-    let hasDraft: Bool
+    let rebaseTitle: String
+    let pushTitle: String
     let pushHelp: String
     let status: String?
     let onRebase: @MainActor () async -> Void
@@ -124,23 +125,23 @@ struct PullRequestFooterView: View {
 
     var body: some View {
         HStack {
-            BusyButton("Rebase on origin", busy: "Rebasing", disabled: canRebase == false, action: onRebase)
+            BusyButton(rebaseTitle, busy: "Rebasing", disabled: canRebase == false, action: onRebase)
                 .hoverHelp(
                     "Fetch, then rebase with --force-rebase --gpg-sign: onto this branch's own origin ref "
                         + "when that is fully signed and only new commits need signatures, "
                         + "otherwise onto origin/HEAD re-signing everything; "
                         + "a conflict aborts and reports to the Errors tab",
                 )
-            BusyButton("Push", busy: "Pushing", disabled: canPush == false, action: onPush)
+            BusyButton(pushTitle, busy: "Pushing", disabled: canPush == false, action: onPush)
                 .hoverHelp(pushHelp)
             BusyButton(
-                hasDraft ? "Create PR" : "Open PR",
-                busy: hasDraft ? "Creating" : "Opening",
+                "Open PR",
+                busy: "Opening",
                 disabled: canOpenPullRequest == false,
                 action: onOpenPullRequest,
             )
             .hoverHelp(openHelp)
-            BusyButton("Refresh", busy: "Refreshing", action: onRefresh)
+            RefreshButton(action: onRefresh)
                 .hoverHelp("Fetch the pull requests again")
             if let status {
                 // Selectable so failures can be copied and reported.
@@ -164,9 +165,7 @@ struct PullRequestFooterView: View {
             return "This branch already has an open pull request"
         }
 
-        return hasDraft
-            ? "Push if needed and open the pull request from the draft's edited title and body"
-            : "Write a pull request draft from the repository template and open it in the editor tab"
+        return "Push if needed, then open GitHub's pull request creation page in the Browser tab"
     }
 }
 

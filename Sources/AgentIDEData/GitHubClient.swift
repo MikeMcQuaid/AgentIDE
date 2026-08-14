@@ -83,14 +83,6 @@ public struct GitHubClient: Sendable {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
-    /// Opens a pull request from the worktree's branch with an
-    /// edited title and body; returns its URL.
-    public func createPullRequest(worktreePath: String, title: String, bodyFile: String) async throws -> String {
-        try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     /// Whether the repository merges through a merge queue, so merge
     /// controls can say queue rather than merge.
     public func hasMergeQueue(repositoryPath: String) async -> Bool {
@@ -119,6 +111,17 @@ public struct GitHubClient: Sendable {
             in: repositoryPath,
         )
         return result?.standardOutput.contains("\"mergeQueue\":{") ?? false
+    }
+
+    /// The repository's `owner/name`, nil when unknown; a setting
+    /// that rarely changes, so gh's HTTP cache answers repeats.
+    public func fullName(repositoryPath: String) async -> String? {
+        let result = try? await gh(
+            ["repo", "view", "--json", "nameWithOwner", "--cache", "1h", "--jq", ".nameWithOwner"],
+            in: repositoryPath,
+        )
+        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? nil : name
     }
 
     /// Enables automerge for a pull request.
@@ -181,18 +184,6 @@ public struct GitHubClient: Sendable {
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
-
-    /// The repository's pull request template file, nil without one.
-    static func pullRequestTemplate(in worktreePath: String) -> String? {
-        [
-            ".github/PULL_REQUEST_TEMPLATE.md",
-            ".github/pull_request_template.md",
-            "PULL_REQUEST_TEMPLATE.md",
-            "docs/PULL_REQUEST_TEMPLATE.md",
-        ]
-        .map { worktreePath + "/" + $0 }
-        .first { FileManager.default.fileExists(atPath: $0) }
-    }
 
     static func listArguments(scope: ListScope, limit: Int = Self.listLimit) -> [String] {
         let fields = scope == .open ? Self.coreFields : Self.coreFields + "," + Self.statusFields

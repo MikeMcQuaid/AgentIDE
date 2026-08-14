@@ -24,30 +24,23 @@ extension PullRequestsModel {
         )
     }
 
-    /// The two-phase Open PR: without a draft it writes one for the
-    /// editor; with one it pushes and creates the pull request from
-    /// the draft's edited title and body.
-    func ship(disclosure: String?) async -> ShipOutcome {
-        guard let worktree = actionWorktree else {
-            return .unavailable
+    /// Pushes when needed, then opens GitHub's pull request
+    /// creation page for the branch in the Browser tab; false means
+    /// something failed and the errors surface should open.
+    func openPullRequestPage() async -> Bool {
+        if canPush, await push() == false {
+            return false
+        }
+        guard let branch = listedBranch ?? branchItem?.worktree.branch,
+              let fullName = await fetchFullName()
+        else {
+            ErrorLog.shared.report("The repository's GitHub name is unknown; is it pushed to GitHub?")
+            return false
         }
 
-        do {
-            if hasDraft {
-                status = try await createFromDraft(worktree)
-                isPushed = true
-                hasDraft = false
-                await reload(keepingSelection: true)
-                return .created
-            }
-            let path = try await prepareDraft(worktree, disclosure)
-            hasDraft = true
-            status = "Draft ready in the editor; Create PR sends it."
-            return .drafted(relativePath: path)
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-            return .failed
-        }
+        let encoded = branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? branch
+        LinkOpener.open("https://github.com/" + fullName + "/pull/new/" + encoded)
+        return true
     }
 
     /// Pushes the checked-out branch; false means the push failed

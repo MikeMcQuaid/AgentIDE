@@ -52,9 +52,8 @@ extension PullRequestsModelTests {
         model.fetchHasMergeQueue = { false }
         model.fetchRemediationContext = { _ in "" }
         model.fetchCurrentBranch = { _ in nil }
-        model.checkDraft = { _ in false }
-        model.prepareDraft = { _, _ in ".agentide-pull-request.md" }
-        model.createFromDraft = { _ in "https://example.test/pull/1" }
+        model.fetchRebaseNeed = { _ in .nothing }
+        model.fetchFullName = { nil }
         model.performPush = { _ in
             // Succeeds without side effects.
         }

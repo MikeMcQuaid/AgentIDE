@@ -65,41 +65,6 @@ public extension GitClient {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Hides a path from git status for this clone only: the exclude
-    /// file lives in the common git directory, shared by every
-    /// worktree, and nothing tracked changes.
-    func excludeLocally(pattern: String, worktreePath: String) async throws {
-        let common = try await git(["rev-parse", "--git-common-dir"], in: worktreePath)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let directory = (common.hasPrefix("/") ? common : worktreePath + "/" + common) + "/info"
-        let file = directory + "/exclude"
-        let existing = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
-        guard existing.split(separator: "\n").contains(Substring(pattern)) == false else {
-            return
-        }
-
-        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let separator = existing.isEmpty || existing.hasSuffix("\n") ? "" : "\n"
-        try (existing + separator + pattern + "\n").write(toFile: file, atomically: true, encoding: .utf8)
-    }
-
-    /// The branch's commit subjects beyond a base ref, newest
-    /// first; empty when the base is unknown, as on a repository
-    /// never pushed.
-    func commitSubjects(worktreePath: String, baseRef: String) async -> [String] {
-        let result = try? await git(
-            ["log", "--format=%s", baseRef + "..HEAD"],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return []
-        }
-
-        return result.standardOutput.split(separator: "\n").map(String.init)
-    }
-
     /// The branch's commits beyond the base ref, newest first, one
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {

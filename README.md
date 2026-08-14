@@ -76,11 +76,11 @@ before shipping.
 
 ### Ship
 
-- Pushes branches and opens one or more pull requests, stacked if needed,
-  across public and private repositories: the title and body draft in the
-  built-in editor from each repository's template, checkboxes prechecked
-  and any AI disclosure filled in (so shipping matches how each project
-  already works without retyping its boilerplate)
+- Pushes branches, showing how many commits each push sends and naming
+  whether a rebase would move the base, sign commits or both, then opens
+  GitHub's pull request creation page in the embedded browser (so
+  shipping uses each project's own template and checks without retyping
+  anything)
 - Addresses automated and human review comments, fixes failing CI, resolves
   merge conflicts and enables automerge or merges, each with one click (so
   the last mile is not the slowest)

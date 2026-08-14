@@ -1,3 +1,5 @@
+import Foundation
+
 /// Reflows terminal copies for pasting into prose tools like chat,
 /// notes and pull request bodies: indentation and the hard line
 /// breaks forced by the terminal's width are removed, blank lines

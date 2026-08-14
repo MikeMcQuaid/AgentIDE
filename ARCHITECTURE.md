@@ -461,15 +461,10 @@ Sendable` and `nonisolated(unsafe)` are banned.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
-5. Opening a pull request is two-phase: the first click writes a draft file
-   in the worktree (the title summarises the branch's commit subjects
-   through the on-device model when there are several, else the last
-   commit's subject, over the repository template with checkboxes
-   prechecked and any AI disclosure line filled with the session's agent,
-   model and effort) and opens it in the editor tab, hidden from git
-   status through the repository-local exclude file; the second click, now
-   Create PR, pushes and runs `gh pr create` with the draft's edited title
-   and body, then deletes the draft.
+5. Opening a pull request pushes when needed, then opens GitHub's own
+   pull request creation page for the branch in the Browser tab, where
+   the template, checkboxes and title autofill live; GitHub is the one
+   place that flow cannot drift from.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.

@@ -76,13 +76,6 @@ public struct PullRequestsView: View {
     @AppStorage("utilityTab")
     private var utilityTab = ""
 
-    /// The new session form's last choices, naming what wrote the
-    /// change in the draft's AI disclosure.
-    @AppStorage("agentModel")
-    private var agentModel = ""
-    @AppStorage("agentEffort")
-    private var agentEffort = ""
-
     @State private var model: PullRequestsModel
 
     /// The repository and branch as a task identity: it comes from
@@ -107,8 +100,9 @@ public struct PullRequestsView: View {
         PullRequestFooterView(
             canPush: model.canPush,
             canOpenPullRequest: model.canOpenPullRequest,
-            canRebase: model.branchItem != nil,
-            hasDraft: model.hasDraft,
+            canRebase: model.canRebase,
+            rebaseTitle: model.rebaseTitle,
+            pushTitle: model.pushTitle,
             pushHelp: model.pushHelp,
             status: model.status,
             onRebase: {
@@ -121,7 +115,11 @@ public struct PullRequestsView: View {
                     utilityTab = UtilityTabTarget.errors
                 }
             },
-            onOpenPullRequest: { await ship() },
+            onOpenPullRequest: {
+                if await model.openPullRequestPage() == false {
+                    utilityTab = UtilityTabTarget.errors
+                }
+            },
             onRefresh: { await model.reload(keepingSelection: true) },
         )
     }
@@ -152,29 +150,5 @@ public struct PullRequestsView: View {
             },
             onRemediate: { await model.act { try await model.remediate(summary) } },
         )
-    }
-
-    /// Routes Open PR's outcome: a fresh draft opens in the editor
-    /// tab, a failure opens the errors tab.
-    private func ship() async {
-        let item = model.branchItem
-        let disclosure = PullRequestDraft.disclosure(
-            agent: (item?.session?.agent ?? item?.pastSessions.first?.agent)?.displayName,
-            model: agentModel,
-            effort: agentEffort,
-        )
-        switch await model.ship(disclosure: disclosure) {
-        case let .drafted(relativePath):
-            if let path = item?.worktree.path {
-                FileOpener.open(relativePath: relativePath, line: nil, worktreePath: path)
-            }
-
-        case .failed:
-            utilityTab = UtilityTabTarget.errors
-
-        case .created,
-             .unavailable:
-            break
-        }
     }
 }
