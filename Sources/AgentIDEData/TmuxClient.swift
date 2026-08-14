@@ -115,12 +115,15 @@ public struct TmuxClient: Sendable {
     /// terminal. External SSH attaches still get mouse and OSC 52
     /// copying from the server config.
     public func attachCommand(sessionName: String) -> [String] {
+        // `-d` detaches any other client: the pane is the session's
+        // one legitimate viewer, and clients leaked by an earlier
+        // app run would otherwise linger attached forever.
         if isInsideSandbox {
-            ["tmux", "-C", "attach-session", "-t", sessionName]
+            ["tmux", "-C", "attach-session", "-d", "-t", sessionName]
         } else {
             launcher.command(
                 payload: "export TMUX_TMPDIR=" + socketDirectory.shellQuoted
-                    + "; exec tmux -C attach-session -t " + sessionName.shellQuoted,
+                    + "; exec tmux -C attach-session -d -t " + sessionName.shellQuoted,
                 initialDirectory: launcher.sharedWorkspace,
                 // Deterministic, so the pane's command compares equal
                 // across view updates: a fresh UUID here made every

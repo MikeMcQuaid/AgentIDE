@@ -36,10 +36,13 @@ public extension SessionService {
     /// uuids; the path digest keeps same-named repositories under
     /// different owners from attaching to each other's shells. `-f`
     /// keeps the user's own tmux config out of app-managed sessions.
+    /// `-D` detaches any other client of the session: the pane is
+    /// the one legitimate viewer, and clients leaked by an earlier
+    /// app run would otherwise linger attached forever.
     func hostShellCommand(worktree: Worktree) -> [String] {
         [
-            Self.hostTmuxPath, "-f", hostTmuxConfigFile(), "-C",
-            "new-session", "-A", "-s", hostShellName(worktree: worktree), "-c", worktree.path,
+            Self.hostTmuxPath, "-f", Self.hostTmuxConfigFile, "-C",
+            "new-session", "-A", "-D", "-s", hostShellName(worktree: worktree), "-c", worktree.path,
         ]
     }
 
@@ -53,9 +56,13 @@ public extension SessionService {
     }
 
     /// Writes the host shell server's config beside the app's other
-    /// state and returns its path; matching the sandbox server's
-    /// copy behaviour, present from the server's first moment.
-    private func hostTmuxConfigFile() -> String {
+    /// state, once per launch, and keeps its path; matching the
+    /// sandbox server's copy behaviour, present from the server's
+    /// first moment. Computed once because the pane compares its
+    /// argv across view updates: a value that could flip between
+    /// the path and the `/dev/null` fallback re-attached the shell
+    /// in a loop.
+    internal static let hostTmuxConfigFile: String = {
         let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
         let file = directory + "/host-tmux.conf"
         let content = """
@@ -71,11 +78,11 @@ public extension SessionService {
             try content.write(toFile: file, atomically: true, encoding: .utf8)
         } catch {
             // tmux errors on a missing config path; /dev/null reads
-            // as empty and the chained commands still apply.
+            // as empty.
             return "/dev/null"
         }
         return file
-    }
+    }()
 
     /// Every AgentIDE tmux session for the session manager: the
     /// sandboxed agents and the host shells, deduplicated.

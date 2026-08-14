@@ -102,6 +102,11 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   name, never index, so reordering cannot repoint them.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
+- tmux servers and sessions outlive the app and only read config at
+  start, so changes to launch commands, configs or session shapes
+  often need existing tmux sessions or servers restarted (or leaked
+  clients killed) to take effect: when finishing such a change, tell
+  the user exactly what to restart or kill.
 
 ### Required Before Each Commit
 

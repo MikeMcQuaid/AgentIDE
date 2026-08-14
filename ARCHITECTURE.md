@@ -187,7 +187,10 @@ Two visually unmistakable flavours ride that one client:
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
   (SSH, `script/attach`) still get tmux-native mouse scrolling and
-  OSC 52 copying from the server config.
+  OSC 52 copying from the server config. A pane attaching detaches any
+  other client of its session (`-d`): clients leaked by an earlier app
+  run would otherwise linger forever, so an SSH viewer is dropped when
+  the app's pane (re)attaches and simply reattaches when wanted.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
