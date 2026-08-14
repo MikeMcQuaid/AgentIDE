@@ -241,11 +241,16 @@ public extension SessionService {
         if let resumeID = metadata.resumeIDs[sessionName] {
             let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+        } else if let past = sessionsInDirectories(of: worktree.path, liveSession: nil).first {
+            // Externally killed sessions never record a resume id,
+            // but their transcripts still name the conversation; the
+            // newest one is what resuming should continue.
+            _ = try await resumePast(past, worktree: worktree)
         } else {
-            // Without a resume id, relaunching with the original
-            // prompt would re-run the whole task against the already
-            // modified worktree; a fresh session there is the safe
-            // fallback.
+            // Without any conversation to continue, relaunching with
+            // the original prompt would re-run the whole task against
+            // the already modified worktree; a fresh session there is
+            // the safe fallback.
             let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: nil)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         }

@@ -89,6 +89,10 @@ public actor TmuxControlChannel {
 
             pids += frontier
         }
+        // Every tmux process joins the picture: a client alive with
+        // no events usually means it is waiting on a slow or wedged
+        // server, whose state and age then matter most.
+        pids += Self.outputLines("/usr/bin/pgrep", ["-x", "tmux"]).filter { pids.contains($0) == false }
         return Self.outputLines("/bin/ps", ["-o", "pid=,stat=,etime=,ucomm=", "-p", pids.joined(separator: ",")])
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .joined(separator: " | ")
