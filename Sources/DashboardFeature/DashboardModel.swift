@@ -64,6 +64,11 @@ public final class DashboardModel {
     /// extension also reports through it.
     public internal(set) var status: String?
 
+    /// A failure shown inline on the middle-pane screens: the finder
+    /// and new-session pages render before the split view exists, so
+    /// the Errors tab is not visible from them.
+    public internal(set) var screenError: String?
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {

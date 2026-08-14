@@ -99,6 +99,12 @@ before shipping.
 - Keeps sessions in a tmux server owned by the sandbox user rather than the
   app (so agents and terminals survive AgentIDE quitting, crashing or
   updating, expectedly or not)
+- Defers idle sleep while agents or shells run and resumes sessions the
+  sleep killed when the Mac wakes (so a long response survives you
+  walking away; closing the lid still sleeps)
+- Collects every failure into an Errors utility tab, shown from the first
+  error and inline on screens without the utility pane (so background
+  failures are never lost to a log you were not watching)
 
 ## Out of Scope Features
 

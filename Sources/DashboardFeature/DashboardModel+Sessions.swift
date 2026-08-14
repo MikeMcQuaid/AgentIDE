@@ -96,6 +96,7 @@ public extension DashboardModel {
     /// screen immediately.
     private func run(_ work: () async throws -> String) async {
         do {
+            screenError = nil
             let sessionName = try await work()
             showsNewSession = false
             await refresh()
@@ -103,6 +104,9 @@ public extension DashboardModel {
                 selection = created
             }
         } catch {
+            // The new-session page is still on screen and cannot
+            // show the Errors tab, so the failure shows inline too.
+            screenError = error.localizedDescription
             ErrorLog.shared.report(error.localizedDescription)
         }
     }
