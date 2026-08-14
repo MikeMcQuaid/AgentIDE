@@ -9,6 +9,11 @@ public enum TmuxControl {
     /// colours, to seed the local scrollback on attach.
     public static let historyCommand = "capture-pane -p -e -q -N -S -"
 
+    /// Deepens scrollback on servers born before the config file
+    /// carried the option; a long-lived server never rereads its
+    /// config, and the setting only shapes panes created after it.
+    public static let historyLimitCommand = "set -g history-limit 50000"
+
     /// Types raw bytes into the attached session's active pane;
     /// `-H` sends each hexadecimal byte as a literal character.
     public static func sendKeysCommand(bytes: some Sequence<UInt8>) -> String {

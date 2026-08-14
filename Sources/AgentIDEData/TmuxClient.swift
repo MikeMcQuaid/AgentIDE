@@ -119,8 +119,8 @@ public struct TmuxClient: Sendable {
             ["tmux", "-C", "attach-session", "-t", sessionName]
         } else {
             launcher.command(
-                payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux -C attach-session -t " + shellQuote(sessionName),
+                payload: "export TMUX_TMPDIR=" + socketDirectory.shellQuoted
+                    + "; exec tmux -C attach-session -t " + sessionName.shellQuoted,
                 initialDirectory: launcher.sharedWorkspace,
                 sessionID: UUID().uuidString,
                 sessionName: sessionName,
@@ -139,10 +139,10 @@ public struct TmuxClient: Sendable {
     /// whole config onto one line.
     var configPrelude: String {
         let format = Self.configContent.replacing("\n", with: "\\n") + "\\n"
-        return "export TMUX_TMPDIR=" + shellQuote(socketDirectory) + "; "
-            + "mkdir -p " + shellQuote(socketDirectory) + "; "
-            + "chmod 700 " + shellQuote(socketDirectory) + "; "
-            + "printf " + shellQuote(format) + " > " + shellQuote(configFile) + "; "
+        return "export TMUX_TMPDIR=" + socketDirectory.shellQuoted + "; "
+            + "mkdir -p " + socketDirectory.shellQuoted + "; "
+            + "chmod 700 " + socketDirectory.shellQuoted + "; "
+            + "printf " + format.shellQuoted + " > " + configFile.shellQuoted + "; "
     }
 
     // MARK: Private
@@ -194,7 +194,7 @@ public struct TmuxClient: Sendable {
         } else {
             let payload = configPrelude + "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; "
-                + "exec tmux " + full.map(shellQuote).joined(separator: " ")
+                + "exec tmux " + full.map(\.shellQuoted).joined(separator: " ")
             let argv = launcher.command(
                 payload: payload,
                 initialDirectory: launcher.sharedWorkspace,
@@ -208,9 +208,5 @@ public struct TmuxClient: Sendable {
         }
 
         return result
-    }
-
-    private func shellQuote(_ value: String) -> String {
-        "'" + value.replacing("'", with: "'\\''") + "'"
     }
 }

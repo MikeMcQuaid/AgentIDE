@@ -28,21 +28,13 @@ public actor TmuxControlChannel {
         let client = Process()
         client.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         client.arguments = command
-        var environment = ProcessInfo.processInfo.environment
-        let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
-        // As in FoundationProcessRunner: an inherited TMUX variable
-        // would aim the client at the surrounding server no matter
-        // what TMUX_TMPDIR says. Servers are only chosen explicitly.
-        environment["TMUX"] = nil
-        environment["TMUX_PANE"] = nil
-        environment.merge(extraEnvironment) { _, new in new }
-        client.environment = environment
+        client.environment = ProcessEnvironment.scrubbed(merging: extraEnvironment)
         client.standardInput = input
         client.standardOutput = output
-        client.standardError = FileHandle.nullDevice
+        client.standardError = errors
         try client.run()
         process = client
+        spawned = true
 
         let reading = output.fileHandleForReading
         return AsyncStream { continuation in
@@ -78,11 +70,28 @@ public actor TmuxControlChannel {
         process = nil
     }
 
+    /// Everything the client wrote to standard error, where tmux
+    /// puts its diagnostics (unknown session, refused sudo). Only
+    /// call after the event stream has finished: the read waits for
+    /// the pipe to close with the process, so a client that never
+    /// spawned answers empty rather than waiting forever.
+    public func collectedErrorText() -> String {
+        guard spawned else {
+            return ""
+        }
+
+        let data = (try? errors.fileHandleForReading.readToEnd()) ?? Data()
+        return String(bytes: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     // MARK: Private
 
     private nonisolated let input: Pipe = .init()
     private nonisolated let output: Pipe = .init()
+    private nonisolated let errors: Pipe = .init()
     private let command: [String]
     private let extraEnvironment: [String: String]
     private var process: Process?
+    private var spawned = false
 }

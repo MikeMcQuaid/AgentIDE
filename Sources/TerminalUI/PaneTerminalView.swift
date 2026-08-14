@@ -65,7 +65,10 @@ final class BlockSelector {
         switch event.type {
         case .leftMouseDown:
             let point = view.convert(event.locationInWindow, from: nil)
-            guard event.modifierFlags.contains(.option), view.bounds.contains(point) else {
+            guard event.modifierFlags.contains(.option), view.bounds.contains(point),
+                  view.isHiddenOrHasHiddenAncestor == false,
+                  Self.hitsTerminal(event, in: view)
+            else {
                 return event
             }
 
@@ -92,6 +95,18 @@ final class BlockSelector {
     private weak var view: PaneTerminalView?
     private var anchor: CGPoint?
     private var overlay: NSView?
+
+    /// Whether the window resolves the click to this terminal: a
+    /// pane kept mounted but covered or hidden must not steal drags
+    /// from the view actually under the pointer.
+    private static func hitsTerminal(_ event: NSEvent, in view: PaneTerminalView) -> Bool {
+        guard let content = view.window?.contentView, let root = content.superview else {
+            return false
+        }
+
+        let hit = content.hitTest(root.convert(event.locationInWindow, from: nil))
+        return hit === view || hit?.isDescendant(of: view) == true
+    }
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
         anchor = point

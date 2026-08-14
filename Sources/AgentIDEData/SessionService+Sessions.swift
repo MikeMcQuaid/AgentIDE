@@ -192,10 +192,9 @@ public extension SessionService {
             return
         }
 
-        let quoted = "'" + past.path.replacing("'", with: "'\\''") + "'"
         let launcher = SandvaultLauncher(hostUser: paths.hostUser)
         let command = launcher.command(
-            payload: "rm -f " + quoted,
+            payload: "rm -f " + past.path.shellQuoted,
             initialDirectory: launcher.sharedWorkspace,
             sessionID: UUID().uuidString,
             sessionName: "agentide-delete",
@@ -243,9 +242,11 @@ public extension SessionService {
             let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         } else {
-            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
-            let existing = FileManager.default.fileExists(atPath: promptFile) ? promptFile : nil
-            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: existing)
+            // Without a resume id, relaunching with the original
+            // prompt would re-run the whole task against the already
+            // modified worktree; a fresh session there is the safe
+            // fallback.
+            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: nil)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         }
         clearIntentionalClose(worktreePath: worktree.path)

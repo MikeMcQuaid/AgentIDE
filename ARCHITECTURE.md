@@ -364,9 +364,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    permission-skipping flag inside the sandbox), and the session launches
    through the tmux payload above.
 8. The prompt travels inside the launch command, read from its file as the
-   agent starts (`"$(cat …)"` evaluated in the sandbox): pasting it as
+   agent starts (`"$(cat …)"` evaluated in the sandbox, the file path
+   shell-quoted): pasting it as
    terminal input after launch raced the agent's terminal setup, which
-   flushed pending input and lost the prompt. The pane's `INITIAL_DIR` is
+   flushed pending input and lost the prompt. The accepted trade-offs: the
+   expanded prompt appears in the agent process's own argv, visible to
+   `ps` on the machine, and prompts are bounded by the kernel's
+   argument-size limit.
+   The pane's `INITIAL_DIR` is
    pinned to the worktree so the sandbox's zshenv cannot redirect the agent
    elsewhere.
 9. The session is recorded in the metadata store, with the agent-native
@@ -489,10 +494,18 @@ Sendable` and `nonisolated(unsafe)` are banned.
 ### Close and reopen a session
 
 Closing a session kills only the tmux session. The worktree, transcripts and
-metadata (including the resume id) remain. Reopening builds the agent's
+metadata (including the resume id) remain, and the deliberate close is
+recorded so the automatic resumes below leave that worktree alone until a
+session starts there again. Reopening builds the agent's
 resume command (`claude --resume <id>`, or the Codex equivalent) through the
 normal launch shape in the same canonical cwd, restoring the full prior
-conversation. Deleting a worktree composes with this: its conversations stay
+conversation. A worktree whose session never recorded a resume id falls
+back to a fresh session there, never a relaunch of the original prompt,
+which would re-run the whole task against the already modified worktree.
+
+While agents or shells run, the app holds a system activity that defers
+idle sleep (`SleepInhibitor`; closing the lid still sleeps), and sessions
+that were running at sleep and died with it resume automatically on wake. Deleting a worktree composes with this: its conversations stay
 listed on the repository page and resume into fresh worktrees.
 
 Beyond the one live session, every earlier conversation in a worktree is
