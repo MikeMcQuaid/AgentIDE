@@ -16,9 +16,9 @@ struct PullRequestRowView: View {
     let stackDepth: Int
     let hasMergeQueue: Bool
     let showsActions: Bool
-    let onAutomerge: () -> Void
-    let onMerge: () -> Void
-    let onRemediate: () -> Void
+    let onAutomerge: @MainActor () async -> Void
+    let onMerge: @MainActor () async -> Void
+    let onRemediate: @MainActor () async -> Void
 
     var body: some View {
         HStack {
@@ -120,22 +120,25 @@ struct PullRequestRowView: View {
     }
 
     @ViewBuilder private var actions: some View {
-        Button("Fix", action: onRemediate)
-            .disabled(canRemediate == false)
+        BusyButton("Fix", busy: "Fixing", disabled: canRemediate == false, action: onRemediate)
             .hoverHelp("Dump every review comment and failing check into an agent in this worktree")
         // One merge action, matching what the pull request can do
         // right now: merge when green and mergeable, automerge
         // while checks are still running.
         if summary.state == "OPEN" {
             if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
-                Button(hasMergeQueue ? "Queue" : "Merge", action: onMerge)
-                    .hoverHelp(
-                        hasMergeQueue
-                            ? "Checks passed and the branch is mergeable: queue now"
-                            : "Checks passed and the branch is mergeable: merge now",
-                    )
+                BusyButton(
+                    hasMergeQueue ? "Queue" : "Merge",
+                    busy: hasMergeQueue ? "Queueing" : "Merging",
+                    action: onMerge,
+                )
+                .hoverHelp(
+                    hasMergeQueue
+                        ? "Checks passed and the branch is mergeable: queue now"
+                        : "Checks passed and the branch is mergeable: merge now",
+                )
             } else {
-                Button("Automerge", action: onAutomerge)
+                BusyButton("Automerge", busy: "Enabling automerge", action: onAutomerge)
                     .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
             }
         }

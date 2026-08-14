@@ -18,9 +18,9 @@ struct PullRequestConversationPane: View {
     let repositoryPath: String
     let store: MetadataStore
     let onBack: () -> Void
-    let onAutomerge: () -> Void
-    let onMerge: () -> Void
-    let onRemediate: () -> Void
+    let onAutomerge: @MainActor () async -> Void
+    let onMerge: @MainActor () async -> Void
+    let onRemediate: @MainActor () async -> Void
 
     var body: some View {
         VStack(spacing: 0) {

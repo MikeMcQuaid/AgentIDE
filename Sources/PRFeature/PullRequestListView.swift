@@ -117,28 +117,30 @@ struct PullRequestFooterView: View {
     let hasDraft: Bool
     let pushHelp: String
     let status: String?
-    let onRebase: () -> Void
-    let onPush: () -> Void
-    let onOpenPullRequest: () -> Void
-    let onRefresh: () -> Void
+    let onRebase: @MainActor () async -> Void
+    let onPush: @MainActor () async -> Void
+    let onOpenPullRequest: @MainActor () async -> Void
+    let onRefresh: @MainActor () async -> Void
 
     var body: some View {
         HStack {
-            Button("Rebase on origin", action: onRebase)
-                .disabled(canRebase == false)
+            BusyButton("Rebase on origin", busy: "Rebasing", disabled: canRebase == false, action: onRebase)
                 .hoverHelp(
                     "Fetch, then rebase with --force-rebase --gpg-sign: onto this branch's own origin ref "
                         + "when that is fully signed and only new commits need signatures, "
                         + "otherwise onto origin/HEAD re-signing everything; "
                         + "a conflict aborts and reports to the Errors tab",
                 )
-            Button("Push", action: onPush)
-                .disabled(canPush == false)
+            BusyButton("Push", busy: "Pushing", disabled: canPush == false, action: onPush)
                 .hoverHelp(pushHelp)
-            Button(hasDraft ? "Create PR" : "Open PR", action: onOpenPullRequest)
-                .disabled(canOpenPullRequest == false)
-                .hoverHelp(openHelp)
-            Button("Refresh", action: onRefresh)
+            BusyButton(
+                hasDraft ? "Create PR" : "Open PR",
+                busy: hasDraft ? "Creating" : "Opening",
+                disabled: canOpenPullRequest == false,
+                action: onOpenPullRequest,
+            )
+            .hoverHelp(openHelp)
+            BusyButton("Refresh", busy: "Refreshing", action: onRefresh)
                 .hoverHelp("Fetch the pull requests again")
             if let status {
                 // Selectable so failures can be copied and reported.

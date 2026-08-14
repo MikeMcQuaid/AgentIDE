@@ -103,15 +103,13 @@ extension PullRequestsModel {
         status = "Fix agent launched for #\(summary.number)."
     }
 
-    func act(_ work: @escaping () async throws -> Void) {
-        Task {
-            do {
-                try await work()
-                status = "Done."
-                await reload(keepingSelection: true)
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
+    func act(_ work: () async throws -> Void) async {
+        do {
+            try await work()
+            status = "Done."
+            await reload(keepingSelection: true)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 }

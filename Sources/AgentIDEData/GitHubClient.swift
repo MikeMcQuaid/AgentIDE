@@ -134,10 +134,16 @@ public struct GitHubClient: Sendable {
     /// The review comments and check results of a pull request, as
     /// text an agent can act on.
     public func remediationContext(repositoryPath: String, number: Int) async -> String {
-        let view = try? await gh(["pr", "view", String(number), "--comments"], in: repositoryPath)
+        // The three fetches are independent, so they run together:
+        // serially they made Fix feel unresponsive.
+        let viewTask = Task { try? await gh(["pr", "view", String(number), "--comments"], in: repositoryPath) }
         // `--comments` omits inline file comments, where review bots
         // leave their findings, so they join separately.
-        let inline = await inlineComments(repositoryPath: repositoryPath, number: number)
+        let inlineTask = Task { await inlineComments(repositoryPath: repositoryPath, number: number) }
+        let checksTask = Task {
+            try? await gh(["pr", "checks", String(number)], in: repositoryPath, allowFailure: true)
+        }
+        let inline = await inlineTask.value
             .compactMap { row -> String? in
                 let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 guard body.isEmpty == false else {
@@ -147,15 +153,19 @@ public struct GitHubClient: Sendable {
                 return (row.author ?? "unknown") + ": " + body
             }
             .joined(separator: "\n\n")
-        let checks = try? await gh(
-            ["pr", "checks", String(number)],
-            in: repositoryPath,
-            allowFailure: true,
-        )
-        return [
-            view?.standardOutput,
+        // Only failing checks earn the agent's attention; passing,
+        // pending and skipped rows are prompt noise.
+        let failing = await (checksTask.value?.standardOutput ?? "")
+            .split(separator: "\n")
+            .filter { line in
+                let fields = line.split(separator: "\t")
+                return fields.count > 1 && fields[1].localizedCaseInsensitiveContains("fail")
+            }
+            .joined(separator: "\n")
+        return await [
+            viewTask.value?.standardOutput,
             inline.isEmpty ? nil : "Inline review comments:\n\n" + inline,
-            checks?.standardOutput,
+            failing.isEmpty ? nil : "Failing checks:\n\n" + failing,
         ]
         .compactMap(\.self)
         .joined(separator: "\n\n")

@@ -112,21 +112,17 @@ public struct PullRequestsView: View {
             pushHelp: model.pushHelp,
             status: model.status,
             onRebase: {
-                Task {
-                    if await model.rebaseSigned() == false {
-                        utilityTab = UtilityTabTarget.errors
-                    }
+                if await model.rebaseSigned() == false {
+                    utilityTab = UtilityTabTarget.errors
                 }
             },
             onPush: {
-                Task {
-                    if await model.push() == false {
-                        utilityTab = UtilityTabTarget.errors
-                    }
+                if await model.push() == false {
+                    utilityTab = UtilityTabTarget.errors
                 }
             },
-            onOpenPullRequest: { Task { await ship() } },
-            onRefresh: { Task { await model.reload(keepingSelection: true) } },
+            onOpenPullRequest: { await ship() },
+            onRefresh: { await model.reload(keepingSelection: true) },
         )
     }
 
@@ -141,20 +137,20 @@ public struct PullRequestsView: View {
             store: model.store,
             onBack: { model.selected = nil },
             onAutomerge: {
-                model.act { try await model.github.enableAutomerge(
+                await model.act { try await model.github.enableAutomerge(
                     repositoryPath: model.repository.path,
                     number: summary.number,
                 )
                 }
             },
             onMerge: {
-                model.act { try await model.github.merge(
+                await model.act { try await model.github.merge(
                     repositoryPath: model.repository.path,
                     number: summary.number,
                 )
                 }
             },
-            onRemediate: { model.act { try await model.remediate(summary) } },
+            onRemediate: { await model.act { try await model.remediate(summary) } },
         )
     }
 
