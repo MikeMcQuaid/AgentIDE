@@ -62,6 +62,14 @@ public actor TmuxControlChannel {
         try? input.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
     }
 
+    /// Whether the spawned client process is still alive, for
+    /// diagnosing a pane that receives nothing: a running client
+    /// with no events points at the launch chain, a dead one at the
+    /// session.
+    public func isRunning() -> Bool {
+        process?.isRunning ?? false
+    }
+
     /// Detaches the client: end of standard input ends it, and the
     /// termination covers a client stuck before reading commands.
     public func stop() {

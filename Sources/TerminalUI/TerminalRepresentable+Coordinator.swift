@@ -132,6 +132,10 @@ extension TerminalRepresentable {
         /// live output anyway.
         private static let seedTimeoutSeconds = 3
 
+        /// How many capture asks run before the pane gives up on
+        /// its history and reports.
+        private static let seedAttemptLimit = 3
+
         private var onProcessTerminated: (@MainActor () -> Void)?
         private var started = false
         private var tornDown = false
@@ -155,6 +159,10 @@ extension TerminalRepresentable {
         private var queuedOutput: [[UInt8]] = []
         private var seeded = false
         private var seedDeadline: Task<Void, Never>?
+        private var seedAttempts = 0
+        private var responsesSeen = 0
+        private var outputsSeen = 0
+        private var notificationsSeen = 0
 
         private func start(_ command: [String], in view: PaneTerminalView) {
             self.view = view
@@ -186,23 +194,45 @@ extension TerminalRepresentable {
             )
             sendCommand(TmuxControl.historyLimitCommand, expecting: .acknowledgement)
             sendCommand(TmuxControl.historyCommand, expecting: .history)
-            // A seed that never answers must not hold the pane blank
-            // forever; after the deadline live output flows unseeded.
+            armSeedDeadline()
+        }
+
+        /// A seed that never answers must not hold the pane blank
+        /// forever; the deadline retries and eventually gives up.
+        private func armSeedDeadline() {
             seedDeadline = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(Self.seedTimeoutSeconds))
                 self?.seedIfStalled()
             }
         }
 
-        /// The deadline fired before the history response: report it
-        /// and let live output through rather than queueing forever.
+        /// The deadline fired before the history response. A slow
+        /// sudo or sandbox launch answers late rather than never, so
+        /// the capture is asked again before giving up; the final
+        /// report carries enough state to name the failing layer.
         private func seedIfStalled() {
             guard seeded == false, tornDown == false else {
                 return
             }
 
-            ErrorLog.shared.report("Terminal: the pane's history never answered; showing live output only")
-            seed(lines: [])
+            seedAttempts += 1
+            if seedAttempts < Self.seedAttemptLimit {
+                sendCommand(TmuxControl.historyCommand, expecting: .history)
+                armSeedDeadline()
+                return
+            }
+
+            let ended = channel
+            let state = "responses \(responsesSeen), outputs \(outputsSeen), "
+                + "notifications \(notificationsSeen), pending \(pending.count)"
+            Task { [weak self] in
+                let running = await ended?.isRunning() ?? false
+                ErrorLog.shared.report(
+                    "Terminal: no history after \(Self.seedAttemptLimit) asks"
+                        + " (client running: \(running), \(state)); showing live output only",
+                )
+                self?.seed(lines: [])
+            }
         }
 
         private func sendCommand(_ line: String, expecting: CommandExpectation) {
@@ -213,6 +243,7 @@ extension TerminalRepresentable {
         private func handle(_ event: TmuxControlEvent) {
             switch event {
             case let .output(_, bytes):
+                outputsSeen += 1
                 if seeded {
                     view?.feed(byteArray: bytes[...])
                 } else {
@@ -220,6 +251,7 @@ extension TerminalRepresentable {
                 }
 
             case let .response(lines, isError):
+                responsesSeen += 1
                 guard pending.isEmpty == false, pending.removeFirst() == .history else {
                     return
                 }
@@ -230,14 +262,20 @@ extension TerminalRepresentable {
                 exitReason = reason
 
             case .notification:
-                break
+                notificationsSeen += 1
             }
         }
 
         /// Feeds the captured history, replays anything queued and
         /// nudges the pane to repaint so full-screen interfaces
-        /// redraw themselves over the seeded scrollback.
+        /// redraw themselves over the seeded scrollback. A late or
+        /// retried capture answering after the first seed is skipped:
+        /// feeding old history over live output would reorder it.
         private func seed(lines: [String]) {
+            guard seeded == false else {
+                return
+            }
+
             let text = TmuxControl.seedText(lines: lines)
             if text.isEmpty == false {
                 view?.feed(text: text)
