@@ -227,9 +227,11 @@ extension TerminalRepresentable {
                 + "notifications \(notificationsSeen), pending \(pending.count)"
             Task { [weak self] in
                 let running = await ended?.isRunning() ?? false
+                let chain = await ended?.launchChainSnapshot() ?? "gone"
                 ErrorLog.shared.report(
                     "Terminal: no history after \(Self.seedAttemptLimit) asks"
-                        + " (client running: \(running), \(state)); showing live output only",
+                        + " (client running: \(running), \(state); chain: \(chain));"
+                        + " showing live output only",
                 )
                 self?.seed(lines: [])
             }
