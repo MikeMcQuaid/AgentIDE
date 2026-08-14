@@ -145,10 +145,14 @@ final class PullRequestsModel {
     }
 
     /// The visible page; visiting the lookahead page refetches with
-    /// a higher limit.
+    /// a higher limit. The guards keep `reload`'s own `page = 0`
+    /// reset and a fresh model (both counts zero) from spawning a
+    /// second concurrent reload.
     var page = 0 {
         didSet {
-            guard summaries.count == fetchedLimit,
+            guard page != oldValue,
+                  fetchedLimit > 0,
+                  summaries.count == fetchedLimit,
                   (page + 1) * PullRequestListView.pageSize >= summaries.count
             else {
                 return

@@ -10,6 +10,18 @@ struct CodexTranscriptIndexTests {
     // MARK: Internal
 
     @Test
+    func `head decoding survives a cut inside a multi-byte character`() {
+        let ellipsis = Array("…".utf8)
+        let whole = Data(Array("line one\n".utf8) + ellipsis)
+        #expect(CodexTranscriptIndex.decodeHead(whole) == "line one\n…")
+        // A fixed-size read can end mid-character; the partial
+        // trailing bytes drop rather than losing the whole session.
+        let cut = whole.dropLast()
+        #expect(CodexTranscriptIndex.decodeHead(Data(cut)) == "line one\n")
+        #expect(CodexTranscriptIndex.decodeHead(Data()) != nil)
+    }
+
+    @Test
     func `indexes sessions by their embedded working directory`() throws {
         let root = try TestSupport.temporaryDirectory("codex-index")
         defer { try? FileManager.default.removeItem(atPath: root) }

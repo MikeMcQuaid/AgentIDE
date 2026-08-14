@@ -8,8 +8,6 @@ import Testing
 /// and button availability through its fetch seams, so the tab's
 /// behaviour tests without GitHub or a window.
 struct PullRequestsModelTests {
-    // MARK: Internal
-
     @Test
     func `stack depth follows base branches through listed heads`() async {
         let model = makeModel()
@@ -142,6 +140,23 @@ struct PullRequestsModelTests {
     }
 
     @Test
+    func `a fresh reload fetches exactly once`() async {
+        let model = makeModel()
+        var fetches = 0
+        model.fetchList = { _, _ in
+            fetches += 1
+            return [summary(1, head: "feature")]
+        }
+        await model.reload()
+        // reload's own `page = 0` reset must not spawn a second
+        // concurrent fetch through page's lookahead observer.
+        for _ in 0 ..< 10 {
+            await Task.yield()
+        }
+        #expect(fetches == 1)
+    }
+
+    @Test
     func `an unsigned tip with nothing to push reads as pushed`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         model.checkTipSigned = { _ in false }
@@ -205,100 +220,5 @@ struct PullRequestsModelTests {
 
         _ = await model.push()
         #expect(pushed == "switched")
-    }
-
-    // MARK: Private
-
-    /// A model against a throwaway store whose every fetch and
-    /// service seam is replaced; nothing real is reached by these
-    /// tests.
-    private func makeModel(
-        items: [WorktreeItem] = [],
-        metadataFile: String? = nil,
-    ) -> PullRequestsModel {
-        let runner = FoundationProcessRunner()
-        let base = FileManager.default
-            .temporaryDirectory
-            .appendingPathComponent("agentide-prmodel-" + UUID().uuidString, isDirectory: true)
-            .path
-        let paths = WorkspacePaths(
-            hostUser: "test",
-            sharedWorkspace: base + "/shared",
-            sandboxHome: base + "/home",
-            metadataFile: metadataFile ?? base + "/state.json",
-        )
-        let service = SessionService(
-            paths: paths,
-            git: GitClient(runner: runner),
-            tmux: TmuxClient(
-                runner: runner,
-                launcher: SandvaultLauncher(hostUser: "test"),
-                isInsideSandbox: true,
-                socketDirectory: base + "/socket",
-            ),
-            github: GitHubClient(runner: runner),
-            transcripts: TranscriptReader(),
-            spool: EventSpool(directory: paths.eventsDirectory),
-            store: MetadataStore(file: paths.metadataFile),
-            runners: [],
-        )
-        let model = PullRequestsModel(
-            repository: Repository(name: "repo", path: "/repo"),
-            branch: "feature",
-            items: items,
-            github: GitHubClient(runner: runner),
-            service: service,
-            store: MetadataStore(file: paths.metadataFile),
-        )
-        model.fetchList = { _, _ in [] }
-        model.fetchSummary = { _ in nil }
-        model.fetchHasMergeQueue = { false }
-        model.fetchRemediationContext = { _ in "" }
-        model.fetchCurrentBranch = { _ in nil }
-        model.checkDraft = { _ in false }
-        model.prepareDraft = { _, _ in ".agentide-pull-request.md" }
-        model.createFromDraft = { _ in "https://example.test/pull/1" }
-        model.performPush = { _ in
-            // Succeeds without side effects.
-        }
-        model.performRebase = { _ in
-            // Succeeds without side effects.
-        }
-        model.checkTipSigned = { _ in true }
-        return model
-    }
-
-    private func summary(
-        _ number: Int,
-        head: String,
-        base: String = "main",
-        state: String = "OPEN",
-    ) -> PullRequestSummary {
-        PullRequestSummary(
-            number: number,
-            title: "Title \(number)",
-            url: "",
-            headBranch: head,
-            mergeable: "",
-            reviewDecision: "",
-            checks: "",
-            baseBranch: base,
-            state: state,
-        )
-    }
-
-    private func item(branch: String, ahead: Int?) -> WorktreeItem {
-        WorktreeItem(
-            worktree: Worktree(
-                repositoryName: "repo",
-                repositoryPath: "/repo",
-                branch: branch,
-                path: "/worktrees/" + branch,
-            ),
-            session: nil,
-            isDirty: false,
-            aheadOfUpstream: ahead,
-            hasUnread: false,
-        )
     }
 }
