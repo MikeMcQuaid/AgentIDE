@@ -13,11 +13,14 @@ struct TmuxControlChannelIntegrationTests {
         defer { TestSupport.killServerSync(socketDirectory: socket) }
 
         // `cat` echoes typed lines back through the pane's tty, so
-        // one session covers history, output and key delivery.
+        // one session covers history, output and key delivery. The
+        // protocol-shaped lines poison the scrollback: capturing a
+        // pane that displayed tmux output once desynchronised the
+        // parser and blanked the pane.
         try await tmux.newSession(
             name: "agentide--r--control--claude",
             directory: directory,
-            command: "printf 'ready\\n'; exec cat",
+            command: "printf '%%end 1 2 3\\n%%begin 9 9 9\\nready\\n'; exec cat",
         )
         let started = await TestSupport.poll {
             let panes = await (try? tmux.panes()) ?? []

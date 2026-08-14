@@ -34,6 +34,24 @@ struct TmuxControlParserTests {
     }
 
     @Test
+    func `protocol lines inside a response stay content until the numbers match`() {
+        var parser = TmuxControlParser()
+        #expect(parser.parse(line: "%begin 1786653489 292 1") == nil)
+        // A captured pane can itself display protocol lines (a
+        // terminal that showed tmux output); only the end carrying
+        // this block's own command number closes it.
+        #expect(parser.parse(line: "%end 1786653488 285 0") == nil)
+        #expect(parser.parse(line: "%output %3 hi") == nil)
+        #expect(parser.parse(line: "%begin 1786653489 291 1") == nil)
+        let event = parser.parse(line: "%end 1786653489 292 1")
+        #expect(event == .response(
+            lines: ["%end 1786653488 285 0", "%output %3 hi", "%begin 1786653489 291 1"],
+            isError: false,
+        ))
+        #expect(parser.parse(line: "%output %1 later") == .output(pane: "%1", bytes: Array("later".utf8)))
+    }
+
+    @Test
     func `errors and empty responses report as such`() {
         var parser = TmuxControlParser()
         #expect(parser.parse(line: "%begin 1 1 0") == nil)

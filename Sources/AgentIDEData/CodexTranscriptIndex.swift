@@ -173,8 +173,7 @@ struct CodexTranscriptIndex {
     /// caches when unchanged or recently listed.
     private func indexedEntries(root: String) -> [String: Entry] {
         let now = ContinuousClock.now
-        if let listing = Self.listings.withLock({ $0[root] }),
-           now - listing.listedAt < Self.listingLifetime {
+        if let listing = Self.listings.withLock({ $0[root] }), now - listing.listedAt < Self.listingLifetime {
             return listing.entries
         }
 

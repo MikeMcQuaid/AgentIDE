@@ -66,6 +66,8 @@ extension TerminalRepresentable {
             }
             blockMonitor = nil
             tornDown = true
+            seedDeadline?.cancel()
+            seedDeadline = nil
             pump?.cancel()
             onProcessTerminated = nil
             if let channel {
@@ -126,6 +128,10 @@ extension TerminalRepresentable {
 
         // MARK: Private
 
+        /// How long the pane waits for its history before showing
+        /// live output anyway.
+        private static let seedTimeoutSeconds = 3
+
         private var onProcessTerminated: (@MainActor () -> Void)?
         private var started = false
         private var tornDown = false
@@ -148,6 +154,7 @@ extension TerminalRepresentable {
         /// it so nothing renders out of order.
         private var queuedOutput: [[UInt8]] = []
         private var seeded = false
+        private var seedDeadline: Task<Void, Never>?
 
         private func start(_ command: [String], in view: PaneTerminalView) {
             self.view = view
@@ -179,6 +186,23 @@ extension TerminalRepresentable {
             )
             sendCommand(TmuxControl.historyLimitCommand, expecting: .acknowledgement)
             sendCommand(TmuxControl.historyCommand, expecting: .history)
+            // A seed that never answers must not hold the pane blank
+            // forever; after the deadline live output flows unseeded.
+            seedDeadline = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(Self.seedTimeoutSeconds))
+                self?.seedIfStalled()
+            }
+        }
+
+        /// The deadline fired before the history response: report it
+        /// and let live output through rather than queueing forever.
+        private func seedIfStalled() {
+            guard seeded == false, tornDown == false else {
+                return
+            }
+
+            ErrorLog.shared.report("Terminal: the pane's history never answered; showing live output only")
+            seed(lines: [])
         }
 
         private func sendCommand(_ line: String, expecting: CommandExpectation) {
@@ -223,6 +247,8 @@ extension TerminalRepresentable {
             }
             queuedOutput = []
             seeded = true
+            seedDeadline?.cancel()
+            seedDeadline = nil
             nudgeRepaint()
         }
 

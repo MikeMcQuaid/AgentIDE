@@ -40,6 +40,7 @@ public struct TmuxControlParser: Sendable {
         }
         if line.hasPrefix("%begin ") {
             insideBlock = true
+            blockNumber = Self.commandNumber(of: line)
             blockLines = []
             return nil
         }
@@ -70,8 +71,15 @@ public struct TmuxControlParser: Sendable {
     /// A backslash and three octal digits.
     private static let escapeLength = 4
 
+    /// `%begin`, `%end` and `%error` lines carry time, command
+    /// number and flags; the number is the second argument.
+    private static let numberField = 2
+
     /// Whether a `%begin` block is being collected.
     private var insideBlock = false
+
+    /// The open block's command number from its `%begin` line.
+    private var blockNumber: String?
 
     /// The lines of the block being collected.
     private var blockLines: [String] = []
@@ -87,6 +95,12 @@ public struct TmuxControlParser: Sendable {
         return .output(pane: pane, bytes: unescape(rest[rest.index(after: paneEnd)...]))
     }
 
+    /// Whether a slice is a whole `\xxx` octal escape.
+    private static func isEscape(_ escape: ArraySlice<UInt8>) -> Bool {
+        escape.count == escapeLength && escape.first == backslash
+            && escape.dropFirst().allSatisfy(octalDigits.contains)
+    }
+
     /// Decodes tmux's `\xxx` octal escaping into raw bytes.
     private static func unescape(_ text: Substring) -> [UInt8] {
         var bytes = [UInt8]()
@@ -94,8 +108,7 @@ public struct TmuxControlParser: Sendable {
         var index = 0
         while index < raw.count {
             let escape = raw[index...].prefix(escapeLength)
-            if raw[index] == backslash, escape.count == escapeLength,
-               escape.dropFirst().allSatisfy(octalDigits.contains) {
+            if isEscape(escape) {
                 var value = 0
                 for digit in escape.dropFirst() {
                     value = value * octalBase + Int(digit - octalDigits.lowerBound)
@@ -110,15 +123,37 @@ public struct TmuxControlParser: Sendable {
         return bytes
     }
 
+    /// The command number argument of a block delimiter line.
+    private static func commandNumber(of line: String) -> String? {
+        line.split(separator: " ").dropFirst(numberField).first.map(String.init)
+    }
+
     private mutating func parseInsideBlock(line: String) -> TmuxControlEvent? {
-        if line.hasPrefix("%end ") || line.hasPrefix("%error ") {
+        if isBlockEnd(line) {
             let lines = blockLines
             insideBlock = false
+            blockNumber = nil
             blockLines = []
             return .response(lines: lines, isError: line.hasPrefix("%error "))
         }
 
         blockLines.append(line)
         return nil
+    }
+
+    /// Whether a line genuinely closes the open block: captured pane
+    /// content can itself contain protocol-shaped lines (a terminal
+    /// that displayed tmux output, say), and mistaking one for the
+    /// end desynchronised the whole stream. tmux repeats the block's
+    /// command number on the real end line.
+    private func isBlockEnd(_ line: String) -> Bool {
+        guard line.hasPrefix("%end ") || line.hasPrefix("%error ") else {
+            return false
+        }
+        guard let blockNumber else {
+            return true
+        }
+
+        return Self.commandNumber(of: line) == blockNumber
     }
 }
