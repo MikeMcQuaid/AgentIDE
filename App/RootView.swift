@@ -360,11 +360,11 @@ struct RootView: View {
                 Button {
                     terminateShell(for: item.worktree)
                 } label: {
-                    Image(systemName: "xmark.circle")
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("Terminate shell")
+                    Label("Close shell", systemImage: "xmark")
+                        .font(.caption)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 .padding(Self.shellClosePadding)
                 .hoverHelp("Kill this shell's host tmux session; Start shell opens a fresh one")
             }

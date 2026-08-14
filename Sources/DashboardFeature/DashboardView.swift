@@ -93,6 +93,7 @@ public struct DashboardView: View {
     private static let listPadding: CGFloat = 6
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
+    private static let deletingOpacity = 0.35
     private static let rowHorizontalPadding: CGFloat = 6
     private static let rowIndent: CGFloat = 12
     private static let rowCornerRadius: CGFloat = 5
@@ -190,6 +191,9 @@ public struct DashboardView: View {
                 pullRequest: model.pullRequest(for: item),
                 stackDepth: model.stackDepth(for: item),
             )
+            // Deleting takes a moment; the row fades the instant the
+            // click lands so the click visibly took.
+            .opacity(model.deletingPaths.contains(item.worktree.path) ? Self.deletingOpacity : 1)
             .padding(.vertical, Self.rowVerticalPadding)
             .padding(.horizontal, Self.rowHorizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)

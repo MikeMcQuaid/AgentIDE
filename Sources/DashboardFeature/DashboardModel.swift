@@ -69,6 +69,9 @@ public final class DashboardModel {
     /// the Errors tab is not visible from them.
     public internal(set) var screenError: String?
 
+    /// Worktrees mid-deletion, so their rows grey out instantly.
+    public internal(set) var deletingPaths: Set<String> = []
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {
@@ -175,8 +178,12 @@ public final class DashboardModel {
     }
 
     /// Deletes a worktree; its conversations stay readable in the
-    /// repository's sessions browser.
+    /// repository's sessions browser. The path joins
+    /// `deletingPaths` immediately, so the row can grey out the
+    /// moment the click lands rather than when the deletion ends.
     public func delete(item: WorktreeItem) async {
+        deletingPaths.insert(item.worktree.path)
+        defer { deletingPaths.remove(item.worktree.path) }
         do {
             try await service.deleteWorktree(item: item)
             if selection?.id == item.id {

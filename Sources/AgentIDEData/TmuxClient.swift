@@ -122,7 +122,11 @@ public struct TmuxClient: Sendable {
                 payload: "export TMUX_TMPDIR=" + socketDirectory.shellQuoted
                     + "; exec tmux -C attach-session -t " + sessionName.shellQuoted,
                 initialDirectory: launcher.sharedWorkspace,
-                sessionID: UUID().uuidString,
+                // Deterministic, so the pane's command compares equal
+                // across view updates: a fresh UUID here made every
+                // update look like a new command and reattach the
+                // client in a loop.
+                sessionID: sessionName,
                 sessionName: sessionName,
             )
         }
