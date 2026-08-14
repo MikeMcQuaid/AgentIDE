@@ -5,16 +5,20 @@ import Foundation
 public extension GitClient {
     /// The branch actually checked out in a worktree, nil when
     /// detached or unreadable; agents sometimes switch away from the
-    /// branch the worktree was created for.
+    /// branch the worktree was created for. The full symbolic ref
+    /// with the prefix stripped by hand, because shortening git-side
+    /// (`--abbrev-ref`) answered `heads/main` whenever an agent left
+    /// a stray ref named `main` elsewhere in the repository.
     func currentBranch(worktreePath: String) async -> String? {
-        let name = try? await git(["rev-parse", "--abbrev-ref", "HEAD"], in: worktreePath)
-            .standardOutput
+        let name = await (try? git(["symbolic-ref", "HEAD"], in: worktreePath, allowFailure: true))
+            .flatMap { $0.succeeded ? $0.standardOutput : nil }?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let name, name.isEmpty == false, name != "HEAD" else {
+        let prefix = "refs/heads/"
+        guard let name, name.hasPrefix(prefix) else {
             return nil
         }
 
-        return name
+        return String(name.dropFirst(prefix.count))
     }
 
     /// Whether a commit carries a verifying GPG signature: good, or

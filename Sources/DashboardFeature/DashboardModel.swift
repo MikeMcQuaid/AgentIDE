@@ -150,6 +150,10 @@ public final class DashboardModel {
     /// Model discovery runs once per launch, so the pickers track the
     /// installed CLIs.
     public func poll() async {
+        // The sidebar and the restored selection come first: model
+        // discovery and the notification prompt take seconds, and
+        // the window showed "no worktree selected" while they ran.
+        await refresh()
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
         for agent in AgentKind.allCases {
             if let models = await service.discoverModels(for: agent) {
