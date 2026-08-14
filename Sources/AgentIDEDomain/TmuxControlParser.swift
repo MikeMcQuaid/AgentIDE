@@ -33,6 +33,27 @@ public struct TmuxControlParser: Sendable {
 
     // MARK: Public
 
+    /// Consumes one raw line. `%output` payloads decode straight
+    /// from the bytes: pane output is a byte stream whose multi-byte
+    /// characters tmux may split across events, and a string round
+    /// trip would replace the split points with U+FFFD.
+    public mutating func parse(lineBytes: ArraySlice<UInt8>) -> TmuxControlEvent? {
+        if insideBlock == false, lineBytes.starts(with: Self.outputPrefix) {
+            let rest = lineBytes.dropFirst(Self.outputPrefix.count)
+            guard let paneEnd = rest.firstIndex(of: Self.space) else {
+                return .output(pane: String(bytes: rest, encoding: .utf8) ?? "", bytes: [])
+            }
+
+            return .output(
+                pane: String(bytes: rest[..<paneEnd], encoding: .utf8) ?? "",
+                bytes: Self.unescape(rest[(paneEnd + 1)...]),
+            )
+        }
+        // Every other protocol line is ASCII; only a captured
+        // content line could fail to decode, and those arrive whole.
+        return parse(line: String(bytes: lineBytes, encoding: .utf8) ?? "")
+    }
+
     /// Consumes one line and returns the event it completes, if any.
     public mutating func parse(line: String) -> TmuxControlEvent? {
         if insideBlock {
@@ -71,6 +92,9 @@ public struct TmuxControlParser: Sendable {
     /// A backslash and three octal digits.
     private static let escapeLength = 4
 
+    private static let outputPrefix: Array = .init("%output ".utf8)
+    private static let space: UInt8 = 0x20
+
     /// `%begin`, `%end` and `%error` lines carry time, command
     /// number and flags; the number is the second argument.
     private static let numberField = 2
@@ -92,7 +116,7 @@ public struct TmuxControlParser: Sendable {
         }
 
         let pane = String(rest[..<paneEnd])
-        return .output(pane: pane, bytes: unescape(rest[rest.index(after: paneEnd)...]))
+        return .output(pane: pane, bytes: unescape(ArraySlice(rest[rest.index(after: paneEnd)...].utf8)))
     }
 
     /// Whether a slice is a whole `\xxx` octal escape.
@@ -102,9 +126,9 @@ public struct TmuxControlParser: Sendable {
     }
 
     /// Decodes tmux's `\xxx` octal escaping into raw bytes.
-    private static func unescape(_ text: Substring) -> [UInt8] {
+    private static func unescape(_ escaped: ArraySlice<UInt8>) -> [UInt8] {
         var bytes = [UInt8]()
-        let raw = Array(text.utf8)
+        let raw = Array(escaped)
         var index = 0
         while index < raw.count {
             let escape = raw[index...].prefix(escapeLength)

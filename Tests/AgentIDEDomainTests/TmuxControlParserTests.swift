@@ -21,6 +21,23 @@ struct TmuxControlParserTests {
     }
 
     @Test
+    func `byte lines keep split multi-byte characters intact`() {
+        var parser = TmuxControlParser()
+        // The two bytes are the head of a three-byte box-drawing
+        // character; a string round trip would turn them into U+FFFD.
+        let split: [UInt8] = Array("%output %1 ab".utf8) + [0xE2, 0x94]
+        #expect(parser.parse(lineBytes: split[...]) == .output(
+            pane: "%1",
+            bytes: Array("ab".utf8) + [0xE2, 0x94],
+        ))
+        let plain = Array("%session-changed $1 work".utf8)
+        #expect(parser.parse(lineBytes: plain[...]) == .notification(
+            name: "session-changed",
+            body: "$1 work",
+        ))
+    }
+
+    @Test
     func `command responses collect lines between begin and end`() {
         var parser = TmuxControlParser()
         #expect(parser.parse(line: "%begin 1363006971 2 1") == nil)

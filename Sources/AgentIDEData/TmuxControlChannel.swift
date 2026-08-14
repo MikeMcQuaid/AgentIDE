@@ -40,10 +40,19 @@ public actor TmuxControlChannel {
         return AsyncStream { continuation in
             let pump = Task {
                 var parser = TmuxControlParser()
+                var line = [UInt8]()
                 do {
-                    for try await line in reading.bytes.lines {
-                        if let event = parser.parse(line: line) {
-                            continuation.yield(event)
+                    // Lines split at the byte level: a string-based
+                    // line reader replaced multi-byte characters that
+                    // tmux split across `%output` events with U+FFFD.
+                    for try await byte in reading.bytes {
+                        if byte == UInt8(ascii: "\n") {
+                            if let event = parser.parse(lineBytes: line[...]) {
+                                continuation.yield(event)
+                            }
+                            line.removeAll(keepingCapacity: true)
+                        } else {
+                            line.append(byte)
                         }
                     }
                 } catch {
