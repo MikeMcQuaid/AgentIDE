@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// Pushing branches and inspecting pull
 /// requests.

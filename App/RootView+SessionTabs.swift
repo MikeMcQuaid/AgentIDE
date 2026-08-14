@@ -62,6 +62,7 @@ extension RootView {
                 Button("Close shell") {
                     closeShell(at: item.worktree.path)
                 }
+                .buttonStyle(.glass)
                 .controlSize(.small)
                 .fixedSize()
                 .hoverHelp("End this shell and its process immediately")

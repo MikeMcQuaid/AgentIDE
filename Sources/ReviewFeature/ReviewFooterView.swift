@@ -1,5 +1,3 @@
-import AgentIDEData
-import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 

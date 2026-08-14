@@ -389,6 +389,7 @@ private struct StartShellButton: View {
         Button(action: onStart) {
             Label("Start shell", systemImage: "terminal")
         }
+        .buttonStyle(.glass)
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it lives and dies with the app")
     }

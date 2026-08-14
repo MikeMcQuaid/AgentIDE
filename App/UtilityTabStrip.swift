@@ -23,9 +23,12 @@ struct UtilityTabStrip: View {
     private static let badgeSpacing: CGFloat = 4
     private static let verticalPadding: CGFloat = 3
     private static let selectedOpacity = 0.25
+    private static let hoverOpacity = 0.08
 
     @AppStorage("utilityTab")
     private var utilityTab = UtilityTab.review.rawValue
+
+    @State private var hovered: String?
 
     private var errorLog: ErrorLog = .shared
 
@@ -50,12 +53,17 @@ struct UtilityTabStrip: View {
                 Capsule().fill(
                     tab.rawValue == utilityTab
                         ? Color.accentColor.opacity(Self.selectedOpacity)
+                        : hovered == tab.rawValue
+                        ? Color.primary.opacity(Self.hoverOpacity)
                         : Color.clear,
                 ),
             )
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .onHover { inside in
+            hovered = inside ? tab.rawValue : (hovered == tab.rawValue ? nil : hovered)
+        }
         .hoverHelp(tab.help)
     }
 }

@@ -28,7 +28,7 @@ public struct RefreshButton: View {
             Image(systemName: "arrow.clockwise")
                 .accessibilityLabel("Refresh")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.glass)
         .disabled(isBusy)
     }
 

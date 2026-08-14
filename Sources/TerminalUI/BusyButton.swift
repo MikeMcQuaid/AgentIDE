@@ -36,6 +36,7 @@ public struct BusyButton: View {
                 isBusy = false
             }
         }
+        .buttonStyle(.glass)
         .disabled(isDisabled || isBusy)
     }
 

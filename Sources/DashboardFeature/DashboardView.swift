@@ -131,7 +131,7 @@ public struct DashboardView: View {
             // The avatar already names the owner, so the text keeps
             // to the repository name alone.
             Text(group.repository.name)
-                .font(.callout.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if group.items.count > 1 {
