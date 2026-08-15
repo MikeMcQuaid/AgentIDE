@@ -43,16 +43,19 @@ docs_style() {
 }
 
 swift_style() {
-  # Version drift between a stale local install and CI's fresh brew
-  # bundle changes what the linters accept; naming versions in every
-  # run makes a local/CI disagreement diagnosable from the logs.
-  echo "swiftformat $(swiftformat --version), swiftlint $(swiftlint --version)"
+  # Homebrew's swiftformat is the copy CI installs; a stale copy
+  # elsewhere on PATH quietly disagrees with CI.
+  local swiftformat
+  for candidate in /opt/homebrew/bin/swiftformat /usr/local/bin/swiftformat; do
+    [[ -x "${candidate}" ]] && swiftformat="${candidate}" && break
+  done
+  : "${swiftformat:=swiftformat}"
   [[ -z "$(git ls-files "*.swift")" ]] && return 0
   if [[ -n "${STYLE_FIX}" ]]; then
-    swiftformat .
+    "${swiftformat}" .
     swiftlint --fix --quiet
   else
-    swiftformat --lint .
+    "${swiftformat}" --lint .
   fi
   swiftlint --strict --quiet
 }

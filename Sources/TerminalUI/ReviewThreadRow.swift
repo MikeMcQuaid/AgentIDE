@@ -56,12 +56,19 @@ public struct ReviewThreadRow: View {
     private let thread: ReviewThread
     private let onToggleResolved: @MainActor () async -> Void
 
-    /// The `path:line` anchor, then each comment under its author.
+    /// The `path:line` anchor, then the comments, each under its
+    /// author; a run of comments by one author names them once.
     private var markdown: String {
         let anchor = "`" + thread.path + (thread.line.map { ":" + String($0) } ?? "") + "`"
-        let comments = thread.comments
-            .map { comment in "**" + comment.author + "**\n\n" + comment.body }
-            .joined(separator: "\n\n")
-        return anchor + "\n\n" + comments
+        var sections = [anchor]
+        var lastAuthor = ""
+        for comment in thread.comments {
+            if comment.author != lastAuthor {
+                sections.append("**" + comment.author + "**")
+                lastAuthor = comment.author
+            }
+            sections.append(comment.body)
+        }
+        return sections.joined(separator: "\n\n")
     }
 }

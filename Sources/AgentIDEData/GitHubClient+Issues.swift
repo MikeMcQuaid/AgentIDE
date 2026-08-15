@@ -66,6 +66,10 @@ public extension GitHubClient {
     /// something, so approvals appear in the timeline. Throws on
     /// fetch failure so callers keep their last good cache rather
     /// than mistaking a failure for no feedback.
+    /// Review summaries and top-level comments only: inline file
+    /// comments render as resolvable conversations with their
+    /// `path:line` anchors instead, so the timeline never repeats a
+    /// reviewer's name once per finding.
     func reviewComments(repositoryPath: String, number: Int) async throws -> [ReviewComment] {
         let result = try await gh(
             ["pr", "view", String(number), "--json", "reviews,comments"],
@@ -79,9 +83,6 @@ public extension GitHubClient {
             rows += (feedback.comments ?? [])
                 .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: "") }
         }
-
-        rows += await inlineComments(repositoryPath: repositoryPath, number: number)
-            .map { FeedbackEntry(author: $0.author, body: $0.body, kind: "") }
 
         return rows.enumerated().compactMap { index, row in
             let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -101,24 +102,6 @@ public extension GitHubClient {
     }
 
     // MARK: Internal
-
-    /// Inline file comments, where review bots leave their findings.
-    /// They only exist on the REST endpoint; `pr view` returns
-    /// review summaries and conversation comments.
-    func inlineComments(
-        repositoryPath: String,
-        number: Int,
-    ) async -> [(author: String?, body: String?)] {
-        // gh's own HTTP cache answers repeats within the window, so
-        // revisiting a conversation does not re-query GitHub.
-        let inline = try? await gh(
-            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100", "--cache", "60s"],
-            in: repositoryPath,
-        )
-        let decoded = (inline?.standardOutput)
-            .flatMap { try? JSONDecoder().decode([InlineComment].self, from: Data($0.utf8)) }
-        return (decoded ?? []).map { ($0.user?.login, $0.body) }
-    }
 
     /// The prompt for working on an issue.
     static func issuePrompt(number: Int, title: String, body: String, context: String) -> String {
@@ -179,12 +162,6 @@ private extension GitHubClient {
 
     struct Author: Decodable {
         let login: String?
-    }
-
-    /// One REST inline review comment; its author key is `user`.
-    struct InlineComment: Decodable {
-        let user: Author?
-        let body: String?
     }
 
     static func prompt(heading: String, body: String, context: String, closing: String) -> String {

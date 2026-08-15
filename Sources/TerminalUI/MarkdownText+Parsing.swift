@@ -123,10 +123,22 @@ extension MarkdownText {
         }
         stripped = stripped.replacing(/<br\s*\/?>/, with: "\n")
         stripped = stripped.replacing(/<img[^>]*>/, with: "")
+        // Bots write HTML lists and code spans (dependabot's commit
+        // listings); they map straight onto markdown.
+        stripped = stripped.replacing(/<li>\s*/.ignoresCase(), with: "\n- ")
+        stripped = stripped.replacing(/<\/li>/.ignoresCase(), with: "")
+        stripped = stripped.replacing(/<\/?[uo]l>/.ignoresCase(), with: "\n")
+        stripped = stripped.replacing(/<\/?code>/.ignoresCase(), with: "`")
+        stripped = stripped.replacing(/<\/?p>/.ignoresCase(), with: "\n")
         for tag in ["<details>", "</details>", "<summary>", "</summary>"] {
             stripped = stripped.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
+        // `[//]: #` lines are markdown comments (dependabot's
+        // automerge markers) and render as nothing.
         return stripped
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[//]: #") == false }
+            .joined(separator: "\n")
     }
 
     static func inline(_ text: String) -> AttributedString {
