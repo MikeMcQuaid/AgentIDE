@@ -60,6 +60,7 @@ public struct DashboardView: View {
     private static let listPadding: CGFloat = 6
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
+    private static let headerVerticalPadding: CGFloat = 5
     private static let deletingOpacity = 0.35
     private static let rowHorizontalPadding: CGFloat = 6
     private static let rowIndent: CGFloat = 12
@@ -142,7 +143,7 @@ public struct DashboardView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, Self.rowVerticalPadding)
+        .padding(.vertical, Self.headerVerticalPadding)
         .contentShape(Rectangle())
     }
 

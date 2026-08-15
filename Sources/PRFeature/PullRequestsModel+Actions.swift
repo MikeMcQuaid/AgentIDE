@@ -1,5 +1,5 @@
-import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import Foundation
 import TerminalUI
 
@@ -25,23 +25,70 @@ extension PullRequestsModel {
         )
     }
 
-    /// Pushes when needed, then opens GitHub's pull request
-    /// creation page for the branch in the Browser tab; false means
-    /// something failed and the errors surface should open.
-    func openPullRequestPage() async -> Bool {
-        if canPush, await push() == false {
-            return false
+    /// Copies every unresolved review conversation to the
+    /// clipboard, ready for pasting into an agent or reply.
+    func copyUnresolvedComments(_ summary: PullRequestSummary) async {
+        let threads = await fetchThreads(summary.number).filter { $0.isResolved == false }
+        let text = threads.map(\.asText).joined(separator: "\n\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ErrorLog.shared.note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
+    }
+
+    /// Copies the failing checks, one line each, to the clipboard.
+    func copyFailingChecks(_ summary: PullRequestSummary) async {
+        let text = await fetchFailingChecks(summary.number)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        ErrorLog.shared.note(
+            text.isEmpty
+                ? "No failing checks on #\(summary.number)."
+                : "Copied the failing checks of #\(summary.number).",
+        )
+    }
+
+    /// Marks every unresolved conversation resolved through the API.
+    func resolveAllThreads(_ summary: PullRequestSummary) async {
+        let unresolved = await fetchThreads(summary.number).filter { $0.isResolved == false }
+        var resolved = 0
+        for thread in unresolved where await (try? setThreadResolved(thread.id, true)) != nil {
+            resolved += 1
         }
-        guard let branch = listedBranch ?? branchItem?.worktree.branch,
-              let fullName = await fetchFullName()
-        else {
-            ErrorLog.shared.report("The repository's GitHub name is unknown; is it pushed to GitHub?")
+        ErrorLog.shared.note("Resolved \(resolved) of \(unresolved.count) conversations on #\(summary.number).")
+    }
+
+    /// Pushes when needed, then opens the pull request from the
+    /// form's title and body, with the template appended below the
+    /// body after an empty line; false opens the errors surface.
+    func createPullRequest() async -> Bool {
+        guard let worktree = actionWorktree else {
             return false
         }
 
-        let encoded = branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? branch
-        LinkOpener.open("https://github.com/" + fullName + "/pull/new/" + encoded)
-        return true
+        let title = prTitle.trimmingCharacters(in: .whitespaces)
+        guard title.isEmpty == false else {
+            ErrorLog.shared.report("The pull request needs a title.")
+            return false
+        }
+
+        if canPush, await push() == false {
+            return false
+        }
+
+        let template = prTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = prBody + (template.isEmpty ? "" : "\n\n" + template)
+        do {
+            let url = try await performCreate(worktree, title, body)
+            ErrorLog.shared.note("Opened pull request " + url)
+            prTitle = ""
+            prBody = ""
+            Self.requestSidebarRefresh()
+            await reload(keepingSelection: true)
+            return true
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+            return false
+        }
     }
 
     /// Pushes the checked-out branch; false means the push failed
@@ -83,22 +130,6 @@ extension PullRequestsModel {
             ErrorLog.shared.report(error.localizedDescription)
             return false
         }
-    }
-
-    func remediate(_ summary: PullRequestSummary) async throws {
-        guard let worktree = worktree(for: summary) else {
-            return
-        }
-
-        let context = await fetchRemediationContext(summary.number)
-        let prompt = """
-        Address the following review comments and failing checks on pull request #\(summary.number), \
-        then commit your fixes. Do not push.
-
-        \(context)
-        """
-        _ = try await service.launchAgent(in: worktree, prompt: prompt, agent: .claudeCode)
-        status = "Fix agent launched for #\(summary.number)."
     }
 
     func act(_ work: () async throws -> Void) async {

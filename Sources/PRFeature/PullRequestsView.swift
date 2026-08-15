@@ -1,7 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
-import TerminalUI
 
 /// The repository's pull requests: a paginated title list clicking
 /// through to each pull request's conversation and actions. The
@@ -19,8 +18,10 @@ public struct PullRequestsView: View {
         service: SessionService,
         store: MetadataStore,
         branch: String? = nil,
+        isMainCheckout: Bool = false,
     ) {
         self.items = items
+        self.isMainCheckout = isMainCheckout
         identity = repository.id + "#" + (branch ?? "")
         makeModel = {
             PullRequestsModel(
@@ -40,10 +41,12 @@ public struct PullRequestsView: View {
     /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
-            PullRequestScopePicker(scope: $model.scope)
+            PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
             Divider()
             if let selected = model.selected {
                 conversation(for: selected)
+            } else if model.needsCreateForm {
+                PullRequestCreateForm(model: model)
             } else {
                 listView
             }
@@ -62,6 +65,10 @@ public struct PullRequestsView: View {
         }
         .onChange(of: model.scope) { Task { await model.reload() } }
         .onChange(of: items) { model.items = items }
+        // The menu bar's Push and Rebase land here through the
+        // storage bus, acting on whichever worktree the pane shows.
+        .onChange(of: pushRequest) { Task { _ = await model.push() } }
+        .onChange(of: rebaseRequest) { Task { _ = await model.rebaseSigned() } }
     }
 
     // MARK: Internal
@@ -72,11 +79,15 @@ public struct PullRequestsView: View {
 
     // MARK: Private
 
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTab")
-    private var utilityTab = ""
+    /// The menu bar's action signals.
+    @AppStorage("pushRequest")
+    private var pushRequest = 0
+    @AppStorage("rebaseRequest")
+    private var rebaseRequest = 0
 
     @State private var model: PullRequestsModel
+
+    private let isMainCheckout: Bool
 
     /// The repository and branch as a task identity: it comes from
     /// the view's own inputs, never the persisted model, so a
@@ -84,6 +95,12 @@ public struct PullRequestsView: View {
     private let identity: String
 
     private let makeModel: () -> PullRequestsModel
+
+    /// The worktree scope names the branch itself when the pane
+    /// drives from the main checkout, where no worktree exists.
+    private var worktreeScopeTitle: String {
+        isMainCheckout ? "Branch" : "Worktree"
+    }
 
     private var listView: some View {
         PullRequestListView(
@@ -97,37 +114,12 @@ public struct PullRequestsView: View {
     }
 
     private var footer: some View {
-        PullRequestFooterView(
-            canPush: model.canPush,
-            canOpenPullRequest: model.canOpenPullRequest,
-            canRebase: model.canRebase,
-            rebaseTitle: model.rebaseTitle,
-            pushTitle: model.pushTitle,
-            pushHelp: model.pushHelp,
-            status: model.status,
-            onRebase: {
-                if await model.rebaseSigned() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
-            },
-            onPush: {
-                if await model.push() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
-            },
-            onOpenPullRequest: {
-                if await model.openPullRequestPage() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
-            },
-            onRefresh: { await model.reload(keepingSelection: true) },
-        )
+        PullRequestFooterView(model: model)
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
         PullRequestConversationPane(
             summary: summary,
-            canRemediate: model.worktree(for: summary) != nil,
             stackDepth: model.stackDepth(for: summary),
             hasMergeQueue: model.hasMergeQueue,
             github: model.github,
@@ -148,7 +140,9 @@ public struct PullRequestsView: View {
                 )
                 }
             },
-            onRemediate: { await model.act { try await model.remediate(summary) } },
+            onCopyComments: { await model.copyUnresolvedComments(summary) },
+            onCopyChecks: { await model.copyFailingChecks(summary) },
+            onResolveAll: { await model.resolveAllThreads(summary) },
         )
     }
 }

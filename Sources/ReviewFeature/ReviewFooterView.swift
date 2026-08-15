@@ -9,6 +9,12 @@ struct ReviewFooterView: View {
 
     @Bindable var model: ReviewModel
 
+    /// Commits everything the agent left uncommitted.
+    let onCommit: @MainActor () async -> Void
+
+    /// Whether Commit applies: the uncommitted scope with changes.
+    let canCommit: Bool
+
     /// The drag handle over the footer itself.
     var body: some View {
         VStack(spacing: 0) {
@@ -105,8 +111,13 @@ struct ReviewFooterView: View {
                         "The full commit message; the guides mark 50 columns for the subject and 72 for the body",
                     )
                 HStack {
-                    Button("Amend message") { Task { await model.saveCommitMessage() } }
-                        .disabled(model.showsUncommitted || model.messageEdited == false)
+                    BusyButton("Commit", busy: "Committing", disabled: canCommit == false, action: onCommit)
+                        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
+                    BusyButton(
+                        "Amend",
+                        busy: "Amending",
+                        disabled: model.showsUncommitted || model.messageEdited == false,
+                    ) { await model.saveCommitMessage() }
                         .hoverHelp("Rewrite the last commit's message; dimmed until the text differs from it")
                     messageLengths
                     if let status = model.status {

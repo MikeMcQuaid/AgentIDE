@@ -12,13 +12,14 @@ struct PullRequestRowView: View {
     static let rowPadding: CGFloat = 4
 
     let summary: PullRequestSummary
-    let canRemediate: Bool
     let stackDepth: Int
     let hasMergeQueue: Bool
     let showsActions: Bool
     let onAutomerge: @MainActor () async -> Void
     let onMerge: @MainActor () async -> Void
-    let onRemediate: @MainActor () async -> Void
+    let onCopyComments: @MainActor () async -> Void
+    let onCopyChecks: @MainActor () async -> Void
+    let onResolveAll: @MainActor () async -> Void
 
     var body: some View {
         HStack {
@@ -32,6 +33,15 @@ struct PullRequestRowView: View {
             }
         }
         .padding(.vertical, Self.rowPadding)
+        // The same actions as the buttons, reachable from list rows
+        // that hide them.
+        .contextMenu {
+            Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
+            Button("Copy Failing Checks") { Task { await onCopyChecks() } }
+            Button("Resolve All Conversations") { Task { await onResolveAll() } }
+            Divider()
+            Button("Open in Browser") { LinkOpener.open(summary.url) }
+        }
     }
 
     // MARK: Private
@@ -120,8 +130,20 @@ struct PullRequestRowView: View {
     }
 
     @ViewBuilder private var actions: some View {
-        BusyButton("Fix", busy: "Fixing", disabled: canRemediate == false, action: onRemediate)
-            .hoverHelp("Dump every review comment and failing check into an agent in this worktree")
+        BusyButton("", busy: "", systemImage: "text.bubble", action: onCopyComments)
+            .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        BusyButton("", busy: "", systemImage: "exclamationmark.triangle", action: onCopyChecks)
+            .hoverHelp("Copy the failing checks to the clipboard")
+        BusyButton("", busy: "", systemImage: "checkmark.bubble", action: onResolveAll)
+            .hoverHelp("Mark every unresolved conversation resolved")
+        Button {
+            LinkOpener.open(summary.url)
+        } label: {
+            Image(systemName: "safari")
+                .accessibilityLabel("Open pull request in browser")
+        }
+        .buttonStyle(.glass)
+        .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the system browser")
         // One merge action, matching what the pull request can do
         // right now: merge when green and mergeable, automerge
         // while checks are still running.

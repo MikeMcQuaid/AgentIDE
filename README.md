@@ -65,8 +65,10 @@ before shipping.
 ### Review
 
 - Presents the agent's conversation beside a pull-request-style review of its
-  diff, syntax highlighted with generated files hidden (so you review what
-  matters the way you would on GitHub)
+  diff, syntax highlighted with per-file and total diffstats, generated files
+  hidden, a whitespace-only-change toggle and the open pull request's
+  conversations inline under their files, resolvable in place (so you review
+  what matters the way you would on GitHub)
 - Rejects individual lines to amend the commit, edits commit messages and
   edits files directly in a built-in syntax-highlighted editor (so small fixes
   need no other app)
@@ -78,12 +80,12 @@ before shipping.
 
 - Pushes branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
-  GitHub's pull request creation page in the embedded browser (so
-  shipping uses each project's own template and checks without retyping
-  anything)
-- Addresses automated and human review comments, fixes failing CI, resolves
-  merge conflicts and enables automerge or merges, each with one click (so
-  the last mile is not the slowest)
+  pull requests from an in-app form that fills in the project's own
+  template below your title and body (so shipping needs no retyping)
+- Copies unresolved review comments or failing CI steps straight into a
+  prompt, resolves every conversation, resolves merge conflicts and
+  enables automerge or merges, each with one click (so the last mile is
+  not the slowest)
 
 ### Tidy up
 
@@ -103,9 +105,10 @@ before shipping.
 - Defers idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
-- Collects every failure into an Errors utility tab, shown from the first
-  error and inline on screens without the utility pane (so background
-  failures are never lost to a log you were not watching)
+- Collects every failure and status message into a Messages utility tab,
+  shown from the first error and inline on screens without the utility
+  pane (so background failures are never lost to a log you were not
+  watching)
 
 ## Out of Scope Features
 

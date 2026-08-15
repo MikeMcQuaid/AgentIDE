@@ -24,10 +24,11 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `push needs unpushed commits and opening needs no open pull request`() async {
+    func `push needs unpushed commits and the form needs no open pull request`() async {
         let pushed = makeModel(items: [item(branch: "feature", ahead: 0)])
+        await pushed.reload()
         #expect(pushed.canPush == false)
-        #expect(pushed.canOpenPullRequest)
+        #expect(pushed.needsCreateForm)
 
         let ahead = makeModel(items: [item(branch: "feature", ahead: 2)])
         #expect(ahead.canPush)
@@ -38,16 +39,16 @@ struct PullRequestsModelTests {
         let open = makeModel(items: [item(branch: "feature", ahead: 1)])
         open.fetchList = { _, _ in [summary(7, head: "feature")] }
         await open.reload()
-        #expect(open.canOpenPullRequest == false)
+        #expect(open.needsCreateForm == false)
 
         let merged = makeModel(items: [item(branch: "feature", ahead: 1)])
         merged.fetchList = { _, _ in [summary(7, head: "feature", state: "MERGED")] }
         await merged.reload()
-        #expect(merged.canOpenPullRequest)
+        #expect(merged.needsCreateForm)
 
         let elsewhere = makeModel()
         #expect(elsewhere.canPush == false)
-        #expect(elsewhere.canOpenPullRequest == false)
+        #expect(elsewhere.needsCreateForm == false)
     }
 
     @Test
@@ -173,14 +174,27 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `opening a pull request pushes then opens the GitHub page`() async {
+    func `creating a pull request pushes then appends the template`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        model.fetchFullName = { "owner/repo" }
         var pushed = false
         model.performPush = { _ in pushed = true }
-        #expect(await model.openPullRequestPage())
+        var created: (title: String, body: String)?
+        model.performCreate = { _, title, body in
+            created = (title, body)
+            return "https://example.invalid/pull/1"
+        }
+        model.prTitle = "A change"
+        model.prBody = "Why it changed."
+        model.prTemplate = "- [ ] Checked"
+        #expect(await model.createPullRequest())
         #expect(pushed)
         #expect(model.isPushed)
+        #expect(created?.title == "A change")
+        #expect(created?.body == "Why it changed.\n\n- [ ] Checked")
+        #expect(model.prTitle.isEmpty)
+
+        let untitled = makeModel(items: [item(branch: "feature", ahead: 1)])
+        #expect(await untitled.createPullRequest() == false)
     }
 
     @Test
@@ -197,7 +211,7 @@ struct PullRequestsModelTests {
 
         await model.reload()
         #expect(listed == .branch("switched"))
-        #expect(model.canOpenPullRequest == false)
+        #expect(model.needsCreateForm == false)
 
         _ = await model.push()
         #expect(pushed == "switched")

@@ -11,7 +11,6 @@ struct PullRequestConversationPane: View {
     // MARK: Internal
 
     let summary: PullRequestSummary
-    let canRemediate: Bool
     let stackDepth: Int
     let hasMergeQueue: Bool
     let github: GitHubClient
@@ -20,7 +19,9 @@ struct PullRequestConversationPane: View {
     let onBack: () -> Void
     let onAutomerge: @MainActor () async -> Void
     let onMerge: @MainActor () async -> Void
-    let onRemediate: @MainActor () async -> Void
+    let onCopyComments: @MainActor () async -> Void
+    let onCopyChecks: @MainActor () async -> Void
+    let onResolveAll: @MainActor () async -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,13 +32,14 @@ struct PullRequestConversationPane: View {
                     .hoverHelp("Back to the pull request list")
                 PullRequestRowView(
                     summary: summary,
-                    canRemediate: canRemediate,
                     stackDepth: stackDepth,
                     hasMergeQueue: hasMergeQueue,
                     showsActions: true,
                     onAutomerge: onAutomerge,
                     onMerge: onMerge,
-                    onRemediate: onRemediate,
+                    onCopyComments: onCopyComments,
+                    onCopyChecks: onCopyChecks,
+                    onResolveAll: onResolveAll,
                 )
             }
             .padding(.horizontal, Self.padding)

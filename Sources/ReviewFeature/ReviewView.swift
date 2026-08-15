@@ -10,14 +10,38 @@ import TerminalUI
 public struct ReviewView: View {
     // MARK: Lifecycle
 
-    /// Creates the review view for a worktree.
-    public init(worktree: Worktree, git: GitClient, service: SessionService) {
+    /// Creates the review view for a worktree; the GitHub client
+    /// feeds the inline pull request conversations.
+    public init(worktree: Worktree, git: GitClient, github: GitHubClient, service: SessionService) {
         worktreePath = worktree.path
         self.service = service
-        let builder = {
-            ReviewModel(worktreePath: worktree.path, git: git) {
-                await service.reviewBase(for: worktree)
+        let fetchThreads: () async -> [ReviewThread] = {
+            let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+            let listed = try? await github.pullRequests(
+                repositoryPath: worktree.repositoryPath,
+                scope: .branch(branch),
+            )
+            guard let number = listed?.first(where: { $0.state == "OPEN" })?.number else {
+                return []
             }
+
+            return await github.reviewThreads(repositoryPath: worktree.repositoryPath, number: number)
+        }
+        let setThreadResolved: (String, Bool) async throws -> Void = { threadID, resolved in
+            try await github.setThreadResolved(
+                repositoryPath: worktree.repositoryPath,
+                threadID: threadID,
+                resolved: resolved,
+            )
+        }
+        let builder = {
+            ReviewModel(
+                worktreePath: worktree.path,
+                git: git,
+                baseRefProvider: { await service.reviewBase(for: worktree) },
+                fetchThreads: fetchThreads,
+                setThreadResolved: setThreadResolved,
+            )
         }
         makeModel = builder
         _model = State(initialValue: builder())
@@ -31,7 +55,11 @@ public struct ReviewView: View {
             toolbar
             Divider()
             diffList
-            ReviewFooterView(model: model)
+            ReviewFooterView(
+                model: model,
+                onCommit: { await commitOutstanding() },
+                canCommit: model.showsUncommitted && model.files.isEmpty == false,
+            )
         }
         // The model is rebuilt whenever the worktree changes: state
         // survives the view struct's re-initialisation, so the first
@@ -40,34 +68,66 @@ public struct ReviewView: View {
             model = makeModel()
             await model.reload()
         }
+        // The menu bar's Commit Outstanding lands here through the
+        // storage bus.
+        .onChange(of: commitRequest) { Task { await commitOutstanding() } }
     }
 
     // MARK: Private
 
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
-    private static let dividerHeight: CGFloat = 14
     private static let iconPadding: CGFloat = 4
     private static let iconCornerRadius: CGFloat = 5
     private static let iconSelectedOpacity = 0.2
     private static let disabledOpacity = 0.4
 
     @State private var model: ReviewModel
-    @State private var display: ReviewFileDisplay = .standard
+    @State private var collapsedAll = false
+
+    /// The menu bar's commit signal.
+    @AppStorage("commitRequest")
+    private var commitRequest = 0
     @State private var collapseOverrides: [String: Bool] = [:]
 
     private let worktreePath: String
     private let service: SessionService
     private let makeModel: () -> ReviewModel
 
-    /// Icon-only controls, every one explained by its tooltip.
+    /// Icon-only controls in two grouped capsules, every one
+    /// explained by its tooltip.
     private var toolbar: some View {
+        HStack(spacing: Self.spacing) {
+            HStack(spacing: Self.captionSpacing) {
+                scopeButtons
+            }
+            .padding(Self.captionSpacing)
+            .background(.thinMaterial, in: Capsule())
+            displayToggles
+            Spacer()
+            DiffStatText(
+                additions: model.files.map(\.additions).reduce(0, +),
+                deletions: model.files.map(\.deletions).reduce(0, +),
+            )
+            .hoverHelp("Lines added and deleted across the diff")
+            RefreshButton { await model.reload() }
+                .hoverHelp("Reload the diff from git")
+        }
+        .padding(Self.spacing)
+    }
+
+    /// The collapse-all and whitespace toggles, one capsule group.
+    private var displayToggles: some View {
         HStack(spacing: Self.captionSpacing) {
-            scopeButtons
-            Divider().frame(height: Self.dividerHeight)
-            displayButton(.standard, systemImage: "doc.badge.gearshape", help: "Hide generated files, expand the rest")
-            displayButton(.hideAll, systemImage: "eye.slash", help: "Collapse every file to its name")
-            displayButton(.showAll, systemImage: "eye", help: "Expand every file, generated included")
+            iconButton(
+                collapsedAll ? "eye" : "eye.slash",
+                help: collapsedAll
+                    ? "Expand every file (generated files stay behind their carets)"
+                    : "Collapse every file to its name",
+            ) {
+                collapsedAll.toggle()
+                collapseOverrides = [:]
+            }
             iconButton(
                 "textformat",
                 help: model.hidesWhitespace
@@ -78,29 +138,17 @@ public struct ReviewView: View {
                 model.hidesWhitespace.toggle()
                 Task { await model.reload() }
             }
-            Spacer()
-            DiffStatText(
-                additions: model.visibleFiles.map(\.additions).reduce(0, +),
-                deletions: model.visibleFiles.map(\.deletions).reduce(0, +),
-            )
-            .hoverHelp("Lines added and deleted across the visible files")
-            actionButtons
         }
-        .padding(Self.spacing)
+        .padding(Self.captionSpacing)
+        .background(.thinMaterial, in: Capsule())
     }
 
     @ViewBuilder private var scopeButtons: some View {
-        scopeButton(.uncommitted, systemImage: "pencil", title: "Uncommitted", help: "Review uncommitted changes")
-        scopeButton(
-            .lastCommit,
-            systemImage: "clock",
-            title: "Last Commit",
-            help: "Review the last commit",
-        )
+        scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
+        scopeButton(.lastCommit, systemImage: "clock", help: "Review the last commit")
         scopeButton(
             .upstream,
             systemImage: "icloud.and.arrow.up",
-            title: "Upstream",
             help: model.hasUpstream
                 ? "Review commits not yet pushed to this branch's origin ref"
                 : "Dimmed until this branch has been pushed",
@@ -109,32 +157,14 @@ public struct ReviewView: View {
         scopeButton(
             .branch,
             systemImage: "arrow.triangle.branch",
-            title: "Branch",
             help: "Review every commit on the branch against its merge base",
         )
-    }
-
-    @ViewBuilder private var actionButtons: some View {
-        iconButton(
-            "tray.and.arrow.down",
-            help: "Commit changes the agent left uncommitted; enabled on the uncommitted scope when there are any",
-            disabled: model.showsUncommitted == false || model.files.isEmpty,
-        ) { Task { await commitOutstanding() } }
-        iconButton(
-            "arrow.uturn.backward",
-            help: "Reject the selected lines: reverse-apply them and amend the commit",
-            disabled: model.selections.values.allSatisfy(\.isEmpty)
-                || model.scope == .branch || model.scope == .upstream,
-        ) { Task { await model.rejectSelected() } }
-        iconButton("arrow.clockwise", help: "Reload the diff from git") {
-            Task { await model.reload() }
-        }
     }
 
     /// The collapsible file list; the uncommitted scope embeds the
     /// shared editor per file so fixes are typed directly.
     @ViewBuilder private var diffList: some View {
-        if model.visibleFiles.isEmpty {
+        if model.files.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -142,51 +172,50 @@ public struct ReviewView: View {
                 model: model,
                 worktreePath: worktreePath,
                 service: service,
-                hideAllByDefault: display == .hideAll,
+                hideAllByDefault: collapsedAll,
                 collapseOverrides: $collapseOverrides,
             )
+            .contextMenu {
+                Button("Reject Selected Lines") { Task { await model.rejectSelected() } }
+                    .disabled(
+                        model.selections.values.allSatisfy(\.isEmpty)
+                            || model.scope == .branch || model.scope == .upstream,
+                    )
+            }
         }
     }
 
     private func scopeButton(
         _ scope: ReviewModel.Scope,
         systemImage: String,
-        title: String,
         help: String,
         disabled: Bool = false,
     ) -> some View {
-        iconButton(systemImage, help: help, title: title, isOn: model.scope == scope, disabled: disabled) {
+        iconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
             model.scope = scope
             collapseOverrides = [:]
             Task { await model.reload() }
         }
     }
 
-    /// A one-word title beside the icon where one fits; the action
-    /// buttons on the right stay icon-only.
+    /// One icon control; a selected one fills its bubble.
     private func iconButton(
         _ systemImage: String,
         help: String,
-        title: String? = nil,
         isOn: Bool = false,
         disabled: Bool = false,
         action: @escaping () -> Void,
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: Self.captionSpacing) {
-                Image(systemName: systemImage)
-                if let title {
-                    Text(title).font(.caption)
-                }
-            }
-            .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-            .padding(Self.iconPadding)
-            .background(
-                RoundedRectangle(cornerRadius: Self.iconCornerRadius)
-                    .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
-            )
-            .contentShape(Rectangle())
-            .accessibilityLabel(help)
+            Image(systemName: systemImage)
+                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                .padding(Self.iconPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: Self.iconCornerRadius)
+                        .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
+                )
+                .contentShape(Rectangle())
+                .accessibilityLabel(help)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -194,21 +223,6 @@ public struct ReviewView: View {
         // The colour fill alone is invisible to VoiceOver.
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
-    }
-
-    /// One bubble per display mode, like the scope toggles;
-    /// generated files show outside the default mode and manual
-    /// carets reset on every switch.
-    private func displayButton(
-        _ mode: ReviewFileDisplay,
-        systemImage: String,
-        help: String,
-    ) -> some View {
-        iconButton(systemImage, help: help, title: mode.title, isOn: display == mode) {
-            display = mode
-            collapseOverrides = [:]
-            model.showsGenerated = mode != .standard
-        }
     }
 
     private func commitOutstanding() async {

@@ -29,6 +29,20 @@ public struct GitHubClient: Sendable {
     /// limit as later pages are visited.
     public static let listLimit = 25
 
+    /// The repository's pull request template file content, nil
+    /// without one.
+    public static func pullRequestTemplate(in worktreePath: String) -> String? {
+        [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            ".github/pull_request_template.md",
+            "PULL_REQUEST_TEMPLATE.md",
+            "docs/PULL_REQUEST_TEMPLATE.md",
+        ]
+        .map { worktreePath + "/" + $0 }
+        .first { FileManager.default.fileExists(atPath: $0) }
+        .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+    }
+
     /// The repository's pull requests for a scope, with dashboard
     /// state.
     public func pullRequests(
@@ -124,6 +138,20 @@ public struct GitHubClient: Sendable {
         return name.isEmpty ? nil : name
     }
 
+    /// Opens a pull request from the worktree's branch; returns its
+    /// URL. The body travels by file: it can hold anything.
+    public func createPullRequest(worktreePath: String, title: String, body: String) async throws -> String {
+        let bodyFile = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-pr-body-" + UUID().uuidString + ".md")
+            .path
+        try body.write(toFile: bodyFile, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: bodyFile) }
+        return try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
         try await gh(["pr", "merge", String(number), "--auto", "--squash"], in: repositoryPath)
@@ -132,46 +160,6 @@ public struct GitHubClient: Sendable {
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
         try await gh(["pr", "merge", String(number), "--squash"], in: repositoryPath)
-    }
-
-    /// The review comments and check results of a pull request, as
-    /// text an agent can act on.
-    public func remediationContext(repositoryPath: String, number: Int) async -> String {
-        // The three fetches are independent, so they run together:
-        // serially they made Fix feel unresponsive.
-        let viewTask = Task { try? await gh(["pr", "view", String(number), "--comments"], in: repositoryPath) }
-        // `--comments` omits inline file comments, where review bots
-        // leave their findings, so they join separately.
-        let inlineTask = Task { await inlineComments(repositoryPath: repositoryPath, number: number) }
-        let checksTask = Task {
-            try? await gh(["pr", "checks", String(number)], in: repositoryPath, allowFailure: true)
-        }
-        let inline = await inlineTask.value
-            .compactMap { row -> String? in
-                let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard body.isEmpty == false else {
-                    return nil
-                }
-
-                return (row.author ?? "unknown") + ": " + body
-            }
-            .joined(separator: "\n\n")
-        // Only failing checks earn the agent's attention; passing,
-        // pending and skipped rows are prompt noise.
-        let failing = await (checksTask.value?.standardOutput ?? "")
-            .split(separator: "\n")
-            .filter { line in
-                let fields = line.split(separator: "\t")
-                return fields.count > 1 && fields[1].localizedCaseInsensitiveContains("fail")
-            }
-            .joined(separator: "\n")
-        return await [
-            viewTask.value?.standardOutput,
-            inline.isEmpty ? nil : "Inline review comments:\n\n" + inline,
-            failing.isEmpty ? nil : "Failing checks:\n\n" + failing,
-        ]
-        .compactMap(\.self)
-        .joined(separator: "\n\n")
     }
 
     // MARK: Internal

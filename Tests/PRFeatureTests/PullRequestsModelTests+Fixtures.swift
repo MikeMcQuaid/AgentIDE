@@ -13,6 +13,32 @@ extension PullRequestsModelTests {
         items: [WorktreeItem] = [],
         metadataFile: String? = nil,
     ) -> PullRequestsModel {
+        let model = makeBareModel(items: items, metadataFile: metadataFile)
+        model.fetchList = { _, _ in [] }
+        model.fetchSummary = { _ in nil }
+        model.fetchHasMergeQueue = { false }
+        model.fetchThreads = { _ in [] }
+        model.setThreadResolved = { _, _ in
+            // Succeeds without side effects.
+        }
+        model.fetchFailingChecks = { _ in "" }
+        model.performCreate = { _, _, _ in "" }
+        model.fetchTemplate = { _ in nil }
+        model.fetchCurrentBranch = { _ in nil }
+        model.fetchRebaseNeed = { _ in .nothing }
+        model.performPush = { _ in
+            // Succeeds without side effects.
+        }
+        model.performRebase = { _ in
+            // Succeeds without side effects.
+        }
+        model.checkTipSigned = { _ in true }
+        return model
+    }
+
+    /// The model against a throwaway store, before any seams are
+    /// replaced; split from `makeModel` for function length.
+    private func makeBareModel(items: [WorktreeItem], metadataFile: String?) -> PullRequestsModel {
         let runner = FoundationProcessRunner()
         let base = FileManager.default
             .temporaryDirectory
@@ -39,7 +65,7 @@ extension PullRequestsModelTests {
             store: MetadataStore(file: paths.metadataFile),
             runners: [],
         )
-        let model = PullRequestsModel(
+        return PullRequestsModel(
             repository: Repository(name: "repo", path: "/repo"),
             branch: "feature",
             items: items,
@@ -47,21 +73,6 @@ extension PullRequestsModelTests {
             service: service,
             store: MetadataStore(file: paths.metadataFile),
         )
-        model.fetchList = { _, _ in [] }
-        model.fetchSummary = { _ in nil }
-        model.fetchHasMergeQueue = { false }
-        model.fetchRemediationContext = { _ in "" }
-        model.fetchCurrentBranch = { _ in nil }
-        model.fetchRebaseNeed = { _ in .nothing }
-        model.fetchFullName = { nil }
-        model.performPush = { _ in
-            // Succeeds without side effects.
-        }
-        model.performRebase = { _ in
-            // Succeeds without side effects.
-        }
-        model.checkTipSigned = { _ in true }
-        return model
     }
 
     func summary(

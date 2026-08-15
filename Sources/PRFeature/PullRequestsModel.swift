@@ -37,17 +37,30 @@ final class PullRequestsModel {
         fetchHasMergeQueue = {
             await github.hasMergeQueue(repositoryPath: repository.path)
         }
-        fetchRemediationContext = { number in
-            await github.remediationContext(repositoryPath: repository.path, number: number)
+        fetchThreads = { number in
+            await github.reviewThreads(repositoryPath: repository.path, number: number)
+        }
+        setThreadResolved = { threadID, resolved in
+            try await github.setThreadResolved(
+                repositoryPath: repository.path,
+                threadID: threadID,
+                resolved: resolved,
+            )
+        }
+        fetchFailingChecks = { number in
+            await github.failingChecks(repositoryPath: repository.path, number: number)
+        }
+        performCreate = { worktree, title, body in
+            try await github.createPullRequest(worktreePath: worktree.path, title: title, body: body)
+        }
+        fetchTemplate = { path in
+            GitHubClient.pullRequestTemplate(in: path)
         }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
         fetchRebaseNeed = { worktree in
             await service.rebaseNeed(worktree: worktree)
-        }
-        fetchFullName = {
-            await github.fullName(repositoryPath: repository.path)
         }
         performPush = { worktree in
             try await service.push(worktree: worktree)
@@ -107,20 +120,36 @@ final class PullRequestsModel {
     /// extension.
     var status: String?
 
+    /// The pull request creation form's fields; the template loads
+    /// from the repository on reload when the form shows.
+    var prTitle = ""
+    var prBody = ""
+    var prTemplate = ""
+
     /// Test seams: the live client and service by default, fakes in
     /// tests.
     var fetchList: (GitHubClient.ListScope, Int) async throws -> [PullRequestSummary]
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
-    var fetchRemediationContext: (Int) async -> String
+    var fetchThreads: (Int) async -> [ReviewThread]
+    var setThreadResolved: (String, Bool) async throws -> Void
+    var fetchFailingChecks: (Int) async -> String
+    var performCreate: (Worktree, String, String) async throws -> String
+    var fetchTemplate: (String) -> String?
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
-    var fetchFullName: () async -> String?
     var performPush: (Worktree) async throws -> Void
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
 
     let service: SessionService
+
+    /// Whether the list pane shows the creation form instead: the
+    /// worktree scope with no open pull request for the branch.
+    var needsCreateForm: Bool {
+        scope == .worktree && branchItem != nil && isLoading == false
+            && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
+    }
 
     /// The repository's worktree items, refreshed by the view as the
     /// dashboard polls; fresh counts also clear the local pushed
@@ -205,22 +234,6 @@ final class PullRequestsModel {
         branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
-    /// Push names how many commits it would send.
-    var pushTitle: String {
-        guard canPush, let ahead = branchItem?.aheadOfUpstream, ahead > 0 else {
-            return "Push"
-        }
-
-        return "Push " + String(ahead)
-    }
-
-    /// Opening a pull request makes sense until one is open for the
-    /// checked-out branch; it pushes first when needed.
-    var canOpenPullRequest: Bool {
-        branchItem != nil
-            && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
-    }
-
     /// The branch the tab lists and compares against: the checked
     /// out one when known, the worktree's recorded one otherwise.
     var listedBranch: String? {
@@ -241,6 +254,9 @@ final class PullRequestsModel {
         if let worktree = branchItem?.worktree {
             isTipSigned = await checkTipSigned(worktree.path)
             rebaseNeed = await fetchRebaseNeed(worktree)
+            if prTemplate.isEmpty {
+                prTemplate = fetchTemplate(worktree.path) ?? ""
+            }
             if let live = await fetchCurrentBranch(worktree.path) {
                 currentBranch = live
             }
@@ -303,10 +319,6 @@ final class PullRequestsModel {
             current = next
         }
         return depth
-    }
-
-    func worktree(for summary: PullRequestSummary) -> Worktree? {
-        items.first { $0.worktree.branch == summary.headBranch }?.worktree
     }
 
     // MARK: Private

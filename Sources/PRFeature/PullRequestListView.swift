@@ -84,13 +84,14 @@ struct PullRequestListView: View {
     private func row(_ summary: PullRequestSummary) -> some View {
         PullRequestRowView(
             summary: summary,
-            canRemediate: false,
             stackDepth: stackDepth(summary),
             hasMergeQueue: false,
             showsActions: false,
             onAutomerge: noAction,
             onMerge: noAction,
-            onRemediate: noAction,
+            onCopyComments: noAction,
+            onCopyChecks: noAction,
+            onResolveAll: noAction,
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect(summary) }
@@ -106,44 +107,21 @@ struct PullRequestListView: View {
 
 // MARK: - PullRequestFooterView
 
-/// The pull request tab's footer actions: rebase, push, open,
-/// refresh and the status line.
+/// The pull request tab's footer actions: rebase and push as icon
+/// buttons carrying the sidebar-style counts, the refresh icon and
+/// the status line.
 struct PullRequestFooterView: View {
     // MARK: Internal
 
-    let canPush: Bool
-    let canOpenPullRequest: Bool
-    let canRebase: Bool
-    let rebaseTitle: String
-    let pushTitle: String
-    let pushHelp: String
-    let status: String?
-    let onRebase: @MainActor () async -> Void
-    let onPush: @MainActor () async -> Void
-    let onOpenPullRequest: @MainActor () async -> Void
-    let onRefresh: @MainActor () async -> Void
+    @Bindable var model: PullRequestsModel
 
     var body: some View {
         HStack {
-            BusyButton(rebaseTitle, busy: "Rebasing", disabled: canRebase == false, action: onRebase)
-                .hoverHelp(
-                    "Fetch, then rebase with --force-rebase --gpg-sign: onto this branch's own origin ref "
-                        + "when that is fully signed and only new commits need signatures, "
-                        + "otherwise onto origin/HEAD re-signing everything; "
-                        + "a conflict aborts and reports to the Errors tab",
-                )
-            BusyButton(pushTitle, busy: "Pushing", disabled: canPush == false, action: onPush)
-                .hoverHelp(pushHelp)
-            BusyButton(
-                "Open PR",
-                busy: "Opening",
-                disabled: canOpenPullRequest == false,
-                action: onOpenPullRequest,
-            )
-            .hoverHelp(openHelp)
-            RefreshButton(action: onRefresh)
+            rebaseButton
+            pushButton
+            RefreshButton { await model.reload(keepingSelection: true) }
                 .hoverHelp("Fetch the pull requests again")
-            if let status {
+            if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
                     .font(.callout)
@@ -160,12 +138,54 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    private var openHelp: String {
-        guard canOpenPullRequest else {
-            return "This branch already has an open pull request"
-        }
+    /// The cross-module signal that switches the utility pane's tab.
+    @AppStorage("utilityTab")
+    private var utilityTab = ""
 
-        return "Push if needed, then open GitHub's pull request creation page in the Browser tab"
+    /// Sidebar-style: how far the branch sits behind its base.
+    private var rebaseCount: String {
+        let behind = model.branchItem?.behindDefault ?? 0
+        return behind > 0 ? "\u{2193}" + String(behind) : ""
+    }
+
+    /// Sidebar-style: how many commits a push would send.
+    private var pushCount: String {
+        let ahead = model.branchItem?.aheadOfUpstream ?? 0
+        return ahead > 0 ? String(ahead) : ""
+    }
+
+    private var rebaseHelp: String {
+        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
+            + "own origin ref when that is fully signed and only new commits need signatures, "
+            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+    }
+
+    private var rebaseButton: some View {
+        BusyButton(
+            rebaseCount,
+            busy: "Rebasing",
+            systemImage: "arrow.triangle.2.circlepath",
+            disabled: model.canRebase == false,
+        ) {
+            if await model.rebaseSigned() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp(rebaseHelp)
+    }
+
+    private var pushButton: some View {
+        BusyButton(
+            pushCount,
+            busy: "Pushing",
+            systemImage: "arrow.up",
+            disabled: model.canPush == false,
+        ) {
+            if await model.push() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp(model.pushHelp)
     }
 }
 
@@ -215,10 +235,14 @@ struct PullRequestScopePicker: View {
 
     @Binding var scope: PullRequestScope
 
+    /// What the worktree scope calls itself: Branch on the main
+    /// checkout, where there is no worktree to speak of.
+    let worktreeTitle: String
+
     var body: some View {
         Picker("Scope", selection: $scope) {
             ForEach(PullRequestScope.allCases, id: \.self) { scope in
-                Text(scope.title).tag(scope)
+                Text(scope == .worktree ? worktreeTitle : scope.title).tag(scope)
             }
         }
         .pickerStyle(.segmented)

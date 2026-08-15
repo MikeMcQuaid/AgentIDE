@@ -271,7 +271,12 @@ extension RootView {
             EmptyView()
 
         case .review:
-            ReviewView(worktree: target.worktree, git: dependencies.git, service: dependencies.service)
+            ReviewView(
+                worktree: target.worktree,
+                git: dependencies.git,
+                github: dependencies.github,
+                service: dependencies.service,
+            )
 
         case .editor:
             EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
@@ -284,6 +289,7 @@ extension RootView {
                 service: dependencies.service,
                 store: dependencies.store,
                 branch: target.worktree.branch,
+                isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )
 
         case .browser:

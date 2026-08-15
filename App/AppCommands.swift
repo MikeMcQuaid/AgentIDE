@@ -23,6 +23,17 @@ struct AppCommands: Commands {
             Divider()
             Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
+        CommandMenu("Worktree") {
+            Button("Push") { bump("pushRequest") }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+            Button("Rebase on Origin") { bump("rebaseRequest") }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            Button("Commit Outstanding") { bump("commitRequest") }
+                .keyboardShortcut("k", modifiers: [.command, .option])
+            Divider()
+            Button("Refresh") { bump("dashboardRefreshRequest") }
+                .keyboardShortcut("r", modifiers: .command)
+        }
         CommandGroup(after: .sidebar) {
             // The repository sidebar never hides, only resizes, so
             // the utility pane is the one toggle here.
@@ -53,6 +64,12 @@ struct AppCommands: Commands {
     private var finderSearchesContents = false
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
+
+    /// Increments a storage-bus counter; the pane owning the
+    /// action observes it and runs.
+    private func bump(_ key: String) {
+        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+    }
 
     private func show(_ tab: UtilityTab) {
         showsUtilityPane = true

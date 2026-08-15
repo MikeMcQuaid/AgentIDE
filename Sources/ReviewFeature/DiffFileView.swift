@@ -3,32 +3,6 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-// MARK: - ReviewFileDisplay
-
-/// How the review file list shows: Default hides generated files
-/// and expands the rest, Hide All collapses everything and Show All
-/// expands everything, generated included.
-enum ReviewFileDisplay: CaseIterable {
-    case standard
-    case hideAll
-    case showAll
-
-    // MARK: Internal
-
-    var title: String {
-        switch self {
-        case .standard:
-            "Default"
-
-        case .hideAll:
-            "Hide All"
-
-        case .showAll:
-            "Show All"
-        }
-    }
-}
-
 // MARK: - FileCollapseCaret
 
 /// The one caret that hides or shows a file's body in review lists.
@@ -99,8 +73,12 @@ struct DiffFileView: View {
                 Text(file.path).font(.headline.monospaced())
                 DiffStatText(additions: file.additions, deletions: file.deletions)
                 Spacer()
-                Button("Edit file", action: onEdit)
-                    .hoverHelp("Open this file in the built-in editor for review-time fixes")
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .accessibilityLabel("Edit file")
+                }
+                .buttonStyle(.borderless)
+                .hoverHelp("Open this file in the built-in editor for review-time fixes")
             }
             if isCollapsed == false {
                 ForEach(Array(file.hunks.enumerated()), id: \.offset) { hunkIndex, hunk in
@@ -108,11 +86,12 @@ struct DiffFileView: View {
                 }
             }
         }
-        .padding(.bottom, Self.filePadding)
+        .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
     }
 
     // MARK: Private
 
+    private static let collapsedPadding: CGFloat = 1
     private static let lineSpacing: CGFloat = 2
     private static let gutterSpacing: CGFloat = 6
     private static let selectionBarWidth: CGFloat = 3
@@ -333,7 +312,7 @@ struct ReviewFileListView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                ForEach(model.visibleFiles) { file in
+                ForEach(model.files) { file in
                     fileSection(file)
                 }
             }
@@ -362,6 +341,11 @@ struct ReviewFileListView: View {
                 },
             )
         }
+        if isCollapsed(file) == false {
+            ForEach(model.threads(for: file.path)) { thread in
+                ReviewThreadRow(thread: thread) { await model.toggleResolved(thread) }
+            }
+        }
     }
 
     /// Uncommitted changes edit in place: the shared editor embeds
@@ -388,7 +372,9 @@ struct ReviewFileListView: View {
     }
 
     private func isCollapsed(_ file: DiffFile) -> Bool {
-        collapseOverrides[file.path] ?? hideAllByDefault
+        // Generated files always start collapsed, whatever the
+        // expand-all state says; only their own caret opens them.
+        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path))
     }
 
     private func toggleCollapse(_ file: DiffFile) {
