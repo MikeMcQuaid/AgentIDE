@@ -65,6 +65,16 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
   delay over half a second.
+- Buttons follow Apple HIG and Liquid Glass, in that order, then
+  this app's conventions: at most one primary action per surface,
+  rendered prominent and bound to Cmd-Return when the surface takes
+  text input; every other button is plain glass, icon-only with
+  hover help when the icon is unambiguous and short text otherwise.
+  Order buttons in the sequence they are expected to be clicked,
+  left to right, primary last; put counts in the label and
+  explanations in hover help. Slow or unrepeatable actions go
+  through `BusyButton` and lock any inputs they read or write
+  while running.
 
 ### Platform Notes
 

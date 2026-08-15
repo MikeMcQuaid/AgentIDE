@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -71,6 +72,15 @@ struct DiffFileView: View {
             HStack {
                 FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
                 Text(file.path).font(.headline.monospaced())
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(file.path, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .accessibilityLabel("Copy file path")
+                }
+                .buttonStyle(.borderless)
+                .hoverHelp("Copy this file's path to the clipboard")
                 Spacer()
                 DiffStatText(additions: file.additions, deletions: file.deletions)
                 Button(action: onEdit) {

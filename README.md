@@ -160,6 +160,12 @@ currently launches to an empty dashboard; features land slice by slice (see
 
 ## Status
 
+Unstable and changing daily. AgentIDE is being designed exclusively
+for [@MikeMcQuaid](https://github.com/MikeMcQuaid)'s personal
+workflow; nothing here promises to suit anyone else's, interfaces
+and behaviour break without notice and there is no support. If it
+fits your workflow anyway, expect sharp edges.
+
 Readme-driven development: this README describes the complete intended
 workflow before any of it exists. Slices land in order, each one usable when
 done:
@@ -189,3 +195,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 
 [GNU Affero General Public License v3.0](LICENSE). If you reuse or adapt the
 source the AGPL terms apply, including the network-use clause.
+[Octicons](https://github.com/primer/octicons) are vendored in
+`App/Assets.xcassets` and licensed under the
+[MIT License](https://github.com/primer/octicons/blob/main/LICENSE).

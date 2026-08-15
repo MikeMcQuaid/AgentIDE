@@ -82,7 +82,7 @@ public struct FoundationModelClient: Sendable {
             return nil
         }
 
-        let filled = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filled = Self.strippedCodeFences(raw).trimmingCharacters(in: .whitespacesAndNewlines)
         return filled.isEmpty ? nil : filled
     }
 
@@ -114,7 +114,7 @@ public struct FoundationModelClient: Sendable {
     /// usable came back; models sometimes wrap answers in quotes or
     /// markdown heading markers despite instructions.
     static func pullRequestDescription(fromModelAnswer raw: String) -> (title: String, body: String)? {
-        let lines = raw.trimmingCharacters(in: .whitespacesAndNewlines).split(
+        let lines = Self.strippedCodeFences(raw).trimmingCharacters(in: .whitespacesAndNewlines).split(
             separator: "\n",
             omittingEmptySubsequences: false,
         )
@@ -131,6 +131,15 @@ public struct FoundationModelClient: Sendable {
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return (Self.capitalisedFirst(title), body)
+    }
+
+    /// Drops Markdown fence lines; models sometimes wrap answers in
+    /// code blocks despite instructions, and a fence line carries no
+    /// content of its own.
+    static func strippedCodeFences(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("```") == false }
+            .joined(separator: "\n")
     }
 
     /// Uppercases only the leading character; models sometimes echo

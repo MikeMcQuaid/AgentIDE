@@ -465,12 +465,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
    creation form instead of the list: title, body and the repository's
    `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Opening
    pushes when needed, then runs `gh pr create` with the template
-   appended below the body after an empty line. Blank fields fill from
-   the branch's commits: a one-commit branch defaults to that commit's
-   own message, and a generate button summarises several through the
-   on-device model; typed text is never overwritten. A repository
-   without a template shows no template field, and with one the
-   generate button also completes the template from the commits.
+   appended below the body after an empty line. Open PR sits in the
+   footer as the primary action (Cmd-Return), after fetch, rebase and
+   push in click order. Blank fields fill from the branch's commits:
+   a one-commit branch defaults to that commit's own message, and a
+   generate button inside the title field summarises several through
+   the on-device model, locking the fields while it drafts; typed
+   text is never overwritten. A repository without a template shows
+   no template field, and with one the generate button also
+   completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.

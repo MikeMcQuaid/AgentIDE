@@ -40,6 +40,20 @@ struct ReviewFooterView: View {
     private var messageHeight = 88.0
     @State private var messageDragBase: Double?
 
+    /// The commit listing coloured like git log: hashes orange,
+    /// subjects bold and the trailing ref decorations green, all in
+    /// one attributed block so selection still spans lines.
+    private var styledCommits: AttributedString {
+        var whole = AttributedString()
+        for (index, line) in model.branchCommits.enumerated() {
+            if index > 0 {
+                whole += AttributedString("\n")
+            }
+            whole += Self.styledCommitLine(line)
+        }
+        return whole
+    }
+
     /// A slim grab area over the divider: dragging resizes the
     /// commit message or commit list pane, like the window's pane
     /// dividers.
@@ -92,7 +106,7 @@ struct ReviewFooterView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text(model.branchCommits.joined(separator: "\n"))
+                        Text(styledCommits)
                             .font(.caption.monospaced())
                             .textSelection(.enabled)
                             .fixedSize(horizontal: true, vertical: false)
@@ -174,5 +188,22 @@ struct ReviewFooterView: View {
         }
         .font(.caption.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
+    }
+
+    private static func styledCommitLine(_ line: String) -> AttributedString {
+        let hashEnd = line.firstIndex(of: " ") ?? line.endIndex
+        var hash = AttributedString(String(line[..<hashEnd]))
+        hash.foregroundColor = .orange
+        var rest = String(line[hashEnd...])
+        var trailing = ""
+        if rest.hasSuffix(")"), let open = rest.range(of: " (", options: .backwards) {
+            trailing = String(rest[open.lowerBound...])
+            rest = String(rest[..<open.lowerBound])
+        }
+        var subject = AttributedString(rest)
+        subject.font = .caption.monospaced().weight(.semibold)
+        var decorations = AttributedString(trailing)
+        decorations.foregroundColor = .green
+        return hash + subject + decorations
     }
 }

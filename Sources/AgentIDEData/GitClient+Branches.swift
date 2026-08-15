@@ -83,7 +83,7 @@ public extension GitClient {
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {
         let result = try? await git(
-            ["log", "--format=%h%d %s", baseRef + "..HEAD"],
+            ["log", "--format=%h %s%d", baseRef + "..HEAD"],
             in: worktreePath,
             allowFailure: true,
         )
@@ -93,7 +93,7 @@ public extension GitClient {
         // Plain local branches pointing there are already merged, so
         // only the default and remote names survive the filter.
         let base = try? await git(
-            ["log", "-1", "--format=%h%d %s", baseRef],
+            ["log", "-1", "--format=%h %s%d", baseRef],
             in: worktreePath,
             allowFailure: true,
         )
@@ -108,9 +108,12 @@ public extension GitClient {
     /// is fully merged there, so only `origin/*`, `main`, `master`
     /// and `HEAD` arrows orient the reader.
     internal static func filteredBaseDecorations(_ line: String) -> String {
-        guard let open = line.firstIndex(of: "("),
-              let close = line.firstIndex(of: ")"),
-              open < close
+        // Decorations sit at the line's end, after the subject, so
+        // the last parenthesis pair is theirs even when the subject
+        // contains its own.
+        guard let open = line.lastIndex(of: "("),
+              let close = line[open...].firstIndex(of: ")"),
+              line[line.index(after: close)...].isEmpty
         else {
             return line
         }

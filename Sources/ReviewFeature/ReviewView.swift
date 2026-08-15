@@ -103,6 +103,7 @@ public struct ReviewView: View {
             }
             .padding(Self.captionSpacing)
             .background(.thinMaterial, in: Capsule())
+            Spacer()
             displayToggles
             Spacer()
             Text(model.files.count == 1 ? "1 file" : String(model.files.count) + " files")

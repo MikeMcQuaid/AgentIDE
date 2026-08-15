@@ -16,12 +16,15 @@ struct PullRequestCreateForm: View {
                 .font(.subheadline.weight(.semibold))
             TextField("Title", text: $model.prTitle)
                 .textFieldStyle(.roundedBorder)
+                .disabled(isGenerating)
+                .overlay(alignment: .trailing) { generateButton.padding(.trailing, Self.overlayPadding) }
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody)
                 .font(.body)
                 .frame(minHeight: Self.bodyMinimumHeight)
                 .border(.separator)
+                .disabled(isGenerating)
                 .hoverHelp("The description in your own words; the template below is appended after it")
             if model.hasTemplate {
                 Text("Template").font(.caption).foregroundStyle(.secondary)
@@ -29,9 +32,9 @@ struct PullRequestCreateForm: View {
                     .font(.body.monospaced())
                     .frame(minHeight: Self.templateMinimumHeight)
                     .border(.separator)
+                    .disabled(isGenerating)
                     .hoverHelp("The repository's pull request template, editable; appended below the body")
             }
-            actionsRow
         }
         .padding(Self.spacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -40,38 +43,48 @@ struct PullRequestCreateForm: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 8
+    private static let overlayPadding: CGFloat = 4
+
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
+
+    /// Drafting locks every field, so a slow model never races
+    /// typing it would then overwrite.
+    @State private var isGenerating = false
 
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage("utilityTab")
     private var utilityTab = ""
 
-    /// Generate on the left, Open PR on the right.
-    private var actionsRow: some View {
-        HStack {
-            BusyButton(
-                "",
-                busy: "Generating",
-                systemImage: "sparkles",
-                disabled: model.prTitle.isEmpty == false && model.prBody.isEmpty == false,
-            ) {
+    /// Sits inside the title field; drafting only ever fills empty
+    /// fields, so any typed content dims it.
+    private var generateButton: some View {
+        Button {
+            guard isGenerating == false else {
+                return
+            }
+
+            isGenerating = true
+            Task {
                 if await model.generateDescription() == false {
                     utilityTab = UtilityTabTarget.errors
                 }
+                isGenerating = false
             }
-            .hoverHelp(
-                "Fill the blank fields from the branch's commits: one commit's own message "
-                    + "directly, several summarised by the on-device model, and the template "
-                    + "completed from the commits when the repository has one",
-            )
-            Spacer()
-            BusyButton("Open PR", busy: "Opening", disabled: model.prTitle.isEmpty) {
-                if await model.createPullRequest() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
+        } label: {
+            if isGenerating {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "sparkles")
+                    .accessibilityLabel("Generate title and body")
             }
-            .hoverHelp("Push if needed, then open the pull request with this title and body")
         }
+        .buttonStyle(.borderless)
+        .disabled(isGenerating || model.prTitle.isEmpty == false || model.prBody.isEmpty == false)
+        .hoverHelp(
+            "Fill the empty fields from the branch's commits: one commit's own message "
+                + "directly, several summarised by the on-device model, and the template "
+                + "completed from the commits when the repository has one",
+        )
     }
 }

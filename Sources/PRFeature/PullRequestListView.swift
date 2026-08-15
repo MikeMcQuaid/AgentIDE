@@ -107,9 +107,9 @@ struct PullRequestListView: View {
 
 // MARK: - PullRequestFooterView
 
-/// The pull request tab's footer actions: rebase and push as icon
-/// buttons carrying the sidebar-style counts, the refresh icon and
-/// the status line.
+/// The pull request tab's footer actions in the order they are
+/// expected to be clicked: fetch, rebase, push and, when the
+/// creation form shows, Open PR as the primary action.
 struct PullRequestFooterView: View {
     // MARK: Internal
 
@@ -117,10 +117,13 @@ struct PullRequestFooterView: View {
 
     var body: some View {
         HStack {
-            rebaseButton
-            pushButton
             RefreshButton { await model.reload(keepingSelection: true) }
                 .hoverHelp("Fetch the pull requests again")
+            rebaseButton
+            pushButton
+            if model.needsCreateForm {
+                openButton
+            }
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
@@ -186,6 +189,16 @@ struct PullRequestFooterView: View {
             }
         }
         .hoverHelp(model.pushHelp)
+    }
+
+    private var openButton: some View {
+        BusyButton("Open PR", busy: "Opening", prominent: true, disabled: model.prTitle.isEmpty) {
+            if await model.createPullRequest() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .keyboardShortcut(.return, modifiers: .command)
+        .hoverHelp("Push if needed, then open the pull request with the form's title and body (Cmd-Return)")
     }
 }
 

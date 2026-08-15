@@ -26,6 +26,13 @@ struct FoundationModelClientTests {
           continuation lines and --flags stay untouched
         """)
         #expect(FoundationModelClient.pullRequestDescription(fromModelAnswer: "  \n\n") == nil)
+
+        // Fence lines carry no content and disappear; the body
+        // inside survives untouched.
+        let fenced = "Title line\n\n```\n- First point\n- Second point\n```"
+        let unfenced = FoundationModelClient.pullRequestDescription(fromModelAnswer: fenced)
+        #expect(unfenced?.title == "Title line")
+        #expect(unfenced?.body == "- First point\n- Second point")
     }
 
     @Test
