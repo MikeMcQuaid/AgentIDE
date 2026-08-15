@@ -353,7 +353,13 @@ struct ReviewFileListView: View {
         }
         if isCollapsed(file) == false {
             ForEach(model.threads(for: file.path)) { thread in
-                ReviewThreadRow(thread: thread) { await model.toggleResolved(thread) }
+                ReviewThreadRow(
+                    thread: thread,
+                    onEdit: {
+                        FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath)
+                    },
+                    onToggleResolved: { await model.toggleResolved(thread) },
+                )
             }
         }
     }

@@ -140,11 +140,12 @@ public extension GitHubClient {
         }
         return roots.map { root in
             ReviewThread(
-                id: "",
+                id: "rest-" + String(root),
                 path: anchorsByRoot[root]?.path ?? "",
                 line: anchorsByRoot[root]?.line,
                 isResolved: false,
                 comments: commentsByRoot[root] ?? [],
+                resolveID: "",
             )
         }
     }
@@ -171,14 +172,18 @@ public extension GitHubClient {
     internal static func threads(fromJSON json: String) -> [ReviewThread] {
         let decoded = try? JSONDecoder().decode(ThreadsResponse.self, from: Data(json.utf8))
         let nodes = decoded?.data?.repository?.pullRequest?.reviewThreads.nodes ?? []
-        return nodes.map { node in
-            ReviewThread(
+        return nodes.compactMap { node in
+            guard let node else {
+                return nil
+            }
+
+            return ReviewThread(
                 id: node.id,
                 path: node.path,
                 line: node.line,
                 isResolved: node.isResolved,
-                comments: node.comments.nodes.map { comment in
-                    ReviewThreadComment(author: comment.author?.login ?? "unknown", body: comment.body)
+                comments: node.comments.nodes.compactMap { comment in
+                    comment.map { ReviewThreadComment(author: $0.author?.login ?? "unknown", body: $0.body) }
                 },
             )
         }
@@ -237,7 +242,9 @@ private struct ThreadsResponse: Decodable {
     }
 
     struct CommentNodes: Decodable {
-        let nodes: [CommentNode]
+        /// Element-nullable in the schema; one null must not drop
+        /// every thread.
+        let nodes: [CommentNode?]
     }
 
     struct ThreadNode: Decodable {
@@ -249,7 +256,9 @@ private struct ThreadsResponse: Decodable {
     }
 
     struct ThreadNodes: Decodable {
-        let nodes: [ThreadNode]
+        /// Element-nullable in the schema; one null must not drop
+        /// every thread.
+        let nodes: [ThreadNode?]
     }
 
     struct PullRequest: Decodable {

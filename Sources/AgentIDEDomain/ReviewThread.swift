@@ -26,19 +26,33 @@ public struct ReviewThreadComment: Hashable, Sendable {
 public struct ReviewThread: Hashable, Identifiable, Sendable {
     // MARK: Lifecycle
 
-    /// Creates a thread.
-    public init(id: String, path: String, line: Int?, isResolved: Bool, comments: [ReviewThreadComment]) {
+    /// Creates a thread; `resolveID` defaults to the id for threads
+    /// whose display identity is the resolvable GraphQL node.
+    public init(
+        id: String,
+        path: String,
+        line: Int?,
+        isResolved: Bool,
+        comments: [ReviewThreadComment],
+        resolveID: String? = nil,
+    ) {
         self.id = id
         self.path = path
         self.line = line
         self.isResolved = isResolved
         self.comments = comments
+        self.resolveID = resolveID ?? id
     }
 
     // MARK: Public
 
-    /// The GraphQL node id, what resolving mutates.
+    /// The display identity; duplicated ids would make SwiftUI
+    /// lists repeat one row and drop the rest.
     public let id: String
+
+    /// The GraphQL node id resolving mutates; empty for REST
+    /// fallback threads, which cannot be resolved.
+    public let resolveID: String
 
     /// The file the thread anchors to.
     public let path: String

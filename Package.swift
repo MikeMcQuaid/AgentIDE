@@ -21,6 +21,9 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
+        // Apple's GitHub-flavoured markdown parser; parsing by hand
+        // kept misreading real review comments.
+        .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.5.0"),
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.9.0"),
         // The newest grammar releases are generated with tree-sitter
         // ABI 15, which swift-tree-sitter 0.9.0's runtime rejects, so
@@ -78,6 +81,7 @@ let package = Package(
                 "AgentIDEDomain",
                 "AgentIDEData",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
+                .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
                 .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),
                 .product(name: "TreeSitterBash", package: "tree-sitter-bash"),

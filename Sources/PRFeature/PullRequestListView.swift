@@ -114,10 +114,11 @@ struct PullRequestFooterView: View {
 
     var body: some View {
         HStack {
-            RefreshButton { await model.reload(keepingSelection: true) }
-                .hoverHelp("Fetch the pull requests again")
             rebaseButton
             pushButton
+            if let selected = model.selected {
+                copyButtons(for: selected)
+            }
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
@@ -214,6 +215,30 @@ struct PullRequestFooterView: View {
         }
         .keyboardShortcut(.return, modifiers: .command)
         .hoverHelp("Push if needed, then open the pull request with the form's title and body (Cmd-Return)")
+    }
+
+    /// The copy actions for the open conversation, in the footer's
+    /// click-order run.
+    @ViewBuilder
+    private func copyButtons(for selected: PullRequestSummary) -> some View {
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "text.bubble",
+            accessibilityLabel: "Copy unresolved comments",
+        ) {
+            await model.copyUnresolvedComments(selected)
+        }
+        .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "exclamationmark.triangle",
+            accessibilityLabel: "Copy failing checks",
+        ) {
+            await model.copyFailingChecks(selected)
+        }
+        .hoverHelp("Copy the failing checks and their failed step output to the clipboard")
     }
 }
 

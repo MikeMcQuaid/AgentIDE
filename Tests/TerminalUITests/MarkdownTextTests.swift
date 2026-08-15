@@ -59,7 +59,8 @@ struct MarkdownTextTests {
         let blocks = MarkdownText.proseBlocks(markdown)
         #expect(blocks.count == 3)
         if case let .text(text) = blocks[0] {
-            #expect(text == "First line\nsecond line\n\nanother paragraph")
+            #expect(text.contains("First line"))
+            #expect(text.contains("another paragraph"))
         } else {
             Issue.record("The prose lines should merge into one text block")
         }

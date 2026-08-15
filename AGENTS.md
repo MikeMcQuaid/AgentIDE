@@ -147,7 +147,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 5. Keep dependency directions clean: Domain depends on nothing,
    DataAccess and Features depend on Domain and App composes them.
 6. Follow YAGNI and DRY: build only what the current slice needs and
-   inline variables and functions used only once.
+   inline variables and functions used only once. For non-trivial
+   parsing or protocol work, prefer widely used, well maintained
+   libraries, Apple's own first (markdown parses through
+   apple/swift-markdown), over bespoke reimplementations.
 7. Keep agent-specific logic inside its adapter; everything else
    speaks one agent interface.
 8. Describe third-party apps this project replaces by category, never

@@ -132,12 +132,23 @@ struct PullRequestConversationView: View {
         ForEach(events) { event in
             eventRow(event)
         }
-        if threads.isEmpty == false {
+        if threads.isEmpty == false || isLoading {
             Divider()
             Text("Conversations").font(.headline)
-            ForEach(threads) { thread in
-                ReviewThreadRow(thread: thread) { await toggleResolved(thread) }
-            }
+        }
+        // The loading state paints instantly; threads can take a
+        // while behind the GraphQL round trip.
+        if threads.isEmpty, isLoading {
+            ProgressView().controlSize(.small)
+        }
+        ForEach(threads) { thread in
+            ReviewThreadRow(
+                thread: thread,
+                onEdit: {
+                    FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: repositoryPath)
+                },
+                onToggleResolved: { await toggleResolved(thread) },
+            )
         }
         if events.isEmpty, description.isEmpty {
             Text("No description or feedback yet.")
@@ -209,7 +220,7 @@ struct PullRequestConversationView: View {
         do {
             try await github.setThreadResolved(
                 repositoryPath: repositoryPath,
-                threadID: thread.id,
+                threadID: thread.resolveID,
                 resolved: thread.isResolved == false,
             )
             threads = try await github.conversationThreads(

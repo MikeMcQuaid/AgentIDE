@@ -1,6 +1,9 @@
 import AgentIDEDomain
 import Foundation
 
+/// How long a TERMed pane gets to exit before KILL.
+private let killGraceSeconds = 2.0
+
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
     /// Host shells share the host tmux server across flavours, so
@@ -50,17 +53,38 @@ public extension SessionService {
         return results
     }
 
-    /// Kills one session on whichever server owns it.
+    /// Kills one session on whichever server owns it, escalating
+    /// when the polite kill fails: TERM the pane's process, wait,
+    /// then KILL it. Sandbox panes only get tmux-level retries: the
+    /// host cannot signal another user's processes and the sudoers
+    /// rules stay narrow.
     func killTmuxSession(name: String, isHostShell: Bool) async {
+        let pids = await panePIDs(sessionName: name, isHostShell: isHostShell)
+        await issueKill(name: name, isHostShell: isHostShell)
+        guard await sessionExists(name: name, isHostShell: isHostShell) else {
+            return
+        }
+
         if isHostShell {
             _ = try? await processes.run(
-                [Self.hostTmuxPath, "kill-session", "-t", name],
+                ["kill", "-TERM"] + pids.map(String.init),
                 workingDirectory: nil,
                 environment: [:],
             )
-        } else {
-            try? await tmux.killSession(name: name)
         }
+        try? await Task.sleep(for: .seconds(killGraceSeconds))
+        guard await sessionExists(name: name, isHostShell: isHostShell) else {
+            return
+        }
+
+        if isHostShell {
+            _ = try? await processes.run(
+                ["kill", "-9"] + pids.map(String.init),
+                workingDirectory: nil,
+                environment: [:],
+            )
+        }
+        await issueKill(name: name, isHostShell: isHostShell)
     }
 
     /// Marks a worktree viewed: clears its unread state, including a

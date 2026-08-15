@@ -125,23 +125,7 @@ struct PullRequestRowView: View {
         )
     }
 
-    @ViewBuilder private var actions: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "text.bubble",
-            accessibilityLabel: "Copy unresolved comments",
-            action: onCopyComments,
-        )
-        .hoverHelp("Copy every unresolved review conversation to the clipboard")
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "exclamationmark.triangle",
-            accessibilityLabel: "Copy failing checks",
-            action: onCopyChecks,
-        )
-        .hoverHelp("Copy the failing checks to the clipboard")
+    private var actions: some View {
         Button {
             LinkOpener.open(summary.url)
         } label: {

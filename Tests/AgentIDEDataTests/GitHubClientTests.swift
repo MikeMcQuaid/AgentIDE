@@ -22,8 +22,9 @@ struct GitHubClientTests {
         #expect(threads.first?.line == 4)
         #expect(threads.first?.comments.map(\.author) == ["copilot", "mike"])
         #expect(threads.last?.line == 9)
-        // REST threads carry no resolvable id.
-        #expect(threads.map(\.id) == ["", ""])
+        // Unique display ids, but no resolvable GraphQL id.
+        #expect(threads.map(\.id) == ["rest-1", "rest-3"])
+        #expect(threads.map(\.resolveID) == ["", ""])
     }
 
     @Test

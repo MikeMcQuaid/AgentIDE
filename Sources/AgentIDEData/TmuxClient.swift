@@ -17,6 +17,9 @@ public struct TmuxPane: Sendable {
     /// unread detection.
     public let activityAt: Int
 
+    /// The pane's root process id, for resource usage and kills.
+    public let pid: Int?
+
     /// The pane's current working directory.
     public let currentPath: String
 }
@@ -76,6 +79,7 @@ public struct TmuxClient: Sendable {
                 isDead: field.next() == "1",
                 exitStatus: field.next().flatMap { Int($0) },
                 activityAt: field.next().flatMap { Int($0) } ?? 0,
+                pid: field.next().flatMap { Int($0) },
                 currentPath: field.next() ?? "",
             )
         }
@@ -154,9 +158,9 @@ public struct TmuxClient: Sendable {
 
     // MARK: Private
 
-    private static let paneFieldCount = 5
+    private static let paneFieldCount = 6
     private static let paneFormat =
-        "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_current_path}"
+        "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_pid}|#{pane_current_path}"
 
     /// The server's config: dead panes stay inspectable, the mouse
     /// wheel scrolls tmux's own history (the alternate screen leaves

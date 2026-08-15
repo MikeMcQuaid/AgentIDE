@@ -105,7 +105,7 @@ final class ReviewModel {
     /// refreshes the inline listing.
     func toggleResolved(_ thread: ReviewThread) async {
         do {
-            try await setThreadResolved(thread.id, thread.isResolved == false)
+            try await setThreadResolved(thread.resolveID, thread.isResolved == false)
             threads = await fetchThreads()
         } catch {
             report(error.localizedDescription)

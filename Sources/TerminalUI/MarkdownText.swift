@@ -76,13 +76,25 @@ public struct MarkdownText: View {
         return results
     }
 
-    /// One chunk's fences and prose.
+    /// One chunk's blocks, parsed by the official GitHub-flavoured
+    /// parser after the HTML mapping.
     private func segmentViews(_ text: String) -> some View {
-        ForEach(Array(segments(of: text).enumerated()), id: \.offset) { _, segment in
-            if segment.isCode {
-                code(segment.text, language: segment.language)
-            } else {
-                prose(segment.text)
+        ForEach(Array(Self.proseBlocks(Self.strippingHTML(text)).enumerated()), id: \.offset) { _, block in
+            switch block {
+            case let .heading(title):
+                Text(Self.inline(title)).fontWeight(.semibold).textSelection(.enabled)
+
+            case .rule:
+                Divider()
+
+            case let .code(text, language):
+                code(text, language: language)
+
+            case let .table(header, rows):
+                table(header: header, rows: rows)
+
+            case let .text(line):
+                Text(Self.inline(line)).textSelection(.enabled)
             }
         }
     }
@@ -104,27 +116,6 @@ public struct MarkdownText: View {
             RoundedRectangle(cornerRadius: Self.codeCornerRadius)
                 .fill(.quaternary.opacity(Self.codeBackgroundOpacity)),
         )
-    }
-
-    /// Prose renders headings as bold lines (the inline parser keeps
-    /// `#` literal), `---` rules as dividers, pipe tables as grids
-    /// and everything else as inline markdown.
-    private func prose(_ text: String) -> some View {
-        ForEach(Array(Self.proseBlocks(text).enumerated()), id: \.offset) { _, block in
-            switch block {
-            case let .heading(title):
-                Text(title).fontWeight(.semibold).textSelection(.enabled)
-
-            case .rule:
-                Divider()
-
-            case let .table(header, rows):
-                table(header: header, rows: rows)
-
-            case let .text(line):
-                Text(Self.inline(line)).textSelection(.enabled)
-            }
-        }
     }
 
     /// Wide tables scroll within the pane instead of demanding
@@ -151,34 +142,5 @@ public struct MarkdownText: View {
                 }
             }
         }
-    }
-
-    /// The text split on ``` fences after stripping the HTML wrapper
-    /// tags review bots emit; each fence's language tag drives the
-    /// block's highlighting.
-    private func segments(of text: String) -> [Segment] {
-        var results = [Segment]()
-        var current = [Substring]()
-        var inCode = false
-        var language: SyntaxLanguage?
-        for line in Self.strippingHTML(text).split(separator: "\n", omittingEmptySubsequences: false) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("```") {
-                let joined = current.joined(separator: "\n")
-                if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    results.append(Segment(text: joined, isCode: inCode, language: language))
-                }
-                current = []
-                language = inCode ? nil : Self.syntaxLanguage(for: String(trimmed.dropFirst("```".count)))
-                inCode.toggle()
-            } else {
-                current.append(line)
-            }
-        }
-        let joined = current.joined(separator: "\n")
-        if joined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            results.append(Segment(text: joined, isCode: inCode, language: language))
-        }
-        return results
     }
 }

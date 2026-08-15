@@ -2,6 +2,11 @@ import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
 
+// RefreshButton and hoverHelp come from here and the build fails
+// without it; the analyzer misreads same-package view extensions.
+// swiftlint:disable:next unused_import
+import TerminalUI
+
 /// The repository's pull requests: a paginated title list clicking
 /// through to each pull request's conversation and actions. The
 /// view renders and binds; PullRequestsModel owns the behaviour.
@@ -41,7 +46,13 @@ public struct PullRequestsView: View {
     /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
-            PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
+            HStack {
+                PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
+                Spacer()
+                RefreshButton { await model.reload(keepingSelection: true) }
+                    .hoverHelp("Fetch the pull requests again")
+            }
+            .padding(.trailing, Self.headerPadding)
             Divider()
             if let selected = model.selected {
                 conversation(for: selected)
@@ -78,6 +89,8 @@ public struct PullRequestsView: View {
     let items: [WorktreeItem]
 
     // MARK: Private
+
+    private static let headerPadding: CGFloat = 8
 
     /// The menu bar's action signals.
     @AppStorage("pushRequest")
