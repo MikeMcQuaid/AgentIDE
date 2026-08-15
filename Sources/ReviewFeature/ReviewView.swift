@@ -105,6 +105,10 @@ public struct ReviewView: View {
             .background(.thinMaterial, in: Capsule())
             displayToggles
             Spacer()
+            Text(model.files.count == 1 ? "1 file" : String(model.files.count) + " files")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .hoverHelp("How many files the diff touches")
             DiffStatText(
                 additions: model.files.map(\.additions).reduce(0, +),
                 deletions: model.files.map(\.deletions).reduce(0, +),

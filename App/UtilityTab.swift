@@ -10,8 +10,8 @@ enum UtilityTab: String, CaseIterable {
     case review
     case pullRequests
     case editor
-    case browser
     case shell
+    case browser
     case errors
     // swiftlint:enable explicit_enum_raw_value
 

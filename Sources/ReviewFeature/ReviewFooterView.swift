@@ -60,7 +60,9 @@ struct ReviewFooterView: View {
                     .onChanged { value in
                         let base = messageDragBase ?? messageHeight
                         messageDragBase = base
-                        let dragged = base - value.translation.height
+                        // Whole points: fractional heights make the
+                        // text jiggle as it re-rasterises mid-drag.
+                        let dragged = (base - value.translation.height).rounded()
                         messageHeight = min(
                             max(dragged, Self.messageHeightRange.lowerBound),
                             Self.messageHeightRange.upperBound,

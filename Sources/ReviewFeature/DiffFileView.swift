@@ -71,8 +71,8 @@ struct DiffFileView: View {
             HStack {
                 FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
                 Text(file.path).font(.headline.monospaced())
-                DiffStatText(additions: file.additions, deletions: file.deletions)
                 Spacer()
+                DiffStatText(additions: file.additions, deletions: file.deletions)
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .accessibilityLabel("Edit file")

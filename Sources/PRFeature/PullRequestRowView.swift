@@ -150,8 +150,9 @@ struct PullRequestRowView: View {
         if summary.state == "OPEN" {
             if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
                 BusyButton(
-                    hasMergeQueue ? "Queue" : "Merge",
+                    "",
                     busy: hasMergeQueue ? "Queueing" : "Merging",
+                    systemImage: "arrow.triangle.merge",
                     action: onMerge,
                 )
                 .hoverHelp(
@@ -160,8 +161,13 @@ struct PullRequestRowView: View {
                         : "Checks passed and the branch is mergeable: merge now",
                 )
             } else {
-                BusyButton("Automerge", busy: "Enabling automerge", action: onAutomerge)
-                    .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
+                BusyButton(
+                    "",
+                    busy: "Enabling automerge",
+                    systemImage: "clock.badge.checkmark",
+                    action: onAutomerge,
+                )
+                .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
             }
         }
     }

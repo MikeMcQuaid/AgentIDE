@@ -59,8 +59,11 @@ extension RootView {
             }
             Spacer(minLength: 0)
             if utilityTab == .shell, hasRunningShell(at: item.worktree.path) {
-                Button("Close shell") {
+                Button {
                     closeShell(at: item.worktree.path)
+                } label: {
+                    Image(systemName: "xmark")
+                        .accessibilityLabel("Close shell")
                 }
                 .buttonStyle(.glass)
                 .controlSize(.small)
