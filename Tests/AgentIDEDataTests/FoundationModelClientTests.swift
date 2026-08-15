@@ -29,6 +29,28 @@ struct FoundationModelClientTests {
     }
 
     @Test
+    func `commit digests carry every subject and bodies while they fit`() {
+        let commits = [
+            "First change\n\nWhy the first change happened.",
+            "Second change",
+            "Third change\n\nA very long explanation of the third change's why.",
+        ]
+        let full = FoundationModelClient.commitDigest(commits, limit: 1_000)
+        #expect(full.contains("Subjects:\nFirst change\nSecond change\nThird change"))
+        #expect(full.contains("Why the first change happened."))
+        #expect(full.contains("A very long explanation"))
+        // Body-less commits add nothing to the details section.
+        #expect(full.contains("Second change\n\n") == false)
+
+        // A tight budget keeps every subject and drops later bodies
+        // rather than truncating the subject list.
+        let tight = FoundationModelClient.commitDigest(commits, limit: 120)
+        #expect(tight.contains("Subjects:\nFirst change\nSecond change\nThird change"))
+        #expect(tight.contains("Why the first change happened."))
+        #expect(tight.contains("A very long explanation") == false)
+    }
+
+    @Test
     func `model answers normalise into safe branch names`() {
         #expect(FoundationModelClient.branchName(fromModelAnswer: "Fix Login Crash") == "fix_login_crash")
         #expect(FoundationModelClient.branchName(fromModelAnswer: "`fix_login`.\n") == "fix_login")

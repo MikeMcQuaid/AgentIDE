@@ -48,14 +48,18 @@ public struct FoundationModelClient: Sendable {
     /// commit messages, nil when the model cannot help.
     public func pullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
         let instructions = """
-        Draft a pull request description from the git commit messages given. \
-        Answer with the title on the first line: imperative, sentence case, under \
-        51 characters, no trailing full stop. Leave the second line empty, then \
-        a body summarising why the changes were made as a dash list with lines \
+        Draft a pull request description from the git commits given: every \
+        subject is listed first, then each commit's full message while space \
+        allows. Synthesise from all of it rather than copying: never repeat \
+        commit lines verbatim and never write one dash per commit. Answer with \
+        the title on the first line: one imperative, sentence case summary of \
+        the whole branch, under 51 characters, no trailing full stop. Leave \
+        the second line empty, then summarise what changed and why across the \
+        whole branch as a dash list, grouping related work, with every line \
         under 73 characters. Answer with the title and body alone.
         """
-        let input = commits.joined(separator: "\n\n").prefix(Self.commitsLimit)
-        guard let raw = await respond(instructions: instructions, to: String(input)) else {
+        let input = Self.commitDigest(commits, limit: Self.commitsLimit)
+        guard let raw = await respond(instructions: instructions, to: input) else {
             return nil
         }
 
@@ -72,7 +76,7 @@ public struct FoundationModelClient: Sendable {
         checkbox only when the commits clearly justify it. Answer with the \
         completed template alone.
         """
-        let input = "Commits:\n\n" + String(commits.joined(separator: "\n\n").prefix(Self.commitsLimit))
+        let input = Self.commitDigest(commits, limit: Self.commitsLimit)
             + "\n\nTemplate:\n\n" + String(template.prefix(Self.commitsLimit))
         guard let raw = await respond(instructions: instructions, to: input) else {
             return nil
@@ -83,6 +87,28 @@ public struct FoundationModelClient: Sendable {
     }
 
     // MARK: Internal
+
+    /// Lays the branch's commits out for the model: every subject
+    /// first, so a tight context budget never hides later commits
+    /// entirely, then each commit's whole message while the budget
+    /// allows, so the why in bodies informs the draft too.
+    static func commitDigest(_ commits: [String], limit: Int) -> String {
+        let subjects = commits.map { commit in
+            commit.split(separator: "\n").first.map(String.init) ?? ""
+        }
+        let head = "Subjects:\n" + subjects.joined(separator: "\n")
+        var details = ""
+        for (index, commit) in commits.enumerated()
+            where commit.contains("\n") {
+            let block = "\n\nCommit " + String(index + 1) + ":\n" + commit
+            guard head.count + details.count + block.count <= limit else {
+                break
+            }
+
+            details += block
+        }
+        return details.isEmpty ? head : head + "\n\nDetails:" + details
+    }
 
     /// Splits a model answer into title and body, nil when nothing
     /// usable came back; models sometimes wrap answers in quotes or
