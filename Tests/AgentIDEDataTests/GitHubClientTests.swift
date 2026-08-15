@@ -5,6 +5,19 @@ import Testing
 /// Exercises the pure parsing and prompt composition around `gh`.
 struct GitHubClientTests {
     @Test
+    func `merge flags follow the repository's allowed methods`() {
+        // A merge commit wins whenever it is allowed.
+        let all = #"{"mergeCommitAllowed":true,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: all) == "--merge")
+        let noMergeCommit = #"{"mergeCommitAllowed":false,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: noMergeCommit) == "--rebase")
+        let squashOnly = #"{"mergeCommitAllowed":false,"rebaseMergeAllowed":false,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: squashOnly) == "--squash")
+        // An unreadable answer defaults to the merge commit.
+        #expect(GitHubClient.mergeFlag(fromJSON: "") == "--merge")
+    }
+
+    @Test
     func `summaries carry failing check links and click through sensibly`() throws {
         let json = """
         [{"number": 7, "title": "Fix", "url": "https://github.com/o/r/pull/7",

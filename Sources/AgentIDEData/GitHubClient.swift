@@ -154,12 +154,29 @@ public struct GitHubClient: Sendable {
 
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
-        try await gh(["pr", "merge", String(number), "--auto", "--squash"], in: repositoryPath)
+        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
+        try await gh(["pr", "merge", String(number), "--auto", flag], in: repositoryPath)
     }
 
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
-        try await gh(["pr", "merge", String(number), "--squash"], in: repositoryPath)
+        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
+        try await gh(["pr", "merge", String(number), flag], in: repositoryPath)
+    }
+
+    /// The method flag `gh pr merge` needs when not interactive
+    /// (it refuses to run with none), from the repository's allowed
+    /// methods; hardcoding one broke on repositories disallowing it. Settings rarely change, so
+    /// gh's HTTP cache answers repeats.
+    public func mergeMethodFlag(repositoryPath: String) async -> String {
+        let result = try? await gh(
+            [
+                "repo", "view", "--cache", "1h",
+                "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed",
+            ],
+            in: repositoryPath,
+        )
+        return Self.mergeFlag(fromJSON: result?.standardOutput ?? "")
     }
 
     // MARK: Internal
@@ -172,6 +189,21 @@ public struct GitHubClient: Sendable {
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
+
+    /// A merge commit preferred, then rebase, then squash; an
+    /// unreadable answer defaults to the merge commit, the one
+    /// method nearly every repository here allows. Plain substring
+    /// checks: gh's compact JSON needs no decoder here and Bools in
+    /// a Decodable would have to be optional.
+    static func mergeFlag(fromJSON json: String) -> String {
+        if json.contains("\"mergeCommitAllowed\":false") == false {
+            "--merge"
+        } else if json.contains("\"rebaseMergeAllowed\":true") {
+            "--rebase"
+        } else {
+            "--squash"
+        }
+    }
 
     static func listArguments(scope: ListScope, limit: Int = Self.listLimit) -> [String] {
         let fields = scope == .open ? Self.coreFields : Self.coreFields + "," + Self.statusFields
