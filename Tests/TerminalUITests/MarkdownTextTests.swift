@@ -22,6 +22,29 @@ struct MarkdownTextTests {
     }
 
     @Test
+    func `details tables parse as tables after tag stripping`() {
+        let body = """
+        <details>
+        <summary>Show a summary per file</summary>
+
+        | File | Description |
+        | ---- | ----------- |
+        | `Sources/a.swift` | Does a thing |
+
+        </details>
+        """
+        let stripped = MarkdownText.strippingHTML(body)
+        let blocks = MarkdownText.proseBlocks(stripped)
+        let isTable = blocks.contains { block in
+            if case let .table(header, rows) = block {
+                return header == ["File", "Description"] && rows.count == 1
+            }
+            return false
+        }
+        #expect(isTable)
+    }
+
+    @Test
     func `consecutive prose lines merge into one selectable block`() {
         let markdown = """
         First line

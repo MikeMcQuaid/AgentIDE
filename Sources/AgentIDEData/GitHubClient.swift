@@ -158,6 +158,12 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "merge", String(number), "--auto", flag], in: repositoryPath)
     }
 
+    /// Cancels automerge, which on merge-queue repositories also
+    /// leaves the queue.
+    public func disableAutomerge(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "merge", String(number), "--disable-auto"], in: repositoryPath)
+    }
+
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)

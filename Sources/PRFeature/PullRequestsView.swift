@@ -126,20 +126,6 @@ public struct PullRequestsView: View {
             repositoryPath: model.repository.path,
             store: model.store,
             onBack: { model.selected = nil },
-            onAutomerge: {
-                await model.act { try await model.github.enableAutomerge(
-                    repositoryPath: model.repository.path,
-                    number: summary.number,
-                )
-                }
-            },
-            onMerge: {
-                await model.act { try await model.github.merge(
-                    repositoryPath: model.repository.path,
-                    number: summary.number,
-                )
-                }
-            },
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onCopyChecks: { await model.copyFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },

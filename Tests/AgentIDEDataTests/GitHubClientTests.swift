@@ -5,6 +5,28 @@ import Testing
 /// Exercises the pure parsing and prompt composition around `gh`.
 struct GitHubClientTests {
     @Test
+    func `rest comments group into anchored threads by reply chains`() {
+        let json = """
+        [
+          {"id": 1, "path": "a.swift", "line": 4, "body": "First",
+           "user": {"login": "copilot"}},
+          {"id": 2, "path": "a.swift", "line": 4, "in_reply_to_id": 1,
+           "body": "Reply", "user": {"login": "mike"}},
+          {"id": 3, "path": "b.swift", "original_line": 9,
+           "body": "Other", "user": {"login": "copilot"}}
+        ]
+        """
+        let threads = GitHubClient.threads(fromRESTJSON: json)
+        #expect(threads.count == 2)
+        #expect(threads.first?.path == "a.swift")
+        #expect(threads.first?.line == 4)
+        #expect(threads.first?.comments.map(\.author) == ["copilot", "mike"])
+        #expect(threads.last?.line == 9)
+        // REST threads carry no resolvable id.
+        #expect(threads.map(\.id) == ["", ""])
+    }
+
+    @Test
     func `run ids come deduplicated from failing check links`() {
         let lines = [
             "build\tfail\t1m2s\thttps://github.com/o/r/actions/runs/123/job/456",

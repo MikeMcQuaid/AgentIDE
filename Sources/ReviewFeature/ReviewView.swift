@@ -25,7 +25,15 @@ public struct ReviewView: View {
                 return []
             }
 
-            return await github.reviewThreads(repositoryPath: worktree.repositoryPath, number: number)
+            do {
+                return try await github.conversationThreads(
+                    repositoryPath: worktree.repositoryPath,
+                    number: number,
+                )
+            } catch {
+                ErrorLog.shared.report(error.localizedDescription)
+                return []
+            }
         }
         let setThreadResolved: (String, Bool) async throws -> Void = { threadID, resolved in
             try await github.setThreadResolved(

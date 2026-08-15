@@ -23,17 +23,20 @@ public struct ReviewThreadRow: View {
                     .foregroundStyle(thread.isResolved ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
                     .accessibilityLabel(thread.isResolved ? "Resolved conversation" : "Open conversation")
                 Spacer()
-                BusyButton(
-                    thread.isResolved ? "Unresolve" : "Resolve",
-                    busy: "Saving",
-                    action: onToggleResolved,
-                )
-                .controlSize(.small)
-                .hoverHelp(
-                    thread.isResolved
-                        ? "Reopen this conversation on GitHub"
-                        : "Mark this conversation resolved on GitHub",
-                )
+                // A REST-fallback thread carries no id to resolve.
+                if thread.id.isEmpty == false {
+                    BusyButton(
+                        thread.isResolved ? "Unresolve" : "Resolve",
+                        busy: "Saving",
+                        action: onToggleResolved,
+                    )
+                    .controlSize(.small)
+                    .hoverHelp(
+                        thread.isResolved
+                            ? "Reopen this conversation on GitHub"
+                            : "Mark this conversation resolved on GitHub",
+                    )
+                }
             }
             // The anchor and every comment in one markdown block:
             // separate views cannot share a selection, so one block

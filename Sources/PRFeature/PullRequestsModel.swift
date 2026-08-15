@@ -40,7 +40,12 @@ final class PullRequestsModel {
             await github.hasMergeQueue(repositoryPath: repository.path)
         }
         fetchThreads = { number in
-            await github.reviewThreads(repositoryPath: repository.path, number: number)
+            do {
+                return try await github.conversationThreads(repositoryPath: repository.path, number: number)
+            } catch {
+                ErrorLog.shared.report(error.localizedDescription)
+                return []
+            }
         }
         fetchFailingChecks = { number in
             await github.failingChecks(repositoryPath: repository.path, number: number)

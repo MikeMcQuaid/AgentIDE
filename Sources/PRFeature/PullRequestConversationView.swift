@@ -17,8 +17,6 @@ struct PullRequestConversationPane: View {
     let repositoryPath: String
     let store: MetadataStore
     let onBack: () -> Void
-    let onAutomerge: @MainActor () async -> Void
-    let onMerge: @MainActor () async -> Void
     let onCopyComments: @MainActor () async -> Void
     let onCopyChecks: @MainActor () async -> Void
     let onResolvedChanged: @MainActor () async -> Void
@@ -35,8 +33,6 @@ struct PullRequestConversationPane: View {
                     stackDepth: stackDepth,
                     hasMergeQueue: hasMergeQueue,
                     showsActions: true,
-                    onAutomerge: onAutomerge,
-                    onMerge: onMerge,
                     onCopyComments: onCopyComments,
                     onCopyChecks: onCopyChecks,
                 )
@@ -106,32 +102,7 @@ struct PullRequestConversationView: View {
             let cached = store.load().conversationCache[cacheKey]
             description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
-            do {
-                let freshBody: String
-                let freshEvents: [ReviewComment]
-                if let seededBody {
-                    freshBody = seededBody
-                    freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
-                } else {
-                    (freshBody, freshEvents) = try await github.conversation(
-                        repositoryPath: repositoryPath,
-                        number: number,
-                    )
-                }
-                guard Task.isCancelled == false else {
-                    return
-                }
-
-                description = freshBody
-                events = freshEvents
-                threads = await github.reviewThreads(repositoryPath: repositoryPath, number: number)
-                var metadata = store.load()
-                metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
-                store.save(metadata)
-            } catch {
-                // The painted cache stays; the failure only logs.
-                ErrorLog.shared.report(error.localizedDescription)
-            }
+            await refresh()
         }
     }
 
@@ -198,6 +169,40 @@ struct PullRequestConversationView: View {
         }
     }
 
+    /// Fetches the conversation and its threads, painting over the
+    /// cache and re-caching; failures log and the painted cache
+    /// stays.
+    private func refresh() async {
+        do {
+            let freshBody: String
+            let freshEvents: [ReviewComment]
+            if let seededBody {
+                freshBody = seededBody
+                freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
+            } else {
+                (freshBody, freshEvents) = try await github.conversation(
+                    repositoryPath: repositoryPath,
+                    number: number,
+                )
+            }
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            description = freshBody
+            events = freshEvents
+            threads = try await github.conversationThreads(
+                repositoryPath: repositoryPath,
+                number: number,
+            )
+            var metadata = store.load()
+            metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
+            store.save(metadata)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
     /// Flips one conversation's resolve state on GitHub, then
     /// refreshes the listing and the header above.
     private func toggleResolved(_ thread: ReviewThread) async {
@@ -207,7 +212,10 @@ struct PullRequestConversationView: View {
                 threadID: thread.id,
                 resolved: thread.isResolved == false,
             )
-            threads = await github.reviewThreads(repositoryPath: repositoryPath, number: number)
+            threads = try await github.conversationThreads(
+                repositoryPath: repositoryPath,
+                number: number,
+            )
             await onResolvedChanged()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

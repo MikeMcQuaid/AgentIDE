@@ -15,8 +15,6 @@ struct PullRequestRowView: View {
     let stackDepth: Int
     let hasMergeQueue: Bool
     let showsActions: Bool
-    let onAutomerge: @MainActor () async -> Void
-    let onMerge: @MainActor () async -> Void
     let onCopyComments: @MainActor () async -> Void
     let onCopyChecks: @MainActor () async -> Void
 
@@ -43,10 +41,6 @@ struct PullRequestRowView: View {
     }
 
     // MARK: Private
-
-    private var isMergeable: Bool {
-        summary.checks == "SUCCESS" && summary.mergeable == "MERGEABLE"
-    }
 
     private var caption: String {
         let author = ChecksStyle.authorDisplayName(summary.author ?? "")
@@ -156,33 +150,5 @@ struct PullRequestRowView: View {
         }
         .buttonStyle(.glass)
         .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the system browser")
-        // Merge stays visible but greyed until the pull request is
-        // green and mergeable; automerge covers the meantime.
-        if summary.state == "OPEN" {
-            BusyButton(
-                "",
-                busy: hasMergeQueue ? "Queueing" : "Merging",
-                systemImage: "arrow.triangle.merge",
-                accessibilityLabel: hasMergeQueue ? "Queue" : "Merge",
-                disabled: isMergeable == false,
-                action: onMerge,
-            )
-            .hoverHelp(
-                isMergeable
-                    ? "Checks passed and the branch is mergeable: "
-                    + (hasMergeQueue ? "queue now" : "merge now")
-                    : "Dimmed until checks pass and the branch is mergeable",
-            )
-            if isMergeable == false {
-                BusyButton(
-                    "",
-                    busy: "Enabling automerge",
-                    systemImage: "clock.badge.checkmark",
-                    accessibilityLabel: "Automerge",
-                    action: onAutomerge,
-                )
-                .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
-            }
-        }
     }
 }

@@ -190,6 +190,61 @@ extension PullRequestsModel {
         }
     }
 
+    /// The one merge action's label, naming exactly what a click
+    /// does right now; nil when no open conversation is selected.
+    var mergeActionTitle: String? {
+        guard let selected, selected.state == "OPEN" else {
+            return nil
+        }
+
+        if selected.hasAutomerge {
+            return hasMergeQueue ? "Dequeue" : "Cancel automerge"
+        }
+        if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
+            return hasMergeQueue ? "Queue" : "Merge"
+        }
+        return "Automerge"
+    }
+
+    /// The present-tense form while the merge action runs.
+    var mergeActionBusyTitle: String {
+        switch mergeActionTitle {
+        case "Dequeue":
+            "Dequeuing"
+
+        case "Cancel automerge":
+            "Cancelling"
+
+        case "Queue":
+            "Queueing"
+
+        case "Merge":
+            "Merging"
+
+        default:
+            "Enabling automerge"
+        }
+    }
+
+    /// Merges, queues, enables automerge or cancels either, per the
+    /// label; the header refreshes to show the new state.
+    func performMergeAction() async {
+        guard let selected, selected.state == "OPEN" else {
+            return
+        }
+
+        await act {
+            if selected.hasAutomerge {
+                try await github.disableAutomerge(repositoryPath: repository.path, number: selected.number)
+            } else if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
+                try await github.merge(repositoryPath: repository.path, number: selected.number)
+            } else {
+                try await github.enableAutomerge(repositoryPath: repository.path, number: selected.number)
+            }
+        }
+        await refreshSummary(selected.number)
+    }
+
     func act(_ work: () async throws -> Void) async {
         do {
             try await work()

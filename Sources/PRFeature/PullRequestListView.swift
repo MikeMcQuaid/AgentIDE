@@ -87,8 +87,6 @@ struct PullRequestListView: View {
             stackDepth: stackDepth(summary),
             hasMergeQueue: false,
             showsActions: false,
-            onAutomerge: noAction,
-            onMerge: noAction,
             onCopyComments: noAction,
             onCopyChecks: noAction,
         )
@@ -120,9 +118,6 @@ struct PullRequestFooterView: View {
                 .hoverHelp("Fetch the pull requests again")
             rebaseButton
             pushButton
-            if model.needsCreateForm {
-                openButton
-            }
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
@@ -131,6 +126,18 @@ struct PullRequestFooterView: View {
                     .textSelection(.enabled)
             }
             Spacer()
+            if model.needsCreateForm {
+                openButton
+            }
+            if let mergeTitle = model.mergeActionTitle {
+                BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
+                    await model.performMergeAction()
+                }
+                .hoverHelp(
+                    "The one merge action for the open conversation: its label names exactly "
+                        + "what a click does now, and a second click cancels automerge or queueing",
+                )
+            }
         }
         .padding(Self.padding)
         .background(.bar)

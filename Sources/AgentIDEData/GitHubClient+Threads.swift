@@ -5,6 +5,15 @@ import Foundation
 /// request's threads, toggling their resolve state and listing its
 /// failing checks. Split from `GitHubClient.swift` for file length.
 public extension GitHubClient {
+    /// The REST inline comments, gh's HTTP cache answering repeats.
+    private func restThreads(repositoryPath: String, number: Int) async -> [ReviewThread] {
+        let result = try? await gh(
+            ["api", "repos/{owner}/{repo}/pulls/\(number)/comments?per_page=100", "--cache", "60s"],
+            in: repositoryPath,
+        )
+        return Self.threads(fromRESTJSON: result?.standardOutput ?? "")
+    }
+
     /// Enough log to diagnose without flooding the clipboard.
     private static var runLogLimit: Int {
         // swiftlint:disable:next no_magic_numbers
@@ -13,9 +22,31 @@ public extension GitHubClient {
 
     // MARK: Public
 
+    /// The pull request's review conversation threads with a REST
+    /// fallback: a failing GraphQL query must never make the
+    /// conversation silently vanish. REST threads carry the anchor
+    /// and comments but no resolvable id; throws only when GraphQL
+    /// failed and REST answered nothing either.
+    func conversationThreads(repositoryPath: String, number: Int) async throws -> [ReviewThread] {
+        do {
+            let threads = try await reviewThreads(repositoryPath: repositoryPath, number: number)
+            if threads.isEmpty == false {
+                return threads
+            }
+        } catch {
+            let rest = await restThreads(repositoryPath: repositoryPath, number: number)
+            guard rest.isEmpty == false else {
+                throw error
+            }
+
+            return rest
+        }
+        return await restThreads(repositoryPath: repositoryPath, number: number)
+    }
+
     /// The pull request's review conversation threads, each
     /// resolvable through its GraphQL id.
-    func reviewThreads(repositoryPath: String, number: Int) async -> [ReviewThread] {
+    func reviewThreads(repositoryPath: String, number: Int) async throws -> [ReviewThread] {
         guard let fullName = await fullName(repositoryPath: repositoryPath) else {
             return []
         }
@@ -29,7 +60,7 @@ public extension GitHubClient {
             + "{ repository(owner: $owner, name: $name) { pullRequest(number: $number) "
             + "{ reviewThreads(first: 100) { nodes { id isResolved path line "
             + "comments(first: 50) { nodes { author { login } body } } } } } } }"
-        let result = try? await gh(
+        let result = try await gh(
             [
                 "api", "graphql",
                 "-f", "query=" + query,
@@ -39,7 +70,7 @@ public extension GitHubClient {
             ],
             in: repositoryPath,
         )
-        return Self.threads(fromJSON: result?.standardOutput ?? "")
+        return Self.threads(fromJSON: result.standardOutput)
     }
 
     /// Marks one review thread resolved or unresolved.
@@ -89,6 +120,35 @@ public extension GitHubClient {
 
     // MARK: Internal
 
+    /// Groups the REST inline comments into anchored threads; the
+    /// REST rows carry no resolvable thread id, so these render
+    /// without a resolve button.
+    internal static func threads(fromRESTJSON json: String) -> [ReviewThread] {
+        let decoded = try? JSONDecoder().decode([RESTInlineComment].self, from: Data(json.utf8))
+        var roots = [Int]()
+        var commentsByRoot = [Int: [ReviewThreadComment]]()
+        var anchorsByRoot = [Int: (path: String, line: Int?)]()
+        for row in decoded ?? [] {
+            let root = row.inReplyToID ?? row.id
+            if commentsByRoot[root] == nil {
+                roots.append(root)
+                anchorsByRoot[root] = (row.path ?? "", row.line ?? row.originalLine)
+            }
+            commentsByRoot[root, default: []].append(
+                ReviewThreadComment(author: row.user?.login ?? "unknown", body: row.body ?? ""),
+            )
+        }
+        return roots.map { root in
+            ReviewThread(
+                id: "",
+                path: anchorsByRoot[root]?.path ?? "",
+                line: anchorsByRoot[root]?.line,
+                isResolved: false,
+                comments: commentsByRoot[root] ?? [],
+            )
+        }
+    }
+
     /// Distinct Actions run ids from the failing check lines'
     /// links, in order; external checks without an Actions link
     /// contribute no logs.
@@ -123,6 +183,41 @@ public extension GitHubClient {
             )
         }
     }
+}
+
+// MARK: - RESTInlineComment
+
+/// One REST inline review comment; replies name their root through
+/// `in_reply_to_id`.
+private struct RESTInlineComment: Decodable {
+    // MARK: Internal
+
+    struct Author: Decodable {
+        let login: String
+    }
+
+    let id: Int
+    let path: String?
+    let line: Int?
+    let originalLine: Int?
+    let inReplyToID: Int?
+    let body: String?
+    let user: Author?
+
+    // MARK: Private
+
+    // swiftlint:disable explicit_enum_raw_value
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case path
+        case line
+        case originalLine = "original_line"
+        case inReplyToID = "in_reply_to_id"
+        case body
+        case user
+    }
+
+    // swiftlint:enable explicit_enum_raw_value
 }
 
 // MARK: - ThreadsResponse
