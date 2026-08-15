@@ -6,6 +6,29 @@ import Testing
 /// machine.
 struct FoundationModelClientTests {
     @Test
+    func `description answers capitalise and collapse doubled dashes`() {
+        // Models echo commit bodies that are already dash lists and
+        // prefix another dash, and sometimes lowercase the title.
+        let doubled = """
+        attach tmux control mode clients
+
+        - - Fix protocol decoding at the byte level
+        -  - Keep hidden panes from swallowing input
+        - Show failures inline
+          continuation lines and --flags stay untouched
+        """
+        let parsed = FoundationModelClient.pullRequestDescription(fromModelAnswer: doubled)
+        #expect(parsed?.title == "Attach tmux control mode clients")
+        #expect(parsed?.body == """
+        - Fix protocol decoding at the byte level
+        - Keep hidden panes from swallowing input
+        - Show failures inline
+          continuation lines and --flags stay untouched
+        """)
+        #expect(FoundationModelClient.pullRequestDescription(fromModelAnswer: "  \n\n") == nil)
+    }
+
+    @Test
     func `model answers normalise into safe branch names`() {
         #expect(FoundationModelClient.branchName(fromModelAnswer: "Fix Login Crash") == "fix_login_crash")
         #expect(FoundationModelClient.branchName(fromModelAnswer: "`fix_login`.\n") == "fix_login")

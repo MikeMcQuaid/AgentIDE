@@ -101,9 +101,35 @@ public struct FoundationModelClient: Sendable {
         }
 
         let body = lines.dropFirst()
+            .map(Self.collapsedListMarker)
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (title, body)
+        return (Self.capitalisedFirst(title), body)
+    }
+
+    /// Uppercases only the leading character; models sometimes echo
+    /// a lowercase commit subject as the title.
+    static func capitalisedFirst(_ text: String) -> String {
+        guard let first = text.first else {
+            return text
+        }
+
+        return first.uppercased() + text.dropFirst()
+    }
+
+    /// Collapses repeated list markers like `- - item` to one dash;
+    /// models echo commit bodies that are already dash lists and
+    /// prefix another dash. Lines not starting with `- ` (including
+    /// `--flags` and indented continuations) pass through untouched.
+    static func collapsedListMarker(_ line: Substring) -> String {
+        let indent = line.prefix { $0 == " " }
+        var rest = line.dropFirst(indent.count)
+        var isListItem = false
+        while rest.first == "-", rest.dropFirst().first == " " {
+            isListItem = true
+            rest = rest.dropFirst().drop { $0 == " " }
+        }
+        return isListItem ? indent + "- " + rest : String(line)
     }
 
     /// Normalises a model answer into a safe branch name, nil when
