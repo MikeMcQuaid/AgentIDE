@@ -219,9 +219,9 @@ public extension SessionService {
         try await tmux.newSession(
             name: sessionName,
             directory: worktree.path,
-            command: runner(for: past.agent).resumeCommand(resumeID: past.id, extraArguments: ""),
+            command: runner(for: past.agent).resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
-        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.id)
+        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
         return sessionName
     }
 
@@ -241,9 +241,9 @@ public extension SessionService {
         try await tmux.newSession(
             name: sessionName,
             directory: worktreePath,
-            command: agentRunner.resumeCommand(resumeID: past.id, extraArguments: ""),
+            command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
-        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.id)
+        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
         return sessionName
     }
 
@@ -326,7 +326,7 @@ public extension SessionService {
         }
 
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.id + ".jsonl")
+        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.resumeID + ".jsonl")
     }
 
     private func remember(sessionName: String, worktreePath: String, resumeID: String) {

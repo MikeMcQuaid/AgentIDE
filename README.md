@@ -81,7 +81,9 @@ before shipping.
 - Pushes branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
-  template below your title and body (so shipping needs no retyping)
+  template below your title and body, defaulting both from a single
+  commit or drafting them from many with the on-device model (so
+  shipping needs no retyping)
 - Copies unresolved review comments or failing CI steps straight into a
   prompt, resolves every conversation, resolves merge conflicts and
   enables automerge or merges, each with one click (so the last mile is

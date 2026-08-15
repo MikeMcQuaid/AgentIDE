@@ -465,7 +465,10 @@ Sendable` and `nonisolated(unsafe)` are banned.
    creation form instead of the list: title, body and the repository's
    `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Opening
    pushes when needed, then runs `gh pr create` with the template
-   appended below the body after an empty line.
+   appended below the body after an empty line. Blank fields fill from
+   the branch's commits: a one-commit branch defaults to that commit's
+   own message, and a generate button summarises several through the
+   on-device model; typed text is never overwritten.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
@@ -524,10 +527,15 @@ code fences highlighted and tool steps showing the actual command run.
 An inactive session resumes either in place or into a fresh worktree and
 branch; in the latter case the transcript is first copied into the new
 working directory's transcript directory, because agents look
-conversations up by cwd. Only agents whose transcripts are scoped per
-working directory participate; Codex's flat session directory cannot be
-attributed to one worktree, so its history surfaces through its own
-resume flow instead.
+conversations up by cwd. Agents whose transcripts are scoped per
+working directory list that way directly; Codex keeps one flat date
+tree instead, so an index attributes each rollout by the working
+directory embedded in its metadata line. A rollout's identity is its
+file name stem, never the embedded session id, which subagent
+rollouts share with their parent thread and which would break list
+selection; the embedded id is kept separately as what resume passes
+to Codex, and subagent rollouts stay hidden as a turn's internal
+machinery rather than conversations.
 
 Every repository also lists its main checkout as a permanent entry, so a
 repository with no worktrees still shows. Selecting it opens the

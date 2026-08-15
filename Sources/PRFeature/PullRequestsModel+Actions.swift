@@ -57,6 +57,54 @@ extension PullRequestsModel {
         ErrorLog.shared.note("Resolved \(resolved) of \(unresolved.count) conversations on #\(summary.number).")
     }
 
+    /// Fills the form's blank fields from the branch's commits: the
+    /// one commit's own message when there is only one, otherwise a
+    /// draft from the on-device model; false opens the errors
+    /// surface. Typed text is never overwritten.
+    func generateDescription() async -> Bool {
+        guard let worktree = actionWorktree else {
+            return false
+        }
+
+        let commits = await fetchCommitMessages(worktree)
+        guard commits.isEmpty == false else {
+            ErrorLog.shared.report("No commits beyond origin/HEAD to describe.")
+            return false
+        }
+
+        if commits.count == 1, let only = commits.first {
+            apply(description: Self.description(splitFromMessage: only))
+            return true
+        }
+        guard let drafted = await generateDescription(commits) else {
+            ErrorLog.shared.report(
+                "The on-device model is unavailable; is Apple Intelligence enabled?",
+            )
+            return false
+        }
+
+        apply(description: drafted)
+        return true
+    }
+
+    /// Fills only the blank fields, so typed text always wins.
+    func apply(description: (title: String, body: String)) {
+        if prTitle.isEmpty {
+            prTitle = description.title
+        }
+        if prBody.isEmpty {
+            prBody = description.body
+        }
+    }
+
+    /// Splits one commit message into the form's title and body.
+    static func description(splitFromMessage message: String) -> (title: String, body: String) {
+        let lines = message.split(separator: "\n", omittingEmptySubsequences: false)
+        let title = lines.first.map(String.init) ?? ""
+        let body = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return (title, body)
+    }
+
     /// Pushes when needed, then opens the pull request from the
     /// form's title and body, with the template appended below the
     /// body after an empty line; false opens the errors surface.

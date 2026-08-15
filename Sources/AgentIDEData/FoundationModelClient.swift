@@ -1,3 +1,4 @@
+import Foundation
 import FoundationModels
 
 /// The on-device Apple foundation model, kept behind one client so
@@ -43,7 +44,47 @@ public struct FoundationModelClient: Sendable {
         return Self.branchName(fromModelAnswer: raw)
     }
 
+    /// A pull request title and body drafted from the branch's
+    /// commit messages, nil when the model cannot help.
+    public func pullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
+        let instructions = """
+        Draft a pull request description from the git commit messages given. \
+        Answer with the title on the first line: imperative, sentence case, under \
+        51 characters, no trailing full stop. Leave the second line empty, then \
+        a body summarising why the changes were made as a dash list with lines \
+        under 73 characters. Answer with the title and body alone.
+        """
+        let input = commits.joined(separator: "\n\n").prefix(Self.commitsLimit)
+        guard let raw = await respond(instructions: instructions, to: String(input)) else {
+            return nil
+        }
+
+        return Self.pullRequestDescription(fromModelAnswer: raw)
+    }
+
     // MARK: Internal
+
+    /// Splits a model answer into title and body, nil when nothing
+    /// usable came back; models sometimes wrap answers in quotes or
+    /// markdown heading markers despite instructions.
+    static func pullRequestDescription(fromModelAnswer raw: String) -> (title: String, body: String)? {
+        let lines = raw.trimmingCharacters(in: .whitespacesAndNewlines).split(
+            separator: "\n",
+            omittingEmptySubsequences: false,
+        )
+        let title = String(lines.first ?? "")
+            .trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "#*\"'`"))
+            .trimmingCharacters(in: .whitespaces)
+        guard title.isEmpty == false else {
+            return nil
+        }
+
+        let body = lines.dropFirst()
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (title, body)
+    }
 
     /// Normalises a model answer into a safe branch name, nil when
     /// nothing usable remains; models sometimes answer with quotes,
@@ -74,6 +115,9 @@ public struct FoundationModelClient: Sendable {
 
     /// Enough prompt for a name without paying for a whole spec.
     private static let promptLimit = 500
+
+    /// Enough commit text for a description within the context cap.
+    private static let commitsLimit = 8_000
 
     /// Git and the file system are happier with short branch names.
     private static let nameLimit = 40

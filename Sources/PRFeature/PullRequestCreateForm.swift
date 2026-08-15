@@ -29,15 +29,7 @@ struct PullRequestCreateForm: View {
                 .frame(minHeight: Self.templateMinimumHeight)
                 .border(.separator)
                 .hoverHelp("The repository's pull request template, editable; appended below the body")
-            HStack {
-                Spacer()
-                BusyButton("Open PR", busy: "Opening", disabled: model.prTitle.isEmpty) {
-                    if await model.createPullRequest() == false {
-                        utilityTab = UtilityTabTarget.errors
-                    }
-                }
-                .hoverHelp("Push if needed, then open the pull request with this title and body")
-            }
+            actionsRow
         }
         .padding(Self.spacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -52,4 +44,31 @@ struct PullRequestCreateForm: View {
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage("utilityTab")
     private var utilityTab = ""
+
+    /// Generate on the left, Open PR on the right.
+    private var actionsRow: some View {
+        HStack {
+            BusyButton(
+                "",
+                busy: "Generating",
+                systemImage: "sparkles",
+                disabled: model.prTitle.isEmpty == false && model.prBody.isEmpty == false,
+            ) {
+                if await model.generateDescription() == false {
+                    utilityTab = UtilityTabTarget.errors
+                }
+            }
+            .hoverHelp(
+                "Fill the blank fields from the branch's commits: one commit's own message "
+                    + "directly, several summarised by the on-device model",
+            )
+            Spacer()
+            BusyButton("Open PR", busy: "Opening", disabled: model.prTitle.isEmpty) {
+                if await model.createPullRequest() == false {
+                    utilityTab = UtilityTabTarget.errors
+                }
+            }
+            .hoverHelp("Push if needed, then open the pull request with this title and body")
+        }
+    }
 }

@@ -32,12 +32,18 @@ struct CodexTranscriptIndex {
         indexedEntries(root: root)
             .filter { $0.value.workingDirectory == workingDirectory }
             .map { path, entry in
+                // The file stem is the identity: subagent rollouts
+                // share the parent's session id, and duplicated ids
+                // break list selection and deduplication.
                 TranscriptSession(
-                    id: entry.sessionID,
+                    id: String(
+                        (path.split(separator: "/").last ?? "").dropLast(".jsonl".count),
+                    ),
                     path: path,
                     agent: .codexCLI,
                     modifiedAt: entry.modifiedAt,
                     title: entry.title,
+                    resumeID: entry.sessionID,
                 )
             }
             .sorted { $0.modifiedAt > $1.modifiedAt }
@@ -59,6 +65,8 @@ struct CodexTranscriptIndex {
     }
 
     private struct Payload: Decodable {
+        // MARK: Internal
+
         // Absent from the JSON when a payload carries no content.
         // swiftlint:disable:next discouraged_optional_collection
         let content: [Content]?
@@ -68,6 +76,26 @@ struct CodexTranscriptIndex {
         let id: String?
         let sessionID: String?
         let message: String?
+        let threadSource: String?
+
+        // MARK: Private
+
+        // The decoder stays default-keyed for speed; only the snake
+        // case fields need mapping and SwiftFormat strips raw values
+        // that equal the case name.
+        // swiftlint:disable explicit_enum_raw_value nesting
+        private enum CodingKeys: String, CodingKey {
+            case content
+            case type
+            case role
+            case cwd
+            case id
+            case sessionID = "session_id"
+            case message
+            case threadSource = "thread_source"
+        }
+
+        // swiftlint:enable explicit_enum_raw_value nesting
     }
 
     private struct Content: Decodable {
@@ -122,6 +150,13 @@ struct CodexTranscriptIndex {
             }
 
             if line.type == "session_meta", let payload = line.payload {
+                // Subagent rollouts are a turn's internal fan-out,
+                // not conversations of their own; the parent thread
+                // already tells the story.
+                guard payload.threadSource != "subagent" else {
+                    return nil
+                }
+
                 workingDirectory = payload.cwd
                 sessionID = payload.id ?? payload.sessionID
             }

@@ -27,4 +27,16 @@ public extension SessionService {
     func currentBranch(worktreePath: String) async -> String? {
         await git.currentBranch(worktreePath: worktreePath)
     }
+
+    /// The branch's full commit messages beyond origin/HEAD, oldest
+    /// first, for drafting pull request descriptions.
+    func commitMessages(worktree: Worktree) async -> [String] {
+        await git.commitMessages(worktreePath: worktree.path, baseRef: "origin/HEAD")
+    }
+
+    /// A pull request title and body drafted by the on-device model,
+    /// nil when it is unavailable or unhelpful.
+    func draftPullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
+        await summariser.pullRequestDescription(fromCommits: commits)
+    }
 }

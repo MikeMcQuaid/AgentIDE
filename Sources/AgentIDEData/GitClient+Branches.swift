@@ -65,6 +65,20 @@ public extension GitClient {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// The branch's full commit messages beyond the base ref,
+    /// oldest first, for drafting pull request descriptions.
+    func commitMessages(worktreePath: String, baseRef: String) async -> [String] {
+        let result = try? await git(
+            ["log", "--reverse", "--format=%B%x1e", baseRef + "..HEAD"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return (result?.standardOutput ?? "")
+            .split(separator: "\u{1e}")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+    }
+
     /// The branch's commits beyond the base ref, newest first, one
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {

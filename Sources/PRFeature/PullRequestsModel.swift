@@ -13,6 +13,9 @@ import TerminalUI
 final class PullRequestsModel {
     // MARK: Lifecycle
 
+    // The init is one flat seam-wiring list; splitting it would
+    // scatter the wiring without shortening anything real.
+    // swiftlint:disable function_body_length
     /// Creates the model for one repository and optional branch.
     init(
         repository: Repository,
@@ -56,6 +59,12 @@ final class PullRequestsModel {
         fetchTemplate = { path in
             GitHubClient.pullRequestTemplate(in: path)
         }
+        fetchCommitMessages = { worktree in
+            await service.commitMessages(worktree: worktree)
+        }
+        generateDescription = { commits in
+            await service.draftPullRequestDescription(fromCommits: commits)
+        }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
@@ -73,6 +82,8 @@ final class PullRequestsModel {
         }
         currentBranch = branch
     }
+
+    // swiftlint:enable function_body_length
 
     deinit {
         // Tasks are owned by the view's lifetime.
@@ -136,6 +147,8 @@ final class PullRequestsModel {
     var fetchFailingChecks: (Int) async -> String
     var performCreate: (Worktree, String, String) async throws -> String
     var fetchTemplate: (String) -> String?
+    var fetchCommitMessages: (Worktree) async -> [String]
+    var generateDescription: ([String]) async -> (title: String, body: String)?
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> Void
@@ -256,6 +269,14 @@ final class PullRequestsModel {
             rebaseNeed = await fetchRebaseNeed(worktree)
             if prTemplate.isEmpty {
                 prTemplate = fetchTemplate(worktree.path) ?? ""
+            }
+            // A one-commit branch is its own description: the form
+            // defaults to that commit, no model involved.
+            if prTitle.isEmpty, prBody.isEmpty {
+                let commits = await fetchCommitMessages(worktree)
+                if commits.count == 1, let only = commits.first {
+                    apply(description: Self.description(splitFromMessage: only))
+                }
             }
             if let live = await fetchCurrentBranch(worktree.path) {
                 currentBranch = live

@@ -89,6 +89,7 @@ struct TranscriptReaderTests {
         "content":[{"type":"input_text","text":"# AGENTS.md instructions for /w\\ninjected"}]}}
         {"type":"response_item","payload":{"type":"message","role":"user",\
         "content":[{"type":"input_text","text":"fix it"}]}}
+        {"type":"event_msg","payload":{"type":"user_message","message":"fix it"}}
         {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec",\
         "input":"pwd && ls\\nsecond line"}}
         {"type":"response_item","payload":{"type":"custom_tool_call_output","output":"files"}}
