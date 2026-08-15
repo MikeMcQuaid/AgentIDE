@@ -142,7 +142,7 @@ public struct PullRequestsView: View {
             },
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onCopyChecks: { await model.copyFailingChecks(summary) },
-            onResolveAll: { await model.resolveAllThreads(summary) },
+            onResolvedChanged: { await model.refreshSummary(summary.number) },
         )
     }
 }

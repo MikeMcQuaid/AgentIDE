@@ -9,13 +9,15 @@ public struct BusyButton: View {
 
     /// Creates the button; `busy` is the label shown while the
     /// action runs, such as Fixing for Fix. With `systemImage` the
-    /// icon leads and an empty title is fine. `prominent` marks a
-    /// surface's one primary action.
+    /// icon leads and an empty title is fine, but VoiceOver then
+    /// needs `accessibilityLabel`. `prominent` marks a surface's one
+    /// primary action.
     @preconcurrency
     public init(
         _ title: String,
         busy: String,
         systemImage: String? = nil,
+        accessibilityLabel: String? = nil,
         prominent: Bool = false,
         disabled: Bool = false,
         action: @escaping @MainActor () async -> Void,
@@ -23,6 +25,7 @@ public struct BusyButton: View {
         self.title = title
         busyTitle = busy
         self.systemImage = systemImage
+        spokenLabel = accessibilityLabel
         isProminent = prominent
         isDisabled = disabled
         self.action = action
@@ -47,9 +50,17 @@ public struct BusyButton: View {
     private let title: String
     private let busyTitle: String
     private let systemImage: String?
+    private let spokenLabel: String?
     private let isProminent: Bool
     private let isDisabled: Bool
     private let action: @MainActor () async -> Void
+
+    /// What VoiceOver reads: the visible label when there is one,
+    /// the explicit spoken label for icon-only buttons.
+    private var spokenTitle: String {
+        let visible = isBusy ? busyTitle : title
+        return visible.isEmpty ? spokenLabel ?? "" : visible
+    }
 
     private var core: some View {
         Button {
@@ -58,7 +69,9 @@ public struct BusyButton: View {
             }
 
             isBusy = true
-            Task {
+            // Explicitly main-actor: the continuation after the
+            // await must not write view state from elsewhere.
+            Task { @MainActor in
                 await action()
                 isBusy = false
             }
@@ -66,13 +79,14 @@ public struct BusyButton: View {
             HStack(spacing: Self.iconSpacing) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .accessibilityLabel(isBusy ? busyTitle : title)
+                        .accessibilityLabel(spokenTitle)
                 }
                 if isBusy || title.isEmpty == false {
                     Text(isBusy ? busyTitle : title)
                 }
             }
         }
+        .accessibilityLabel(spokenTitle)
         .disabled(isDisabled || isBusy)
     }
 }

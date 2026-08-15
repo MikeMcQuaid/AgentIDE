@@ -220,15 +220,12 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `resolving conversations refreshes the header and row`() async {
+    func `refreshing a summary updates the header and row`() async {
         let model = makeModel()
         model.fetchList = { _, _ in [summary(3, head: "feature")] }
         await model.reload()
         #expect(model.selected?.number == 3)
 
-        model.fetchThreads = { _ in
-            [ReviewThread(id: "t1", path: "a.swift", line: nil, isResolved: false, comments: [])]
-        }
         model.fetchSummary = { _ in
             PullRequestSummary(
                 number: 3,
@@ -242,7 +239,7 @@ struct PullRequestsModelTests {
                 state: "OPEN",
             )
         }
-        await model.resolveAllThreads(summary(3, head: "feature"))
+        await model.refreshSummary(3)
         #expect(model.selected?.title == "Refreshed")
         #expect(model.summaries.first?.reviewDecision == "APPROVED")
     }

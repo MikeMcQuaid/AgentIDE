@@ -61,18 +61,6 @@ extension PullRequestsModel {
         return depth
     }
 
-    /// Marks every unresolved conversation resolved through the API.
-    func resolveAllThreads(_ summary: PullRequestSummary) async {
-        let unresolved = await fetchThreads(summary.number).filter { $0.isResolved == false }
-        var resolved = 0
-        for thread in unresolved where await (try? setThreadResolved(thread.id, true)) != nil {
-            resolved += 1
-        }
-        ErrorLog.shared.note("Resolved \(resolved) of \(unresolved.count) conversations on #\(summary.number).")
-        // The header and row show the change without a manual reload.
-        await refreshSummary(summary.number)
-    }
-
     /// Fills the form's blank fields from the branch's commits: the
     /// one commit's own message when there is only one, otherwise a
     /// draft from the on-device model; false opens the errors

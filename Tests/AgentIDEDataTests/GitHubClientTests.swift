@@ -5,6 +5,18 @@ import Testing
 /// Exercises the pure parsing and prompt composition around `gh`.
 struct GitHubClientTests {
     @Test
+    func `run ids come deduplicated from failing check links`() {
+        let lines = [
+            "build\tfail\t1m2s\thttps://github.com/o/r/actions/runs/123/job/456",
+            "test\tfail\t2m\thttps://github.com/o/r/actions/runs/123/job/789",
+            "style\tfail\t3s\thttps://github.com/o/r/actions/runs/987/job/1",
+            "external-ci\tfail\t5s\thttps://ci.example.invalid/build/9",
+        ]
+        #expect(GitHubClient.runIDs(fromCheckLines: lines) == ["123", "987"])
+        #expect(GitHubClient.runIDs(fromCheckLines: []).isEmpty)
+    }
+
+    @Test
     func `merge flags follow the repository's allowed methods`() {
         // A merge commit wins whenever it is allowed.
         let all = #"{"mergeCommitAllowed":true,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#

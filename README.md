@@ -84,10 +84,10 @@ before shipping.
   template below your title and body, defaulting both from a single
   commit or drafting them from many with the on-device model (so
   shipping needs no retyping)
-- Copies unresolved review comments or failing CI steps straight into a
-  prompt, resolves every conversation, resolves merge conflicts and
-  enables automerge or merges, each with one click (so the last mile is
-  not the slowest)
+- Copies unresolved review comments, or failing CI steps with their
+  actual log output, straight into a prompt, resolves conversations one
+  by one, resolves merge conflicts and enables automerge or merges,
+  each with one click (so the last mile is not the slowest)
 
 ### Tidy up
 

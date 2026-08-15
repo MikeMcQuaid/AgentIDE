@@ -21,7 +21,7 @@ struct PullRequestConversationPane: View {
     let onMerge: @MainActor () async -> Void
     let onCopyComments: @MainActor () async -> Void
     let onCopyChecks: @MainActor () async -> Void
-    let onResolveAll: @MainActor () async -> Void
+    let onResolvedChanged: @MainActor () async -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,7 +39,6 @@ struct PullRequestConversationPane: View {
                     onMerge: onMerge,
                     onCopyComments: onCopyComments,
                     onCopyChecks: onCopyChecks,
-                    onResolveAll: onResolveAll,
                 )
             }
             .padding(.horizontal, Self.padding)
@@ -50,6 +49,7 @@ struct PullRequestConversationPane: View {
                 number: summary.number,
                 seededBody: summary.body,
                 store: store,
+                onResolvedChanged: onResolvedChanged,
             )
         }
     }
@@ -76,6 +76,10 @@ struct PullRequestConversationView: View {
     let seededBody: String?
 
     let store: MetadataStore
+
+    /// Runs after a resolve toggle, so the header and listed row
+    /// refresh immediately.
+    let onResolvedChanged: @MainActor () async -> Void
 
     var body: some View {
         ScrollView {
@@ -120,6 +124,7 @@ struct PullRequestConversationView: View {
 
                 description = freshBody
                 events = freshEvents
+                threads = await github.reviewThreads(repositoryPath: repositoryPath, number: number)
                 var metadata = store.load()
                 metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
                 store.save(metadata)
@@ -141,6 +146,7 @@ struct PullRequestConversationView: View {
 
     @State private var description = ""
     @State private var events: [ReviewComment] = []
+    @State private var threads: [ReviewThread] = []
     @State private var isLoading = true
 
     private var cacheKey: String {
@@ -154,6 +160,13 @@ struct PullRequestConversationView: View {
         }
         ForEach(events) { event in
             eventRow(event)
+        }
+        if threads.isEmpty == false {
+            Divider()
+            Text("Conversations").font(.headline)
+            ForEach(threads) { thread in
+                ReviewThreadRow(thread: thread) { await toggleResolved(thread) }
+            }
         }
         if events.isEmpty, description.isEmpty {
             Text("No description or feedback yet.")
@@ -182,6 +195,22 @@ struct PullRequestConversationView: View {
         .padding(.leading, Self.railInset)
         .overlay(alignment: .leading) {
             Rectangle().fill(.separator).frame(width: Self.railWidth)
+        }
+    }
+
+    /// Flips one conversation's resolve state on GitHub, then
+    /// refreshes the listing and the header above.
+    private func toggleResolved(_ thread: ReviewThread) async {
+        do {
+            try await github.setThreadResolved(
+                repositoryPath: repositoryPath,
+                threadID: thread.id,
+                resolved: thread.isResolved == false,
+            )
+            threads = await github.reviewThreads(repositoryPath: repositoryPath, number: number)
+            await onResolvedChanged()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 }

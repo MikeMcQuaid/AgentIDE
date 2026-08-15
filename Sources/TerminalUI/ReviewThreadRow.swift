@@ -1,26 +1,27 @@
 import AgentIDEDomain
 import SwiftUI
-import TerminalUI
 
-/// One pull request conversation shown inline in the review, under
-/// the file it anchors to, with its resolve state toggleable.
-struct ReviewThreadRow: View {
-    // MARK: Internal
+/// One pull request conversation with its resolve state toggleable;
+/// shown inline in the review under the file it anchors to and on
+/// the pull request conversation page.
+public struct ReviewThreadRow: View {
+    // MARK: Lifecycle
 
-    let thread: ReviewThread
-    let onToggleResolved: @MainActor () async -> Void
+    /// Creates the row.
+    @preconcurrency
+    public init(thread: ReviewThread, onToggleResolved: @escaping @MainActor () async -> Void) {
+        self.thread = thread
+        self.onToggleResolved = onToggleResolved
+    }
 
-    var body: some View {
+    // MARK: Public
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack(spacing: Self.spacing) {
                 Image(systemName: thread.isResolved ? "checkmark.bubble" : "bubble.left")
                     .foregroundStyle(thread.isResolved ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
                     .accessibilityLabel(thread.isResolved ? "Resolved conversation" : "Open conversation")
-                if let line = thread.line {
-                    Text("line " + String(line))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
                 Spacer()
                 BusyButton(
                     thread.isResolved ? "Unresolve" : "Resolve",
@@ -34,14 +35,10 @@ struct ReviewThreadRow: View {
                         : "Mark this conversation resolved on GitHub",
                 )
             }
-            ForEach(Array(thread.comments.enumerated()), id: \.offset) { _, comment in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(comment.author)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    MarkdownText(comment.body)
-                }
-            }
+            // The anchor and every comment in one markdown block:
+            // separate views cannot share a selection, so one block
+            // lets a drag span the file, line and all the comments.
+            MarkdownText(markdown)
         }
         .padding(Self.padding)
         .background(.quaternary.opacity(Self.backgroundOpacity), in: RoundedRectangle(cornerRadius: Self.corner))
@@ -55,4 +52,16 @@ struct ReviewThreadRow: View {
     private static let corner: CGFloat = 6
     private static let backgroundOpacity = 0.5
     private static let resolvedOpacity = 0.6
+
+    private let thread: ReviewThread
+    private let onToggleResolved: @MainActor () async -> Void
+
+    /// The `path:line` anchor, then each comment under its author.
+    private var markdown: String {
+        let anchor = "`" + thread.path + (thread.line.map { ":" + String($0) } ?? "") + "`"
+        let comments = thread.comments
+            .map { comment in "**" + comment.author + "**\n\n" + comment.body }
+            .joined(separator: "\n\n")
+        return anchor + "\n\n" + comments
+    }
 }

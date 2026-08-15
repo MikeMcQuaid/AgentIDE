@@ -43,6 +43,10 @@ docs_style() {
 }
 
 swift_style() {
+  # Version drift between a stale local install and CI's fresh brew
+  # bundle changes what the linters accept; naming versions in every
+  # run makes a local/CI disagreement diagnosable from the logs.
+  echo "swiftformat $(swiftformat --version), swiftlint $(swiftlint --version)"
   [[ -z "$(git ls-files "*.swift")" ]] && return 0
   if [[ -n "${STYLE_FIX}" ]]; then
     swiftformat .

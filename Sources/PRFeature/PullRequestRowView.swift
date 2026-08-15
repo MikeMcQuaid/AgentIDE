@@ -19,7 +19,6 @@ struct PullRequestRowView: View {
     let onMerge: @MainActor () async -> Void
     let onCopyComments: @MainActor () async -> Void
     let onCopyChecks: @MainActor () async -> Void
-    let onResolveAll: @MainActor () async -> Void
 
     var body: some View {
         HStack {
@@ -38,13 +37,16 @@ struct PullRequestRowView: View {
         .contextMenu {
             Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
             Button("Copy Failing Checks") { Task { await onCopyChecks() } }
-            Button("Resolve All Conversations") { Task { await onResolveAll() } }
             Divider()
             Button("Open in Browser") { LinkOpener.open(summary.url) }
         }
     }
 
     // MARK: Private
+
+    private var isMergeable: Bool {
+        summary.checks == "SUCCESS" && summary.mergeable == "MERGEABLE"
+    }
 
     private var caption: String {
         let author = ChecksStyle.authorDisplayName(summary.author ?? "")
@@ -130,12 +132,22 @@ struct PullRequestRowView: View {
     }
 
     @ViewBuilder private var actions: some View {
-        BusyButton("", busy: "", systemImage: "text.bubble", action: onCopyComments)
-            .hoverHelp("Copy every unresolved review conversation to the clipboard")
-        BusyButton("", busy: "", systemImage: "exclamationmark.triangle", action: onCopyChecks)
-            .hoverHelp("Copy the failing checks to the clipboard")
-        BusyButton("", busy: "", systemImage: "checkmark.bubble", action: onResolveAll)
-            .hoverHelp("Mark every unresolved conversation resolved")
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "text.bubble",
+            accessibilityLabel: "Copy unresolved comments",
+            action: onCopyComments,
+        )
+        .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "exclamationmark.triangle",
+            accessibilityLabel: "Copy failing checks",
+            action: onCopyChecks,
+        )
+        .hoverHelp("Copy the failing checks to the clipboard")
         Button {
             LinkOpener.open(summary.url)
         } label: {
@@ -144,27 +156,29 @@ struct PullRequestRowView: View {
         }
         .buttonStyle(.glass)
         .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the system browser")
-        // One merge action, matching what the pull request can do
-        // right now: merge when green and mergeable, automerge
-        // while checks are still running.
+        // Merge stays visible but greyed until the pull request is
+        // green and mergeable; automerge covers the meantime.
         if summary.state == "OPEN" {
-            if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
-                BusyButton(
-                    "",
-                    busy: hasMergeQueue ? "Queueing" : "Merging",
-                    systemImage: "arrow.triangle.merge",
-                    action: onMerge,
-                )
-                .hoverHelp(
-                    hasMergeQueue
-                        ? "Checks passed and the branch is mergeable: queue now"
-                        : "Checks passed and the branch is mergeable: merge now",
-                )
-            } else {
+            BusyButton(
+                "",
+                busy: hasMergeQueue ? "Queueing" : "Merging",
+                systemImage: "arrow.triangle.merge",
+                accessibilityLabel: hasMergeQueue ? "Queue" : "Merge",
+                disabled: isMergeable == false,
+                action: onMerge,
+            )
+            .hoverHelp(
+                isMergeable
+                    ? "Checks passed and the branch is mergeable: "
+                    + (hasMergeQueue ? "queue now" : "merge now")
+                    : "Dimmed until checks pass and the branch is mergeable",
+            )
+            if isMergeable == false {
                 BusyButton(
                     "",
                     busy: "Enabling automerge",
                     systemImage: "clock.badge.checkmark",
+                    accessibilityLabel: "Automerge",
                     action: onAutomerge,
                 )
                 .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")

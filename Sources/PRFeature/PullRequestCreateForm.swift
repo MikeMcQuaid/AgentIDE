@@ -65,7 +65,9 @@ struct PullRequestCreateForm: View {
             }
 
             isGenerating = true
-            Task {
+            // Explicitly main-actor: the continuation after the
+            // await must not write view state from elsewhere.
+            Task { @MainActor in
                 if await model.generateDescription() == false {
                     utilityTab = UtilityTabTarget.errors
                 }

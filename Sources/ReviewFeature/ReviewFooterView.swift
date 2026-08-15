@@ -23,6 +23,26 @@ struct ReviewFooterView: View {
         }
     }
 
+    /// The first line of a commit message.
+    static func subject(of message: String) -> String {
+        message.split(separator: "\n", omittingEmptySubsequences: false)
+            .first
+            .map(String.init) ?? ""
+    }
+
+    /// Everything after the subject and its blank separator line.
+    static func messageBody(of message: String) -> String {
+        message.split(separator: "\n", omittingEmptySubsequences: false)
+            .dropFirst()
+            .drop(while: \.isEmpty)
+            .joined(separator: "\n")
+    }
+
+    /// Rejoins the fields with the blank separator git expects.
+    static func message(subject: String, body: String) -> String {
+        body.isEmpty ? subject : subject + "\n\n" + body
+    }
+
     // MARK: Private
 
     private static let footerPadding: CGFloat = 8
@@ -32,6 +52,7 @@ struct ReviewFooterView: View {
     private static let bodyLimit = 72
 
     private static let messageHeightRange: ClosedRange<Double> = 60 ... 400
+    private static let fieldInset: CGFloat = 5
     private static let resizeHandleHeight: CGFloat = 7
 
     /// The footer's height, dragged by the handle above it and
@@ -52,6 +73,20 @@ struct ReviewFooterView: View {
             whole += Self.styledCommitLine(line)
         }
         return whole
+    }
+
+    private var subjectBinding: Binding<String> {
+        Binding(
+            get: { Self.subject(of: model.commitMessage) },
+            set: { model.commitMessage = Self.message(subject: $0, body: Self.messageBody(of: model.commitMessage)) },
+        )
+    }
+
+    private var bodyBinding: Binding<String> {
+        Binding(
+            get: { Self.messageBody(of: model.commitMessage) },
+            set: { model.commitMessage = Self.message(subject: Self.subject(of: model.commitMessage), body: $0) },
+        )
     }
 
     /// A slim grab area over the divider: dragging resizes the
@@ -118,23 +153,8 @@ struct ReviewFooterView: View {
             .padding(Self.footerPadding)
         } else {
             VStack(alignment: .leading, spacing: Self.footerPadding) {
-                TextEditor(text: $model.commitMessage)
-                    .font(.body.monospaced())
-                    .frame(height: messageHeight)
-                    .border(.separator)
-                    .overlay(alignment: .topLeading) { messageGuides }
-                    .hoverHelp(
-                        "The full commit message; the guides mark 50 columns for the subject and 72 for the body",
-                    )
+                messageEditor
                 HStack {
-                    BusyButton("Commit", busy: "Committing", disabled: canCommit == false, action: onCommit)
-                        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
-                    BusyButton(
-                        "Amend",
-                        busy: "Amending",
-                        disabled: model.showsUncommitted || model.messageEdited == false,
-                    ) { await model.saveCommitMessage() }
-                        .hoverHelp("Rewrite the last commit's message; dimmed until the text differs from it")
                     messageLengths
                     if let status = model.status {
                         // Selectable so failures can be copied out.
@@ -145,34 +165,39 @@ struct ReviewFooterView: View {
                             .textSelection(.enabled)
                     }
                     Spacer()
+                    BusyButton("Commit", busy: "Committing", disabled: canCommit == false, action: onCommit)
+                        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
+                    BusyButton(
+                        "Amend",
+                        busy: "Amending",
+                        disabled: model.showsUncommitted || model.messageEdited == false,
+                    ) { await model.saveCommitMessage() }
+                        .hoverHelp("Rewrite the last commit's message; dimmed until the text differs from it")
                 }
             }
             .padding(Self.footerPadding)
         }
     }
 
-    /// Vertical rules at git's conventional 50 and 72 column widths,
-    /// positioned by the editor's monospaced character width.
-    private var messageGuides: some View {
-        let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        // Text measurement is an AppKit API; NSString is its input.
-        // swiftlint:disable:next legacy_objc_type
-        let sample = "M" as NSString
-        let size = sample.size(withAttributes: [.font: font])
-        let inset: CGFloat = 5
-        // The 50-column subject rule marks only the first line; the
-        // 72-column body rule runs the rest of the editor.
-        return ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(.separator)
-                .frame(width: 1, height: size.height)
-                .offset(x: inset + size.width * CGFloat(Self.subjectLimit), y: inset)
-            Rectangle()
-                .fill(.separator)
-                .frame(width: 1)
-                .offset(x: inset + size.width * CGFloat(Self.bodyLimit))
+    /// The subject over the body, split by a rule; the blank
+    /// separator line git expects stays out of sight and reappears
+    /// on save.
+    private var messageEditor: some View {
+        VStack(spacing: 0) {
+            TextField("Subject", text: subjectBinding)
+                .textFieldStyle(.plain)
+                .font(.body.monospaced())
+                .padding(Self.fieldInset)
+                .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
+                .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
+            Divider()
+            TextEditor(text: bodyBinding)
+                .font(.body.monospaced())
+                .frame(height: messageHeight)
+                .overlay(alignment: .topLeading) { columnRule(at: Self.bodyLimit, inset: Self.fieldInset) }
+                .hoverHelp("The commit body; git convention wraps lines at 72 characters")
         }
-        .allowsHitTesting(false)
+        .border(.separator)
     }
 
     /// Live counts against the conventional widths, red when over.
@@ -188,6 +213,21 @@ struct ReviewFooterView: View {
         }
         .font(.caption.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
+    }
+
+    /// A vertical rule at a conventional column, positioned by the
+    /// monospaced character width.
+    private func columnRule(at limit: Int, inset: CGFloat) -> some View {
+        let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        // Text measurement is an AppKit API; NSString is its input.
+        // swiftlint:disable:next legacy_objc_type
+        let sample = "M" as NSString
+        let width = sample.size(withAttributes: [.font: font]).width
+        return Rectangle()
+            .fill(.separator)
+            .frame(width: 1)
+            .offset(x: inset + width * CGFloat(limit))
+            .allowsHitTesting(false)
     }
 
     private static func styledCommitLine(_ line: String) -> AttributedString {

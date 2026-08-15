@@ -478,12 +478,13 @@ Sendable` and `nonisolated(unsafe)` are banned.
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
 7. Each pull request row offers the last mile as small actions: copy the
-   unresolved review conversations or the failing checks to the clipboard
-   for pasting into an agent, resolve every conversation through the
-   GraphQL API and open the page in the Browser tab; resolving refreshes
-   the pull request's header and row immediately. The review tab shows
-   the same conversations inline under the files they anchor to, each
-   resolvable in place.
+   unresolved review conversations, or the failing checks with their
+   failed steps' actual log output, to the clipboard for pasting into
+   an agent, and open the page in the Browser tab. Conversations
+   resolve individually through the GraphQL API, on the conversation
+   page and inline on the review tab under the files they anchor to,
+   each entry naming its file and line; resolving refreshes the pull
+   request's header and row immediately.
 8. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push

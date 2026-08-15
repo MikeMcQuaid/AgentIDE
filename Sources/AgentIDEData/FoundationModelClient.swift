@@ -98,8 +98,7 @@ public struct FoundationModelClient: Sendable {
         }
         let head = "Subjects:\n" + subjects.joined(separator: "\n")
         var details = ""
-        for (index, commit) in commits.enumerated()
-            where commit.contains("\n") {
+        for (index, commit) in commits.enumerated() where commit.contains("\n") {
             let block = "\n\nCommit " + String(index + 1) + ":\n" + commit
             guard head.count + details.count + block.count <= limit else {
                 break

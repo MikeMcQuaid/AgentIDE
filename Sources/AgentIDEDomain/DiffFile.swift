@@ -60,10 +60,15 @@ public struct DiffHunk: Hashable, Sendable {
 public struct DiffFile: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
 
-    /// Creates a file diff.
+    /// Creates a file diff; the diffstat counts are computed once
+    /// here rather than on every read, since the UI reads them per
+    /// row on large diffs.
     public init(path: String, hunks: [DiffHunk]) {
         self.path = path
         self.hunks = hunks
+        let lines = hunks.flatMap(\.lines)
+        additions = lines.count { $0.kind == .addition }
+        deletions = lines.count { $0.kind == .deletion }
     }
 
     // MARK: Public
@@ -74,18 +79,14 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     /// The file's hunks in order.
     public let hunks: [DiffHunk]
 
+    /// Added line count across the file's hunks, for diffstats.
+    public let additions: Int
+
+    /// Deleted line count across the file's hunks, for diffstats.
+    public let deletions: Int
+
     /// The stable identity, the file path.
     public var id: String {
         path
-    }
-
-    /// Added line count across the file's hunks, for diffstats.
-    public var additions: Int {
-        hunks.flatMap(\.lines).count { $0.kind == .addition }
-    }
-
-    /// Deleted line count across the file's hunks, for diffstats.
-    public var deletions: Int {
-        hunks.flatMap(\.lines).count { $0.kind == .deletion }
     }
 }

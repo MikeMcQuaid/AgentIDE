@@ -29,7 +29,6 @@ final class PullRequestsModel {
         self.branch = branch
         self.items = items
         self.github = github
-        self.service = service
         self.store = store
         fetchList = { scope, limit in
             try await github.pullRequests(repositoryPath: repository.path, scope: scope, limit: limit)
@@ -42,13 +41,6 @@ final class PullRequestsModel {
         }
         fetchThreads = { number in
             await github.reviewThreads(repositoryPath: repository.path, number: number)
-        }
-        setThreadResolved = { threadID, resolved in
-            try await github.setThreadResolved(
-                repositoryPath: repository.path,
-                threadID: threadID,
-                resolved: resolved,
-            )
         }
         fetchFailingChecks = { number in
             await github.failingChecks(repositoryPath: repository.path, number: number)
@@ -150,7 +142,6 @@ final class PullRequestsModel {
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
-    var setThreadResolved: (String, Bool) async throws -> Void
     var fetchFailingChecks: (Int) async -> String
     var performCreate: (Worktree, String, String) async throws -> String
     var fetchTemplate: (String) -> String?
@@ -162,8 +153,6 @@ final class PullRequestsModel {
     var performPush: (Worktree) async throws -> Void
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
-
-    let service: SessionService
 
     /// Whether the list pane shows the creation form instead: the
     /// worktree scope with no open pull request for the branch.

@@ -91,7 +91,6 @@ struct PullRequestListView: View {
             onMerge: noAction,
             onCopyComments: noAction,
             onCopyChecks: noAction,
-            onResolveAll: noAction,
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect(summary) }
@@ -168,6 +167,7 @@ struct PullRequestFooterView: View {
             rebaseCount,
             busy: "Rebasing",
             systemImage: "arrow.triangle.2.circlepath",
+            accessibilityLabel: model.rebaseTitle,
             disabled: model.canRebase == false,
         ) {
             if await model.rebaseSigned() == false {
@@ -182,6 +182,7 @@ struct PullRequestFooterView: View {
             pushCount,
             busy: "Pushing",
             systemImage: "arrow.up",
+            accessibilityLabel: "Push",
             disabled: model.canPush == false,
         ) {
             if await model.push() == false {
@@ -192,7 +193,14 @@ struct PullRequestFooterView: View {
     }
 
     private var openButton: some View {
-        BusyButton("Open PR", busy: "Opening", prominent: true, disabled: model.prTitle.isEmpty) {
+        BusyButton(
+            "Open PR",
+            busy: "Opening",
+            prominent: true,
+            // Trimmed like the validation, so a title of spaces
+            // dims the button rather than failing on click.
+            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty,
+        ) {
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
             }

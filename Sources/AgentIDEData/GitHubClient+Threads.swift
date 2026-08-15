@@ -5,6 +5,12 @@ import Foundation
 /// request's threads, toggling their resolve state and listing its
 /// failing checks. Split from `GitHubClient.swift` for file length.
 public extension GitHubClient {
+    /// Enough log to diagnose without flooding the clipboard.
+    private static var runLogLimit: Int {
+        // swiftlint:disable:next no_magic_numbers
+        20_000
+    }
+
     // MARK: Public
 
     /// The pull request's review conversation threads, each
@@ -47,7 +53,9 @@ public extension GitHubClient {
         )
     }
 
-    /// The pull request's failing checks, one line each; passing,
+    /// The pull request's failing checks, one line each, followed by
+    /// each failing Actions run's failed step output; the links
+    /// alone were useless for pasting into an agent. Passing,
     /// pending and skipped rows are noise for every caller.
     func failingChecks(repositoryPath: String, number: Int) async -> String {
         let checks = try? await gh(
@@ -55,16 +63,49 @@ public extension GitHubClient {
             in: repositoryPath,
             allowFailure: true,
         )
-        return (checks?.standardOutput ?? "")
+        let failing = (checks?.standardOutput ?? "")
             .split(separator: "\n")
             .filter { line in
                 let fields = line.split(separator: "\t")
                 return fields.count > 1 && fields[1].localizedCaseInsensitiveContains("fail")
             }
-            .joined(separator: "\n")
+            .map(String.init)
+        var sections = failing.joined(separator: "\n")
+        for runID in Self.runIDs(fromCheckLines: failing) {
+            let log = try? await gh(
+                ["run", "view", runID, "--log-failed"],
+                in: repositoryPath,
+                allowFailure: true,
+            )
+            let output = (log?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard output.isEmpty == false else {
+                continue
+            }
+
+            sections += "\n\nFailed steps of run " + runID + ":\n" + String(output.prefix(Self.runLogLimit))
+        }
+        return sections
     }
 
     // MARK: Internal
+
+    /// Distinct Actions run ids from the failing check lines'
+    /// links, in order; external checks without an Actions link
+    /// contribute no logs.
+    internal static func runIDs(fromCheckLines lines: [String]) -> [String] {
+        var ids = [String]()
+        for line in lines {
+            guard let range = line.range(of: "/actions/runs/") else {
+                continue
+            }
+
+            let id = String(line[range.upperBound...].prefix(while: \.isNumber))
+            if id.isEmpty == false, ids.contains(id) == false {
+                ids.append(id)
+            }
+        }
+        return ids
+    }
 
     /// Decodes the reviewThreads GraphQL answer.
     internal static func threads(fromJSON json: String) -> [ReviewThread] {
