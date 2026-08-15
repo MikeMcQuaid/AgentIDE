@@ -26,6 +26,7 @@ extension PullRequestsModelTests {
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _ in [] }
         model.generateDescription = { _ in nil }
+        model.fillTemplate = { _, _ in nil }
         model.fetchCurrentBranch = { _ in nil }
         model.fetchRebaseNeed = { _ in .nothing }
         model.performPush = { _ in

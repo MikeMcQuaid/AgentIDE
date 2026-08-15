@@ -198,6 +198,56 @@ struct PullRequestsModelTests {
     }
 
     @Test
+    func `generating fills blank fields and completes the template`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        model.fetchCommitMessages = { _ in ["First change\n\nWhy one.", "Second change"] }
+        model.generateDescription = { _ in ("Drafted title", "Drafted body") }
+        model.fillTemplate = { _, template in "filled: " + template }
+        model.prTemplate = "- [ ] Checked"
+        #expect(await model.generateDescription())
+        #expect(model.prTitle == "Drafted title")
+        #expect(model.prBody == "Drafted body")
+        #expect(model.prTemplate == "filled: - [ ] Checked")
+
+        // Without a repository template nothing is invented.
+        let bare = makeModel(items: [item(branch: "feature", ahead: 1)])
+        bare.fetchCommitMessages = { _ in ["Only change\n\nWhy."] }
+        bare.fillTemplate = { _, _ in "should never be asked" }
+        #expect(await bare.generateDescription())
+        #expect(bare.prTitle == "Only change")
+        #expect(bare.prBody == "Why.")
+        #expect(bare.prTemplate.isEmpty)
+    }
+
+    @Test
+    func `resolving conversations refreshes the header and row`() async {
+        let model = makeModel()
+        model.fetchList = { _, _ in [summary(3, head: "feature")] }
+        await model.reload()
+        #expect(model.selected?.number == 3)
+
+        model.fetchThreads = { _ in
+            [ReviewThread(id: "t1", path: "a.swift", line: nil, isResolved: false, comments: [])]
+        }
+        model.fetchSummary = { _ in
+            PullRequestSummary(
+                number: 3,
+                title: "Refreshed",
+                url: "",
+                headBranch: "feature",
+                mergeable: "MERGEABLE",
+                reviewDecision: "APPROVED",
+                checks: "SUCCESS",
+                baseBranch: "main",
+                state: "OPEN",
+            )
+        }
+        await model.resolveAllThreads(summary(3, head: "feature"))
+        #expect(model.selected?.title == "Refreshed")
+        #expect(model.summaries.first?.reviewDecision == "APPROVED")
+    }
+
+    @Test
     func `the checked-out branch drives listing and actions`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "switched" }

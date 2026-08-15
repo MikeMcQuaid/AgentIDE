@@ -39,4 +39,10 @@ public extension SessionService {
     func draftPullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
         await summariser.pullRequestDescription(fromCommits: commits)
     }
+
+    /// The pull request template completed from the commits by the
+    /// on-device model, nil when it is unavailable or unhelpful.
+    func fillPullRequestTemplate(fromCommits commits: [String], template: String) async -> String? {
+        await summariser.filledTemplate(fromCommits: commits, template: template)
+    }
 }

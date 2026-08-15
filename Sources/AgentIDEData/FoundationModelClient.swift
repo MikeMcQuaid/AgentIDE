@@ -62,6 +62,26 @@ public struct FoundationModelClient: Sendable {
         return Self.pullRequestDescription(fromModelAnswer: raw)
     }
 
+    /// The repository's pull request template completed from the
+    /// branch's commit messages, nil when the model cannot help.
+    public func filledTemplate(fromCommits commits: [String], template: String) async -> String? {
+        let instructions = """
+        Fill in the pull request template given after the commit messages. \
+        Keep the template's structure, headings and checkboxes, replacing \
+        placeholders and answering its sections from the commits; tick a \
+        checkbox only when the commits clearly justify it. Answer with the \
+        completed template alone.
+        """
+        let input = "Commits:\n\n" + String(commits.joined(separator: "\n\n").prefix(Self.commitsLimit))
+            + "\n\nTemplate:\n\n" + String(template.prefix(Self.commitsLimit))
+        guard let raw = await respond(instructions: instructions, to: input) else {
+            return nil
+        }
+
+        let filled = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filled.isEmpty ? nil : filled
+    }
+
     // MARK: Internal
 
     /// Splits a model answer into title and body, nil when nothing

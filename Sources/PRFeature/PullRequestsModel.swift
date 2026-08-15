@@ -65,6 +65,9 @@ final class PullRequestsModel {
         generateDescription = { commits in
             await service.draftPullRequestDescription(fromCommits: commits)
         }
+        fillTemplate = { commits, template in
+            await service.fillPullRequestTemplate(fromCommits: commits, template: template)
+        }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
@@ -137,6 +140,10 @@ final class PullRequestsModel {
     var prBody = ""
     var prTemplate = ""
 
+    /// Whether the repository has a pull request template; without
+    /// one the form shows no template field at all.
+    private(set) var hasTemplate = false
+
     /// Test seams: the live client and service by default, fakes in
     /// tests.
     var fetchList: (GitHubClient.ListScope, Int) async throws -> [PullRequestSummary]
@@ -149,6 +156,7 @@ final class PullRequestsModel {
     var fetchTemplate: (String) -> String?
     var fetchCommitMessages: (Worktree) async -> [String]
     var generateDescription: ([String]) async -> (title: String, body: String)?
+    var fillTemplate: ([String], String) async -> String?
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> Void
@@ -267,8 +275,10 @@ final class PullRequestsModel {
         if let worktree = branchItem?.worktree {
             isTipSigned = await checkTipSigned(worktree.path)
             rebaseNeed = await fetchRebaseNeed(worktree)
+            let template = fetchTemplate(worktree.path)
+            hasTemplate = template != nil
             if prTemplate.isEmpty {
-                prTemplate = fetchTemplate(worktree.path) ?? ""
+                prTemplate = template ?? ""
             }
             // A one-commit branch is its own description: the form
             // defaults to that commit, no model involved.
@@ -316,6 +326,22 @@ final class PullRequestsModel {
         }
     }
 
+    /// Refreshes one pull request's header wherever it shows, so
+    /// actions like resolving conversations reflect immediately in
+    /// the selected conversation and its listed row.
+    func refreshSummary(_ number: Int) async {
+        guard let full = try? await fetchSummary(number) else {
+            return
+        }
+
+        if selected?.number == number {
+            selected = full
+        }
+        if let index = summaries.firstIndex(where: { $0.number == number }) {
+            summaries[index] = full
+        }
+    }
+
     /// Opens a conversation and refreshes its header: the open
     /// scope's light rows gain their status icons here.
     func select(_ summary: PullRequestSummary) {
@@ -326,20 +352,6 @@ final class PullRequestsModel {
                 selected = full
             }
         }
-    }
-
-    /// The stack size, following base branches that are other listed
-    /// pull requests' heads.
-    func stackDepth(for summary: PullRequestSummary) -> Int {
-        let byHead = Dictionary(summaries.map { ($0.headBranch, $0) }) { first, _ in first }
-        var current = summary
-        var depth = 1
-        var seen = Set([current.headBranch])
-        while let next = byHead[current.baseBranch], seen.insert(next.headBranch).inserted {
-            depth += 1
-            current = next
-        }
-        return depth
     }
 
     // MARK: Private

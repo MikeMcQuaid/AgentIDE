@@ -23,12 +23,14 @@ struct PullRequestCreateForm: View {
                 .frame(minHeight: Self.bodyMinimumHeight)
                 .border(.separator)
                 .hoverHelp("The description in your own words; the template below is appended after it")
-            Text("Template").font(.caption).foregroundStyle(.secondary)
-            TextEditor(text: $model.prTemplate)
-                .font(.body.monospaced())
-                .frame(minHeight: Self.templateMinimumHeight)
-                .border(.separator)
-                .hoverHelp("The repository's pull request template, editable; appended below the body")
+            if model.hasTemplate {
+                Text("Template").font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $model.prTemplate)
+                    .font(.body.monospaced())
+                    .frame(minHeight: Self.templateMinimumHeight)
+                    .border(.separator)
+                    .hoverHelp("The repository's pull request template, editable; appended below the body")
+            }
             actionsRow
         }
         .padding(Self.spacing)
@@ -60,7 +62,8 @@ struct PullRequestCreateForm: View {
             }
             .hoverHelp(
                 "Fill the blank fields from the branch's commits: one commit's own message "
-                    + "directly, several summarised by the on-device model",
+                    + "directly, several summarised by the on-device model, and the template "
+                    + "completed from the commits when the repository has one",
             )
             Spacer()
             BusyButton("Open PR", busy: "Opening", disabled: model.prTitle.isEmpty) {

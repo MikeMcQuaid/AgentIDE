@@ -47,6 +47,20 @@ extension PullRequestsModel {
         )
     }
 
+    /// The stack size, following base branches that are other listed
+    /// pull requests' heads.
+    func stackDepth(for summary: PullRequestSummary) -> Int {
+        let byHead = Dictionary(summaries.map { ($0.headBranch, $0) }) { first, _ in first }
+        var current = summary
+        var depth = 1
+        var seen = Set([current.headBranch])
+        while let next = byHead[current.baseBranch], seen.insert(next.headBranch).inserted {
+            depth += 1
+            current = next
+        }
+        return depth
+    }
+
     /// Marks every unresolved conversation resolved through the API.
     func resolveAllThreads(_ summary: PullRequestSummary) async {
         let unresolved = await fetchThreads(summary.number).filter { $0.isResolved == false }
@@ -55,6 +69,8 @@ extension PullRequestsModel {
             resolved += 1
         }
         ErrorLog.shared.note("Resolved \(resolved) of \(unresolved.count) conversations on #\(summary.number).")
+        // The header and row show the change without a manual reload.
+        await refreshSummary(summary.number)
     }
 
     /// Fills the form's blank fields from the branch's commits: the
@@ -74,16 +90,22 @@ extension PullRequestsModel {
 
         if commits.count == 1, let only = commits.first {
             apply(description: Self.description(splitFromMessage: only))
-            return true
-        }
-        guard let drafted = await generateDescription(commits) else {
-            ErrorLog.shared.report(
-                "The on-device model is unavailable; is Apple Intelligence enabled?",
-            )
-            return false
-        }
+        } else {
+            guard let drafted = await generateDescription(commits) else {
+                ErrorLog.shared.report(
+                    "The on-device model is unavailable; is Apple Intelligence enabled?",
+                )
+                return false
+            }
 
-        apply(description: drafted)
+            apply(description: drafted)
+        }
+        // A repository template gets completed from the commits too;
+        // an unhelpful or unavailable model leaves it untouched.
+        let template = prTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        if template.isEmpty == false, let filled = await fillTemplate(commits, template) {
+            prTemplate = filled
+        }
         return true
     }
 

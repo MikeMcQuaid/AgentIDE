@@ -468,14 +468,17 @@ Sendable` and `nonisolated(unsafe)` are banned.
    appended below the body after an empty line. Blank fields fill from
    the branch's commits: a one-commit branch defaults to that commit's
    own message, and a generate button summarises several through the
-   on-device model; typed text is never overwritten.
+   on-device model; typed text is never overwritten. A repository
+   without a template shows no template field, and with one the
+   generate button also completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations or the failing checks to the clipboard
    for pasting into an agent, resolve every conversation through the
-   GraphQL API and open the page in the Browser tab. The review tab shows
+   GraphQL API and open the page in the Browser tab; resolving refreshes
+   the pull request's header and row immediately. The review tab shows
    the same conversations inline under the files they anchor to, each
    resolvable in place.
 8. Push and rebase together enforce that every pushed commit is GPG
