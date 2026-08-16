@@ -60,7 +60,7 @@ struct AgentSessionForm: View {
             .labelsHidden()
             .hoverHelp("Where the prompt comes from: typed text, or an open issue or pull request")
             AgentOptionPickers(
-                agent: $agent,
+                agent: agent,
                 model: $agentModel,
                 effort: $agentEffort,
             ) { model.launchChoices(for: $0) }
@@ -85,7 +85,13 @@ struct AgentSessionForm: View {
     private static let contextHeight: CGFloat = 70
 
     @State private var source: PromptSource = .prompt
-    @State private var agent: AgentKind = .claudeCode
+    /// The last agent, model and effort come back next time: the
+    /// agent persists by name beside the model and effort that
+    /// always did, because a persisted Codex model over a fresh
+    /// default of Claude once launched Claude with a GPT id.
+    @AppStorage("agentKind")
+    private var agentKindName = AgentKind.claudeCode.rawValue
+
     @State private var number: Int?
 
     /// Guards against double submission: creating a worktree takes
@@ -102,6 +108,13 @@ struct AgentSessionForm: View {
     private var agentModel = ""
     @AppStorage("agentEffort")
     private var agentEffort = ""
+
+    private var agent: Binding<AgentKind> {
+        Binding(
+            get: { AgentKind(rawValue: agentKindName) ?? .claudeCode },
+            set: { agentKindName = $0.rawValue },
+        )
+    }
 
     private var submitDisabled: Bool {
         guard repository != nil else {
@@ -206,7 +219,7 @@ struct AgentSessionForm: View {
             number: number,
             prompt: prompt,
             context: context,
-            agent: agent,
+            agent: agent.wrappedValue,
             options: AgentLaunchOptions(
                 model: agentModel.isEmpty ? nil : agentModel,
                 effort: agentEffort.isEmpty ? nil : agentEffort,

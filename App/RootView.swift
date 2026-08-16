@@ -272,7 +272,11 @@ struct RootView: View {
     /// a worktree with nothing to list offers the new session form.
     @ViewBuilder
     private func primary(for item: WorktreeItem) -> some View {
-        if isAutoResuming, item.session == nil {
+        if item.isPlaceholder {
+            // The row exists before the worktree does.
+            ProgressView("Creating worktree and starting the agent…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if isAutoResuming, item.session == nil {
             ProgressView("Resuming conversation…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let session = item.session {

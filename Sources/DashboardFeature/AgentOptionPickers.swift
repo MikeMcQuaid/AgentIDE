@@ -46,6 +46,11 @@ struct AgentOptionPickers: View {
             .hoverHelp("How much reasoning the agent spends; Default leaves it to the agent")
         }
         .labelsHidden()
+        // On appearance as well as on change: the agent, model and
+        // effort all persist across launches now, but discovery can
+        // change what a CLI offers between runs, and a persisted pair
+        // must never combine a model one agent knows with another.
+        .onAppear { resetUnavailableChoices() }
         .onChange(of: agent) { resetUnavailableChoices() }
     }
 
