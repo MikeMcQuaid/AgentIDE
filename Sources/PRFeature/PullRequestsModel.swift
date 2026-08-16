@@ -146,11 +146,13 @@ final class PullRequestsModel {
     /// extension.
     var status: String?
 
-    /// The pull request creation form's fields; the template loads
-    /// from the repository on reload when the form shows.
-    var prTitle = ""
-    var prBody = ""
-    var prTemplate = ""
+    /// The template as the repository wrote it, so Open PR can wait
+    /// for it to be filled in rather than opened with placeholders.
+    var originalTemplate = ""
+
+    /// Suppresses saving while a draft is restored, so restoring
+    /// never writes back what it just read.
+    var loadingDraft = false
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
@@ -175,6 +177,20 @@ final class PullRequestsModel {
     var performPush: (Worktree) async throws -> Void
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
+
+    /// The pull request creation form's fields; the template loads
+    /// from the repository on reload when the form shows.
+    var prTitle = "" {
+        didSet { saveDraft() }
+    }
+
+    var prBody = "" {
+        didSet { saveDraft() }
+    }
+
+    var prTemplate = "" {
+        didSet { saveDraft() }
+    }
 
     /// Whether the list pane shows the creation form instead: the
     /// worktree scope with no open pull request for the branch.
@@ -212,10 +228,6 @@ final class PullRequestsModel {
 
     /// Whether the last fetch filled its limit, so more pages may
     /// exist beyond what is loaded.
-    var hasMore: Bool {
-        summaries.isEmpty == false && summaries.count == fetchedLimit
-    }
-
     var branchItem: WorktreeItem? {
         items.first { $0.worktree.branch == branch }
     }
@@ -272,6 +284,7 @@ final class PullRequestsModel {
         currentBranch ?? branch
     }
 
+    /// Where a branch's draft is stored, nil without a branch.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
     }
@@ -288,8 +301,10 @@ final class PullRequestsModel {
             rebaseNeed = await fetchRebaseNeed(worktree)
             let template = fetchTemplate(worktree.path)
             hasTemplate = template != nil
+            loadDraft()
+            originalTemplate = template ?? ""
             if prTemplate.isEmpty {
-                prTemplate = template ?? ""
+                prTemplate = originalTemplate
             }
             await prefillFromSingleCommit(worktree)
             if let live = await fetchCurrentBranch(worktree.path) {

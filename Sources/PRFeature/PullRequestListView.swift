@@ -206,16 +206,24 @@ struct PullRequestFooterView: View {
             prominent: true,
             // Trimmed like the validation, so a title of spaces
             // dims the button rather than failing on click; the
-            // push comes first, explicitly.
+            // push comes first, explicitly. A body drafted or typed
+            // is enough on its own, but a template still reading
+            // exactly as the repository wrote it is not: opening
+            // with its placeholders intact helps nobody.
             disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                || model.isFullyPushed == false,
+                || model.isFullyPushed == false
+                || model.templateUnedited,
         ) {
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
             }
         }
         .keyboardShortcut(.return, modifiers: .command)
-        .hoverHelp("Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed")
+        .hoverHelp(
+            model.templateUnedited
+                ? "Fill in the template before opening: it still reads as the repository wrote it"
+                : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed",
+        )
     }
 
     /// The copy actions for the open conversation, in the footer's

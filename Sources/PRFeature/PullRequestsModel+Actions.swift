@@ -188,6 +188,7 @@ extension PullRequestsModel {
             prBody = ""
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            clearDraft()
             return true
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

@@ -26,15 +26,7 @@ struct PullRequestCreateForm: View {
                 .border(.separator)
                 .disabled(isGenerating)
                 .hoverHelp("The description in your own words; the template below is appended after it")
-            if model.hasTemplate {
-                Text("Template").font(.caption).foregroundStyle(.secondary)
-                TextEditor(text: $model.prTemplate)
-                    .font(.body.monospaced())
-                    .frame(minHeight: Self.templateMinimumHeight)
-                    .border(.separator)
-                    .disabled(isGenerating)
-                    .hoverHelp("The repository's pull request template, editable; appended below the body")
-            }
+            templateSection
         }
         .padding(Self.spacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -55,6 +47,27 @@ struct PullRequestCreateForm: View {
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage("utilityTab")
     private var utilityTab = ""
+
+    /// The repository's template with its tick-all shortcut.
+    @ViewBuilder private var templateSection: some View {
+        if model.hasTemplate {
+            HStack {
+                Text("Template").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Tick every box") { model.tickTemplateBoxes() }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
+                    .hoverHelp("Tick every unticked checkbox in the template")
+            }
+            TextEditor(text: $model.prTemplate)
+                .font(.body.monospaced())
+                .frame(minHeight: Self.templateMinimumHeight)
+                .border(.separator)
+                .disabled(isGenerating)
+                .hoverHelp("The repository's pull request template, editable; appended below the body")
+        }
+    }
 
     /// Sits inside the title field; drafting only ever fills empty
     /// fields, so any typed content dims it.
