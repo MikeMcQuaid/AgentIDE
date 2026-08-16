@@ -98,7 +98,7 @@ public struct ReviewThreadRow: View {
         if thread.resolveID.isEmpty == false {
             BusyButton(
                 thread.isResolved ? "Unresolve" : "Resolve",
-                busy: "Saving",
+                busy: thread.isResolved ? "Unresolving" : "Resolving",
                 action: onToggleResolved,
             )
             .controlSize(.small)
