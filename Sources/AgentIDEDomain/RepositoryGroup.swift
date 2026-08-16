@@ -70,10 +70,12 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
 public struct RepositoryGroup: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
 
-    /// Creates a group.
-    public init(repository: Repository, items: [WorktreeItem]) {
+    /// Creates a group; `defaultBranch` is nil when the repository
+    /// has no resolvable default (never pushed, no `main`).
+    public init(repository: Repository, items: [WorktreeItem], defaultBranch: String? = nil) {
         self.repository = repository
         self.items = items
+        self.defaultBranch = defaultBranch
     }
 
     // MARK: Public
@@ -83,6 +85,11 @@ public struct RepositoryGroup: Identifiable, Hashable, Sendable {
 
     /// Its worktrees in branch order.
     public var items: [WorktreeItem]
+
+    /// The bare default branch name (`main`, never `origin/main`),
+    /// so the sidebar can tell a main checkout off its default branch
+    /// without asking git.
+    public let defaultBranch: String?
 
     /// The stable identity, the repository's.
     public var id: String {

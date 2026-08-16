@@ -97,7 +97,11 @@ public struct SessionService: Sendable {
             // The main checkout stays pinned first; worktrees order by
             // recency of their own work.
             let sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
-            groups.append(RepositoryGroup(repository: named, items: sorted))
+            groups.append(RepositoryGroup(
+                repository: named,
+                items: sorted,
+                defaultBranch: baseRef?.split(separator: "/").last.map(String.init),
+            ))
         }
         // Repositories order by their worktrees' activity; the main
         // checkout's own churn deliberately does not count, except

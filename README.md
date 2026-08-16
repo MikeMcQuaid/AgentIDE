@@ -91,8 +91,10 @@ before shipping.
 
 ### 🧹 Tidy up
 
-- **Deletes** a worktree and its branch once the pull request merges (so
-  finished work disappears without ceremony)
+- **Deletes** a worktree and its branch once the pull request merges,
+  whether you merged in the app, picked Clean up after merge from the
+  worktree's menu or the next refresh simply notices the merge happened
+  on GitHub (so finished work disappears without ceremony)
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
   even after that worktree is deleted (so tidying up never loses a

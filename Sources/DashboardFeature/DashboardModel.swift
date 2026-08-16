@@ -197,6 +197,35 @@ public final class DashboardModel {
         }
     }
 
+    /// Tidies a worktree whose pull request has merged: a real
+    /// worktree is deleted outright, the main checkout is returned to
+    /// the default branch with the merged branch safely deleted. The
+    /// one path behind the Merge button, the context menu and the
+    /// poll's own merge detection.
+    public func cleanUp(item: WorktreeItem) async {
+        if item.worktree.path == item.worktree.repositoryPath {
+            await service.cleanUpAfterMerge(worktree: item.worktree, mergedBranch: item.worktree.branch)
+            await refresh()
+        } else {
+            await delete(item: item)
+        }
+    }
+
+    /// Whether a main checkout sits on a branch other than its
+    /// repository's default, the only state in which cleaning it up
+    /// after a merge means anything; false when the default is
+    /// unknown, so the offer never appears on a guess.
+    public func isOffDefaultBranch(_ item: WorktreeItem) -> Bool {
+        guard item.worktree.path == item.worktree.repositoryPath,
+              let group = groups.first(where: { $0.repository.path == item.worktree.repositoryPath }),
+              let defaultBranch = group.defaultBranch
+        else {
+            return false
+        }
+
+        return item.worktree.branch != defaultBranch
+    }
+
     /// Flags the item unread until it is next viewed.
     public func markUnread(item: WorktreeItem) async {
         service.markUnread(worktreePath: item.worktree.path)
