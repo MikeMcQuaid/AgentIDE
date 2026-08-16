@@ -216,16 +216,23 @@ struct PullRequestConversationView: View {
 
             description = freshBody
             events = freshEvents
-            threads = try await github.conversationThreads(
-                repositoryPath: repositoryPath,
-                number: number,
-            )
+            threads = await loadThreads()
             var metadata = store.load()
             metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
             store.save(metadata)
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
+    }
+
+    /// The threads from either source; a GraphQL failure reaches
+    /// Messages, since it is what removes the resolve buttons.
+    private func loadThreads() async -> [ReviewThread] {
+        let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
+        if let failure = answer.graphQLFailure {
+            ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+        }
+        return answer.threads
     }
 
     /// Copies every open conversation as pasteable text.
@@ -245,10 +252,7 @@ struct PullRequestConversationView: View {
                 threadID: thread.resolveID,
                 resolved: thread.isResolved == false,
             )
-            threads = try await github.conversationThreads(
-                repositoryPath: repositoryPath,
-                number: number,
-            )
+            threads = await loadThreads()
             await onResolvedChanged()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

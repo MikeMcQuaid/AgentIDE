@@ -24,36 +24,40 @@ public extension GitHubClient {
 
     /// The pull request's review conversation threads with a REST
     /// fallback: a failing GraphQL query must never make the
-    /// conversation silently vanish. REST threads carry the anchor
-    /// and comments but no resolvable id; throws only when GraphQL
-    /// failed and REST answered nothing either.
-    func conversationThreads(repositoryPath: String, number: Int) async throws -> [ReviewThread] {
+    /// conversation silently vanish, but the failure still names
+    /// itself, because REST threads carry no resolvable id and the
+    /// missing resolve buttons otherwise look like a display bug.
+    func conversationThreads(repositoryPath: String, number: Int) async -> ConversationThreads {
         do {
             let threads = try await reviewThreads(repositoryPath: repositoryPath, number: number)
             if threads.isEmpty == false {
-                return threads
-            }
-        } catch {
-            let rest = await restThreads(repositoryPath: repositoryPath, number: number)
-            guard rest.isEmpty == false else {
-                throw error
+                return ConversationThreads(threads: threads, graphQLFailure: nil)
             }
 
-            return rest
+            return await ConversationThreads(
+                threads: restThreads(repositoryPath: repositoryPath, number: number),
+                graphQLFailure: nil,
+            )
+        } catch {
+            return await ConversationThreads(
+                threads: restThreads(repositoryPath: repositoryPath, number: number),
+                graphQLFailure: error.localizedDescription,
+            )
         }
-        return await restThreads(repositoryPath: repositoryPath, number: number)
     }
 
     /// The pull request's review conversation threads, each
     /// resolvable through its GraphQL id.
     func reviewThreads(repositoryPath: String, number: Int) async throws -> [ReviewThread] {
+        // Loud guards: an early silent return here used to read as
+        // an empty conversation and hide the real fault.
         guard let fullName = await fullName(repositoryPath: repositoryPath) else {
-            return []
+            throw ThreadDecodeError(message: "the repository's GitHub name is unknown; is origin set?")
         }
 
         let parts = fullName.split(separator: "/", maxSplits: 1)
         guard let owner = parts.first, let name = parts.dropFirst().first else {
-            return []
+            throw ThreadDecodeError(message: "unexpected repository name shape: " + fullName)
         }
 
         let query = "query($owner: String!, $name: String!, $number: Int!) "
@@ -70,7 +74,7 @@ public extension GitHubClient {
             ],
             in: repositoryPath,
         )
-        return Self.threads(fromJSON: result.standardOutput)
+        return try Self.threads(fromJSON: result.standardOutput)
     }
 
     /// Marks one review thread resolved or unresolved.
@@ -168,10 +172,24 @@ public extension GitHubClient {
         return ids
     }
 
-    /// Decodes the reviewThreads GraphQL answer.
-    internal static func threads(fromJSON json: String) -> [ReviewThread] {
-        let decoded = try? JSONDecoder().decode(ThreadsResponse.self, from: Data(json.utf8))
-        let nodes = decoded?.data?.repository?.pullRequest?.reviewThreads.nodes ?? []
+    /// Decodes the reviewThreads GraphQL answer; a decode failure
+    /// names the mismatching field, the only way shape drift in the
+    /// live answer ever gets diagnosed.
+    internal static func threads(fromJSON json: String) throws -> [ReviewThread] {
+        let decoded: ThreadsResponse
+        do {
+            decoded = try JSONDecoder().decode(ThreadsResponse.self, from: Data(json.utf8))
+        } catch {
+            throw ThreadDecodeError(
+                message: "reviewThreads answer did not decode: "
+                    + String(String(describing: error).prefix(ThreadDecodeError.detailLimit)),
+            )
+        }
+        guard let data = decoded.data else {
+            throw ThreadDecodeError(message: "the reviewThreads answer carried no data")
+        }
+
+        let nodes = data.repository?.pullRequest?.reviewThreads.nodes ?? []
         return nodes.compactMap { node in
             guard let node else {
                 return nil
@@ -187,6 +205,33 @@ public extension GitHubClient {
                 },
             )
         }
+    }
+}
+
+// MARK: - ConversationThreads
+
+/// A conversation listing and, when the REST fallback rescued it,
+/// the GraphQL failure the caller should surface.
+public struct ConversationThreads: Sendable {
+    /// The threads to render, whichever source answered.
+    public let threads: [ReviewThread]
+
+    /// Why GraphQL failed, nil when it answered; without it the
+    /// missing resolve buttons look like a display bug.
+    public let graphQLFailure: String?
+}
+
+// MARK: - ThreadDecodeError
+
+/// A reviewThreads decode failure, carrying the mismatch detail.
+struct ThreadDecodeError: LocalizedError {
+    /// Enough decoder detail to name the field without flooding.
+    static let detailLimit = 300
+
+    let message: String
+
+    var errorDescription: String? {
+        message
     }
 }
 

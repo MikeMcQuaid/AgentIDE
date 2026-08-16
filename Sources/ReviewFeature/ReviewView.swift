@@ -25,15 +25,14 @@ public struct ReviewView: View {
                 return []
             }
 
-            do {
-                return try await github.conversationThreads(
-                    repositoryPath: worktree.repositoryPath,
-                    number: number,
-                )
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-                return []
+            let answer = await github.conversationThreads(
+                repositoryPath: worktree.repositoryPath,
+                number: number,
+            )
+            if let failure = answer.graphQLFailure {
+                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
             }
+            return answer.threads
         }
         let setThreadResolved: (String, Bool) async throws -> Void = { threadID, resolved in
             try await github.setThreadResolved(

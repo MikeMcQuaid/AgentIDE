@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 
 /// One pull request conversation: a single header line with the
@@ -122,6 +123,15 @@ public struct ReviewThreadRow: View {
                 .lineLimit(1)
                 .textSelection(.enabled)
             Spacer()
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(thread.asText, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .accessibilityLabel("Copy this conversation")
+            }
+            .buttonStyle(.borderless)
+            .hoverHelp("Copy this conversation, with its file and line, to the clipboard")
             if let onEdit {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")

@@ -40,12 +40,11 @@ final class PullRequestsModel {
             await github.hasMergeQueue(repositoryPath: repository.path)
         }
         fetchThreads = { number in
-            do {
-                return try await github.conversationThreads(repositoryPath: repository.path, number: number)
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-                return []
+            let answer = await github.conversationThreads(repositoryPath: repository.path, number: number)
+            if let failure = answer.graphQLFailure {
+                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
             }
+            return answer.threads
         }
         fetchFailingChecks = { number in
             await github.failingChecks(repositoryPath: repository.path, number: number)
