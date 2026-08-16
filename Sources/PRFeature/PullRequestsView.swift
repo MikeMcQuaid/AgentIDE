@@ -1,10 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
-
-// RefreshButton and hoverHelp come from here and the build fails
-// without it; the analyzer misreads same-package view extensions.
-// swiftlint:disable:next unused_import
 import TerminalUI
 
 /// The repository's pull requests: a paginated title list clicking
