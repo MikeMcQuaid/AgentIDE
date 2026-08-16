@@ -124,8 +124,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Run `script/test` and `script/analyze` when Swift changed
 - Run `script/analyze` again before opening or updating a pull
   request; unused imports and dead code otherwise surface in CI
-  first (sandboxed runs skip periphery, so dead-code findings
-  still need the host or CI)
+  first (sandboxed runs reuse the analyze build's index store, so
+  periphery's dead-code pass now runs everywhere)
 - Reread changed documentation for UK English, working links and
   72-column wrapping of this file
 - Confirm `README.md` and `ARCHITECTURE.md` still describe behaviour

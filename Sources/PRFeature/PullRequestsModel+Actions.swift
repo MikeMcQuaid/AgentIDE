@@ -47,6 +47,35 @@ extension PullRequestsModel {
         )
     }
 
+    /// Opens a conversation with its cached enriched header painted
+    /// instantly, then refreshes it; the open scope's light rows
+    /// gain their status icons here.
+    func select(_ summary: PullRequestSummary) {
+        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)] ?? summary
+        Task {
+            let full = try? await fetchSummary(summary.number)
+            if let full {
+                cacheEnriched(full)
+                if selected?.number == full.number {
+                    selected = full
+                }
+            }
+        }
+    }
+
+    /// Caches one enriched summary, so reopening the conversation
+    /// or restarting the app paints its header instantly.
+    func cacheEnriched(_ summary: PullRequestSummary) {
+        var metadata = store.load()
+        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = summary
+        store.save(metadata)
+    }
+
+    /// The enriched summary cache key for one pull request.
+    func enrichedKey(_ number: Int) -> String {
+        repository.path + "#" + String(number)
+    }
+
     /// The stack size, following base branches that are other listed
     /// pull requests' heads.
     func stackDepth(for summary: PullRequestSummary) -> Int {
@@ -227,31 +256,34 @@ extension PullRequestsModel {
     }
 
     /// Merges, queues, enables automerge or cancels either, per the
-    /// label; the header refreshes to show the new state.
+    /// label; an immediate merge from the main checkout also cleans
+    /// the checkout up, returning to the default branch and deleting
+    /// the merged one. The header refreshes to show the new state.
     func performMergeAction() async {
         guard let selected, selected.state == "OPEN" else {
             return
         }
 
-        await act {
-            if selected.hasAutomerge {
-                try await github.disableAutomerge(repositoryPath: repository.path, number: selected.number)
-            } else if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
-                try await github.merge(repositoryPath: repository.path, number: selected.number)
-            } else {
-                try await github.enableAutomerge(repositoryPath: repository.path, number: selected.number)
-            }
+        let merges = selected.hasAutomerge == false
+            && selected.checks == "SUCCESS" && selected.mergeable == "MERGEABLE"
+        let succeeded = await act { try await performMergeChange(selected) }
+        if succeeded, merges, let worktree = actionWorktree {
+            await performPostMergeCleanup(worktree, selected.headBranch)
+            Self.requestSidebarRefresh()
         }
         await refreshSummary(selected.number)
     }
 
-    func act(_ work: () async throws -> Void) async {
+    @discardableResult
+    func act(_ work: () async throws -> Void) async -> Bool {
         do {
             try await work()
             status = "Done."
             await reload(keepingSelection: true)
+            return true
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
+            return false
         }
     }
 

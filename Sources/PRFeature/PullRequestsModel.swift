@@ -64,6 +64,18 @@ final class PullRequestsModel {
         fillTemplate = { commits, template in
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
         }
+        performMergeChange = { summary in
+            if summary.hasAutomerge {
+                try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
+            } else if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
+                try await github.merge(repositoryPath: repository.path, number: summary.number)
+            } else {
+                try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
+            }
+        }
+        performPostMergeCleanup = { worktree, mergedBranch in
+            await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)
+        }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
@@ -152,6 +164,8 @@ final class PullRequestsModel {
     var fetchCommitMessages: (Worktree) async -> [String]
     var generateDescription: ([String]) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
+    var performMergeChange: (PullRequestSummary) async throws -> Void
+    var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> Void
@@ -327,23 +341,12 @@ final class PullRequestsModel {
             return
         }
 
+        cacheEnriched(full)
         if selected?.number == number {
             selected = full
         }
         if let index = summaries.firstIndex(where: { $0.number == number }) {
             summaries[index] = full
-        }
-    }
-
-    /// Opens a conversation and refreshes its header: the open
-    /// scope's light rows gain their status icons here.
-    func select(_ summary: PullRequestSummary) {
-        selected = summary
-        Task {
-            let full = try? await fetchSummary(summary.number)
-            if let full, selected?.number == full.number {
-                selected = full
-            }
         }
     }
 

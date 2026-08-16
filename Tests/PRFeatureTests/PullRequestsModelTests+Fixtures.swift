@@ -24,6 +24,12 @@ extension PullRequestsModelTests {
         model.fetchCommitMessages = { _ in [] }
         model.generateDescription = { _ in nil }
         model.fillTemplate = { _, _ in nil }
+        model.performMergeChange = { _ in
+            // Succeeds without side effects.
+        }
+        model.performPostMergeCleanup = { _, _ in
+            // Succeeds without side effects.
+        }
         model.fetchCurrentBranch = { _ in nil }
         model.fetchRebaseNeed = { _ in .nothing }
         model.performPush = { _ in

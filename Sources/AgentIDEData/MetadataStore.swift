@@ -87,6 +87,10 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: CachedPullRequestList].self, forKey: .pullRequestListsCache) ?? [:]
         conversationCache = try container
             .decodeIfPresent([String: CachedConversation].self, forKey: .conversationCache) ?? [:]
+        enrichedSummaryCache = try container
+            .decodeIfPresent([String: PullRequestSummary].self, forKey: .enrichedSummaryCache) ?? [:]
+        threadsCache = try container
+            .decodeIfPresent([String: [ReviewThread]].self, forKey: .threadsCache) ?? [:]
         intentionallyClosed = try container
             .decodeIfPresent([String].self, forKey: .intentionallyClosed) ?? []
     }
@@ -148,6 +152,14 @@ public struct AppMetadata: Codable, Sendable {
     /// Each pull request's last conversation, keyed by repository
     /// path and number, painted instantly like the listings.
     public var conversationCache: [String: CachedConversation] = [:]
+
+    /// Enriched pull request headers by `repositoryPath#number`, so
+    /// reopening a conversation paints its status icons instantly.
+    public var enrichedSummaryCache: [String: PullRequestSummary] = [:]
+
+    /// Review conversation threads by `repositoryPath#number`, so a
+    /// reopened conversation paints them instantly.
+    public var threadsCache: [String: [ReviewThread]] = [:]
 
     /// Worktrees whose last session the user closed deliberately;
     /// automatic resumes leave them alone until a session starts

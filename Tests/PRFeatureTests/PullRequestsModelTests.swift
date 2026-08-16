@@ -245,6 +245,34 @@ struct PullRequestsModelTests {
     }
 
     @Test
+    func `an immediate merge cleans up, arming automerge does not`() async {
+        let mergeable = PullRequestSummary(
+            number: 5,
+            title: "Ready",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var cleaned: String?
+        model.performPostMergeCleanup = { _, branch in cleaned = branch }
+        model.selected = mergeable
+        await model.performMergeAction()
+        #expect(cleaned == "feature")
+
+        let pending = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var pendingCleaned = false
+        pending.performPostMergeCleanup = { _, _ in pendingCleaned = true }
+        pending.selected = summary(6, head: "feature")
+        await pending.performMergeAction()
+        #expect(pendingCleaned == false)
+    }
+
+    @Test
     func `the checked-out branch drives listing and actions`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "switched" }

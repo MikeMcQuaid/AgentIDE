@@ -457,7 +457,10 @@ Sendable` and `nonisolated(unsafe)` are banned.
    worktree refreshes most often, then its repository's other worktrees,
    then other expanded repositories; repositories collapsed in the sidebar
    poll rarely. Selecting a worktree jumps its branch to the front, and a
-   failed poll keeps the cached answer.
+   failed poll keeps the cached answer. Listings, conversations, enriched
+   headers and review threads all persist in the metadata store and paint
+   from it instantly, on pane switches and across restarts, before the
+   fetch refreshes them.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
@@ -498,7 +501,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
 ### Cleanup (Tidy up)
 
 1. A merged pull request offers cleanup; the sidebar offers the same
-   deletion from a worktree's context menu at any time.
+   deletion from a worktree's context menu at any time. Merging from
+   the main checkout also tidies the checkout itself: back to the
+   default branch, a hard reset to origin when the local default
+   carries nothing of its own, and a safe `-d` delete of the merged
+   branch; dirty checkouts are left alone.
 2. Deletion records the session's agent-native resume id, kills the tmux
    session, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes the friendly symlink. Nothing is archived:

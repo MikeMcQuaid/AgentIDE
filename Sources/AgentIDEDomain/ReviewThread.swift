@@ -1,7 +1,7 @@
 // MARK: - ReviewThreadComment
 
 /// One comment inside a pull request review conversation.
-public struct ReviewThreadComment: Hashable, Sendable {
+public struct ReviewThreadComment: Codable, Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a comment.
@@ -23,7 +23,7 @@ public struct ReviewThreadComment: Hashable, Sendable {
 
 /// One review conversation thread on a pull request, anchored to a
 /// file and line, resolvable through the API.
-public struct ReviewThread: Hashable, Identifiable, Sendable {
+public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a thread; `resolveID` defaults to the id for threads

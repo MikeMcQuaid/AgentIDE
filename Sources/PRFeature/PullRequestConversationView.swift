@@ -98,9 +98,11 @@ struct PullRequestConversationView: View {
         .task(id: number) {
             isLoading = true
             defer { isLoading = false }
-            let cached = store.load().conversationCache[cacheKey]
+            let metadata = store.load()
+            let cached = metadata.conversationCache[cacheKey]
             description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
+            threads = metadata.threadsCache[cacheKey] ?? []
             await refresh()
         }
     }
@@ -230,6 +232,9 @@ struct PullRequestConversationView: View {
         if let failure = answer.graphQLFailure {
             ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
         }
+        var metadata = store.load()
+        metadata.threadsCache[cacheKey] = answer.threads
+        store.save(metadata)
         return answer.threads
     }
 
