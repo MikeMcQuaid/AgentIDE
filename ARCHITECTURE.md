@@ -192,12 +192,14 @@ Two visually unmistakable flavours ride that one client:
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
   to agent sessions (SSH, `script/attach`) still get tmux-native mouse
-  scrolling and
-  OSC 52 copying from the server config. An agent pane attaching
-  detaches any
-  other client of its session (`-d`): clients leaked by an earlier app
-  run would otherwise linger forever, so an SSH viewer is dropped when
-  the app's pane (re)attaches and simply reattaches when wanted.
+  scrolling and OSC 52 copying from the server config. An agent pane
+  attaching detaches any other client of its session (`-d`): clients
+  leaked by an earlier app run would otherwise linger forever, so an
+  SSH viewer is dropped when the app's pane (re)attaches and simply
+  reattaches when wanted. Cmd-K clears the shell pane the way a
+  terminal app's clear does, screen and local scrollback wiped and the
+  prompt redrawn; agent panes ignore it, so an agent's conversation
+  can never be cleared from view by a stray shortcut.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).

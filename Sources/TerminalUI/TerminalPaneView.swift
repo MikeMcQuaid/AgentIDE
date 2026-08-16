@@ -55,11 +55,18 @@ public struct TerminalPaneView: View {
             transport: transport,
             reflowsCopies: reflowsCopies,
             isActive: isActive,
+            clearRequest: clearShellRequest,
             onProcessTerminated: onProcessTerminated,
         )
     }
 
     // MARK: Private
+
+    /// Cmd-K's counter on the storage bus; only an active local
+    /// shell pane acts on it, never an agent pane, so clearing can
+    /// never wipe an agent's conversation from view.
+    @AppStorage("clearShellRequest")
+    private var clearShellRequest = 0
 
     private let transport: TerminalTransport
     private let reflowsCopies: Bool
@@ -86,6 +93,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     let transport: TerminalTransport
     let reflowsCopies: Bool
     let isActive: Bool
+    let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
 
     /// Detaches the coordinator's client with the view.
@@ -124,6 +132,9 @@ struct TerminalRepresentable: NSViewRepresentable {
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(transport, in: view)
         context.coordinator.updateFocus(isActive: isActive, of: view)
+        if case .shell = transport, isActive {
+            context.coordinator.clearIfRequested(clearRequest, in: view)
+        }
     }
 
     /// Creates the control mode coordinator.

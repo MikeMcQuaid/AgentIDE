@@ -120,6 +120,26 @@ extension TerminalRepresentable {
             }
         }
 
+        /// Cmd-K on the shell: a full terminal reset wipes the screen
+        /// and local scrollback, then Ctrl-L asks the running shell to
+        /// redraw its prompt, which is what a terminal app's clear
+        /// does. Each raise of the counter clears once; the first
+        /// observed value only records the baseline, so a stale count
+        /// from a previous launch never clears on appearance.
+        func clearIfRequested(_ request: Int, in view: PaneTerminalView) {
+            guard let seen = seenClearRequest else {
+                seenClearRequest = request
+                return
+            }
+            guard request != seen else {
+                return
+            }
+
+            seenClearRequest = request
+            view.feed(text: "\u{1B}c")
+            view.send(txt: "\u{0C}")
+        }
+
         /// Releases keyboard focus when the pane goes invisible: the
         /// shell stays mounted behind other tabs to survive
         /// switches, and a hidden terminal holding first responder
@@ -185,6 +205,7 @@ extension TerminalRepresentable {
         // MARK: Private
 
         private var started = false
+        private var seenClearRequest: Int?
         private var startedTransport: TerminalTransport?
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
