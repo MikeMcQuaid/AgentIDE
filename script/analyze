@@ -31,12 +31,15 @@ fi
 
 xcodebuild "${args[@]}" clean build >"$log" 2>&1
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # The sandbox's SourceKit misreads one import as unused (see the
-  # baseline); the baseline swallows exactly that known false
-  # positive so real findings still fail, while the host and CI
-  # stay strict with no baseline at all.
-  swiftlint analyze --compiler-log-path "$log" --strict \
-    --baseline .swiftlint-analyze-sandbox-baseline.json
+  # The sandbox's SourceKit misreads one import as unused; the
+  # baseline swallows exactly that known false positive so real
+  # findings still fail, while the host and CI stay strict with no
+  # baseline at all. The template carries no absolute paths, so it
+  # works for any sandbox user's checkout.
+  baseline=".build/swiftlint-analyze-baseline.json"
+  sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
+    .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
+  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline"
 else
   swiftlint analyze --compiler-log-path "$log" --strict
 fi
