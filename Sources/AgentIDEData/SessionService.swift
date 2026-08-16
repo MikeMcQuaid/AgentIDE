@@ -100,7 +100,7 @@ public struct SessionService: Sendable {
             groups.append(RepositoryGroup(
                 repository: named,
                 items: sorted,
-                defaultBranch: baseRef?.split(separator: "/").last.map(String.init),
+                defaultBranch: baseRef.map(Self.branchName(fromBaseRef:)),
             ))
         }
         // Repositories order by their worktrees' activity; the main
@@ -281,7 +281,7 @@ public struct SessionService: Sendable {
             repositoryName: repository.name,
             repositoryPath: repository.path,
             branch: git.currentBranch(worktreePath: repository.path)
-                ?? baseRef?.split(separator: "/").last.map(String.init) ?? "main",
+                ?? baseRef.map(Self.branchName(fromBaseRef:)) ?? "main",
             path: repository.path,
         )
     }

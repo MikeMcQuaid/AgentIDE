@@ -347,7 +347,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
    form is a middle-pane action on its repository, so opening it (from a
    repository's plus button, a worktree's new session action or Cmd-N and
    the picker) selects that repository's main checkout in the sidebar
-   without closing the form. An issue's title and body become the prompt. A pull request instead gets a
+   without closing the form. The agent, model and effort come back as
+   they were last time; the pickers re-validate the pair on appearance
+   as well as on change, since a persisted model of one agent must never
+   launch another (a Codex id once reached Claude that way). Submitting
+   inserts a greyed placeholder row under a provisional name into the
+   repository the instant the click lands and selects it, with the
+   primary pane showing creation progress; the real worktree replaces
+   the row on the refresh that follows, and a failure removes it and
+   returns to the form. An issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
 2. The branch name summarises the prompt: the on-device Apple foundation
@@ -512,14 +520,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
    merge, at any time) and the pull request poll, which fires it by
    itself when a branch's pull request that was open at the last poll
    is found merged, so a merge made on GitHub or elsewhere is tidied
-   on the next refresh without being noticed first. A real worktree is
-   deleted; the main checkout is tidied in place instead: back to the
-   default branch, a hard reset to origin when the local default
-   carries nothing of its own, and a safe `-d` delete of the merged
-   branch. Dirty worktrees and checkouts are left alone, and the poll
-   never cleans up on a merely missing pull request (a stale cache or a
-   branch that never had one), only on an observed open-to-merged
-   transition.
+   on the next refresh without being noticed first. Cleanup is
+   merge-safe by construction: a real worktree's branch is deleted
+   with `git branch -d`, which git refuses for an unmerged branch, and
+   a dirty worktree is refused before anything runs; the main checkout
+   is tidied in place instead: back to the default branch, a hard reset
+   to origin when the local default carries nothing of its own, and the
+   same safe `-d` delete. A refusal reports why rather than forcing.
+   Only the explicit Delete worktree action force-deletes (`--force`,
+   `git branch -D`), and it confirms first with a dialog naming exactly
+   what would be lost (uncommitted changes, unmerged commits); the poll
+   never prompts and never forces, and never cleans up on a merely
+   missing pull request (a stale cache or a branch that never had one),
+   only on an observed open-to-merged transition.
 2. Deletion records the session's agent-native resume id, kills the tmux
    session, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes the friendly symlink. Nothing is archived:

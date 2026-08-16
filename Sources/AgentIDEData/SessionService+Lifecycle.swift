@@ -47,6 +47,33 @@ public extension SessionService {
         try? FileManager.default.removeItem(atPath: link)
     }
 
+    /// Why a merge-safe cleanup refused a worktree, so the caller can
+    /// name what a forced deletion would destroy.
+    enum CleanupRefusal: Equatable, Sendable {
+        /// Uncommitted changes would be lost.
+        case dirty
+        /// Commits not on the base branch would be lost.
+        case unmerged
+    }
+
+    /// The merge-safe cleanup of a real worktree: refused outright
+    /// when the worktree is dirty or its branch has commits the base
+    /// branch lacks, so nothing this path does can lose work; the
+    /// force delete is a separate, confirmed action. Returns the
+    /// refusal, nil when the worktree was removed.
+    func cleanUpMergedWorktree(item: WorktreeItem, baseRef: String) async throws -> CleanupRefusal? {
+        let worktree = item.worktree
+        guard await git.isDirty(worktreePath: worktree.path) == false else {
+            return .dirty
+        }
+        guard await git.isMerged(worktreePath: worktree.path, branch: worktree.branch, into: baseRef) else {
+            return .unmerged
+        }
+
+        try await deleteWorktree(item: item)
+        return nil
+    }
+
     /// Deletes a path as the sandbox user through the launcher, for
     /// files the host user does not own.
     private func removeAsSandboxUser(path: String) async throws {

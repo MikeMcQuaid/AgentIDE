@@ -2,6 +2,8 @@ import AgentIDEDomain
 @testable import DashboardFeature
 import Testing
 
+// MARK: - MergeCleanupTests
+
 /// Pins the rule behind automatic cleanup: only a pull request seen
 /// open at one poll and merged at the next may trigger it, never a
 /// merely missing one, so a stale cache or a branch that never had a
@@ -42,5 +44,44 @@ struct MergeCleanupTests {
             checks: "",
             state: state,
         )
+    }
+}
+
+// MARK: - CreationPlaceholderTests
+
+/// Pins the provisional row a new session shows while its worktree
+/// is created: named from the prompt in the branch style, and never
+/// mistaken for a real worktree.
+@MainActor
+struct CreationPlaceholderTests {
+    @Test
+    func `placeholder names come from the prompt's first words`() {
+        #expect(DashboardModel.placeholderName(from: "Fix the crash on launch, please") == "fix_the_crash_on")
+        #expect(DashboardModel.placeholderName(from: "   ") == "new_session")
+    }
+
+    @Test
+    func `placeholder items are recognised by their synthetic path`() {
+        let placeholder = WorktreeItem(
+            worktree: Worktree(
+                repositoryName: "repo",
+                repositoryPath: "/repo",
+                branch: "fix_the_crash",
+                path: "/repo" + DashboardModel.placeholderMarker + "fix_the_crash",
+            ),
+            session: nil,
+            isDirty: false,
+            aheadOfUpstream: nil,
+            hasUnread: false,
+        )
+        #expect(placeholder.isPlaceholder)
+        let real = WorktreeItem(
+            worktree: Worktree(repositoryName: "repo", repositoryPath: "/repo", branch: "main", path: "/repo"),
+            session: nil,
+            isDirty: false,
+            aheadOfUpstream: nil,
+            hasUnread: false,
+        )
+        #expect(real.isPlaceholder == false)
     }
 }

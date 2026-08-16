@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import SwiftUI
@@ -71,6 +72,11 @@ public struct DashboardView: View {
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
+
+    /// The pending confirmed deletion: which worktree, and what the
+    /// merge-safe path refused about it (nil for a plain Delete
+    /// worktree, which always confirms since it always forces).
+    @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
     private let model: DashboardModel
 
@@ -182,6 +188,19 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
+        .confirmationDialog(
+            forceDeleteTitle(for: item),
+            isPresented: forceDeleteBinding(for: item),
+            titleVisibility: .visible,
+        ) {
+            Button("Delete worktree and branch", role: .destructive) {
+                pendingForceDelete = nil
+                Task { await model.delete(item: item) }
+            }
+            Button("Cancel", role: .cancel) { pendingForceDelete = nil }
+        } message: {
+            Text(forceDeleteMessage(for: item))
+        }
     }
 
     @ViewBuilder
@@ -210,17 +229,18 @@ public struct DashboardView: View {
         // the poll has not noticed yet or made outside GitHub; on the
         // main checkout it only makes sense off the default branch.
         if item.worktree.path != item.worktree.repositoryPath || model.isOffDefaultBranch(item) {
-            Button("Clean up after merge") { Task { await model.cleanUp(item: item) } }
+            Button("Clean up after merge") { Task { await cleanUpOrOffer(item) } }
                 .hoverHelp(
                     item.worktree.path == item.worktree.repositoryPath
                         ? "Return to the default branch and safely delete this merged branch; "
                         + "dirty checkouts are left alone"
-                        : "Delete this worktree and its merged branch; conversations stay on the repository page",
+                        : "Remove this worktree once its branch is merged and clean; "
+                        + "anything that would lose work asks first",
                 )
         }
         if item.worktree.path != item.worktree.repositoryPath {
-            Button("Delete worktree") { Task { await model.delete(item: item) } }
-                .hoverHelp("Deletes the worktree and branch; conversations stay on the repository page")
+            Button("Delete worktree", role: .destructive) { pendingForceDelete = (item.worktree.path, nil) }
+                .hoverHelp("Force-deletes the worktree and branch after confirming what would be lost")
         }
     }
 
@@ -233,6 +253,45 @@ public struct DashboardView: View {
         .frame(width: Self.avatarSize, height: Self.avatarSize)
         .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
         .accessibilityHidden(true)
+    }
+
+    private func forceDeleteBinding(for item: WorktreeItem) -> Binding<Bool> {
+        Binding(
+            get: { pendingForceDelete?.path == item.worktree.path },
+            set: { shown in
+                if shown == false, pendingForceDelete?.path == item.worktree.path {
+                    pendingForceDelete = nil
+                }
+            },
+        )
+    }
+
+    private func forceDeleteTitle(for item: WorktreeItem) -> String {
+        "Delete the worktree for \(item.worktree.branch)?"
+    }
+
+    /// Names exactly what forcing would destroy, so the choice is
+    /// never made on a generic warning.
+    private func forceDeleteMessage(for item: WorktreeItem) -> String {
+        var losses = [String]()
+        if item.isDirty || pendingForceDelete?.refusal == .dirty {
+            losses.append("its uncommitted changes")
+        }
+        if pendingForceDelete?.refusal == .unmerged || (item.aheadOfDefault ?? 0) > 0 {
+            losses.append("commits not on the default branch")
+        }
+        let loss = losses.isEmpty
+            ? "The worktree and its branch are removed."
+            : "This permanently discards " + losses.joined(separator: " and ") + "."
+        return loss + " Conversations stay readable on the repository page."
+    }
+
+    /// Cleans up merge-safely and, when refused, offers the confirmed
+    /// force delete instead of silently doing nothing.
+    private func cleanUpOrOffer(_ item: WorktreeItem) async {
+        if let refusal = await model.cleanUp(item: item) {
+            pendingForceDelete = (item.worktree.path, refusal)
+        }
     }
 
     private func isExpanded(_ path: String) -> Bool {

@@ -129,6 +129,43 @@ struct SessionServiceIntegrationTests {
     }
 
     @Test
+    func `merge cleanup refuses dirty and unmerged worktrees and removes merged ones`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+
+        let sessionName = try await world.service.createSession(
+            repository: world.repository,
+            prompt: "Anchor work",
+            agent: .claudeCode,
+        )
+        var overview = await world.service.overview()
+        var item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("anchor_work") })
+        try await world.service.closeSession(sessionName: sessionName, worktreePath: item.worktree.path)
+        let git = GitClient(runner: FoundationProcessRunner())
+        let base = "main"
+
+        // Uncommitted changes: refused before anything runs.
+        try "draft\n".write(toFile: item.worktree.path + "/draft.txt", atomically: true, encoding: .utf8)
+        #expect(try await world.service.cleanUpMergedWorktree(item: item, baseRef: base) == .dirty)
+        #expect(FileManager.default.fileExists(atPath: item.worktree.path))
+
+        // A commit the base lacks: refused, since `-d` would refuse.
+        try await git.commitAll(worktreePath: item.worktree.path, message: "Unmerged work")
+        #expect(try await world.service.cleanUpMergedWorktree(item: item, baseRef: base) == .unmerged)
+        #expect(FileManager.default.fileExists(atPath: item.worktree.path))
+
+        // Once the base carries every commit, the safe path removes it:
+        // the fixture's main has no work of its own, so moving it to
+        // the branch tip is a fast-forward merge.
+        try await git.checkout(worktreePath: world.repository.path, branch: base)
+        try await git.resetHard(worktreePath: world.repository.path, ref: item.worktree.branch)
+        overview = await world.service.overview()
+        item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("anchor_work") })
+        #expect(try await world.service.cleanUpMergedWorktree(item: item, baseRef: base) == nil)
+        #expect(FileManager.default.fileExists(atPath: item.worktree.path) == false)
+    }
+
+    @Test
     func `past sessions are discovered and resume into a new worktree with the transcript`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
