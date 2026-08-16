@@ -207,6 +207,18 @@ public struct DashboardView: View {
         }
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")
+        // Cleanup is the merge-time tidy, offered by hand for merges
+        // the poll has not noticed yet or made outside GitHub; on the
+        // main checkout it only makes sense off the default branch.
+        if item.worktree.path != item.worktree.repositoryPath || model.isOffDefaultBranch(item) {
+            Button("Clean up after merge") { Task { await model.cleanUp(item: item) } }
+                .hoverHelp(
+                    item.worktree.path == item.worktree.repositoryPath
+                        ? "Return to the default branch and safely delete this merged branch; "
+                        + "dirty checkouts are left alone"
+                        : "Delete this worktree and its merged branch; conversations stay on the repository page",
+                )
+        }
         if item.worktree.path != item.worktree.repositoryPath {
             Button("Delete worktree") { Task { await model.delete(item: item) } }
                 .hoverHelp("Deletes the worktree and branch; conversations stay on the repository page")

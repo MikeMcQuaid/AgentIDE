@@ -44,8 +44,10 @@ extension DashboardModel {
                         scope: .branch(item.worktree.branch),
                     )
                     let summary = summaries.first { $0.state == "OPEN" }
+                    let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
+                    await cleanUpIfMerged(item, previous: previous, fresh: summaries)
                 } catch {
                     ErrorLog.shared.report("Pull requests for \(group.repository.name): " + error.localizedDescription)
                 }
@@ -78,6 +80,38 @@ extension DashboardModel {
     // MARK: Private
 
     private static let selectedInterval: TimeInterval = 30
+
+    /// A merge made on GitHub or elsewhere is tidied on the poll that
+    /// first sees it: the branch's pull request that was open at the
+    /// last poll now reports merged. Only that observed transition
+    /// counts, never a merely missing pull request (a stale cache or
+    /// a branch that never had one), and dirty worktrees are left
+    /// alone by the cleanup itself.
+    private func cleanUpIfMerged(
+        _ item: WorktreeItem,
+        previous: PullRequestSummary?,
+        fresh: [PullRequestSummary],
+    ) async {
+        guard Self.observedMerge(previous: previous, fresh: fresh),
+              deletingPaths.contains(item.worktree.path) == false
+        else {
+            return
+        }
+
+        await cleanUp(item: item)
+    }
+
+    /// Whether a poll observed the branch's pull request go from
+    /// open to merged: the same number, open before, merged now. Pure
+    /// so the rule tests without GitHub.
+    static func observedMerge(previous: PullRequestSummary?, fresh: [PullRequestSummary]) -> Bool {
+        guard let previous, previous.state == "OPEN" else {
+            return false
+        }
+
+        return fresh.contains { $0.number == previous.number && $0.state == "MERGED" }
+    }
+
     private static let selectedRepositoryInterval: TimeInterval = 120
     private static let expandedInterval: TimeInterval = 300
     private static let collapsedInterval: TimeInterval = 1_800

@@ -502,12 +502,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
 
 ### Cleanup (Tidy up)
 
-1. A merged pull request offers cleanup; the sidebar offers the same
-   deletion from a worktree's context menu at any time. Merging from
-   the main checkout also tidies the checkout itself: back to the
+1. Cleanup after a merge runs from three places through one path: the
+   in-app Merge button, the worktree's context menu (Clean up after
+   merge, at any time) and the pull request poll, which fires it by
+   itself when a branch's pull request that was open at the last poll
+   is found merged, so a merge made on GitHub or elsewhere is tidied
+   on the next refresh without being noticed first. A real worktree is
+   deleted; the main checkout is tidied in place instead: back to the
    default branch, a hard reset to origin when the local default
    carries nothing of its own, and a safe `-d` delete of the merged
-   branch; dirty checkouts are left alone.
+   branch. Dirty worktrees and checkouts are left alone, and the poll
+   never cleans up on a merely missing pull request (a stale cache or a
+   branch that never had one), only on an observed open-to-merged
+   transition.
 2. Deletion records the session's agent-native resume id, kills the tmux
    session, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes the friendly symlink. Nothing is archived:
