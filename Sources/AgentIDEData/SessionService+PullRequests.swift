@@ -45,4 +45,37 @@ public extension SessionService {
     func fillPullRequestTemplate(fromCommits commits: [String], template: String) async -> String? {
         await summariser.filledTemplate(fromCommits: commits, template: template)
     }
+
+    /// After merging from the main checkout: return to the default
+    /// branch, reset it to origin when it carries nothing of its
+    /// own, and delete the merged branch with `-d` so an unmerged
+    /// branch survives. Dirty checkouts and worktrees other than
+    /// the main checkout are left untouched.
+    func cleanUpAfterMerge(worktree: Worktree, mergedBranch: String) async {
+        guard worktree.path == worktree.repositoryPath,
+              await git.isDirty(worktreePath: worktree.path) == false
+        else {
+            return
+        }
+
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        try? await git.fetch(repositoryPath: worktree.path)
+        guard let base = await git.defaultBaseRef(of: repository) else {
+            return
+        }
+
+        // defaultBaseRef answers `origin/main` or a bare local name.
+        let branch = base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
+        guard branch != mergedBranch,
+              await (try? git.checkout(worktreePath: worktree.path, branch: branch)) != nil
+        else {
+            return
+        }
+
+        let counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: "origin/" + branch)
+        if counts?.ahead == 0 {
+            try? await git.resetHard(worktreePath: worktree.path, ref: "origin/" + branch)
+        }
+        await git.deleteMergedBranch(worktreePath: worktree.path, branch: mergedBranch)
+    }
 }

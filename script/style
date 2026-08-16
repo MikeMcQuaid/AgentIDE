@@ -43,6 +43,17 @@ docs_style() {
 }
 
 swift_style() {
+  # Outdated linters quietly disagree with CI's fresh installs; a
+  # brew failure (offline, missing) skips the check rather than
+  # blocking, since CI enforces its own versions anyway.
+  local outdated
+  outdated="$(brew outdated --quiet swiftformat swiftlint 2>/dev/null || true)"
+  if [[ -n "${outdated}" ]]; then
+    echo "Outdated Homebrew linters; run 'brew upgrade' on the host:" >&2
+    echo "${outdated}" >&2
+    return 1
+  fi
+
   # Homebrew's swiftformat is the copy CI installs; a stale copy
   # elsewhere on PATH quietly disagrees with CI.
   local swiftformat

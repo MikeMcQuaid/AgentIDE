@@ -98,9 +98,11 @@ struct PullRequestConversationView: View {
         .task(id: number) {
             isLoading = true
             defer { isLoading = false }
-            let cached = store.load().conversationCache[cacheKey]
+            let metadata = store.load()
+            let cached = metadata.conversationCache[cacheKey]
             description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
+            threads = metadata.threadsCache[cacheKey]?.threads ?? []
             await refresh()
         }
     }
@@ -229,6 +231,13 @@ struct PullRequestConversationView: View {
         let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
         if let failure = answer.graphQLFailure {
             ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+        }
+        // The REST fallback never overwrites cached GraphQL threads:
+        // that would strip resolve buttons from an offline reopen.
+        if answer.graphQLFailure == nil {
+            var metadata = store.load()
+            metadata.threadsCache[cacheKey] = CachedThreads(threads: answer.threads)
+            store.save(metadata)
         }
         return answer.threads
     }

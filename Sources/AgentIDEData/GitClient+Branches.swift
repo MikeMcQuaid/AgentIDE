@@ -65,6 +65,22 @@ public extension GitClient {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// Switches the checkout to a branch.
+    func checkout(worktreePath: String, branch: String) async throws {
+        try await git(["checkout", branch], in: worktreePath)
+    }
+
+    /// Hard-resets the checkout to a ref; callers guard that
+    /// nothing local would be lost.
+    func resetHard(worktreePath: String, ref: String) async throws {
+        try await git(["reset", "--hard", ref], in: worktreePath)
+    }
+
+    /// Deletes a branch with `-d`, so an unmerged branch survives.
+    func deleteMergedBranch(worktreePath: String, branch: String) async {
+        _ = try? await git(["branch", "-d", branch], in: worktreePath, allowFailure: true)
+    }
+
     /// The branch's full commit messages beyond the base ref,
     /// oldest first, for drafting pull request descriptions.
     func commitMessages(worktreePath: String, baseRef: String) async -> [String] {

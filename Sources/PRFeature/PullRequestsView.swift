@@ -64,11 +64,18 @@ public struct PullRequestsView: View {
         // the last worktree's list would otherwise linger. The first
         // reload happens here rather than in a second task keyed on
         // the scope, which could run against the model this one is
-        // about to replace.
+        // about to replace. Revisiting the tab refreshes the list
+        // but leaves the creation form alone: there is no pull
+        // request to poll for until Open PR creates it.
         .task(id: identity) {
-            model = makeModel()
-            await model.reload()
-            await model.loadMergeQueue()
+            if loadedIdentity != identity {
+                model = makeModel()
+                loadedIdentity = identity
+                await model.reload()
+                await model.loadMergeQueue()
+            } else if model.needsCreateForm == false {
+                await model.reload(keepingSelection: true)
+            }
         }
         .onChange(of: model.scope) { Task { await model.reload() } }
         .onChange(of: items) { model.items = items }
@@ -95,6 +102,10 @@ public struct PullRequestsView: View {
     private var rebaseRequest = 0
 
     @State private var model: PullRequestsModel
+
+    /// Which repository and branch the model was last built for;
+    /// tab revisits with the same identity keep it.
+    @State private var loadedIdentity = ""
 
     private let isMainCheckout: Bool
 

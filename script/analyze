@@ -30,22 +30,45 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
 fi
 
 xcodebuild "${args[@]}" clean build >"$log" 2>&1
-swiftlint analyze --compiler-log-path "$log" --strict
-
-# periphery drives its own xcodebuild, which re-enters sandbox-exec
-# and cannot nest, so it runs on the host and in CI only. The project
-# is scanned through the app scheme because periphery's SPM mode does
-# not find an index store under the current build system; the app
-# scheme excludes the test targets, so the few declarations used only
-# by tests carry `// periphery:ignore`.
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  echo "skipping periphery: it cannot build inside the sandbox" >&2
-elif command -v periphery &>/dev/null; then
+  # The sandbox's SourceKit misreads one import as unused; the
+  # baseline swallows exactly that known false positive so real
+  # findings still fail, while the host and CI stay strict with no
+  # baseline at all. The template carries no absolute paths, so it
+  # works for any sandbox user's checkout.
+  baseline=".build/swiftlint-analyze-baseline.json"
+  sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
+    .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
+  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline"
+else
+  swiftlint analyze --compiler-log-path "$log" --strict
+fi
+
+# The project is scanned through the app scheme because periphery's
+# SPM mode does not find an index store under the current build
+# system; the app scheme excludes the test targets, so the few
+# declarations used only by tests carry `// periphery:ignore`.
+if ! command -v periphery &>/dev/null; then
+  echo "skipping periphery: not installed (add it via the Brewfile)" >&2
+elif [[ -n "${SV_SESSION_ID:-}" ]]; then
+  # periphery re-drives xcodebuild, whose package resolution cannot
+  # nest inside sandbox-exec; these user defaults turn off SPM's own
+  # manifest sandbox for this already sandboxed user, and the scan
+  # reuses the index store the build above just wrote instead of
+  # building again.
+  defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES
+  defaults write com.apple.dt.Xcode IDEPackageSupportDisablePackageSandbox -bool YES
+  periphery scan \
+    --project AgentIDE.xcodeproj \
+    --schemes AgentIDEApp \
+    --skip-build \
+    --index-store-path .DerivedData/Index.noindex/DataStore \
+    --strict \
+    --disable-update-check
+else
   periphery scan \
     --project AgentIDE.xcodeproj \
     --schemes AgentIDEApp \
     --strict \
     --disable-update-check
-else
-  echo "skipping periphery: not installed (add it via the Brewfile)" >&2
 fi

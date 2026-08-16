@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import Foundation
@@ -47,6 +48,35 @@ extension PullRequestsModel {
         )
     }
 
+    /// Opens a conversation with its cached enriched header painted
+    /// instantly, then refreshes it; the open scope's light rows
+    /// gain their status icons here.
+    func select(_ summary: PullRequestSummary) {
+        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)]?.summary ?? summary
+        Task {
+            let full = try? await fetchSummary(summary.number)
+            if let full {
+                cacheEnriched(full)
+                if selected?.number == full.number {
+                    selected = full
+                }
+            }
+        }
+    }
+
+    /// Caches one enriched summary, so reopening the conversation
+    /// or restarting the app paints its header instantly.
+    func cacheEnriched(_ summary: PullRequestSummary) {
+        var metadata = store.load()
+        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = CachedSummary(summary: summary)
+        store.save(metadata)
+    }
+
+    /// The enriched summary cache key for one pull request.
+    func enrichedKey(_ number: Int) -> String {
+        repository.path + "#" + String(number)
+    }
+
     /// The stack size, following base branches that are other listed
     /// pull requests' heads.
     func stackDepth(for summary: PullRequestSummary) -> Int {
@@ -59,6 +89,25 @@ extension PullRequestsModel {
             current = next
         }
         return depth
+    }
+
+    /// Whether every local commit is already on the upstream; Open
+    /// PR stays dimmed until then.
+    var isFullyPushed: Bool {
+        isPushed || branchItem?.aheadOfUpstream == 0
+    }
+
+    /// A one-commit branch is its own description: the form
+    /// defaults to that commit, no model involved.
+    func prefillFromSingleCommit(_ worktree: Worktree) async {
+        guard prTitle.isEmpty, prBody.isEmpty else {
+            return
+        }
+
+        let commits = await fetchCommitMessages(worktree)
+        if commits.count == 1, let only = commits.first {
+            apply(description: Self.description(splitFromMessage: only))
+        }
     }
 
     /// Fills the form's blank fields from the branch's commits: the
@@ -115,9 +164,10 @@ extension PullRequestsModel {
         return (title, body)
     }
 
-    /// Pushes when needed, then opens the pull request from the
-    /// form's title and body, with the template appended below the
-    /// body after an empty line; false opens the errors surface.
+    /// Opens the pull request from the form's title and body, with
+    /// the template appended below the body after an empty line;
+    /// false opens the errors surface. The button dims until the
+    /// branch is pushed, so nothing pushes implicitly here.
     func createPullRequest() async -> Bool {
         guard let worktree = actionWorktree else {
             return false
@@ -126,10 +176,6 @@ extension PullRequestsModel {
         let title = prTitle.trimmingCharacters(in: .whitespaces)
         guard title.isEmpty == false else {
             ErrorLog.shared.report("The pull request needs a title.")
-            return false
-        }
-
-        if canPush, await push() == false {
             return false
         }
 
@@ -227,31 +273,34 @@ extension PullRequestsModel {
     }
 
     /// Merges, queues, enables automerge or cancels either, per the
-    /// label; the header refreshes to show the new state.
+    /// label; an immediate merge from the main checkout also cleans
+    /// the checkout up, returning to the default branch and deleting
+    /// the merged one. The header refreshes to show the new state.
     func performMergeAction() async {
         guard let selected, selected.state == "OPEN" else {
             return
         }
 
-        await act {
-            if selected.hasAutomerge {
-                try await github.disableAutomerge(repositoryPath: repository.path, number: selected.number)
-            } else if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
-                try await github.merge(repositoryPath: repository.path, number: selected.number)
-            } else {
-                try await github.enableAutomerge(repositoryPath: repository.path, number: selected.number)
-            }
+        let merges = selected.hasAutomerge == false
+            && selected.checks == "SUCCESS" && selected.mergeable == "MERGEABLE"
+        let succeeded = await act { try await performMergeChange(selected) }
+        if succeeded, merges, let worktree = actionWorktree {
+            await performPostMergeCleanup(worktree, selected.headBranch)
+            Self.requestSidebarRefresh()
         }
         await refreshSummary(selected.number)
     }
 
-    func act(_ work: () async throws -> Void) async {
+    @discardableResult
+    func act(_ work: () async throws -> Void) async -> Bool {
         do {
             try await work()
             status = "Done."
             await reload(keepingSelection: true)
+            return true
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
+            return false
         }
     }
 
