@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -134,7 +135,20 @@ struct PullRequestConversationView: View {
         }
         if threads.isEmpty == false || isLoading {
             Divider()
-            Text("Conversations").font(.headline)
+            HStack {
+                Text("Conversations").font(.headline)
+                Spacer()
+                if threads.contains(where: { $0.isResolved == false }) {
+                    Button {
+                        copyOpenThreads()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .accessibilityLabel("Copy open conversations")
+                    }
+                    .buttonStyle(.borderless)
+                    .hoverHelp("Copy every open conversation, with its file and line, to the clipboard")
+                }
+            }
         }
         // The loading state paints instantly; threads can take a
         // while behind the GraphQL round trip.
@@ -212,6 +226,14 @@ struct PullRequestConversationView: View {
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
+    }
+
+    /// Copies every open conversation as pasteable text.
+    private func copyOpenThreads() {
+        let open = threads.filter { $0.isResolved == false }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(open.map(\.asText).joined(separator: "\n\n"), forType: .string)
+        ErrorLog.shared.note("Copied \(open.count) open conversations.")
     }
 
     /// Flips one conversation's resolve state on GitHub, then

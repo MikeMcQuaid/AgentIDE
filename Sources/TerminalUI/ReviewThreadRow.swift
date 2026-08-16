@@ -30,6 +30,10 @@ public struct ReviewThreadRow: View {
                 // views cannot share a selection, so one block lets
                 // a drag span all of them.
                 MarkdownText(markdown)
+                HStack {
+                    Spacer()
+                    resolveButton
+                }
             }
         }
         .padding(Self.padding)
@@ -61,8 +65,8 @@ public struct ReviewThreadRow: View {
         thread.path + (thread.line.map { ":" + String($0) } ?? "")
     }
 
-    /// The comments; the header line already names the first
-    /// author, so only a mid-thread author change repeats a name.
+    /// The comments; the header names the first author, so a name
+    /// only appears in the body where a different author replies.
     private var markdown: String {
         var sections = [String]()
         var lastAuthor = thread.comments.first?.author ?? ""
@@ -105,14 +109,19 @@ public struct ReviewThreadRow: View {
         }
     }
 
-    /// Icon, anchor, edit, author and the resolve toggle in one line.
+    /// Icon, bold author, anchor, then the edit jump on the right.
     private var header: some View {
         HStack(spacing: Self.spacing) {
             collapseToggle
+            Text(thread.comments.first?.author ?? "")
+                .font(.callout.weight(.semibold))
+                .textSelection(.enabled)
             Text(anchor)
                 .font(.callout.monospaced())
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .textSelection(.enabled)
+            Spacer()
             if let onEdit {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
@@ -121,12 +130,6 @@ public struct ReviewThreadRow: View {
                 .buttonStyle(.borderless)
                 .hoverHelp("Open this file at the anchored line in the built-in editor")
             }
-            Text(thread.comments.first?.author ?? "")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-            Spacer()
-            resolveButton
         }
     }
 }

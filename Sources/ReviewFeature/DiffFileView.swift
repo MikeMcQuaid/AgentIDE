@@ -72,6 +72,8 @@ struct DiffFileView: View {
             HStack {
                 FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
                 Text(file.path).font(.headline.monospaced())
+                Spacer()
+                DiffStatText(additions: file.additions, deletions: file.deletions)
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(file.path, forType: .string)
@@ -81,8 +83,6 @@ struct DiffFileView: View {
                 }
                 .buttonStyle(.borderless)
                 .hoverHelp("Copy this file's path to the clipboard")
-                Spacer()
-                DiffStatText(additions: file.additions, deletions: file.deletions)
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .accessibilityLabel("Edit file")
