@@ -292,7 +292,6 @@ struct RootView: View {
             RepositorySessionsView(
                 repository: repository(of: item),
                 service: dependencies.service,
-                onNewSession: { newSession(for: item) },
                 // The review surfaces follow the selected
                 // conversation's worktree, so clicking around the
                 // repository page retargets Review and PRs.
@@ -304,9 +303,7 @@ struct RootView: View {
                 repository: repository(of: item),
                 service: dependencies.service,
                 worktreePath: item.worktree.path,
-                onNewSession: { newSession(for: item) },
-                onResumed: { await sessionStarted() },
-            )
+            ) { await sessionStarted() }
         } else {
             CreateSessionPane(
                 worktree: item.worktree,

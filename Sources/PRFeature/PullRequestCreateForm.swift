@@ -54,9 +54,9 @@ struct PullRequestCreateForm: View {
             HStack {
                 Text("Template").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Tick every box") { model.tickTemplateBoxes() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+                Button("Tick every box", systemImage: "checklist") { model.tickTemplateBoxes() }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
                     .hoverHelp("Tick every unticked checkbox in the template")
             }

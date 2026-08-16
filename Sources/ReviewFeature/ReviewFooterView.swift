@@ -51,7 +51,7 @@ struct ReviewFooterView: View {
     private static let subjectLimit = 50
     private static let bodyLimit = 72
 
-    private static let messageHeightRange: ClosedRange<Double> = 60 ... 400
+    private static let messageHeightRange: ClosedRange<Double> = 90 ... 600
     private static let fieldInset: CGFloat = 5
     private static let resizeHandleHeight: CGFloat = 7
 
@@ -62,7 +62,7 @@ struct ReviewFooterView: View {
     /// The footer's height, dragged by the handle above it and
     /// persisted like the pane widths.
     @AppStorage("reviewMessageHeight")
-    private var messageHeight = 88.0
+    private var messageHeight = 150.0
     @State private var messageDragBase: Double?
 
     /// The commit listing coloured like git log: hashes orange,
@@ -129,8 +129,14 @@ struct ReviewFooterView: View {
             "Draft the commit message from the uncommitted diff with the on-device model; "
                 + "only fills an empty message",
         )
-        BusyButton("Commit", busy: "Committing", disabled: canCommit == false, action: onCommit)
-            .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
+        BusyButton(
+            "Commit",
+            busy: "Committing",
+            disabled: canCommit == false,
+            keepsTitle: true,
+            action: onCommit,
+        )
+        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
         BusyButton(
             "Amend",
             busy: "Amending",

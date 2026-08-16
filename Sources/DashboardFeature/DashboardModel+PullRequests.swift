@@ -93,7 +93,11 @@ extension DashboardModel {
         fresh: [PullRequestSummary],
     ) async {
         guard Self.observedMerge(previous: previous, fresh: fresh),
-              deletingPaths.contains(item.worktree.path) == false
+              deletingPaths.contains(item.worktree.path) == false,
+              // Never pull the ground from under the worktree being
+              // looked at: it would vanish mid-action and read as a
+              // crash. Its context menu still offers the cleanup.
+              selection?.worktree.path != item.worktree.path
         else {
             return
         }

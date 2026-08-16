@@ -8,7 +8,9 @@ public struct BusyButton: View {
     // MARK: Lifecycle
 
     /// Creates the button; `busy` is the label shown while the
-    /// action runs, such as Fixing for Fix. With `systemImage` the
+    /// action runs, such as Fixing for Fix. `keepsTitle` holds the
+    /// label still and only dims, for surfaces whose status line
+    /// already narrates the work. With `systemImage` the
     /// icon leads and an empty title is fine, but VoiceOver then
     /// needs `accessibilityLabel`. `prominent` marks a surface's one
     /// primary action.
@@ -20,10 +22,11 @@ public struct BusyButton: View {
         accessibilityLabel: String? = nil,
         prominent: Bool = false,
         disabled: Bool = false,
+        keepsTitle: Bool = false,
         action: @escaping @MainActor () async -> Void,
     ) {
         self.title = title
-        busyTitle = busy
+        busyTitle = keepsTitle ? title : busy
         self.systemImage = systemImage
         spokenLabel = accessibilityLabel
         isProminent = prominent

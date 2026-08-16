@@ -203,6 +203,8 @@ Two visually unmistakable flavours ride that one client:
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
+A session picker for that shell is a later slice: today the session name
+must be known or listed by hand.
 Remote Login must be enabled in macOS settings first. An SSH session is
 isolated by user permissions rather than sandbox-exec whichever account it
 targets, but attaching connects it to the sandboxed tmux server, so agent

@@ -30,7 +30,7 @@ struct WorktreeRowView: View {
                         .hoverHelp(badgesExplanation)
                     pullRequestBadge
                 }
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

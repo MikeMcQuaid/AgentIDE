@@ -133,12 +133,12 @@ final class PullRequestsModel {
     /// The selected conversation; the view writes nil to go back.
     var selected: PullRequestSummary?
 
-    private(set) var summaries: [PullRequestSummary] = []
+    var summaries: [PullRequestSummary] = []
     private(set) var isLoading = false
 
     /// True once the first listing answered; the creation form only
     /// appears after that, and mid-reload churn never hides it.
-    private(set) var hasLoaded = false
+    var hasLoaded = false
     private(set) var fetchedLimit = 0
     private(set) var hasMergeQueue = false
 
@@ -284,6 +284,10 @@ final class PullRequestsModel {
         currentBranch ?? branch
     }
 
+    var cacheKey: String {
+        repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
+    }
+
     /// Where a branch's draft is stored, nil without a branch.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
@@ -314,7 +318,7 @@ final class PullRequestsModel {
         if extending == false {
             page = 0
             selected = nil
-            summaries = store.load().pullRequestListsCache[cacheKey]?.summaries ?? []
+            paintCachedListing()
         }
         defer {
             isLoading = false
@@ -370,8 +374,4 @@ final class PullRequestsModel {
     /// Fetches stay one page ahead of the visible one, so the pager
     /// knows whether a next page exists.
     private static let pageLookahead = 2
-
-    private var cacheKey: String {
-        repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
-    }
 }

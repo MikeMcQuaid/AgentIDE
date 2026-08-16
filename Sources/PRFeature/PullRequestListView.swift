@@ -191,6 +191,7 @@ struct PullRequestFooterView: View {
             systemImage: "arrow.up",
             accessibilityLabel: "Push",
             disabled: model.canPush == false,
+            keepsTitle: true,
         ) {
             if await model.push() == false {
                 utilityTab = UtilityTabTarget.errors

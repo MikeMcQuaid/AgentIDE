@@ -61,6 +61,12 @@ public struct NewSessionPane: View {
         // every appearance or a repository plus would show the
         // previous pick.
         .onAppear { repository = resolvedPreset ?? repository }
+        // Another repository's plus while the form is open changes
+        // the preset under it; the form and the sidebar both follow.
+        .onChange(of: model.newSessionRepository) {
+            repository = resolvedPreset ?? repository
+            model.selectMainCheckout(of: repository)
+        }
         // Picking here is a middle-pane action on that repository
         // too, so the sidebar follows the picker like it follows
         // the openers.

@@ -192,6 +192,10 @@ done:
 9. Polish, including checking the Brewfile's tools are installed at
    startup and offering to install any that are missing from a copy
    vendored in the app bundle
+10. A terminal session picker for SSH: one command on the sandbox
+    user's `PATH` that lists the running agent sessions and attaches
+    to the chosen one, so steering from an iOS SSH client needs no
+    remembered session names
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.

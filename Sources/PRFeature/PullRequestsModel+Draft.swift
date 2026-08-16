@@ -11,6 +11,20 @@ extension PullRequestsModel {
         summaries.isEmpty == false && summaries.count == fetchedLimit
     }
 
+    /// Paints the stored listing for this scope, if any. A cached
+    /// listing decides the creation form as surely as a fetched one,
+    /// so returning to the tab shows it instantly rather than a
+    /// loading state.
+    func paintCachedListing() {
+        guard let cached = store.load().pullRequestListsCache[cacheKey]?.summaries else {
+            summaries = []
+            return
+        }
+
+        summaries = cached
+        hasLoaded = true
+    }
+
     /// Where a branch's draft is stored, nil without a branch.
     var draftKey: String? {
         listedBranch.map { repository.path + "#" + $0 }
