@@ -127,11 +127,13 @@ public struct GitHubClient: Sendable {
         return result?.standardOutput.contains("\"mergeQueue\":{") ?? false
     }
 
-    /// The repository's `owner/name`, nil when unknown; a setting
-    /// that rarely changes, so gh's HTTP cache answers repeats.
+    /// The repository's `owner/name`, nil when unknown. No caching:
+    /// `--cache` belongs to `gh api` alone, and passing it here made
+    /// every lookup die on an unknown flag, which read downstream as
+    /// a missing origin.
     public func fullName(repositoryPath: String) async -> String? {
         let result = try? await gh(
-            ["repo", "view", "--json", "nameWithOwner", "--cache", "1h", "--jq", ".nameWithOwner"],
+            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
             in: repositoryPath,
         )
         let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -175,9 +177,11 @@ public struct GitHubClient: Sendable {
     /// methods; hardcoding one broke on repositories disallowing it. Settings rarely change, so
     /// gh's HTTP cache answers repeats.
     public func mergeMethodFlag(repositoryPath: String) async -> String {
+        // No `--cache`: it belongs to `gh api` alone and silently
+        // forced the default method here.
         let result = try? await gh(
             [
-                "repo", "view", "--cache", "1h",
+                "repo", "view",
                 "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed",
             ],
             in: repositoryPath,
