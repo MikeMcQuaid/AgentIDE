@@ -85,7 +85,6 @@ struct PullRequestListView: View {
         PullRequestRowView(
             summary: summary,
             stackDepth: stackDepth(summary),
-            hasMergeQueue: false,
             showsActions: false,
             onCopyComments: noAction,
             onCopyChecks: noAction,

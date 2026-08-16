@@ -13,7 +13,6 @@ struct PullRequestConversationPane: View {
 
     let summary: PullRequestSummary
     let stackDepth: Int
-    let hasMergeQueue: Bool
     let github: GitHubClient
     let repositoryPath: String
     let store: MetadataStore
@@ -32,7 +31,6 @@ struct PullRequestConversationPane: View {
                 PullRequestRowView(
                     summary: summary,
                     stackDepth: stackDepth,
-                    hasMergeQueue: hasMergeQueue,
                     showsActions: true,
                     onCopyComments: onCopyComments,
                     onCopyChecks: onCopyChecks,

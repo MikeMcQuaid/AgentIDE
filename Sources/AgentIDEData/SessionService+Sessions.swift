@@ -30,29 +30,6 @@ public extension SessionService {
         tmux.attachCommand(sessionName: sessionName)
     }
 
-    /// Every AgentIDE tmux session for the session manager: the
-    /// sandboxed agents and the host shells, deduplicated.
-    func allTmuxSessions() async -> [(name: String, isHostShell: Bool)] {
-        var seen = Set<String>()
-        var results = [(name: String, isHostShell: Bool)]()
-        for pane in await (try? tmux.panes()) ?? [] where seen.insert(pane.sessionName).inserted {
-            results.append((pane.sessionName, false))
-        }
-        let list = try? await processes.run(
-            [Self.hostTmuxPath, "ls", "-F", "#{session_name}"],
-            workingDirectory: nil,
-            environment: [:],
-        )
-        let shells = (list?.standardOutput ?? "")
-            .split(separator: "\n")
-            .map(String.init)
-            .filter { $0.hasPrefix(Self.hostShellPrefix) }
-        for name in shells where seen.insert(name).inserted {
-            results.append((name, true))
-        }
-        return results
-    }
-
     /// Kills one session on whichever server owns it, escalating
     /// when the polite kill fails: TERM the pane's process, wait,
     /// then KILL it. Sandbox panes only get tmux-level retries: the

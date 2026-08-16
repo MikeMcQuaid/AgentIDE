@@ -130,7 +130,6 @@ public struct PullRequestsView: View {
         PullRequestConversationPane(
             summary: summary,
             stackDepth: model.stackDepth(for: summary),
-            hasMergeQueue: model.hasMergeQueue,
             github: model.github,
             repositoryPath: model.repository.path,
             store: model.store,

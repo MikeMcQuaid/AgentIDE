@@ -13,7 +13,6 @@ struct PullRequestRowView: View {
 
     let summary: PullRequestSummary
     let stackDepth: Int
-    let hasMergeQueue: Bool
     let showsActions: Bool
     let onCopyComments: @MainActor () async -> Void
     let onCopyChecks: @MainActor () async -> Void
