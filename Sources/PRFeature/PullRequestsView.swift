@@ -19,8 +19,10 @@ public struct PullRequestsView: View {
         service: SessionService,
         store: MetadataStore,
         branch: String? = nil,
+        isMainCheckout: Bool = false,
     ) {
         self.items = items
+        self.isMainCheckout = isMainCheckout
         identity = repository.id + "#" + (branch ?? "")
         makeModel = {
             PullRequestsModel(
@@ -40,10 +42,18 @@ public struct PullRequestsView: View {
     /// The scope picker over the list or the selected conversation.
     public var body: some View {
         VStack(spacing: 0) {
-            PullRequestScopePicker(scope: $model.scope)
+            HStack {
+                PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
+                Spacer()
+                RefreshButton { await model.reload(keepingSelection: true) }
+                    .hoverHelp("Fetch the pull requests again")
+            }
+            .padding(.trailing, Self.headerPadding)
             Divider()
             if let selected = model.selected {
                 conversation(for: selected)
+            } else if model.needsCreateForm {
+                PullRequestCreateForm(model: model)
             } else {
                 listView
             }
@@ -62,6 +72,10 @@ public struct PullRequestsView: View {
         }
         .onChange(of: model.scope) { Task { await model.reload() } }
         .onChange(of: items) { model.items = items }
+        // The menu bar's Push and Rebase land here through the
+        // storage bus, acting on whichever worktree the pane shows.
+        .onChange(of: pushRequest) { Task { _ = await model.push() } }
+        .onChange(of: rebaseRequest) { Task { _ = await model.rebaseSigned() } }
     }
 
     // MARK: Internal
@@ -72,22 +86,17 @@ public struct PullRequestsView: View {
 
     // MARK: Private
 
-    /// The errors tab's position in the utility tab order, driven
-    /// through the storage signal bus.
-    private static let errorsTabIndex = 5
+    private static let headerPadding: CGFloat = 8
 
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTabIndex")
-    private var utilityTabIndex = 0
-
-    /// The new session form's last choices, naming what wrote the
-    /// change in the draft's AI disclosure.
-    @AppStorage("agentModel")
-    private var agentModel = ""
-    @AppStorage("agentEffort")
-    private var agentEffort = ""
+    /// The menu bar's action signals.
+    @AppStorage("pushRequest")
+    private var pushRequest = 0
+    @AppStorage("rebaseRequest")
+    private var rebaseRequest = 0
 
     @State private var model: PullRequestsModel
+
+    private let isMainCheckout: Bool
 
     /// The repository and branch as a task identity: it comes from
     /// the view's own inputs, never the persisted model, so a
@@ -95,6 +104,12 @@ public struct PullRequestsView: View {
     private let identity: String
 
     private let makeModel: () -> PullRequestsModel
+
+    /// The worktree scope names the branch itself when the pane
+    /// drives from the main checkout, where no worktree exists.
+    private var worktreeScopeTitle: String {
+        isMainCheckout ? "Branch" : "Worktree"
+    }
 
     private var listView: some View {
         PullRequestListView(
@@ -108,81 +123,20 @@ public struct PullRequestsView: View {
     }
 
     private var footer: some View {
-        PullRequestFooterView(
-            canPush: model.canPush,
-            canOpenPullRequest: model.canOpenPullRequest,
-            canRebase: model.branchItem != nil,
-            hasDraft: model.hasDraft,
-            pushHelp: model.pushHelp,
-            status: model.status,
-            onRebase: {
-                Task {
-                    if await model.rebaseSigned() == false {
-                        utilityTabIndex = Self.errorsTabIndex
-                    }
-                }
-            },
-            onPush: {
-                Task {
-                    if await model.push() == false {
-                        utilityTabIndex = Self.errorsTabIndex
-                    }
-                }
-            },
-            onOpenPullRequest: { Task { await ship() } },
-            onRefresh: { Task { await model.reload(keepingSelection: true) } },
-        )
+        PullRequestFooterView(model: model)
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
         PullRequestConversationPane(
             summary: summary,
-            canRemediate: model.worktree(for: summary) != nil,
             stackDepth: model.stackDepth(for: summary),
-            hasMergeQueue: model.hasMergeQueue,
             github: model.github,
             repositoryPath: model.repository.path,
             store: model.store,
             onBack: { model.selected = nil },
-            onAutomerge: {
-                model.act { try await model.github.enableAutomerge(
-                    repositoryPath: model.repository.path,
-                    number: summary.number,
-                )
-                }
-            },
-            onMerge: {
-                model.act { try await model.github.merge(
-                    repositoryPath: model.repository.path,
-                    number: summary.number,
-                )
-                }
-            },
-            onRemediate: { model.act { try await model.remediate(summary) } },
+            onCopyComments: { await model.copyUnresolvedComments(summary) },
+            onCopyChecks: { await model.copyFailingChecks(summary) },
+            onResolvedChanged: { await model.refreshSummary(summary.number) },
         )
-    }
-
-    /// Routes Open PR's outcome: a fresh draft opens in the editor
-    /// tab, a failure opens the errors tab.
-    private func ship() async {
-        let item = model.branchItem
-        let disclosure = PullRequestDraft.disclosure(
-            agent: (item?.session?.agent ?? item?.pastSessions.first?.agent)?.displayName,
-            model: agentModel,
-            effort: agentEffort,
-        )
-        switch await model.ship(disclosure: disclosure) {
-        case let .drafted(relativePath):
-            if let path = item?.worktree.path {
-                FileOpener.open(relativePath: relativePath, line: nil, worktreePath: path)
-            }
-
-        case .failed:
-            utilityTabIndex = Self.errorsTabIndex
-
-        case .created,
-             .unavailable:
-            break
-        }
     }
 }

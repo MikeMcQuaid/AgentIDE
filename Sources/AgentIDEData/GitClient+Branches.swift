@@ -5,16 +5,20 @@ import Foundation
 public extension GitClient {
     /// The branch actually checked out in a worktree, nil when
     /// detached or unreadable; agents sometimes switch away from the
-    /// branch the worktree was created for.
+    /// branch the worktree was created for. The full symbolic ref
+    /// with the prefix stripped by hand, because shortening git-side
+    /// (`--abbrev-ref`) answered `heads/main` whenever an agent left
+    /// a stray ref named `main` elsewhere in the repository.
     func currentBranch(worktreePath: String) async -> String? {
-        let name = try? await git(["rev-parse", "--abbrev-ref", "HEAD"], in: worktreePath)
-            .standardOutput
+        let name = await (try? git(["symbolic-ref", "HEAD"], in: worktreePath, allowFailure: true))
+            .flatMap { $0.succeeded ? $0.standardOutput : nil }?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let name, name.isEmpty == false, name != "HEAD" else {
+        let prefix = "refs/heads/"
+        guard let name, name.hasPrefix(prefix) else {
             return nil
         }
 
-        return name
+        return String(name.dropFirst(prefix.count))
     }
 
     /// Whether a commit carries a verifying GPG signature: good, or
@@ -61,46 +65,25 @@ public extension GitClient {
         return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Hides a path from git status for this clone only: the exclude
-    /// file lives in the common git directory, shared by every
-    /// worktree, and nothing tracked changes.
-    func excludeLocally(pattern: String, worktreePath: String) async throws {
-        let common = try await git(["rev-parse", "--git-common-dir"], in: worktreePath)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let directory = (common.hasPrefix("/") ? common : worktreePath + "/" + common) + "/info"
-        let file = directory + "/exclude"
-        let existing = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
-        guard existing.split(separator: "\n").contains(Substring(pattern)) == false else {
-            return
-        }
-
-        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let separator = existing.isEmpty || existing.hasSuffix("\n") ? "" : "\n"
-        try (existing + separator + pattern + "\n").write(toFile: file, atomically: true, encoding: .utf8)
-    }
-
-    /// The branch's commit subjects beyond a base ref, newest
-    /// first; empty when the base is unknown, as on a repository
-    /// never pushed.
-    func commitSubjects(worktreePath: String, baseRef: String) async -> [String] {
+    /// The branch's full commit messages beyond the base ref,
+    /// oldest first, for drafting pull request descriptions.
+    func commitMessages(worktreePath: String, baseRef: String) async -> [String] {
         let result = try? await git(
-            ["log", "--format=%s", baseRef + "..HEAD"],
+            ["log", "--reverse", "--format=%B%x1e", baseRef + "..HEAD"],
             in: worktreePath,
             allowFailure: true,
         )
-        guard let result, result.succeeded else {
-            return []
-        }
-
-        return result.standardOutput.split(separator: "\n").map(String.init)
+        return (result?.standardOutput ?? "")
+            .split(separator: "\u{1e}")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
     }
 
     /// The branch's commits beyond the base ref, newest first, one
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {
         let result = try? await git(
-            ["log", "--format=%h%d %s", baseRef + "..HEAD"],
+            ["log", "--format=%h %s%d", baseRef + "..HEAD"],
             in: worktreePath,
             allowFailure: true,
         )
@@ -110,7 +93,7 @@ public extension GitClient {
         // Plain local branches pointing there are already merged, so
         // only the default and remote names survive the filter.
         let base = try? await git(
-            ["log", "-1", "--format=%h%d %s", baseRef],
+            ["log", "-1", "--format=%h %s%d", baseRef],
             in: worktreePath,
             allowFailure: true,
         )
@@ -125,9 +108,12 @@ public extension GitClient {
     /// is fully merged there, so only `origin/*`, `main`, `master`
     /// and `HEAD` arrows orient the reader.
     internal static func filteredBaseDecorations(_ line: String) -> String {
-        guard let open = line.firstIndex(of: "("),
-              let close = line.firstIndex(of: ")"),
-              open < close
+        // Decorations sit at the line's end, after the subject, so
+        // the last parenthesis pair is theirs even when the subject
+        // contains its own.
+        guard let open = line.lastIndex(of: "("),
+              let close = line[open...].firstIndex(of: ")"),
+              line[line.index(after: close)...].isEmpty
         else {
             return line
         }

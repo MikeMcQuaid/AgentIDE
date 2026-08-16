@@ -3,6 +3,26 @@ import Foundation
 @testable import ReviewFeature
 import Testing
 
+// MARK: - CommitMessageFieldTests
+
+/// The footer's subject and body fields split and rejoin the commit
+/// message around git's blank separator line.
+struct CommitMessageFieldTests {
+    @Test
+    func `subject and body split and rejoin around the separator`() {
+        let message = "Fix the bug\n\nIt crashed.\n\n- twice"
+        #expect(ReviewFooterView.subject(of: message) == "Fix the bug")
+        #expect(ReviewFooterView.messageBody(of: message) == "It crashed.\n\n- twice")
+        #expect(
+            ReviewFooterView.message(subject: "Fix the bug", body: "It crashed.\n\n- twice") == message,
+        )
+        #expect(ReviewFooterView.message(subject: "Just a subject", body: "") == "Just a subject")
+        #expect(ReviewFooterView.messageBody(of: "Just a subject").isEmpty)
+    }
+}
+
+// MARK: - ReviewModelTests
+
 /// Exercises the review model's scopes against a real repository, so
 /// each scope button reliably changes what the pane shows.
 struct ReviewModelTests {

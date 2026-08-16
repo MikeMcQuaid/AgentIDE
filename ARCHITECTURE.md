@@ -155,29 +155,49 @@ exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
 
 ### Terminals
 
-Two visually unmistakable flavours, both rendered by SwiftTerm on a local
-PTY:
+Both terminal panes attach to tmux as control mode clients
+(`tmux -C attach-session`, the textual protocol in tmux(1)'s CONTROL
+MODE section) rather than drawing a remote screen over a PTY. tmux
+streams pane output as `%output` events which the pane decodes
+(`TmuxControlParser` in Domain, `TmuxControlChannel` in DataAccess) and
+feeds into a local SwiftTerm view; keystrokes, pastes and resizes go
+back as `send-keys -H` and `refresh-client -C` commands. On attach the
+pane seeds its local buffer from `capture-pane -S -`, then nudges the
+client size so full-screen interfaces repaint. Because the screen and
+scrollback are local, selection, copying, the mouse wheel and
+scrollback behave like a native text view while the sessions still
+outlive the app; agent panes additionally reflow multi-line copies for
+prose and Option-drag copies a rectangle with gutter marks trimmed.
+Programs that request the mouse get it, matching every terminal:
+Claude Code scrolls its own internal transcript (which never reaches
+scrollback, so no scrollbar can exist for it) and pagers scroll
+natively, with Shift bypassing to local selection and scrolling;
+programs that leave the mouse alone, Codex and plain shells included,
+select and scroll natively with no modifier.
+
+Two visually unmistakable flavours ride that one client:
 
 - **Sandbox terminal**: the launch shape with payload
-  `exec tmux attach-session -t <name>`. The attaching client runs inside the
-  sandbox too; tmux sockets are owner-only, so no attach path can skip sudo.
-  Closing the view detaches and never kills the session.
-- **Host terminal** (Review): a host tmux session per worktree
-  (`new-session -A`, so attach-or-create) as the host user, no sudo, no
-  sandbox, full `gh` credentials. Named
-  `agentide-shell--<repo>--<branch-slug>`, so `tmux ls` on the host reads
-  like the sidebar. tmux starts the user's default login
-  shell, and because the server outlives its clients the shell survives
-  pane switches and app restarts exactly like agent sessions do. In both,
-  the mouse belongs to tmux: the wheel scrolls tmux history (the
-  alternate screen leaves the outer terminal nothing to scroll), a drag
-  copies through copy-mode and OSC 52 (agent panes reflow multi-line
-  copies for prose), Shift-drag falls back to a local selection with
-  Cmd-C and Option-drag copies a rectangle with gutter marks trimmed;
-  that is the price of sessions that outlive the app. Both
+  `exec tmux -C attach-session -t <name>`. The attaching client runs
+  inside the sandbox too; tmux sockets are owner-only, so no attach
+  path can skip sudo. Closing the view detaches and never kills the
+  session.
+- **Host terminal** (Review): a plain login shell on the pane's own
+  PTY as the host user, no sudo, no sandbox, full `gh` credentials and
+  no tmux at all: shells stay mounted across tab switches but live and
+  die with the app, a deliberate trade after tmux-backed shells kept
+  wedging their control clients; the tab bar's Close shell ends one
+  instantly. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
-  pane on the left and the shell in the utility pane.
+  pane on the left and the shell in the utility pane. External attaches
+  to agent sessions (SSH, `script/attach`) still get tmux-native mouse
+  scrolling and
+  OSC 52 copying from the server config. An agent pane attaching
+  detaches any
+  other client of its session (`-d`): clients leaked by an earlier app
+  run would otherwise linger forever, so an SSH viewer is dropped when
+  the app's pane (re)attaches and simply reattaches when wanted.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
@@ -224,6 +244,7 @@ flowchart TD
     Review --> Domain
     PR --> Domain
     Session --> Terminal
+    Terminal --> Data
     Dashboard -.->|ports| Data
     Session -.->|ports| Data
     Review -.->|ports| Data
@@ -239,7 +260,8 @@ flowchart TD
   database APIs are banned.
 - **AgentIDEData**: protocol ports with adapter implementations: `GitClient`,
   `GitHubClient` (`gh` shell-outs today, native URLSession GraphQL for hot
-  paths later), `SandvaultLauncher`, `TmuxClient`, `TranscriptReader`,
+  paths later), `SandvaultLauncher`, `TmuxClient`, `TmuxControlChannel`
+  (a live `tmux -C` client on pipes), `TranscriptReader`,
   `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
   outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
   later), `FoundationModelClient` (the on-device Apple foundation model
@@ -253,7 +275,8 @@ flowchart TD
   and an attributed NSTextView today, STTextView as the review slice
   deepens).
 - **TerminalUI**: shared UI components, not a feature: the SwiftTerm
-  wrapper (command specification in, PTY view out), the AppKit-backed
+  wrapper (a `tmux -C` argv in, a locally rendered pane out, via
+  DataAccess's control mode channel), the AppKit-backed
   tooltips and the syntax highlighting engine. Highlighting parses with
   tree-sitter grammars and falls back to a pure-Swift line tokenizer in
   the Domain for text without a loaded grammar, such as fragmentary diff
@@ -351,9 +374,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    permission-skipping flag inside the sandbox), and the session launches
    through the tmux payload above.
 8. The prompt travels inside the launch command, read from its file as the
-   agent starts (`"$(cat …)"` evaluated in the sandbox): pasting it as
+   agent starts (`"$(cat …)"` evaluated in the sandbox, the file path
+   shell-quoted): pasting it as
    terminal input after launch raced the agent's terminal setup, which
-   flushed pending input and lost the prompt. The pane's `INITIAL_DIR` is
+   flushed pending input and lost the prompt. The accepted trade-offs: the
+   expanded prompt appears in the agent process's own argv, visible to
+   `ps` on the machine, and prompts are bounded by the kernel's
+   argument-size limit.
+   The pane's `INITIAL_DIR` is
    pinned to the worktree so the sandbox's zshenv cannot redirect the agent
    elsewhere.
 9. The session is recorded in the metadata store, with the agent-native
@@ -403,7 +431,9 @@ Sendable` and `nonisolated(unsafe)` are banned.
 3. Rendering highlights with tree-sitter grammars (Swift, Ruby and Bash
    today; JavaScript, TypeScript, Markdown, JSON and YAML as the review
    slice deepens, alongside the move to STTextView), with line numbers
-   and visible whitespace in both the diff and the editor.
+   and visible whitespace in both the diff (tabs and trailing whitespace
+   carry a background tint, so copied diff text stays character-exact)
+   and the editor (substitute glyphs).
 4. Rejecting selected lines builds a minimal reverse patch with
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and
@@ -431,21 +461,30 @@ Sendable` and `nonisolated(unsafe)` are banned.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
-5. Opening a pull request is two-phase: the first click writes a draft file
-   in the worktree (the title summarises the branch's commit subjects
-   through the on-device model when there are several, else the last
-   commit's subject, over the repository template with checkboxes
-   prechecked and any AI disclosure line filled with the session's agent,
-   model and effort) and opens it in the editor tab, hidden from git
-   status through the repository-local exclude file; the second click, now
-   Create PR, pushes and runs `gh pr create` with the draft's edited title
-   and body, then deletes the draft.
+5. When the branch has no open pull request, the worktree scope shows a
+   creation form instead of the list: title, body and the repository's
+   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Opening
+   pushes when needed, then runs `gh pr create` with the template
+   appended below the body after an empty line. Open PR sits in the
+   footer as the primary action (Cmd-Return), after fetch, rebase and
+   push in click order. Blank fields fill from the branch's commits:
+   a one-commit branch defaults to that commit's own message, and a
+   generate button inside the title field summarises several through
+   the on-device model, locking the fields while it drafts; typed
+   text is never overwritten. A repository without a template shows
+   no template field, and with one the generate button also
+   completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
-7. One-click remediation composes existing flows: fetch failing check logs
-   and review comments natively, write them into a prompt file and launch a
-   fix agent in the same worktree.
+7. Each pull request row offers the last mile as small actions: copy the
+   unresolved review conversations, or the failing checks with their
+   failed steps' actual log output, to the clipboard for pasting into
+   an agent, and open the page in the Browser tab. Conversations
+   resolve individually through the GraphQL API, on the conversation
+   page and inline on the review tab under the files they anchor to,
+   each entry naming its file and line; resolving refreshes the pull
+   request's header and row immediately.
 8. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
@@ -474,10 +513,18 @@ Sendable` and `nonisolated(unsafe)` are banned.
 ### Close and reopen a session
 
 Closing a session kills only the tmux session. The worktree, transcripts and
-metadata (including the resume id) remain. Reopening builds the agent's
+metadata (including the resume id) remain, and the deliberate close is
+recorded so the automatic resumes below leave that worktree alone until a
+session starts there again. Reopening builds the agent's
 resume command (`claude --resume <id>`, or the Codex equivalent) through the
 normal launch shape in the same canonical cwd, restoring the full prior
-conversation. Deleting a worktree composes with this: its conversations stay
+conversation. A worktree whose session never recorded a resume id falls
+back to a fresh session there, never a relaunch of the original prompt,
+which would re-run the whole task against the already modified worktree.
+
+While agents or shells run, the app holds a system activity that defers
+idle sleep (`SleepInhibitor`; closing the lid still sleeps), and sessions
+that were running at sleep and died with it resume automatically on wake. Deleting a worktree composes with this: its conversations stay
 listed on the repository page and resume into fresh worktrees.
 
 Beyond the one live session, every earlier conversation in a worktree is
@@ -487,10 +534,15 @@ code fences highlighted and tool steps showing the actual command run.
 An inactive session resumes either in place or into a fresh worktree and
 branch; in the latter case the transcript is first copied into the new
 working directory's transcript directory, because agents look
-conversations up by cwd. Only agents whose transcripts are scoped per
-working directory participate; Codex's flat session directory cannot be
-attributed to one worktree, so its history surfaces through its own
-resume flow instead.
+conversations up by cwd. Agents whose transcripts are scoped per
+working directory list that way directly; Codex keeps one flat date
+tree instead, so an index attributes each rollout by the working
+directory embedded in its metadata line. A rollout's identity is its
+file name stem, never the embedded session id, which subagent
+rollouts share with their parent thread and which would break list
+selection; the embedded id is kept separately as what resume passes
+to Codex, and subagent rollouts stay hidden as a turn's internal
+machinery rather than conversations.
 
 Every repository also lists its main checkout as a permanent entry, so a
 repository with no worktrees still shows. Selecting it opens the

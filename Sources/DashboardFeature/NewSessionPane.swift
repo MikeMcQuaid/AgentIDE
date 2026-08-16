@@ -45,6 +45,12 @@ public struct NewSessionPane: View {
                 submitTitle: "Start agent",
                 submitHelp: "Create a worktree and branch and launch the agent in it (Cmd-Return)",
             ) { submission in await start(submission) }
+            if let failure = model.screenError {
+                Text(failure)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
             Spacer()
         }
         .padding([.horizontal, .bottom])

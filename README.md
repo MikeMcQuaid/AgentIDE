@@ -49,6 +49,10 @@ before shipping.
   revisit (so you always know where you are needed)
 - Notifies you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
+- Renders terminals locally from a tmux control mode client, so selecting,
+  copying, wheel scrolling and scrollback behave like any other text on
+  your Mac while the sessions keep running in tmux (so native terminal
+  feel costs no session survival)
 - Reflows multi-line copies from agent terminals: indentation, gutter
   marks and hard line breaks go while paragraphs and lists survive, and
   Option-drag copies a rectangle (so answers paste cleanly into chat,
@@ -61,8 +65,10 @@ before shipping.
 ### Review
 
 - Presents the agent's conversation beside a pull-request-style review of its
-  diff, syntax highlighted with generated files hidden (so you review what
-  matters the way you would on GitHub)
+  diff, syntax highlighted with per-file and total diffstats, generated files
+  hidden, a whitespace-only-change toggle and the open pull request's
+  conversations inline under their files, resolvable in place (so you review
+  what matters the way you would on GitHub)
 - Rejects individual lines to amend the commit, edits commit messages and
   edits files directly in a built-in syntax-highlighted editor (so small fixes
   need no other app)
@@ -72,14 +78,16 @@ before shipping.
 
 ### Ship
 
-- Pushes branches and opens one or more pull requests, stacked if needed,
-  across public and private repositories: the title and body draft in the
-  built-in editor from each repository's template, checkboxes prechecked
-  and any AI disclosure filled in (so shipping matches how each project
-  already works without retyping its boilerplate)
-- Addresses automated and human review comments, fixes failing CI, resolves
-  merge conflicts and enables automerge or merges, each with one click (so
-  the last mile is not the slowest)
+- Pushes branches, showing how many commits each push sends and naming
+  whether a rebase would move the base, sign commits or both, then opens
+  pull requests from an in-app form that fills in the project's own
+  template below your title and body, defaulting both from a single
+  commit or drafting them from many with the on-device model (so
+  shipping needs no retyping)
+- Copies unresolved review comments, or failing CI steps with their
+  actual log output, straight into a prompt, resolves conversations one
+  by one, resolves merge conflicts and enables automerge or merges,
+  each with one click (so the last mile is not the slowest)
 
 ### Tidy up
 
@@ -92,9 +100,17 @@ before shipping.
 
 ### Resilience
 
-- Keeps sessions in a tmux server owned by the sandbox user rather than the
-  app (so agents and terminals survive AgentIDE quitting, crashing or
-  updating, expectedly or not)
+- Keeps agent sessions in a tmux server owned by the sandbox user rather
+  than the app (so agents survive AgentIDE quitting, crashing or
+  updating, expectedly or not; the host shell tab deliberately does not,
+  living and dying with the app)
+- Defers idle sleep while agents or shells run and resumes sessions the
+  sleep killed when the Mac wakes (so a long response survives you
+  walking away; closing the lid still sleeps)
+- Collects every failure and status message into a Messages utility tab,
+  shown from the first error and inline on screens without the utility
+  pane (so background failures are never lost to a log you were not
+  watching)
 
 ## Out of Scope Features
 
@@ -144,6 +160,12 @@ currently launches to an empty dashboard; features land slice by slice (see
 
 ## Status
 
+Unstable and changing daily. AgentIDE is being designed exclusively
+for [@MikeMcQuaid](https://github.com/MikeMcQuaid)'s personal
+workflow; nothing here promises to suit anyone else's, interfaces
+and behaviour break without notice and there is no support. If it
+fits your workflow anyway, expect sharp edges.
+
 Readme-driven development: this README describes the complete intended
 workflow before any of it exists. Slices land in order, each one usable when
 done:
@@ -173,3 +195,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 
 [GNU Affero General Public License v3.0](LICENSE). If you reuse or adapt the
 source the AGPL terms apply, including the network-use clause.
+[Octicons](https://github.com/primer/octicons) are vendored in
+`App/Assets.xcassets` and licensed under the
+[MIT License](https://github.com/primer/octicons/blob/main/LICENSE).

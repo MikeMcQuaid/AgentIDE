@@ -29,6 +29,20 @@ public struct GitHubClient: Sendable {
     /// limit as later pages are visited.
     public static let listLimit = 25
 
+    /// The repository's pull request template file content, nil
+    /// without one.
+    public static func pullRequestTemplate(in worktreePath: String) -> String? {
+        [
+            ".github/PULL_REQUEST_TEMPLATE.md",
+            ".github/pull_request_template.md",
+            "PULL_REQUEST_TEMPLATE.md",
+            "docs/PULL_REQUEST_TEMPLATE.md",
+        ]
+        .map { worktreePath + "/" + $0 }
+        .first { FileManager.default.fileExists(atPath: $0) }
+        .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+    }
+
     /// The repository's pull requests for a scope, with dashboard
     /// state.
     public func pullRequests(
@@ -83,14 +97,6 @@ public struct GitHubClient: Sendable {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 
-    /// Opens a pull request from the worktree's branch with an
-    /// edited title and body; returns its URL.
-    public func createPullRequest(worktreePath: String, title: String, bodyFile: String) async throws -> String {
-        try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     /// Whether the repository merges through a merge queue, so merge
     /// controls can say queue rather than merge.
     public func hasMergeQueue(repositoryPath: String) async -> Bool {
@@ -121,44 +127,66 @@ public struct GitHubClient: Sendable {
         return result?.standardOutput.contains("\"mergeQueue\":{") ?? false
     }
 
+    /// The repository's `owner/name`, nil when unknown. No caching:
+    /// `--cache` belongs to `gh api` alone, and passing it here made
+    /// every lookup die on an unknown flag, which read downstream as
+    /// a missing origin.
+    public func fullName(repositoryPath: String) async -> String? {
+        let result = try? await gh(
+            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+            in: repositoryPath,
+        )
+        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? nil : name
+    }
+
+    /// Opens a pull request from the worktree's branch; returns its
+    /// URL. The body travels by file: it can hold anything.
+    public func createPullRequest(worktreePath: String, title: String, body: String) async throws -> String {
+        let bodyFile = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-pr-body-" + UUID().uuidString + ".md")
+            .path
+        try body.write(toFile: bodyFile, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: bodyFile) }
+        return try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
-        try await gh(["pr", "merge", String(number), "--auto", "--squash"], in: repositoryPath)
+        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
+        try await gh(["pr", "merge", String(number), "--auto", flag], in: repositoryPath)
+    }
+
+    /// Cancels automerge, which on merge-queue repositories also
+    /// leaves the queue.
+    public func disableAutomerge(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "merge", String(number), "--disable-auto"], in: repositoryPath)
     }
 
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
-        try await gh(["pr", "merge", String(number), "--squash"], in: repositoryPath)
+        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
+        try await gh(["pr", "merge", String(number), flag], in: repositoryPath)
     }
 
-    /// The review comments and check results of a pull request, as
-    /// text an agent can act on.
-    public func remediationContext(repositoryPath: String, number: Int) async -> String {
-        let view = try? await gh(["pr", "view", String(number), "--comments"], in: repositoryPath)
-        // `--comments` omits inline file comments, where review bots
-        // leave their findings, so they join separately.
-        let inline = await inlineComments(repositoryPath: repositoryPath, number: number)
-            .compactMap { row -> String? in
-                let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                guard body.isEmpty == false else {
-                    return nil
-                }
-
-                return (row.author ?? "unknown") + ": " + body
-            }
-            .joined(separator: "\n\n")
-        let checks = try? await gh(
-            ["pr", "checks", String(number)],
+    /// The method flag `gh pr merge` needs when not interactive
+    /// (it refuses to run with none), from the repository's allowed
+    /// methods; hardcoding one broke on repositories disallowing it. Settings rarely change, so
+    /// gh's HTTP cache answers repeats.
+    public func mergeMethodFlag(repositoryPath: String) async -> String {
+        // No `--cache`: it belongs to `gh api` alone and silently
+        // forced the default method here.
+        let result = try? await gh(
+            [
+                "repo", "view",
+                "--json", "squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed",
+            ],
             in: repositoryPath,
-            allowFailure: true,
         )
-        return [
-            view?.standardOutput,
-            inline.isEmpty ? nil : "Inline review comments:\n\n" + inline,
-            checks?.standardOutput,
-        ]
-        .compactMap(\.self)
-        .joined(separator: "\n\n")
+        return Self.mergeFlag(fromJSON: result?.standardOutput ?? "")
     }
 
     // MARK: Internal
@@ -172,16 +200,19 @@ public struct GitHubClient: Sendable {
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
 
-    /// The repository's pull request template file, nil without one.
-    static func pullRequestTemplate(in worktreePath: String) -> String? {
-        [
-            ".github/PULL_REQUEST_TEMPLATE.md",
-            ".github/pull_request_template.md",
-            "PULL_REQUEST_TEMPLATE.md",
-            "docs/PULL_REQUEST_TEMPLATE.md",
-        ]
-        .map { worktreePath + "/" + $0 }
-        .first { FileManager.default.fileExists(atPath: $0) }
+    /// A merge commit preferred, then rebase, then squash; an
+    /// unreadable answer defaults to the merge commit, the one
+    /// method nearly every repository here allows. Plain substring
+    /// checks: gh's compact JSON needs no decoder here and Bools in
+    /// a Decodable would have to be optional.
+    static func mergeFlag(fromJSON json: String) -> String {
+        if json.contains("\"mergeCommitAllowed\":false") == false {
+            "--merge"
+        } else if json.contains("\"rebaseMergeAllowed\":true") {
+            "--rebase"
+        } else {
+            "--squash"
+        }
     }
 
     static func listArguments(scope: ListScope, limit: Int = Self.listLimit) -> [String] {

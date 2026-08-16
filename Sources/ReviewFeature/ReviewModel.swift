@@ -13,10 +13,20 @@ final class ReviewModel {
 
     /// Creates a review model for a worktree; `baseRefProvider`
     /// resolves the whole-branch scope's merge base on demand.
-    init(worktreePath: String, git: GitClient, baseRefProvider: @escaping () async -> String? = { nil }) {
+    init(
+        worktreePath: String,
+        git: GitClient,
+        baseRefProvider: @escaping () async -> String? = { nil },
+        fetchThreads: @escaping () async -> [ReviewThread] = { [] },
+        setThreadResolved: @escaping (String, Bool) async throws -> Void = { _, _ in
+            // Without GitHub wiring resolve toggles are no-ops.
+        },
+    ) {
         self.worktreePath = worktreePath
         self.git = git
         self.baseRefProvider = baseRefProvider
+        self.fetchThreads = fetchThreads
+        self.setThreadResolved = setThreadResolved
     }
 
     deinit {
@@ -59,8 +69,8 @@ final class ReviewModel {
     /// The commit message being edited.
     var commitMessage = ""
 
-    /// Whether generated files are revealed.
-    var showsGenerated = false
+    /// Whether whitespace-only changes are hidden from the diff.
+    var hidesWhitespace = false
 
     /// The selected lines per file path.
     var selections: [String: Set<DiffSelection>] = [:]
@@ -71,14 +81,35 @@ final class ReviewModel {
     /// The branch scope's commits, newest first, one line each.
     private(set) var branchCommits: [String] = []
 
+    /// The branch's open pull request conversations, shown inline
+    /// under the files they anchor to.
+    private(set) var threads: [ReviewThread] = []
+
     /// Whether the checked-out branch has its own origin ref, so
     /// the upstream scope has something to diff against; refreshed
     /// on every reload.
     private(set) var hasUpstream = false
 
-    /// The files to display, generated ones filtered unless revealed.
-    var visibleFiles: [DiffFile] {
-        showsGenerated ? files : files.filter { isGenerated($0.path) == false }
+    /// Whether the commit message differs from the commit's actual
+    /// message, so Amend only lights up with something to amend.
+    var messageEdited: Bool {
+        commitMessage != originalMessage
+    }
+
+    /// The conversations anchored to one file.
+    func threads(for path: String) -> [ReviewThread] {
+        threads.filter { $0.path == path }
+    }
+
+    /// Flips one conversation's resolved state on GitHub, then
+    /// refreshes the inline listing.
+    func toggleResolved(_ thread: ReviewThread) async {
+        do {
+            try await setThreadResolved(thread.resolveID, thread.isResolved == false)
+            threads = await fetchThreads()
+        } catch {
+            report(error.localizedDescription)
+        }
     }
 
     /// Whether a path looks generated.
@@ -100,42 +131,29 @@ final class ReviewModel {
             switch scope {
             case .uncommitted:
                 showsUncommitted = true
-                files = try await DiffParser.parse(git.uncommittedDiff(worktreePath: worktreePath))
+                files = try await DiffParser.parse(git.uncommittedDiff(
+                    worktreePath: worktreePath,
+                    ignoringWhitespace: hidesWhitespace,
+                ))
 
             case .lastCommit:
                 showsUncommitted = false
-                files = try await DiffParser.parse(git.lastCommitDiff(worktreePath: worktreePath))
+                files = try await DiffParser.parse(git.lastCommitDiff(
+                    worktreePath: worktreePath,
+                    ignoringWhitespace: hidesWhitespace,
+                ))
 
             case .upstream:
                 showsUncommitted = false
-                branchCommits = []
-                guard let currentBranch, hasUpstream else {
-                    status = "This branch has not been pushed yet."
-                    files = []
-                    return
-                }
-
-                let upstreamRef = "origin/" + currentBranch
-                branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: upstreamRef)
-                files = try await DiffParser.parse(
-                    git.upstreamDiff(worktreePath: worktreePath, upstreamRef: upstreamRef),
-                )
+                try await loadUpstream(currentBranch: currentBranch)
 
             case .branch:
                 showsUncommitted = false
-                branchCommits = []
-                guard let baseRef = await baseRefProvider() else {
-                    status = "No base branch to diff against."
-                    files = []
-                    return
-                }
-
-                // Commits before the diff, so they list even when the
-                // diff itself fails to parse.
-                branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
-                files = try await DiffParser.parse(git.branchDiff(worktreePath: worktreePath, baseRef: baseRef))
+                try await loadBranch()
             }
             commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
+            originalMessage = commitMessage
+            threads = await fetchThreads()
         } catch {
             report(error.localizedDescription)
         }
@@ -183,6 +201,7 @@ final class ReviewModel {
     func saveCommitMessage() async {
         do {
             try await git.amend(worktreePath: worktreePath, message: commitMessage)
+            originalMessage = commitMessage
             status = "Commit message updated."
         } catch {
             report(error.localizedDescription)
@@ -191,7 +210,50 @@ final class ReviewModel {
 
     // MARK: Private
 
+    /// The commit's actual message, for dimming Amend until the
+    /// editor differs from it.
+    private var originalMessage = ""
+
     private let worktreePath: String
     private let git: GitClient
     private let baseRefProvider: () async -> String?
+    private let fetchThreads: () async -> [ReviewThread]
+    private let setThreadResolved: (String, Bool) async throws -> Void
+
+    /// The upstream scope's commits and two-dot diff, empty with a
+    /// message until the branch has been pushed.
+    private func loadUpstream(currentBranch: String?) async throws {
+        branchCommits = []
+        guard let currentBranch, hasUpstream else {
+            status = "This branch has not been pushed yet."
+            files = []
+            return
+        }
+
+        let upstreamRef = "origin/" + currentBranch
+        branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: upstreamRef)
+        files = try await DiffParser.parse(git.upstreamDiff(
+            worktreePath: worktreePath,
+            upstreamRef: upstreamRef,
+            ignoringWhitespace: hidesWhitespace,
+        ))
+    }
+
+    /// The branch scope's commits and merge-base diff; commits load
+    /// first so they list even when the diff fails to parse.
+    private func loadBranch() async throws {
+        branchCommits = []
+        guard let baseRef = await baseRefProvider() else {
+            status = "No base branch to diff against."
+            files = []
+            return
+        }
+
+        branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
+        files = try await DiffParser.parse(git.branchDiff(
+            worktreePath: worktreePath,
+            baseRef: baseRef,
+            ignoringWhitespace: hidesWhitespace,
+        ))
+    }
 }

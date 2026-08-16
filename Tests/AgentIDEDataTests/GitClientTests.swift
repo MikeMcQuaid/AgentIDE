@@ -6,11 +6,11 @@ struct GitClientTests {
     @Test
     func `base decorations keep remote and default names only`() {
         #expect(
-            GitClient.filteredBaseDecorations("abc123 (HEAD -> main, origin/main, main, stale-branch) Subject")
-                == "abc123 (HEAD -> main, origin/main, main) Subject",
+            GitClient.filteredBaseDecorations("abc123 Subject (HEAD -> main, origin/main, main, stale-branch)")
+                == "abc123 Subject (HEAD -> main, origin/main, main)",
         )
         #expect(
-            GitClient.filteredBaseDecorations("abc123 (stale-branch) Subject") == "abc123 Subject",
+            GitClient.filteredBaseDecorations("abc123 Subject (stale) (stale-branch)") == "abc123 Subject (stale)",
         )
         #expect(GitClient.filteredBaseDecorations("abc123 Subject") == "abc123 Subject")
     }

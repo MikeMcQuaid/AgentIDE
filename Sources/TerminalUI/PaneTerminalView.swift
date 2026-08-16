@@ -4,18 +4,34 @@ import SwiftTerm
 
 // MARK: - PaneTerminalView
 
-/// The SwiftTerm view with the pane's own copy behaviour.
+/// The SwiftTerm view with the pane's own copy behaviour. Agent
+/// panes feed it from a tmux control mode client and never start a
+/// process; the shell pane starts a plain local shell on its PTY.
 final class PaneTerminalView: LocalProcessTerminalView {
     // MARK: Lifecycle
 
     deinit {
-        // The PTY dies with the view.
+        // A local shell's PTY dies with the view; control channels
+        // are owned by the coordinator.
     }
 
     // MARK: Internal
 
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
+
+    /// The right-click menu: Copy and Paste, which terminals
+    /// otherwise lack entirely.
+    override func menu(for _: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "")
+        copyItem.target = self
+        menu.addItem(copyItem)
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "")
+        pasteItem.target = self
+        menu.addItem(pasteItem)
+        return menu
+    }
 
     /// Native selection copy, reflowed for prose panes.
     override func copy(_ sender: Any) {
@@ -63,7 +79,10 @@ final class BlockSelector {
         switch event.type {
         case .leftMouseDown:
             let point = view.convert(event.locationInWindow, from: nil)
-            guard event.modifierFlags.contains(.option), view.bounds.contains(point) else {
+            guard event.modifierFlags.contains(.option), view.bounds.contains(point),
+                  view.isHiddenOrHasHiddenAncestor == false,
+                  Self.hitsTerminal(event, in: view)
+            else {
                 return event
             }
 
@@ -90,6 +109,18 @@ final class BlockSelector {
     private weak var view: PaneTerminalView?
     private var anchor: CGPoint?
     private var overlay: NSView?
+
+    /// Whether the window resolves the click to this terminal: a
+    /// pane kept mounted but covered or hidden must not steal drags
+    /// from the view actually under the pointer.
+    private static func hitsTerminal(_ event: NSEvent, in view: PaneTerminalView) -> Bool {
+        guard let content = view.window?.contentView, let root = content.superview else {
+            return false
+        }
+
+        let hit = content.hitTest(root.convert(event.locationInWindow, from: nil))
+        return hit === view || hit?.isDescendant(of: view) == true
+    }
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
         anchor = point

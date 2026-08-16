@@ -12,13 +12,10 @@ struct PullRequestRowView: View {
     static let rowPadding: CGFloat = 4
 
     let summary: PullRequestSummary
-    let canRemediate: Bool
     let stackDepth: Int
-    let hasMergeQueue: Bool
     let showsActions: Bool
-    let onAutomerge: () -> Void
-    let onMerge: () -> Void
-    let onRemediate: () -> Void
+    let onCopyComments: @MainActor () async -> Void
+    let onCopyChecks: @MainActor () async -> Void
 
     var body: some View {
         HStack {
@@ -32,6 +29,14 @@ struct PullRequestRowView: View {
             }
         }
         .padding(.vertical, Self.rowPadding)
+        // The same actions as the buttons, reachable from list rows
+        // that hide them.
+        .contextMenu {
+            Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
+            Button("Copy Failing Checks") { Task { await onCopyChecks() } }
+            Divider()
+            Button("Open in Browser") { LinkOpener.open(summary.url) }
+        }
     }
 
     // MARK: Private
@@ -119,25 +124,14 @@ struct PullRequestRowView: View {
         )
     }
 
-    @ViewBuilder private var actions: some View {
-        Button("Fix", action: onRemediate)
-            .disabled(canRemediate == false)
-            .hoverHelp("Dump every review comment and failing check into an agent in this worktree")
-        // One merge action, matching what the pull request can do
-        // right now: merge when green and mergeable, automerge
-        // while checks are still running.
-        if summary.state == "OPEN" {
-            if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
-                Button(hasMergeQueue ? "Queue" : "Merge", action: onMerge)
-                    .hoverHelp(
-                        hasMergeQueue
-                            ? "Checks passed and the branch is mergeable: queue now"
-                            : "Checks passed and the branch is mergeable: merge now",
-                    )
-            } else {
-                Button("Automerge", action: onAutomerge)
-                    .hoverHelp("Not mergeable yet: merge automatically once checks and reviews pass")
-            }
+    private var actions: some View {
+        Button {
+            LinkOpener.open(summary.url)
+        } label: {
+            Image(systemName: "safari")
+                .accessibilityLabel("Open pull request in browser")
         }
+        .buttonStyle(.glass)
+        .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the system browser")
     }
 }

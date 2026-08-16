@@ -65,6 +65,16 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
   delay over half a second.
+- Buttons follow Apple HIG and Liquid Glass, in that order, then
+  this app's conventions: at most one primary action per surface,
+  rendered prominent and bound to Cmd-Return when the surface takes
+  text input; every other button is plain glass, icon-only with
+  hover help when the icon is unambiguous and short text otherwise.
+  Order buttons in the sequence they are expected to be clicked,
+  left to right, primary last; put counts in the label and
+  explanations in hover help. Slow or unrepeatable actions go
+  through `BusyButton` and lock any inputs they read or write
+  while running.
 
 ### Platform Notes
 
@@ -98,9 +108,15 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   checks, mergeability and review decision: wide listings fetch
   light fields only and enrich one pull request on selection.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
-  index, finder mode and focus, browser address).
+  name, finder mode and focus, browser address); tabs travel by
+  name, never index, so reordering cannot repoint them.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
+- tmux servers and sessions outlive the app and only read config at
+  start, so changes to launch commands, configs or session shapes
+  often need existing tmux sessions or servers restarted (or leaked
+  clients killed) to take effect: when finishing such a change, tell
+  the user exactly what to restart or kill.
 
 ### Required Before Each Commit
 
@@ -131,7 +147,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 5. Keep dependency directions clean: Domain depends on nothing,
    DataAccess and Features depend on Domain and App composes them.
 6. Follow YAGNI and DRY: build only what the current slice needs and
-   inline variables and functions used only once.
+   inline variables and functions used only once. For non-trivial
+   parsing or protocol work, prefer widely used, well maintained
+   libraries, Apple's own first (markdown parses through
+   apple/swift-markdown), over bespoke reimplementations.
 7. Keep agent-specific logic inside its adapter; everything else
    speaks one agent interface.
 8. Describe third-party apps this project replaces by category, never

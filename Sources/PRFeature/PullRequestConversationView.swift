@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -11,16 +12,14 @@ struct PullRequestConversationPane: View {
     // MARK: Internal
 
     let summary: PullRequestSummary
-    let canRemediate: Bool
     let stackDepth: Int
-    let hasMergeQueue: Bool
     let github: GitHubClient
     let repositoryPath: String
     let store: MetadataStore
     let onBack: () -> Void
-    let onAutomerge: () -> Void
-    let onMerge: () -> Void
-    let onRemediate: () -> Void
+    let onCopyComments: @MainActor () async -> Void
+    let onCopyChecks: @MainActor () async -> Void
+    let onResolvedChanged: @MainActor () async -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,13 +30,10 @@ struct PullRequestConversationPane: View {
                     .hoverHelp("Back to the pull request list")
                 PullRequestRowView(
                     summary: summary,
-                    canRemediate: canRemediate,
                     stackDepth: stackDepth,
-                    hasMergeQueue: hasMergeQueue,
                     showsActions: true,
-                    onAutomerge: onAutomerge,
-                    onMerge: onMerge,
-                    onRemediate: onRemediate,
+                    onCopyComments: onCopyComments,
+                    onCopyChecks: onCopyChecks,
                 )
             }
             .padding(.horizontal, Self.padding)
@@ -48,6 +44,7 @@ struct PullRequestConversationPane: View {
                 number: summary.number,
                 seededBody: summary.body,
                 store: store,
+                onResolvedChanged: onResolvedChanged,
             )
         }
     }
@@ -75,6 +72,10 @@ struct PullRequestConversationView: View {
 
     let store: MetadataStore
 
+    /// Runs after a resolve toggle, so the header and listed row
+    /// refresh immediately.
+    let onResolvedChanged: @MainActor () async -> Void
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
@@ -100,31 +101,7 @@ struct PullRequestConversationView: View {
             let cached = store.load().conversationCache[cacheKey]
             description = seededBody ?? cached?.body ?? ""
             events = cached?.events ?? []
-            do {
-                let freshBody: String
-                let freshEvents: [ReviewComment]
-                if let seededBody {
-                    freshBody = seededBody
-                    freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
-                } else {
-                    (freshBody, freshEvents) = try await github.conversation(
-                        repositoryPath: repositoryPath,
-                        number: number,
-                    )
-                }
-                guard Task.isCancelled == false else {
-                    return
-                }
-
-                description = freshBody
-                events = freshEvents
-                var metadata = store.load()
-                metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
-                store.save(metadata)
-            } catch {
-                // The painted cache stays; the failure only logs.
-                ErrorLog.shared.report(error.localizedDescription)
-            }
+            await refresh()
         }
     }
 
@@ -139,6 +116,7 @@ struct PullRequestConversationView: View {
 
     @State private var description = ""
     @State private var events: [ReviewComment] = []
+    @State private var threads: [ReviewThread] = []
     @State private var isLoading = true
 
     private var cacheKey: String {
@@ -152,6 +130,37 @@ struct PullRequestConversationView: View {
         }
         ForEach(events) { event in
             eventRow(event)
+        }
+        if threads.isEmpty == false || isLoading {
+            Divider()
+            HStack {
+                Text("Conversations").font(.headline)
+                Spacer()
+                if threads.contains(where: { $0.isResolved == false }) {
+                    Button {
+                        copyOpenThreads()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .accessibilityLabel("Copy open conversations")
+                    }
+                    .buttonStyle(.borderless)
+                    .hoverHelp("Copy every open conversation, with its file and line, to the clipboard")
+                }
+            }
+        }
+        // The loading state paints instantly; threads can take a
+        // while behind the GraphQL round trip.
+        if threads.isEmpty, isLoading {
+            ProgressView().controlSize(.small)
+        }
+        ForEach(threads) { thread in
+            ReviewThreadRow(
+                thread: thread,
+                onEdit: {
+                    FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: repositoryPath)
+                },
+                onToggleResolved: { await toggleResolved(thread) },
+            )
         }
         if events.isEmpty, description.isEmpty {
             Text("No description or feedback yet.")
@@ -180,6 +189,71 @@ struct PullRequestConversationView: View {
         .padding(.leading, Self.railInset)
         .overlay(alignment: .leading) {
             Rectangle().fill(.separator).frame(width: Self.railWidth)
+        }
+    }
+
+    /// Fetches the conversation and its threads, painting over the
+    /// cache and re-caching; failures log and the painted cache
+    /// stays.
+    private func refresh() async {
+        do {
+            let freshBody: String
+            let freshEvents: [ReviewComment]
+            if let seededBody {
+                freshBody = seededBody
+                freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
+            } else {
+                (freshBody, freshEvents) = try await github.conversation(
+                    repositoryPath: repositoryPath,
+                    number: number,
+                )
+            }
+            guard Task.isCancelled == false else {
+                return
+            }
+
+            description = freshBody
+            events = freshEvents
+            threads = await loadThreads()
+            var metadata = store.load()
+            metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
+            store.save(metadata)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// The threads from either source; a GraphQL failure reaches
+    /// Messages, since it is what removes the resolve buttons.
+    private func loadThreads() async -> [ReviewThread] {
+        let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
+        if let failure = answer.graphQLFailure {
+            ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+        }
+        return answer.threads
+    }
+
+    /// Copies every open conversation as pasteable text.
+    private func copyOpenThreads() {
+        let open = threads.filter { $0.isResolved == false }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(open.map(\.asText).joined(separator: "\n\n"), forType: .string)
+        ErrorLog.shared.note("Copied \(open.count) open conversations.")
+    }
+
+    /// Flips one conversation's resolve state on GitHub, then
+    /// refreshes the listing and the header above.
+    private func toggleResolved(_ thread: ReviewThread) async {
+        do {
+            try await github.setThreadResolved(
+                repositoryPath: repositoryPath,
+                threadID: thread.resolveID,
+                resolved: thread.isResolved == false,
+            )
+            threads = await loadThreads()
+            await onResolvedChanged()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
         }
     }
 }

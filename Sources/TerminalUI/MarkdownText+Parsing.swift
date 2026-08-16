@@ -1,72 +1,53 @@
 import AgentIDEDomain
 import Foundation
+import Markdown
 
-/// The markdown parsing behind the view, split from the view body
-/// for length.
+/// The markdown parsing behind the view: apple/swift-markdown reads
+/// the GitHub-flavoured structure and the shapes here are what the
+/// view renders. Split from the view body for length.
 extension MarkdownText {
-    /// One monospaced or prose run of a chunk.
-    struct Segment {
-        let text: String
-        let isCode: Bool
-        var language: SyntaxLanguage?
-    }
-
-    /// One structural piece of prose: GitHub comments mix headings,
-    /// horizontal rules and pipe tables into their markdown.
+    /// One structural piece of a comment: GitHub comments mix
+    /// headings, rules, fenced code and pipe tables into markdown.
     enum ProseBlock {
         case heading(String)
         case rule
+        case code(String, SyntaxLanguage?)
         case table(header: [String], rows: [[String]])
         case text(String)
     }
 
-    /// The shortest run of `-` or `*` that reads as a rule.
-    static let ruleMinimumLength = 3
-
-    /// A table needs a header row and a separator row.
-    static let tableHeaderRows = 2
-
+    /// Parses one chunk with the official GitHub-flavoured parser,
+    /// mapping its block structure onto the renderer's shapes.
+    /// Consecutive prose blocks merge, so one Text renders them and
+    /// selection can span paragraphs and lists.
     static func proseBlocks(_ text: String) -> [ProseBlock] {
+        let document = Document(parsing: text)
         var blocks = [ProseBlock]()
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var index = 0
-        while index < lines.count {
-            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty {
-                index += 1
-            } else if trimmed.hasPrefix("#") {
-                blocks.append(.heading(trimmed.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)))
-                index += 1
-            } else if isRule(trimmed) {
+        for child in document.blockChildren {
+            switch child {
+            case let heading as Heading:
+                blocks.append(.heading(heading.plainText))
+
+            case let code as CodeBlock:
+                blocks.append(.code(
+                    code.code.trimmingCharacters(in: .newlines),
+                    syntaxLanguage(for: code.language ?? ""),
+                ))
+
+            case is ThematicBreak:
                 blocks.append(.rule)
-                index += 1
-            } else if trimmed.hasPrefix("|") {
-                blocks.append(tableBlock(lines, from: &index))
-            } else {
-                blocks.append(textBlock(lines, from: &index))
+
+            case let table as Markdown.Table:
+                blocks.append(.table(
+                    header: table.head.cells.map { cellSource($0) },
+                    rows: table.body.rows.map { row in row.cells.map { cellSource($0) } },
+                ))
+
+            default:
+                appendProse(child.format(), to: &blocks)
             }
         }
         return blocks
-    }
-
-    /// Whether a line is a `---` or `***` horizontal rule.
-    static func isRule(_ trimmed: String) -> Bool {
-        trimmed.count >= ruleMinimumLength
-            && (Set(trimmed).isSubset(of: ["-"]) || Set(trimmed).isSubset(of: ["*"]))
-    }
-
-    /// The trimmed cells of one `| a | b |` row.
-    static func cells(of row: String) -> [String] {
-        row.trimmingCharacters(in: CharacterSet(charactersIn: "|"))
-            .split(separator: "|", omittingEmptySubsequences: false)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-    }
-
-    /// Whether a row is the `|---|:--|` header separator.
-    static func isSeparatorRow(_ cells: [String]) -> Bool {
-        cells.isEmpty == false && cells.allSatisfy { cell in
-            cell.isEmpty == false && cell.allSatisfy { $0 == "-" || $0 == ":" }
-        }
     }
 
     /// The fence tag's language, tolerating common aliases.
@@ -123,10 +104,22 @@ extension MarkdownText {
         }
         stripped = stripped.replacing(/<br\s*\/?>/, with: "\n")
         stripped = stripped.replacing(/<img[^>]*>/, with: "")
+        // Bots write HTML lists and code spans (dependabot's commit
+        // listings); they map straight onto markdown.
+        stripped = stripped.replacing(/<li>\s*/.ignoresCase(), with: "\n- ")
+        stripped = stripped.replacing(/<\/li>/.ignoresCase(), with: "")
+        stripped = stripped.replacing(/<\/?[uo]l>/.ignoresCase(), with: "\n")
+        stripped = stripped.replacing(/<\/?code>/.ignoresCase(), with: "`")
+        stripped = stripped.replacing(/<\/?p>/.ignoresCase(), with: "\n")
         for tag in ["<details>", "</details>", "<summary>", "</summary>"] {
             stripped = stripped.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
+        // `[//]: #` lines are markdown comments (dependabot's
+        // automerge markers) and render as nothing.
         return stripped
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[//]: #") == false }
+            .joined(separator: "\n")
     }
 
     static func inline(_ text: String) -> AttributedString {
@@ -136,43 +129,24 @@ extension MarkdownText {
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 
-    /// Consecutive prose lines, blank separators included, gather
-    /// into one block so a single Text renders them and selection
-    /// can span lines and paragraphs.
-    private static func textBlock(_ lines: [String], from index: inout Int) -> ProseBlock {
-        var gathered = [String]()
-        while index < lines.count {
-            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("#") == false, isRule(trimmed) == false,
-                  trimmed.hasPrefix("|") == false
-            else {
-                break
-            }
+    /// Merges consecutive prose into one block; the regenerated
+    /// markdown keeps soft breaks, list markers and quote prefixes
+    /// for the inline renderer.
+    private static func appendProse(_ source: String, to blocks: inout [ProseBlock]) {
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return
+        }
 
-            gathered.append(lines[index])
-            index += 1
+        if case let .text(previous) = blocks.last {
+            blocks[blocks.count - 1] = .text(previous + "\n\n" + trimmed)
+        } else {
+            blocks.append(.text(trimmed))
         }
-        while gathered.last?.trimmingCharacters(in: .whitespaces).isEmpty == true {
-            gathered.removeLast()
-        }
-        return .text(gathered.joined(separator: "\n"))
     }
 
-    /// The pipe rows from the current line onwards as one table.
-    private static func tableBlock(_ lines: [String], from index: inout Int) -> ProseBlock {
-        var rows = [[String]]()
-        while index < lines.count {
-            let row = lines[index].trimmingCharacters(in: .whitespaces)
-            guard row.hasPrefix("|") else {
-                break
-            }
-
-            rows.append(cells(of: row))
-            index += 1
-        }
-        if rows.count >= tableHeaderRows, isSeparatorRow(rows[1]) {
-            return .table(header: rows[0], rows: Array(rows.dropFirst(tableHeaderRows)))
-        }
-        return .table(header: [], rows: rows)
+    /// One table cell's inline markdown source.
+    private static func cellSource(_ cell: Markdown.Table.Cell) -> String {
+        cell.inlineChildren.map { $0.format() }.joined().trimmingCharacters(in: .whitespaces)
     }
 }

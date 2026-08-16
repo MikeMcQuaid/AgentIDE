@@ -1,11 +1,19 @@
-/// The tabs of the utility pane beside the agent.
-enum UtilityTab: CaseIterable {
+/// The tabs of the utility pane beside the agent. The raw values
+/// are the persisted selection and the cross-module signal values,
+/// so reordering cases can never repoint a saved tab the way the
+/// old stored indices did.
+enum UtilityTab: String, CaseIterable {
+    // The case names are the persisted values (SwiftFormat strips
+    // explicit raw values), so renaming a case renames what is
+    // stored: keep names stable or migrate deliberately.
+    // swiftlint:disable explicit_enum_raw_value
     case review
     case pullRequests
-    case browser
     case editor
     case shell
+    case browser
     case errors
+    // swiftlint:enable explicit_enum_raw_value
 
     // MARK: Internal
 
@@ -27,14 +35,14 @@ enum UtilityTab: CaseIterable {
             "Browser"
 
         case .errors:
-            "Errors"
+            "Messages"
         }
     }
 
     var help: String {
         switch self {
         case .shell:
-            "A host-user shell in this worktree; it runs in host tmux, so it survives tab switches and app restarts"
+            "A host-user shell in this worktree; it survives tab switches and lives and dies with the app"
 
         case .review:
             "The worktree's diff with per-line rejection and commit message editing"
@@ -49,7 +57,7 @@ enum UtilityTab: CaseIterable {
             "An embedded browser for dev servers the agent starts and pull request pages; logins persist"
 
         case .errors:
-            "Every failure reported this session, in full and copyable; appears on the first error"
+            "Every failure and status message this session, in full and copyable; appears on the first error"
         }
     }
 }

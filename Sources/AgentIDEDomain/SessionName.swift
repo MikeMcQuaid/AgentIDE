@@ -42,17 +42,6 @@ public enum SessionName {
         return AgentKind.allCases.contains { $0.rawValue == agent }
     }
 
-    /// A short stable digest of a path, appended to name slugs so
-    /// same-named repositories under different owners never share a
-    /// session.
-    public static func pathDigest(_ path: String) -> String {
-        var hash = Self.digestSeed
-        for byte in path.utf8 {
-            hash = (hash &* Self.digestMultiplier) &+ UInt64(byte)
-        }
-        return String(String(hash, radix: Self.digestRadix).suffix(Self.digestLength))
-    }
-
     /// Lowercases a value and replaces every character outside `a-z`,
     /// `0-9` and `-`, including the `.` and `:` tmux forbids in names,
     /// then collapses and trims `-` runs so a slug never contains the
@@ -75,10 +64,6 @@ public enum SessionName {
     private static let separator = "--"
     private static let componentCount = 4
 
-    /// djb2, small and stable across launches; no cryptographic
-    /// strength is needed for a name suffix.
-    private static let digestSeed: UInt64 = 5_381
-    private static let digestMultiplier: UInt64 = 33
-    private static let digestRadix = 36
-    private static let digestLength = 6
+    // djb2, small and stable across launches; no cryptographic
+    // strength is needed for a name suffix.
 }

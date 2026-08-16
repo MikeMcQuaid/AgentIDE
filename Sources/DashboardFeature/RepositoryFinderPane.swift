@@ -76,6 +76,12 @@ public struct RepositoryFinderPane: View {
                 .onSubmit { pickHighlighted() }
                 .onKeyPress(.downArrow) { moveHighlight(by: 1) }
                 .onKeyPress(.upArrow) { moveHighlight(by: -1) }
+            if let failure = model.screenError {
+                Text(failure)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
             if results.isEmpty, query.isEmpty {
                 ProgressView(owner == nil ? "Listing organisations…" : "Listing repositories…")
                     .frame(maxWidth: .infinity, minHeight: Self.listHeight)

@@ -4,6 +4,8 @@ import SessionFeature
 import SwiftUI
 import TerminalUI
 
+// MARK: - RootView
+
 /// The main window: the dashboard sidebar on the left; on the right,
 /// segmented controls selecting the worktree's sessions over a split
 /// of the sandboxed agent and a collapsible utility pane.
@@ -12,10 +14,11 @@ struct RootView: View {
 
     let dependencies: AppDependencies
 
-    /// Persisted as an index so the menu commands can drive it too;
+    /// Persisted as the tab's name rather than an index, so
+    /// reordering the tabs can never repoint a saved selection;
     /// internal so the extension file can read it.
-    @AppStorage("utilityTabIndex")
-    var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    var utilityTabName = UtilityTab.review.rawValue
 
     /// Internal so the extension file's toggle button can drive it.
     @AppStorage("showsUtilityPane")
@@ -49,7 +52,6 @@ struct RootView: View {
         .task {
             FlavourIcon.apply()
             finderFocusRequest = 0
-            runningShells = Set(runningShellPaths.split(separator: "\n").map(String.init))
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
         }
@@ -68,6 +70,11 @@ struct RootView: View {
         // the machine sleeping mid-response cuts them off.
         .onChange(of: hasLiveWork, initial: true) {
             sleepInhibitor.update(hasLiveWork: hasLiveWork)
+        }
+        // Pushes and rebases poke this counter so their counts show
+        // in the sidebar immediately rather than on the next poll.
+        .onChange(of: dashboardRefreshRequest) {
+            Task { await dependencies.dashboard.refresh() }
         }
         // Reopening the app resumes the restored worktree's most
         // recent conversation: the default workflow is picking up
@@ -96,6 +103,18 @@ struct RootView: View {
                 isAutoResuming = false
             }
         }
+    }
+
+    /// Whether a worktree's shell runs; internal accessors because
+    /// the extension file's tab bar cannot see the private state.
+    func hasRunningShell(at path: String) -> Bool {
+        runningShells.contains(path)
+    }
+
+    /// Ends a worktree's shell instantly: unmounting the pane kills
+    /// its PTY, even when the shell has wedged beyond Ctrl-D.
+    func closeShell(at path: String) {
+        runningShells.remove(path)
     }
 
     // MARK: Private
@@ -138,21 +157,21 @@ struct RootView: View {
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
 
+    /// The push and rebase actions' immediate-refresh signal.
+    @AppStorage("dashboardRefreshRequest")
+    private var dashboardRefreshRequest = 0
+
     /// Worktrees whose shell is running; started explicitly, removed
-    /// when the shell process exits, so a quit shell shows its start
-    /// button again.
+    /// when the shell process exits or is closed, so the start
+    /// button returns. Shells are plain local processes now, so
+    /// nothing persists across launches.
     @State private var runningShells: Set<String> = []
 
-    /// The same set persisted, so shells running at quit reattach
-    /// automatically on the next launch; host tmux kept them alive.
-    @AppStorage("runningShellPaths")
-    private var runningShellPaths = ""
-
     /// Each worktree's last utility tab, persisted as
-    /// path-tab-index lines so panes stay per-worktree.
+    /// path-tab-name lines so panes stay per-worktree.
     @AppStorage("worktreeTabs")
     private var worktreeTabs = ""
-    @State private var rememberedTabs: [String: Int] = [:]
+    @State private var rememberedTabs: [String: String] = [:]
 
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
@@ -228,7 +247,7 @@ struct RootView: View {
     /// changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
-            utilityHeader
+            utilityHeader(for: item)
             Divider()
             utilityContent(for: item)
         }
@@ -236,12 +255,12 @@ struct RootView: View {
             // A stale conversation focus must not survive switching
             // to another sidebar item.
             conversationWorktreePath = nil
-            utilityTabIndex = rememberedTabs[item.worktree.path] ?? utilityTabIndex
+            utilityTabName = rememberedTabs[item.worktree.path] ?? utilityTabName
         }
-        .onChange(of: utilityTabIndex) {
-            rememberedTabs[item.worktree.path] = utilityTabIndex
+        .onChange(of: utilityTabName) {
+            rememberedTabs[item.worktree.path] = utilityTabName
             worktreeTabs = rememberedTabs
-                .map { $0.key + "\t" + String($0.value) }
+                .map { $0.key + "\t" + $0.value }
                 .sorted()
                 .joined(separator: "\n")
         }
@@ -332,7 +351,7 @@ struct RootView: View {
                     .allowsHitTesting(showsBrowser)
             }
         }
-        .task(id: item.id + String(utilityTabIndex)) {
+        .task(id: item.id + utilityTabName) {
             if utilityTab == .browser {
                 visitedBrowsers.insert(path)
             }
@@ -340,31 +359,38 @@ struct RootView: View {
     }
 
     /// The shell tab's layer, always mounted while its shell runs so
-    /// the terminal survives tab switches at a constant size.
+    /// the terminal survives tab switches at a constant size. The
+    /// close button hard-terminates shells that cannot Ctrl-D out.
     @ViewBuilder
     private func shellLayer(for item: WorktreeItem) -> some View {
         let path = item.worktree.path
         if runningShells.contains(path) {
-            shellTerminal(for: item.worktree) {
+            shellTerminal(for: item.worktree, isActive: utilityTab == .shell) {
                 runningShells.remove(path)
-                runningShellPaths = runningShells.sorted().joined(separator: "\n")
             }
             .id("shell-" + path)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            startShellButton(for: path)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            StartShellButton {
+                runningShells.insert(path)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    private func startShellButton(for path: String) -> some View {
-        Button {
-            runningShells.insert(path)
-            runningShellPaths = runningShells.sorted().joined(separator: "\n")
-        } label: {
+// MARK: - StartShellButton
+
+/// The shell tab's empty state: one button that starts the shell.
+private struct StartShellButton: View {
+    let onStart: () -> Void
+
+    var body: some View {
+        Button(action: onStart) {
             Label("Start shell", systemImage: "terminal")
         }
+        .buttonStyle(.glass)
         .controlSize(.large)
-        .hoverHelp("Open a host-user shell here; it runs in host tmux and survives app restarts")
+        .hoverHelp("Open a host-user shell here; it lives and dies with the app")
     }
 }

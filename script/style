@@ -43,12 +43,19 @@ docs_style() {
 }
 
 swift_style() {
+  # Homebrew's swiftformat is the copy CI installs; a stale copy
+  # elsewhere on PATH quietly disagrees with CI.
+  local swiftformat
+  for candidate in /opt/homebrew/bin/swiftformat /usr/local/bin/swiftformat; do
+    [[ -x "${candidate}" ]] && swiftformat="${candidate}" && break
+  done
+  : "${swiftformat:=swiftformat}"
   [[ -z "$(git ls-files "*.swift")" ]] && return 0
   if [[ -n "${STYLE_FIX}" ]]; then
-    swiftformat .
+    "${swiftformat}" .
     swiftlint --fix --quiet
   else
-    swiftformat --lint .
+    "${swiftformat}" --lint .
   fi
   swiftlint --strict --quiet
 }

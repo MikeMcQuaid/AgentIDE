@@ -8,8 +8,6 @@ import Testing
 /// and button availability through its fetch seams, so the tab's
 /// behaviour tests without GitHub or a window.
 struct PullRequestsModelTests {
-    // MARK: Internal
-
     @Test
     func `stack depth follows base branches through listed heads`() async {
         let model = makeModel()
@@ -26,10 +24,11 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `push needs unpushed commits and opening needs no open pull request`() async {
+    func `push needs unpushed commits and the form needs no open pull request`() async {
         let pushed = makeModel(items: [item(branch: "feature", ahead: 0)])
+        await pushed.reload()
         #expect(pushed.canPush == false)
-        #expect(pushed.canOpenPullRequest)
+        #expect(pushed.needsCreateForm)
 
         let ahead = makeModel(items: [item(branch: "feature", ahead: 2)])
         #expect(ahead.canPush)
@@ -40,16 +39,16 @@ struct PullRequestsModelTests {
         let open = makeModel(items: [item(branch: "feature", ahead: 1)])
         open.fetchList = { _, _ in [summary(7, head: "feature")] }
         await open.reload()
-        #expect(open.canOpenPullRequest == false)
+        #expect(open.needsCreateForm == false)
 
         let merged = makeModel(items: [item(branch: "feature", ahead: 1)])
         merged.fetchList = { _, _ in [summary(7, head: "feature", state: "MERGED")] }
         await merged.reload()
-        #expect(merged.canOpenPullRequest)
+        #expect(merged.needsCreateForm)
 
         let elsewhere = makeModel()
         #expect(elsewhere.canPush == false)
-        #expect(elsewhere.canOpenPullRequest == false)
+        #expect(elsewhere.needsCreateForm == false)
     }
 
     @Test
@@ -142,6 +141,23 @@ struct PullRequestsModelTests {
     }
 
     @Test
+    func `a fresh reload fetches exactly once`() async {
+        let model = makeModel()
+        var fetches = 0
+        model.fetchList = { _, _ in
+            fetches += 1
+            return [summary(1, head: "feature")]
+        }
+        await model.reload()
+        // reload's own `page = 0` reset must not spawn a second
+        // concurrent fetch through page's lookahead observer.
+        for _ in 0 ..< 10 {
+            await Task.yield()
+        }
+        #expect(fetches == 1)
+    }
+
+    @Test
     func `an unsigned tip with nothing to push reads as pushed`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         model.checkTipSigned = { _ in false }
@@ -158,33 +174,74 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `opening a pull request drafts first and creates second`() async {
+    func `creating a pull request pushes then appends the template`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        var prepared: String?
-        model.prepareDraft = { _, disclosure in
-            prepared = disclosure
-            return ".agentide-pull-request.md"
+        var pushed = false
+        model.performPush = { _ in pushed = true }
+        var created: (title: String, body: String)?
+        model.performCreate = { _, title, body in
+            created = (title, body)
+            return "https://example.invalid/pull/1"
         }
-
-        let first = await model.ship(disclosure: "Claude Code")
-        guard case let .drafted(relativePath) = first else {
-            Issue.record("Expected a draft, got \(first)")
-            return
-        }
-
-        #expect(relativePath == ".agentide-pull-request.md")
-        #expect(prepared == "Claude Code")
-        #expect(model.hasDraft)
-
-        let second = await model.ship(disclosure: nil)
-        guard case .created = second else {
-            Issue.record("Expected creation, got \(second)")
-            return
-        }
-
-        #expect(model.hasDraft == false)
+        model.prTitle = "A change"
+        model.prBody = "Why it changed."
+        model.prTemplate = "- [ ] Checked"
+        #expect(await model.createPullRequest())
+        #expect(pushed)
         #expect(model.isPushed)
-        #expect(model.status == "https://example.test/pull/1")
+        #expect(created?.title == "A change")
+        #expect(created?.body == "Why it changed.\n\n- [ ] Checked")
+        #expect(model.prTitle.isEmpty)
+
+        let untitled = makeModel(items: [item(branch: "feature", ahead: 1)])
+        #expect(await untitled.createPullRequest() == false)
+    }
+
+    @Test
+    func `generating fills blank fields and completes the template`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        model.fetchCommitMessages = { _ in ["First change\n\nWhy one.", "Second change"] }
+        model.generateDescription = { _ in ("Drafted title", "Drafted body") }
+        model.fillTemplate = { _, template in "filled: " + template }
+        model.prTemplate = "- [ ] Checked"
+        #expect(await model.generateDescription())
+        #expect(model.prTitle == "Drafted title")
+        #expect(model.prBody == "Drafted body")
+        #expect(model.prTemplate == "filled: - [ ] Checked")
+
+        // Without a repository template nothing is invented.
+        let bare = makeModel(items: [item(branch: "feature", ahead: 1)])
+        bare.fetchCommitMessages = { _ in ["Only change\n\nWhy."] }
+        bare.fillTemplate = { _, _ in "should never be asked" }
+        #expect(await bare.generateDescription())
+        #expect(bare.prTitle == "Only change")
+        #expect(bare.prBody == "Why.")
+        #expect(bare.prTemplate.isEmpty)
+    }
+
+    @Test
+    func `refreshing a summary updates the header and row`() async {
+        let model = makeModel()
+        model.fetchList = { _, _ in [summary(3, head: "feature")] }
+        await model.reload()
+        #expect(model.selected?.number == 3)
+
+        model.fetchSummary = { _ in
+            PullRequestSummary(
+                number: 3,
+                title: "Refreshed",
+                url: "",
+                headBranch: "feature",
+                mergeable: "MERGEABLE",
+                reviewDecision: "APPROVED",
+                checks: "SUCCESS",
+                baseBranch: "main",
+                state: "OPEN",
+            )
+        }
+        await model.refreshSummary(3)
+        #expect(model.selected?.title == "Refreshed")
+        #expect(model.summaries.first?.reviewDecision == "APPROVED")
     }
 
     @Test
@@ -201,104 +258,9 @@ struct PullRequestsModelTests {
 
         await model.reload()
         #expect(listed == .branch("switched"))
-        #expect(model.canOpenPullRequest == false)
+        #expect(model.needsCreateForm == false)
 
         _ = await model.push()
         #expect(pushed == "switched")
-    }
-
-    // MARK: Private
-
-    /// A model against a throwaway store whose every fetch and
-    /// service seam is replaced; nothing real is reached by these
-    /// tests.
-    private func makeModel(
-        items: [WorktreeItem] = [],
-        metadataFile: String? = nil,
-    ) -> PullRequestsModel {
-        let runner = FoundationProcessRunner()
-        let base = FileManager.default
-            .temporaryDirectory
-            .appendingPathComponent("agentide-prmodel-" + UUID().uuidString, isDirectory: true)
-            .path
-        let paths = WorkspacePaths(
-            hostUser: "test",
-            sharedWorkspace: base + "/shared",
-            sandboxHome: base + "/home",
-            metadataFile: metadataFile ?? base + "/state.json",
-        )
-        let service = SessionService(
-            paths: paths,
-            git: GitClient(runner: runner),
-            tmux: TmuxClient(
-                runner: runner,
-                launcher: SandvaultLauncher(hostUser: "test"),
-                isInsideSandbox: true,
-                socketDirectory: base + "/socket",
-            ),
-            github: GitHubClient(runner: runner),
-            transcripts: TranscriptReader(),
-            spool: EventSpool(directory: paths.eventsDirectory),
-            store: MetadataStore(file: paths.metadataFile),
-            runners: [],
-        )
-        let model = PullRequestsModel(
-            repository: Repository(name: "repo", path: "/repo"),
-            branch: "feature",
-            items: items,
-            github: GitHubClient(runner: runner),
-            service: service,
-            store: MetadataStore(file: paths.metadataFile),
-        )
-        model.fetchList = { _, _ in [] }
-        model.fetchSummary = { _ in nil }
-        model.fetchHasMergeQueue = { false }
-        model.fetchRemediationContext = { _ in "" }
-        model.fetchCurrentBranch = { _ in nil }
-        model.checkDraft = { _ in false }
-        model.prepareDraft = { _, _ in ".agentide-pull-request.md" }
-        model.createFromDraft = { _ in "https://example.test/pull/1" }
-        model.performPush = { _ in
-            // Succeeds without side effects.
-        }
-        model.performRebase = { _ in
-            // Succeeds without side effects.
-        }
-        model.checkTipSigned = { _ in true }
-        return model
-    }
-
-    private func summary(
-        _ number: Int,
-        head: String,
-        base: String = "main",
-        state: String = "OPEN",
-    ) -> PullRequestSummary {
-        PullRequestSummary(
-            number: number,
-            title: "Title \(number)",
-            url: "",
-            headBranch: head,
-            mergeable: "",
-            reviewDecision: "",
-            checks: "",
-            baseBranch: base,
-            state: state,
-        )
-    }
-
-    private func item(branch: String, ahead: Int?) -> WorktreeItem {
-        WorktreeItem(
-            worktree: Worktree(
-                repositoryName: "repo",
-                repositoryPath: "/repo",
-                branch: branch,
-                path: "/worktrees/" + branch,
-            ),
-            session: nil,
-            isDirty: false,
-            aheadOfUpstream: ahead,
-            hasUnread: false,
-        )
     }
 }

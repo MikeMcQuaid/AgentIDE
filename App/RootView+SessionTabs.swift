@@ -16,8 +16,7 @@ extension RootView {
     }
 
     var utilityTab: UtilityTab {
-        let tabs = UtilityTab.allCases
-        return tabs.indices.contains(utilityTabIndex) ? tabs[utilityTabIndex] : .review
+        UtilityTab(rawValue: utilityTabName) ?? .review
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
@@ -47,8 +46,9 @@ extension RootView {
         )
     }
 
-    /// The tab bubbles and the pane toggle.
-    var utilityHeader: some View {
+    /// The tab bubbles and the pane toggle, with the shell's close
+    /// button beside them while the shell tab shows a running shell.
+    func utilityHeader(for item: WorktreeItem) -> some View {
         HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
             // beside them can never be squeezed out.
@@ -58,6 +58,18 @@ extension RootView {
                 }
             }
             Spacer(minLength: 0)
+            if utilityTab == .shell, hasRunningShell(at: item.worktree.path) {
+                Button {
+                    closeShell(at: item.worktree.path)
+                } label: {
+                    Image(systemName: "xmark")
+                        .accessibilityLabel("Close shell")
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .fixedSize()
+                .hoverHelp("End this shell and its process immediately")
+            }
             utilityToggleButton
                 .fixedSize()
         }
@@ -168,13 +180,15 @@ extension RootView {
         }
     }
 
-    /// Parses the persisted path-tab lines.
-    static func decodeTabs(_ stored: String) -> [String: Int] {
-        var tabs = [String: Int]()
+    /// Parses the persisted path-tab lines; values are tab names
+    /// (unknown ones, including this store's old integer form, fall
+    /// back to the default tab when read).
+    static func decodeTabs(_ stored: String) -> [String: String] {
+        var tabs = [String: String]()
         for line in stored.split(separator: "\n") {
             let parts = line.split(separator: "\t")
-            if let path = parts.first, let index = parts.last.flatMap({ Int($0) }), parts.first != parts.last {
-                tabs[String(path)] = index
+            if let path = parts.first, let name = parts.last, path != name {
+                tabs[String(path)] = String(name)
             }
         }
         return tabs
@@ -220,13 +234,19 @@ extension RootView {
         )
     }
 
-    /// The host shell terminal; copies stay verbatim for code.
+    /// The host shell terminal, a plain local shell on the pane's
+    /// own PTY: no server to wedge and nothing left behind when the
+    /// app quits. Copies stay verbatim for code. The pane stays
+    /// mounted behind other tabs, so it reports whether it is the
+    /// visible one and yields keyboard focus otherwise.
     func shellTerminal(
         for worktree: Worktree,
+        isActive: Bool,
         onExit: @escaping @MainActor () -> Void,
     ) -> TerminalPaneView {
         TerminalPaneView(
-            command: dependencies.service.hostShellCommand(worktree: worktree),
+            shellIn: worktree.path,
+            isActive: isActive,
             onProcessTerminated: onExit,
         )
     }
@@ -254,7 +274,12 @@ extension RootView {
             EmptyView()
 
         case .review:
-            ReviewView(worktree: target.worktree, git: dependencies.git, service: dependencies.service)
+            ReviewView(
+                worktree: target.worktree,
+                git: dependencies.git,
+                github: dependencies.github,
+                service: dependencies.service,
+            )
 
         case .editor:
             EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
@@ -267,6 +292,7 @@ extension RootView {
                 service: dependencies.service,
                 store: dependencies.store,
                 branch: target.worktree.branch,
+                isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )
 
         case .browser:

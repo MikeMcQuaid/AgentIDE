@@ -58,6 +58,39 @@ struct CommandError: Error, LocalizedError {
     }
 }
 
+// MARK: - Shell helpers
+
+extension String {
+    /// The string single-quoted for a POSIX shell: quotes close,
+    /// escape the quote and reopen, so no content can break out of
+    /// the quoting. The one quoting implementation for every shell
+    /// payload this module builds.
+    var shellQuoted: String {
+        "'" + replacing("'", with: "'\\''") + "'"
+    }
+}
+
+// MARK: - ProcessEnvironment
+
+/// The one environment every spawned process starts from.
+enum ProcessEnvironment {
+    /// The inherited environment with the tool prefixes on PATH and
+    /// any surrounding tmux scrubbed: an inherited TMUX variable
+    /// makes every child tmux command target the surrounding server
+    /// regardless of TMUX_TMPDIR; a test teardown's kill-server once
+    /// killed the production server and every agent on it that way.
+    /// Servers are only ever selected explicitly.
+    static func scrubbed(merging extra: [String: String] = [:]) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
+        environment["TMUX"] = nil
+        environment["TMUX_PANE"] = nil
+        environment.merge(extra) { _, new in new }
+        return environment
+    }
+}
+
 // MARK: - ProcessRunner
 
 /// Runs external commands and captures their output.
@@ -121,19 +154,7 @@ public struct FoundationProcessRunner: ProcessRunner {
         if let workingDirectory {
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
         }
-        var environment = ProcessInfo.processInfo.environment
-        let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
-        // When this process itself runs inside a tmux pane, the
-        // inherited TMUX variable makes every child tmux command
-        // target the surrounding server regardless of TMUX_TMPDIR;
-        // a test teardown's kill-server then killed the production
-        // server and every agent on it. Servers are only ever
-        // selected explicitly here.
-        environment["TMUX"] = nil
-        environment["TMUX_PANE"] = nil
-        environment.merge(extraEnvironment) { _, new in new }
-        process.environment = environment
+        process.environment = ProcessEnvironment.scrubbed(merging: extraEnvironment)
         process.standardOutput = try FileHandle(forWritingTo: outputURL)
         process.standardError = try FileHandle(forWritingTo: errorURL)
         process.standardInput = FileHandle.nullDevice

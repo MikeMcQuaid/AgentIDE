@@ -10,9 +10,9 @@ struct UtilityTabStrip: View {
     var body: some View {
         // The errors tab hides until the first failure of the
         // session, then sticks around even across a clear.
-        ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
+        ForEach(UtilityTab.allCases, id: \.self) { tab in
             if tab != .errors || errorLog.everReported {
-                button(tab, at: index)
+                button(tab)
             }
         }
     }
@@ -23,21 +23,24 @@ struct UtilityTabStrip: View {
     private static let badgeSpacing: CGFloat = 4
     private static let verticalPadding: CGFloat = 3
     private static let selectedOpacity = 0.25
+    private static let hoverOpacity = 0.08
 
-    @AppStorage("utilityTabIndex")
-    private var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    private var utilityTab = UtilityTab.review.rawValue
+
+    @State private var hovered: String?
 
     private var errorLog: ErrorLog = .shared
 
-    private func button(_ tab: UtilityTab, at index: Int) -> some View {
+    private func button(_ tab: UtilityTab) -> some View {
         Button {
-            utilityTabIndex = index
+            utilityTab = tab.rawValue
         } label: {
             HStack(spacing: Self.badgeSpacing) {
                 Text(tab.title)
                     .font(.callout)
-                if tab == .errors, errorLog.entries.isEmpty == false {
-                    Text(String(errorLog.entries.count))
+                if tab == .errors, errorLog.errorCount > 0 {
+                    Text(String(errorLog.errorCount))
                         .font(.caption2.bold())
                         .foregroundStyle(.white)
                         .padding(.horizontal, Self.badgeSpacing)
@@ -48,14 +51,19 @@ struct UtilityTabStrip: View {
             .padding(.vertical, Self.verticalPadding)
             .background(
                 Capsule().fill(
-                    index == utilityTabIndex
+                    tab.rawValue == utilityTab
                         ? Color.accentColor.opacity(Self.selectedOpacity)
+                        : hovered == tab.rawValue
+                        ? Color.primary.opacity(Self.hoverOpacity)
                         : Color.clear,
                 ),
             )
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .onHover { inside in
+            hovered = inside ? tab.rawValue : (hovered == tab.rawValue ? nil : hovered)
+        }
         .hoverHelp(tab.help)
     }
 }

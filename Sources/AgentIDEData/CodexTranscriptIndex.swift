@@ -10,6 +10,21 @@ import Synchronization
 struct CodexTranscriptIndex {
     // MARK: Internal
 
+    /// Decodes a fixed-size head read, dropping the final bytes when
+    /// the cut landed inside a multi-byte character; the partial
+    /// trailing line is skipped by the parse anyway.
+    static func decodeHead(_ head: Data) -> String? {
+        var bytes = head
+        for _ in 0 ..< utf8CharacterBytes {
+            if let text = String(bytes: bytes, encoding: .utf8) {
+                return text
+            }
+
+            bytes = bytes.dropLast()
+        }
+        return nil
+    }
+
     /// Sessions under `root` whose embedded working directory
     /// matches, newest first. The session id comes from the file's
     /// metadata line: the rollout file name is not the resume id.
@@ -17,12 +32,18 @@ struct CodexTranscriptIndex {
         indexedEntries(root: root)
             .filter { $0.value.workingDirectory == workingDirectory }
             .map { path, entry in
+                // The file stem is the identity: subagent rollouts
+                // share the parent's session id, and duplicated ids
+                // break list selection and deduplication.
                 TranscriptSession(
-                    id: entry.sessionID,
+                    id: String(
+                        (path.split(separator: "/").last ?? "").dropLast(".jsonl".count),
+                    ),
                     path: path,
                     agent: .codexCLI,
                     modifiedAt: entry.modifiedAt,
                     title: entry.title,
+                    resumeID: entry.sessionID,
                 )
             }
             .sorted { $0.modifiedAt > $1.modifiedAt }
@@ -44,6 +65,8 @@ struct CodexTranscriptIndex {
     }
 
     private struct Payload: Decodable {
+        // MARK: Internal
+
         // Absent from the JSON when a payload carries no content.
         // swiftlint:disable:next discouraged_optional_collection
         let content: [Content]?
@@ -53,10 +76,38 @@ struct CodexTranscriptIndex {
         let id: String?
         let sessionID: String?
         let message: String?
+        let threadSource: String?
+
+        // MARK: Private
+
+        // The decoder stays default-keyed for speed; only the snake
+        // case fields need mapping and SwiftFormat strips raw values
+        // that equal the case name.
+        // swiftlint:disable explicit_enum_raw_value nesting
+        private enum CodingKeys: String, CodingKey {
+            case content
+            case type
+            case role
+            case cwd
+            case id
+            case sessionID = "session_id"
+            case message
+            case threadSource = "thread_source"
+        }
+
+        // swiftlint:enable explicit_enum_raw_value nesting
     }
 
     private struct Content: Decodable {
         let text: String?
+    }
+
+    /// One whole-tree listing per root within a refresh pass: the
+    /// dashboard poll asks once per worktree in quick succession
+    /// and the tree cannot meaningfully change between those asks.
+    private struct Listing {
+        let listedAt: ContinuousClock.Instant
+        let entries: [String: Entry]
     }
 
     /// Heads are enough for the metadata and the first typed user
@@ -64,10 +115,16 @@ struct CodexTranscriptIndex {
     /// and world-state lines; whole rollout files are larger still.
     private static let headBytes = 262_144
 
+    /// A UTF-8 character spans at most this many bytes.
+    private static let utf8CharacterBytes = 4
+
     /// The most sessions kept indexed, newest first.
     private static let entryCap = 2_000
 
     private static let cache: Mutex<[String: Entry]> = .init([:])
+
+    private static let listings: Mutex<[String: Listing]> = .init([:])
+    private static let listingLifetime: Duration = .seconds(1)
 
     /// Reads the file head: the metadata line names the session and
     /// its working directory, and the first user message titles it.
@@ -78,7 +135,7 @@ struct CodexTranscriptIndex {
 
         defer { try? handle.close() }
         guard let head = try? handle.read(upToCount: headBytes),
-              let text = String(bytes: head, encoding: .utf8)
+              let text = decodeHead(head)
         else {
             return nil
         }
@@ -93,6 +150,13 @@ struct CodexTranscriptIndex {
             }
 
             if line.type == "session_meta", let payload = line.payload {
+                // Subagent rollouts are a turn's internal fan-out,
+                // not conversations of their own; the parent thread
+                // already tells the story.
+                guard payload.threadSource != "subagent" else {
+                    return nil
+                }
+
                 workingDirectory = payload.cwd
                 sessionID = payload.id ?? payload.sessionID
             }
@@ -141,8 +205,13 @@ struct CodexTranscriptIndex {
     }
 
     /// Every session file under the root, parsed or served from the
-    /// cache when unchanged.
+    /// caches when unchanged or recently listed.
     private func indexedEntries(root: String) -> [String: Entry] {
+        let now = ContinuousClock.now
+        if let listing = Self.listings.withLock({ $0[root] }), now - listing.listedAt < Self.listingLifetime {
+            return listing.entries
+        }
+
         let manager = FileManager.default
         var results = [String: Entry]()
         let enumerator = manager.enumerator(atPath: root)
@@ -159,8 +228,12 @@ struct CodexTranscriptIndex {
             let cached = Self.cache.withLock { $0[path] }
             if let cached, cached.modifiedAt == modifiedAt {
                 results[path] = cached
-            } else if let parsed = Self.parseHead(path: path, modifiedAt: modifiedAt) {
-                results[path] = parsed
+            } else {
+                // Unparseable heads cache as an empty sentinel, so
+                // a bad file is not re-read on every poll; the empty
+                // working directory can never match a worktree.
+                results[path] = Self.parseHead(path: path, modifiedAt: modifiedAt)
+                    ?? Entry(modifiedAt: modifiedAt, workingDirectory: "", sessionID: "", title: "")
             }
         }
         // The cache mirrors disk exactly and caps at the newest
@@ -172,6 +245,7 @@ struct CodexTranscriptIndex {
             bounded = Dictionary(uniqueKeysWithValues: Array(newest))
         }
         Self.cache.withLock { $0 = bounded }
+        Self.listings.withLock { $0[root] = Listing(listedAt: now, entries: bounded) }
         return bounded
     }
 }

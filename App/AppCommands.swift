@@ -23,6 +23,17 @@ struct AppCommands: Commands {
             Divider()
             Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
+        CommandMenu("Worktree") {
+            Button("Push") { bump("pushRequest") }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+            Button("Rebase on Origin") { bump("rebaseRequest") }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+            Button("Commit Outstanding") { bump("commitRequest") }
+                .keyboardShortcut("k", modifiers: [.command, .option])
+            Divider()
+            Button("Refresh") { bump("dashboardRefreshRequest") }
+                .keyboardShortcut("r", modifiers: .command)
+        }
         CommandGroup(after: .sidebar) {
             // The repository sidebar never hides, only resizes, so
             // the utility pane is the one toggle here.
@@ -32,7 +43,7 @@ struct AppCommands: Commands {
             .keyboardShortcut("u", modifiers: [.command, .shift])
             Divider()
             ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
-                Button(tab.title) { show(tabAt: index) }
+                Button(tab.title) { show(tab) }
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
             }
             Divider()
@@ -47,23 +58,28 @@ struct AppCommands: Commands {
 
     @AppStorage("showsUtilityPane")
     private var showsUtilityPane = true
-    @AppStorage("utilityTabIndex")
-    private var utilityTabIndex = 0
+    @AppStorage("utilityTab")
+    private var utilityTab = UtilityTab.review.rawValue
     @AppStorage("finderSearchesContents")
     private var finderSearchesContents = false
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
 
-    private func show(tabAt index: Int) {
+    /// Increments a storage-bus counter; the pane owning the
+    /// action observes it and runs.
+    private func bump(_ key: String) {
+        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+    }
+
+    private func show(_ tab: UtilityTab) {
         showsUtilityPane = true
-        utilityTabIndex = index
+        utilityTab = tab.rawValue
     }
 
     /// Jumps to the editor tab's finder in the chosen mode; the pane
     /// consumes the focus request once it is on screen.
     private func openFinder(searchingContents: Bool) {
-        showsUtilityPane = true
-        utilityTabIndex = UtilityTab.allCases.firstIndex(of: .editor) ?? 0
+        show(.editor)
         finderSearchesContents = searchingContents
         finderFocusRequest += 1
     }

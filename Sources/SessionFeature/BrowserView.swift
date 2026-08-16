@@ -42,7 +42,7 @@ public struct BrowserView: View {
                     ContentUnavailableView(
                         "Nothing loaded",
                         systemImage: "safari",
-                        description: Text("Preview what the agent built: enter a local dev server address above."),
+                        description: Text("Enter an address above."),
                     )
                     // Opaque: it covers a reset page fully, in both
                     // colour schemes.

@@ -3,27 +3,48 @@ import SwiftUI
 
 // MARK: - TerminalPaneView
 
-/// An embedded terminal running an argv on a local PTY. Closing the
-/// view only disconnects this client; tmux sessions keep running.
-/// The mouse belongs to tmux: the wheel scrolls tmux history,
-/// dragging copies through copy-mode and OSC 52, and Shift-drag
-/// falls back to a local selection with Cmd-C.
+/// An embedded terminal. Agent panes attach to a tmux session as a
+/// control mode client: tmux streams pane output as protocol events
+/// and the view renders them locally, so selection, copying, wheel
+/// scrolling and scrollback are all native, and closing the view
+/// only detaches while the session keeps running. The shell pane
+/// runs a plain local shell on the view's own PTY instead: no
+/// server, no client, and the shell dies with the app.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
-    /// Creates a terminal that runs an argv; the argv itself decides
-    /// its working directory. `reflowsCopies` reflows multi-line
-    /// copies for pasting into prose tools. `onProcessTerminated`
-    /// fires on the main actor when the process exits, letting
-    /// owners show a restart affordance instead of a dead pane.
+    /// Creates a terminal that spawns a `tmux -C` argv and renders
+    /// the attached session. `reflowsCopies` reflows multi-line
+    /// copies for pasting into prose tools. `isActive` says whether
+    /// the pane is the one on screen: an invisible mounted pane must
+    /// give up keyboard focus or it swallows keystrokes and pastes
+    /// meant for the visible one. `onProcessTerminated` fires on the
+    /// main actor when the client exits, letting owners show a
+    /// restart affordance instead of a dead pane.
     @preconcurrency
     public init(
         command: [String],
         reflowsCopies: Bool = false,
+        isActive: Bool = true,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
-        self.command = command
+        transport = .control(command: command)
         self.reflowsCopies = reflowsCopies
+        self.isActive = isActive
+        self.onProcessTerminated = onProcessTerminated
+    }
+
+    /// Creates a terminal running the user's login shell in a
+    /// directory on a local PTY.
+    @preconcurrency
+    public init(
+        shellIn directory: String,
+        isActive: Bool = true,
+        onProcessTerminated: (@MainActor () -> Void)? = nil,
+    ) {
+        transport = .shell(directory: directory)
+        reflowsCopies = false
+        self.isActive = isActive
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -31,199 +52,81 @@ public struct TerminalPaneView: View {
 
     public var body: some View {
         TerminalRepresentable(
-            command: command,
+            transport: transport,
             reflowsCopies: reflowsCopies,
+            isActive: isActive,
             onProcessTerminated: onProcessTerminated,
         )
     }
 
     // MARK: Private
 
-    private let command: [String]
+    private let transport: TerminalTransport
     private let reflowsCopies: Bool
+    private let isActive: Bool
     private let onProcessTerminated: (@MainActor () -> Void)?
+}
+
+// MARK: - TerminalTransport
+
+/// What feeds a terminal pane: a tmux control mode client's argv,
+/// or a local shell's working directory.
+enum TerminalTransport: Equatable {
+    case control(command: [String])
+    case shell(directory: String)
 }
 
 // MARK: - TerminalRepresentable
 
-/// Bridges the SwiftTerm view into SwiftUI and owns the process
-/// lifecycle.
+/// Bridges the SwiftTerm view into SwiftUI and owns the control
+/// mode client.
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
-    /// Bridges process termination back into the view.
-    final class Coordinator: NSObject, LocalProcessTerminalViewDelegate {
-        // MARK: Lifecycle
-
-        init(onProcessTerminated: (@MainActor () -> Void)?) {
-            self.onProcessTerminated = onProcessTerminated
-        }
-
-        deinit {
-            // The PTY is owned by the terminal view.
-        }
-
-        // MARK: Internal
-
-        /// The last applied appearance; re-applying identical colours
-        /// on every SwiftUI update forces needless full redraws.
-        var appliedScheme: ColorScheme?
-
-        // Retains the copy reflower the view only holds weakly as
-        // its delegate; that retention is its whole use, which
-        // periphery's assign-only check cannot see.
-        // periphery:ignore
-        var copyReflower: ReflowingCopyDelegate?
-
-        /// Installs the Option-drag rectangular selection: its
-        /// events arrive through a monitor because SwiftTerm's
-        /// mouse handling is not overridable.
-        func installBlockSelection(on view: PaneTerminalView) {
-            guard blockMonitor == nil else {
-                return
-            }
-
-            // The monitor's closure is the selector's owner: it
-            // captures it strongly and tearDown releases both.
-            let selector = BlockSelector(view: view)
-            blockMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp],
-            ) { [weak view] event in
-                guard let view, event.window === view.window else {
-                    return event
-                }
-
-                return selector.handle(event)
-            }
-        }
-
-        /// Removes the event monitor with the view.
-        func tearDown() {
-            if let blockMonitor {
-                NSEvent.removeMonitor(blockMonitor)
-            }
-            blockMonitor = nil
-        }
-
-        func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
-            // The window owns sizing.
-        }
-
-        func setTerminalTitle(source _: LocalProcessTerminalView, title _: String) {
-            // Titles are not surfaced.
-        }
-
-        func hostCurrentDirectoryUpdate(source _: TerminalView, directory _: String?) {
-            // Directories are not surfaced.
-        }
-
-        func processTerminated(source _: TerminalView, exitCode _: Int32?) {
-            onProcessTerminated?()
-        }
-
-        /// Spawns the process on the first nonzero layout, exactly
-        /// once, so tmux sizes to the pane rather than a placeholder
-        /// frame.
-        func startWhenSized(_ command: [String], in view: LocalProcessTerminalView) {
-            guard started == false else {
-                return
-            }
-
-            if view.frame.size.width > 1, view.frame.size.height > 1 {
-                started = true
-                Self.start(command, in: view)
-            } else {
-                observeFrame(command, in: view)
-            }
-        }
-
-        // MARK: Private
-
-        private let onProcessTerminated: (@MainActor () -> Void)?
-        private var started = false
-        private var blockMonitor: Any?
-        private var frameObserver: NSObjectProtocol?
-        private weak var pendingView: LocalProcessTerminalView?
-        private var pendingCommand: [String] = []
-
-        private static func start(_ command: [String], in view: LocalProcessTerminalView) {
-            // Non-absolute commands (sudo, tmux) resolve through
-            // env: spawning needs a path, not a name.
-            let resolved = command.first?.hasPrefix("/") == true ? command : ["/usr/bin/env"] + command
-            view.startProcess(
-                executable: resolved.first ?? "/bin/zsh",
-                args: Array(resolved.dropFirst()),
-                environment: nil,
-                execName: nil,
-            )
-        }
-
-        private func observeFrame(_ command: [String], in view: LocalProcessTerminalView) {
-            pendingView = view
-            pendingCommand = command
-            view.postsFrameChangedNotifications = true
-            frameObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: view,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.started == false, let sized = self.pendingView,
-                          sized.frame.size.width > 1, sized.frame.size.height > 1
-                    else {
-                        return
-                    }
-
-                    // startWhenSized marks `started` itself; setting
-                    // it here first made its guard bail and no
-                    // process ever spawned.
-                    if let observer = self.frameObserver {
-                        NotificationCenter.default.removeObserver(observer)
-                        self.frameObserver = nil
-                    }
-                    self.startWhenSized(self.pendingCommand, in: sized)
-                }
-            }
-        }
-    }
-
-    let command: [String]
+    let transport: TerminalTransport
     let reflowsCopies: Bool
+    let isActive: Bool
     let onProcessTerminated: (@MainActor () -> Void)?
 
-    /// Removes the coordinator's event monitor with the view.
+    /// Detaches the coordinator's client with the view.
     static func dismantleNSView(_: PaneTerminalView, coordinator: Coordinator) {
         coordinator.tearDown()
     }
 
-    /// Builds the SwiftTerm view and themes it; the process starts
+    /// Builds the SwiftTerm view and themes it; the client attaches
     /// as soon as layout gives the view its real size.
     func makeNSView(context: Context) -> PaneTerminalView {
         let view = PaneTerminalView(frame: .zero)
-        view.processDelegate = context.coordinator
+        if case .control = transport {
+            // The coordinator speaks the control protocol; a local
+            // shell keeps the view's own PTY wiring instead.
+            view.terminalDelegate = context.coordinator
+        } else {
+            view.processDelegate = context.coordinator
+        }
+        // Mouse reporting stays on (SwiftTerm's default): programs
+        // that ask for the mouse, like Claude Code's own transcript
+        // scrolling and pagers, get it, and Shift bypasses to local
+        // selection and scrolling. Programs that leave the mouse
+        // alone scroll and select natively without any modifier.
         view.font = CodeStyle.nsFont
         view.reflowsCopies = reflowsCopies
-        if reflowsCopies {
-            // The delegate is weakly held by the view, so the
-            // coordinator keeps it alive.
-            let reflower = ReflowingCopyDelegate(base: view)
-            context.coordinator.copyReflower = reflower
-            view.terminalDelegate = reflower
-        }
         context.coordinator.installBlockSelection(on: view)
         applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
+        context.coordinator.startWhenSized(transport, in: view)
         return view
     }
 
     /// Re-themes when the appearance actually changes; the start
-    /// also retries here as a fallback.
+    /// also retries here as a fallback and reattaches when SwiftUI
+    /// reused the view for a different command.
     func updateNSView(_ view: PaneTerminalView, context: Context) {
         applyTheme(to: view, context: context)
-        context.coordinator.startWhenSized(command, in: view)
+        context.coordinator.startWhenSized(transport, in: view)
+        context.coordinator.updateFocus(isActive: isActive, of: view)
     }
 
-    /// Creates the process-lifecycle coordinator.
+    /// Creates the control mode coordinator.
     func makeCoordinator() -> Coordinator {
         Coordinator(onProcessTerminated: onProcessTerminated)
     }

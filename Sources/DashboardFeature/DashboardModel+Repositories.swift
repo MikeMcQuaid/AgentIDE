@@ -63,6 +63,7 @@ public extension DashboardModel {
         }
 
         do {
+            screenError = nil
             status = "Cloning \(fullName)…"
             _ = try await service.cloneRepository(fullName: fullName)
             await refresh()
@@ -70,6 +71,11 @@ public extension DashboardModel {
             showsRepositoryFinder = false
             status = nil
         } catch {
+            // The finder is still on screen, so the failure must
+            // show there, and the sidebar's cloning inset must not
+            // stay stuck on success wording.
+            status = nil
+            screenError = "Cloning \(fullName) failed: " + error.localizedDescription
             ErrorLog.shared.report(error.localizedDescription)
         }
     }

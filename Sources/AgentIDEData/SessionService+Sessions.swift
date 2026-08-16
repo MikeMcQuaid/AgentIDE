@@ -1,6 +1,9 @@
 import AgentIDEDomain
 import Foundation
 
+/// How long a TERMed pane gets to exit before KILL.
+private let killGraceSeconds = 2.0
+
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
     /// Host shells share the host tmux server across flavours, so
@@ -27,101 +30,38 @@ public extension SessionService {
         tmux.attachCommand(sessionName: sessionName)
     }
 
-    /// The argv for a persistent host-user shell in a worktree: a
-    /// host tmux session (attach-or-create) that survives tab
-    /// switches and app restarts and starts the user's default login
-    /// shell. Named `agentide-shell--<repository>-<digest>--<branch>`
-    /// so `tmux ls` reads like the sidebar rather than worktree
-    /// uuids; the path digest keeps same-named repositories under
-    /// different owners from attaching to each other's shells.
-    /// The chained `set` commands give the host server the same
-    /// wheel-scrolls-history behaviour as the sandbox one, whose
-    /// config file it does not read.
-    func hostShellCommand(worktree: Worktree) -> [String] {
-        let name = hostShellName(worktree: worktree)
-        // The config applies at server birth; the chained commands
-        // repeat the options because a long-running server never
-        // rereads config. `-f` also keeps the user's own tmux config
-        // out of these app-managed sessions.
-        return [
-            Self.hostTmuxPath, "-f", hostTmuxConfigFile(),
-            "new-session", "-A", "-s", name, "-c", worktree.path,
-            ";", "set", "-g", "mouse", "on",
-            ";", "set", "-g", "history-limit", "50000",
-            ";", "set", "-g", "default-terminal", "xterm-256color",
-            ";", "set", "-g", "status", "off",
-            ";", "set", "-s", "set-clipboard", "on",
-        ]
-    }
-
-    /// The host tmux session name a worktree's shell uses, shared by
-    /// the attach command and the scrollback capture.
-    func hostShellName(worktree: Worktree) -> String {
-        Self.hostShellPrefix
-            + SessionName.slug(worktree.repositoryName) + "-"
-            + SessionName.pathDigest(worktree.repositoryPath) + "--"
-            + SessionName.slug(worktree.branch)
-    }
-
-    /// Writes the host shell server's config beside the app's other
-    /// state and returns its path; matching the sandbox server's
-    /// copy behaviour, present from the server's first moment.
-    private func hostTmuxConfigFile() -> String {
-        let directory = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
-        let file = directory + "/host-tmux.conf"
-        let content = """
-        set -g mouse on
-        set -g history-limit 50000
-        set -g default-terminal xterm-256color
-        set -g status off
-        set -s set-clipboard on
-        set -as terminal-features xterm-256color:clipboard
-        """
-        do {
-            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-            try content.write(toFile: file, atomically: true, encoding: .utf8)
-        } catch {
-            // tmux errors on a missing config path; /dev/null reads
-            // as empty and the chained commands still apply.
-            return "/dev/null"
-        }
-        return file
-    }
-
-    /// Every AgentIDE tmux session for the session manager: the
-    /// sandboxed agents and the host shells, deduplicated.
-    func allTmuxSessions() async -> [(name: String, isHostShell: Bool)] {
-        var seen = Set<String>()
-        var results = [(name: String, isHostShell: Bool)]()
-        for pane in await (try? tmux.panes()) ?? [] where seen.insert(pane.sessionName).inserted {
-            results.append((pane.sessionName, false))
-        }
-        let list = try? await processes.run(
-            [Self.hostTmuxPath, "ls", "-F", "#{session_name}"],
-            workingDirectory: nil,
-            environment: [:],
-        )
-        let shells = (list?.standardOutput ?? "")
-            .split(separator: "\n")
-            .map(String.init)
-            .filter { $0.hasPrefix(Self.hostShellPrefix) }
-        for name in shells where seen.insert(name).inserted {
-            results.append((name, true))
-        }
-        return results
-    }
-
-    /// Kills one session on whichever server owns it.
+    /// Kills one session on whichever server owns it, escalating
+    /// when the polite kill fails: TERM the pane's process, wait,
+    /// then KILL it. Sandbox panes only get tmux-level retries: the
+    /// host cannot signal another user's processes and the sudoers
+    /// rules stay narrow.
     func killTmuxSession(name: String, isHostShell: Bool) async {
+        let pids = await panePIDs(sessionName: name, isHostShell: isHostShell)
+        await issueKill(name: name, isHostShell: isHostShell)
+        guard await sessionExists(name: name, isHostShell: isHostShell) else {
+            return
+        }
+
         if isHostShell {
             _ = try? await processes.run(
-                [Self.hostTmuxPath, "kill-session", "-t", name],
+                ["kill", "-TERM"] + pids.map(String.init),
                 workingDirectory: nil,
                 environment: [:],
             )
-        } else {
-            try? await tmux.killSession(name: name)
         }
+        try? await Task.sleep(for: .seconds(killGraceSeconds))
+        guard await sessionExists(name: name, isHostShell: isHostShell) else {
+            return
+        }
+
+        if isHostShell {
+            _ = try? await processes.run(
+                ["kill", "-9"] + pids.map(String.init),
+                workingDirectory: nil,
+                environment: [:],
+            )
+        }
+        await issueKill(name: name, isHostShell: isHostShell)
     }
 
     /// Marks a worktree viewed: clears its unread state, including a
@@ -203,10 +143,9 @@ public extension SessionService {
             return
         }
 
-        let quoted = "'" + past.path.replacing("'", with: "'\\''") + "'"
         let launcher = SandvaultLauncher(hostUser: paths.hostUser)
         let command = launcher.command(
-            payload: "rm -f " + quoted,
+            payload: "rm -f " + past.path.shellQuoted,
             initialDirectory: launcher.sharedWorkspace,
             sessionID: UUID().uuidString,
             sessionName: "agentide-delete",
@@ -253,10 +192,17 @@ public extension SessionService {
         if let resumeID = metadata.resumeIDs[sessionName] {
             let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
+        } else if let past = sessionsInDirectories(of: worktree.path, liveSession: nil).first {
+            // Externally killed sessions never record a resume id,
+            // but their transcripts still name the conversation; the
+            // newest one is what resuming should continue.
+            _ = try await resumePast(past, worktree: worktree)
         } else {
-            let promptFile = paths.promptsDirectory + "/" + sessionName + ".md"
-            let existing = FileManager.default.fileExists(atPath: promptFile) ? promptFile : nil
-            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: existing)
+            // Without any conversation to continue, relaunching with
+            // the original prompt would re-run the whole task against
+            // the already modified worktree; a fresh session there is
+            // the safe fallback.
+            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: nil)
             try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
         }
         clearIntentionalClose(worktreePath: worktree.path)
@@ -274,9 +220,9 @@ public extension SessionService {
         try await tmux.newSession(
             name: sessionName,
             directory: worktree.path,
-            command: runner(for: past.agent).resumeCommand(resumeID: past.id, extraArguments: ""),
+            command: runner(for: past.agent).resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
-        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.id)
+        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
         return sessionName
     }
 
@@ -296,9 +242,9 @@ public extension SessionService {
         try await tmux.newSession(
             name: sessionName,
             directory: worktreePath,
-            command: agentRunner.resumeCommand(resumeID: past.id, extraArguments: ""),
+            command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
-        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.id)
+        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
         return sessionName
     }
 
@@ -381,7 +327,7 @@ public extension SessionService {
         }
 
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.id + ".jsonl")
+        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.resumeID + ".jsonl")
     }
 
     private func remember(sessionName: String, worktreePath: String, resumeID: String) {

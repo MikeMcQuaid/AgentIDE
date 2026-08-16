@@ -84,13 +84,10 @@ struct PullRequestListView: View {
     private func row(_ summary: PullRequestSummary) -> some View {
         PullRequestRowView(
             summary: summary,
-            canRemediate: false,
             stackDepth: stackDepth(summary),
-            hasMergeQueue: false,
             showsActions: false,
-            onAutomerge: noAction,
-            onMerge: noAction,
-            onRemediate: noAction,
+            onCopyComments: noAction,
+            onCopyChecks: noAction,
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect(summary) }
@@ -106,41 +103,22 @@ struct PullRequestListView: View {
 
 // MARK: - PullRequestFooterView
 
-/// The pull request tab's footer actions: rebase, push, open,
-/// refresh and the status line.
+/// The pull request tab's footer actions in the order they are
+/// expected to be clicked: fetch, rebase, push and, when the
+/// creation form shows, Open PR as the primary action.
 struct PullRequestFooterView: View {
     // MARK: Internal
 
-    let canPush: Bool
-    let canOpenPullRequest: Bool
-    let canRebase: Bool
-    let hasDraft: Bool
-    let pushHelp: String
-    let status: String?
-    let onRebase: () -> Void
-    let onPush: () -> Void
-    let onOpenPullRequest: () -> Void
-    let onRefresh: () -> Void
+    @Bindable var model: PullRequestsModel
 
     var body: some View {
         HStack {
-            Button("Rebase on origin", action: onRebase)
-                .disabled(canRebase == false)
-                .hoverHelp(
-                    "Fetch, then rebase with --force-rebase --gpg-sign: onto this branch's own origin ref "
-                        + "when that is fully signed and only new commits need signatures, "
-                        + "otherwise onto origin/HEAD re-signing everything; "
-                        + "a conflict aborts and reports to the Errors tab",
-                )
-            Button("Push", action: onPush)
-                .disabled(canPush == false)
-                .hoverHelp(pushHelp)
-            Button(hasDraft ? "Create PR" : "Open PR", action: onOpenPullRequest)
-                .disabled(canOpenPullRequest == false)
-                .hoverHelp(openHelp)
-            Button("Refresh", action: onRefresh)
-                .hoverHelp("Fetch the pull requests again")
-            if let status {
+            rebaseButton
+            pushButton
+            if let selected = model.selected {
+                copyButtons(for: selected)
+            }
+            if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
                     .font(.callout)
@@ -148,6 +126,18 @@ struct PullRequestFooterView: View {
                     .textSelection(.enabled)
             }
             Spacer()
+            if model.needsCreateForm {
+                openButton
+            }
+            if let mergeTitle = model.mergeActionTitle {
+                BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
+                    await model.performMergeAction()
+                }
+                .hoverHelp(
+                    "The one merge action for the open conversation: its label names exactly "
+                        + "what a click does now, and a second click cancels automerge or queueing",
+                )
+            }
         }
         .padding(Self.padding)
         .background(.bar)
@@ -157,14 +147,97 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    private var openHelp: String {
-        guard canOpenPullRequest else {
-            return "This branch already has an open pull request"
-        }
+    /// The cross-module signal that switches the utility pane's tab.
+    @AppStorage("utilityTab")
+    private var utilityTab = ""
 
-        return hasDraft
-            ? "Push if needed and open the pull request from the draft's edited title and body"
-            : "Write a pull request draft from the repository template and open it in the editor tab"
+    /// Sidebar-style: how far the branch sits behind its base.
+    private var rebaseCount: String {
+        let behind = model.branchItem?.behindDefault ?? 0
+        return behind > 0 ? "\u{2193}" + String(behind) : ""
+    }
+
+    /// Sidebar-style: how many commits a push would send.
+    private var pushCount: String {
+        let ahead = model.branchItem?.aheadOfUpstream ?? 0
+        return ahead > 0 ? String(ahead) : ""
+    }
+
+    private var rebaseHelp: String {
+        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
+            + "own origin ref when that is fully signed and only new commits need signatures, "
+            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+    }
+
+    private var rebaseButton: some View {
+        BusyButton(
+            rebaseCount,
+            busy: "Rebasing",
+            systemImage: "arrow.triangle.2.circlepath",
+            accessibilityLabel: model.rebaseTitle,
+            disabled: model.canRebase == false,
+        ) {
+            if await model.rebaseSigned() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp(rebaseHelp)
+    }
+
+    private var pushButton: some View {
+        BusyButton(
+            pushCount,
+            busy: "Pushing",
+            systemImage: "arrow.up",
+            accessibilityLabel: "Push",
+            disabled: model.canPush == false,
+        ) {
+            if await model.push() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp(model.pushHelp)
+    }
+
+    private var openButton: some View {
+        BusyButton(
+            "Open PR",
+            busy: "Opening",
+            prominent: true,
+            // Trimmed like the validation, so a title of spaces
+            // dims the button rather than failing on click.
+            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty,
+        ) {
+            if await model.createPullRequest() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .keyboardShortcut(.return, modifiers: .command)
+        .hoverHelp("Push if needed, then open the pull request with the form's title and body (Cmd-Return)")
+    }
+
+    /// The copy actions for the open conversation, in the footer's
+    /// click-order run.
+    @ViewBuilder
+    private func copyButtons(for selected: PullRequestSummary) -> some View {
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "text.bubble",
+            accessibilityLabel: "Copy unresolved comments",
+        ) {
+            await model.copyUnresolvedComments(selected)
+        }
+        .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "exclamationmark.triangle",
+            accessibilityLabel: "Copy failing checks",
+        ) {
+            await model.copyFailingChecks(selected)
+        }
+        .hoverHelp("Copy the failing checks and their failed step output to the clipboard")
     }
 }
 
@@ -214,10 +287,14 @@ struct PullRequestScopePicker: View {
 
     @Binding var scope: PullRequestScope
 
+    /// What the worktree scope calls itself: Branch on the main
+    /// checkout, where there is no worktree to speak of.
+    let worktreeTitle: String
+
     var body: some View {
         Picker("Scope", selection: $scope) {
             ForEach(PullRequestScope.allCases, id: \.self) { scope in
-                Text(scope.title).tag(scope)
+                Text(scope == .worktree ? worktreeTitle : scope.title).tag(scope)
             }
         }
         .pickerStyle(.segmented)

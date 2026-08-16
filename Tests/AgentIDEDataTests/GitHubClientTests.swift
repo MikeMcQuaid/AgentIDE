@@ -5,6 +5,54 @@ import Testing
 /// Exercises the pure parsing and prompt composition around `gh`.
 struct GitHubClientTests {
     @Test
+    func `rest comments group into anchored threads by reply chains`() {
+        let json = """
+        [
+          {"id": 1, "path": "a.swift", "line": 4, "body": "First",
+           "user": {"login": "copilot"}},
+          {"id": 2, "path": "a.swift", "line": 4, "in_reply_to_id": 1,
+           "body": "Reply", "user": {"login": "mike"}},
+          {"id": 3, "path": "b.swift", "original_line": 9,
+           "body": "Other", "user": {"login": "copilot"}}
+        ]
+        """
+        let threads = GitHubClient.threads(fromRESTJSON: json)
+        #expect(threads.count == 2)
+        #expect(threads.first?.path == "a.swift")
+        #expect(threads.first?.line == 4)
+        #expect(threads.first?.comments.map(\.author) == ["copilot", "mike"])
+        #expect(threads.last?.line == 9)
+        // Unique display ids, but no resolvable GraphQL id.
+        #expect(threads.map(\.id) == ["rest-1", "rest-3"])
+        #expect(threads.map(\.resolveID) == ["", ""])
+    }
+
+    @Test
+    func `run ids come deduplicated from failing check links`() {
+        let lines = [
+            "build\tfail\t1m2s\thttps://github.com/o/r/actions/runs/123/job/456",
+            "test\tfail\t2m\thttps://github.com/o/r/actions/runs/123/job/789",
+            "style\tfail\t3s\thttps://github.com/o/r/actions/runs/987/job/1",
+            "external-ci\tfail\t5s\thttps://ci.example.invalid/build/9",
+        ]
+        #expect(GitHubClient.runIDs(fromCheckLines: lines) == ["123", "987"])
+        #expect(GitHubClient.runIDs(fromCheckLines: []).isEmpty)
+    }
+
+    @Test
+    func `merge flags follow the repository's allowed methods`() {
+        // A merge commit wins whenever it is allowed.
+        let all = #"{"mergeCommitAllowed":true,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: all) == "--merge")
+        let noMergeCommit = #"{"mergeCommitAllowed":false,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: noMergeCommit) == "--rebase")
+        let squashOnly = #"{"mergeCommitAllowed":false,"rebaseMergeAllowed":false,"squashMergeAllowed":true}"#
+        #expect(GitHubClient.mergeFlag(fromJSON: squashOnly) == "--squash")
+        // An unreadable answer defaults to the merge commit.
+        #expect(GitHubClient.mergeFlag(fromJSON: "") == "--merge")
+    }
+
+    @Test
     func `summaries carry failing check links and click through sensibly`() throws {
         let json = """
         [{"number": 7, "title": "Fix", "url": "https://github.com/o/r/pull/7",

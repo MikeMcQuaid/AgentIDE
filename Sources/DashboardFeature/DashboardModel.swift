@@ -64,6 +64,14 @@ public final class DashboardModel {
     /// extension also reports through it.
     public internal(set) var status: String?
 
+    /// A failure shown inline on the middle-pane screens: the finder
+    /// and new-session pages render before the split view exists, so
+    /// the Errors tab is not visible from them.
+    public internal(set) var screenError: String?
+
+    /// Worktrees mid-deletion, so their rows grey out instantly.
+    public internal(set) var deletingPaths: Set<String> = []
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {
@@ -145,6 +153,10 @@ public final class DashboardModel {
     /// Model discovery runs once per launch, so the pickers track the
     /// installed CLIs.
     public func poll() async {
+        // The sidebar and the restored selection come first: model
+        // discovery and the notification prompt take seconds, and
+        // the window showed "no worktree selected" while they ran.
+        await refresh()
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
         for agent in AgentKind.allCases {
             if let models = await service.discoverModels(for: agent) {
@@ -166,13 +178,19 @@ public final class DashboardModel {
     }
 
     /// Deletes a worktree; its conversations stay readable in the
-    /// repository's sessions browser.
+    /// repository's sessions browser. The path joins
+    /// `deletingPaths` immediately, so the row can grey out the
+    /// moment the click lands rather than when the deletion ends.
     public func delete(item: WorktreeItem) async {
+        deletingPaths.insert(item.worktree.path)
+        defer { deletingPaths.remove(item.worktree.path) }
+        // Deselect immediately: the detail pane must not keep
+        // showing, or allow re-entering, a worktree mid-deletion.
+        if selection?.id == item.id {
+            selection = nil
+        }
         do {
             try await service.deleteWorktree(item: item)
-            if selection?.id == item.id {
-                selection = nil
-            }
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -220,7 +238,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetch(repository: repository)
-            status = "Fetched \(repository.name)."
+            ErrorLog.shared.note("Fetched \(repository.name).")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -236,7 +254,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetchAndReset(repository: repository)
-            status = "Reset \(repository.name) to origin."
+            ErrorLog.shared.note("Reset \(repository.name) to origin.")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

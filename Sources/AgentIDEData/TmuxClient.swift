@@ -17,6 +17,9 @@ public struct TmuxPane: Sendable {
     /// unread detection.
     public let activityAt: Int
 
+    /// The pane's root process id, for resource usage and kills.
+    public let pid: Int?
+
     /// The pane's current working directory.
     public let currentPath: String
 }
@@ -76,6 +79,7 @@ public struct TmuxClient: Sendable {
                 isDead: field.next() == "1",
                 exitStatus: field.next().flatMap { Int($0) },
                 activityAt: field.next().flatMap { Int($0) } ?? 0,
+                pid: field.next().flatMap { Int($0) },
                 currentPath: field.next() ?? "",
             )
         }
@@ -109,27 +113,27 @@ public struct TmuxClient: Sendable {
         try await tmux(["send-keys", "-l", "-t", sessionName, text])
     }
 
-    /// The argv a terminal view should spawn to attach interactively.
-    /// Servers outlive app updates and only read their config file
-    /// at start, so the attach chain applies the mouse and clipboard
-    /// options live and idempotently: the wheel scrolls tmux history
-    /// and copy-mode drags reach the macOS clipboard through OSC 52.
+    /// The argv a terminal pane spawns to attach as a control mode
+    /// client: `-C` speaks the textual protocol over the pipes, so
+    /// the pane renders locally and this client never needs a
+    /// terminal. External SSH attaches still get mouse and OSC 52
+    /// copying from the server config.
     public func attachCommand(sessionName: String) -> [String] {
+        // `-d` detaches any other client: the pane is the session's
+        // one legitimate viewer, and clients leaked by an earlier
+        // app run would otherwise linger attached forever.
         if isInsideSandbox {
-            [
-                "tmux",
-                "set", "-g", "mouse", "on",
-                ";", "set", "-s", "set-clipboard", "on",
-                ";", "attach-session", "-t", sessionName,
-            ]
+            ["tmux", "-C", "attach-session", "-d", "-t", sessionName]
         } else {
             launcher.command(
-                payload: "export TMUX_TMPDIR=" + shellQuote(socketDirectory)
-                    + "; exec tmux set -g mouse on ';'"
-                    + " set -s set-clipboard on ';'"
-                    + " attach-session -t " + shellQuote(sessionName),
+                payload: "export TMUX_TMPDIR=" + socketDirectory.shellQuoted
+                    + "; exec tmux -C attach-session -d -t " + sessionName.shellQuoted,
                 initialDirectory: launcher.sharedWorkspace,
-                sessionID: UUID().uuidString,
+                // Deterministic, so the pane's command compares equal
+                // across view updates: a fresh UUID here made every
+                // update look like a new command and reattach the
+                // client in a loop.
+                sessionID: sessionName,
                 sessionName: sessionName,
             )
         }
@@ -146,17 +150,17 @@ public struct TmuxClient: Sendable {
     /// whole config onto one line.
     var configPrelude: String {
         let format = Self.configContent.replacing("\n", with: "\\n") + "\\n"
-        return "export TMUX_TMPDIR=" + shellQuote(socketDirectory) + "; "
-            + "mkdir -p " + shellQuote(socketDirectory) + "; "
-            + "chmod 700 " + shellQuote(socketDirectory) + "; "
-            + "printf " + shellQuote(format) + " > " + shellQuote(configFile) + "; "
+        return "export TMUX_TMPDIR=" + socketDirectory.shellQuoted + "; "
+            + "mkdir -p " + socketDirectory.shellQuoted + "; "
+            + "chmod 700 " + socketDirectory.shellQuoted + "; "
+            + "printf " + format.shellQuoted + " > " + configFile.shellQuoted + "; "
     }
 
     // MARK: Private
 
-    private static let paneFieldCount = 5
+    private static let paneFieldCount = 6
     private static let paneFormat =
-        "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_current_path}"
+        "#{session_name}|#{pane_dead}|#{pane_dead_status}|#{session_activity}|#{pane_pid}|#{pane_current_path}"
 
     /// The server's config: dead panes stay inspectable, the mouse
     /// wheel scrolls tmux's own history (the alternate screen leaves
@@ -201,7 +205,7 @@ public struct TmuxClient: Sendable {
         } else {
             let payload = configPrelude + "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; "
-                + "exec tmux " + full.map(shellQuote).joined(separator: " ")
+                + "exec tmux " + full.map(\.shellQuoted).joined(separator: " ")
             let argv = launcher.command(
                 payload: payload,
                 initialDirectory: launcher.sharedWorkspace,
@@ -215,9 +219,5 @@ public struct TmuxClient: Sendable {
         }
 
         return result
-    }
-
-    private func shellQuote(_ value: String) -> String {
-        "'" + value.replacing("'", with: "'\\''") + "'"
     }
 }

@@ -177,6 +177,42 @@ public extension SessionService {
         try await git.rebaseSigned(worktreePath: worktree.path, onto: target)
     }
 
+    /// What a signed rebase would actually change, so the button
+    /// dims or names its work: moving the branch onto a newer base,
+    /// signing unsigned commits, both, or nothing at all.
+    enum RebaseNeed: Sendable {
+        case nothing
+        case rebase
+        case sign
+        case rebaseAndSign
+    }
+
+    /// The rebase button's work, judged from local refs; the action
+    /// itself fetches first, so a stale answer only mislabels until
+    /// the next reload.
+    func rebaseNeed(worktree: Worktree) async -> RebaseNeed {
+        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+        let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
+        let movesBase = await (git.aheadBehind(worktreePath: worktree.path, baseRef: target)?.behind ?? 0) > 0
+        let needsSigning = await git.allCommitsSigned(
+            worktreePath: worktree.path,
+            range: target + "..HEAD",
+        ) == false
+        switch (movesBase, needsSigning) {
+        case (true, true):
+            return .rebaseAndSign
+
+        case (true, false):
+            return .rebase
+
+        case (false, true):
+            return .sign
+
+        case (false, false):
+            return .nothing
+        }
+    }
+
     /// The ref a signed rebase lands on. The branch's own origin ref
     /// wins when it exists, every commit unique to it verifies and
     /// local commits sit on top needing signatures: rebasing there

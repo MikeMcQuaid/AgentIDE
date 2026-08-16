@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -50,49 +51,17 @@ public struct DashboardView: View {
             .padding(.top, Self.headerTopPadding)
             .padding(.bottom, Self.statusPadding)
         }
-        // An inset, not an overlay: long git errors must never draw
-        // over the rows. Clicking opens the full text, since two
-        // lines truncate most command failures.
-        .safeAreaInset(edge: .bottom) {
-            if let status = model.status {
-                Button {
-                    showsFullStatus = true
-                } label: {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(Self.statusLineLimit)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(Self.statusPadding)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .background(.bar)
-                .hoverHelp("Click for the full message")
-                .popover(isPresented: $showsFullStatus) {
-                    ScrollView {
-                        Text(status)
-                            .font(.caption)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                    .frame(width: Self.statusPopoverWidth, height: Self.statusPopoverHeight)
-                }
-            }
-        }
     }
 
     // MARK: Private
 
     private static let statusPadding: CGFloat = 4
-    private static let statusLineLimit = 2
     private static let headerTopPadding: CGFloat = 12
-    private static let statusPopoverWidth: CGFloat = 420
-    private static let statusPopoverHeight: CGFloat = 200
     private static let listPadding: CGFloat = 6
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
+    private static let headerVerticalPadding: CGFloat = 5
+    private static let deletingOpacity = 0.35
     private static let rowHorizontalPadding: CGFloat = 6
     private static let rowIndent: CGFloat = 12
     private static let rowCornerRadius: CGFloat = 5
@@ -102,8 +71,6 @@ public struct DashboardView: View {
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
-
-    @State private var showsFullStatus = false
 
     private let model: DashboardModel
 
@@ -162,8 +129,10 @@ public struct DashboardView: View {
                 .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
                 .accessibilityHidden(true)
             avatar(for: group.repository)
-            Text(group.repository.fullName ?? group.repository.name)
-                .font(.callout.weight(.semibold))
+            // The avatar already names the owner, so the text keeps
+            // to the repository name alone.
+            Text(group.repository.name)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             if group.items.count > 1 {
@@ -174,7 +143,7 @@ public struct DashboardView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, Self.rowVerticalPadding)
+        .padding(.vertical, Self.headerVerticalPadding)
         .contentShape(Rectangle())
     }
 
@@ -182,7 +151,14 @@ public struct DashboardView: View {
     /// matching native sidebar selection.
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
+        let isDeleting = model.deletingPaths.contains(item.worktree.path)
         return Button {
+            // A worktree mid-deletion cannot be re-entered; the row
+            // only becomes selectable again if the deletion fails.
+            guard isDeleting == false else {
+                return
+            }
+
             model.select(item)
         } label: {
             WorktreeRowView(
@@ -190,6 +166,9 @@ public struct DashboardView: View {
                 pullRequest: model.pullRequest(for: item),
                 stackDepth: model.stackDepth(for: item),
             )
+            // Deleting takes a moment; the row fades the instant the
+            // click lands so the click visibly took.
+            .opacity(model.deletingPaths.contains(item.worktree.path) ? Self.deletingOpacity : 1)
             .padding(.vertical, Self.rowVerticalPadding)
             .padding(.horizontal, Self.rowHorizontalPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,6 +187,16 @@ public struct DashboardView: View {
 
     @ViewBuilder
     private func contextActions(for item: WorktreeItem) -> some View {
+        Button("Copy branch name") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(item.worktree.branch, forType: .string)
+        }
+        .hoverHelp("Copy this worktree's branch name")
+        Button("Copy path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(item.worktree.path, forType: .string)
+        }
+        .hoverHelp("Copy this worktree's full path")
         Button("Fetch") { Task { await model.fetch(item: item) } }
             .hoverHelp("git fetch all remotes of this repository")
         if item.worktree.path == item.worktree.repositoryPath {

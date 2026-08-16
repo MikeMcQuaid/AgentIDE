@@ -1,33 +1,8 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
-
-// MARK: - ReviewFileDisplay
-
-/// How the review file list shows: Default hides generated files
-/// and expands the rest, Hide All collapses everything and Show All
-/// expands everything, generated included.
-enum ReviewFileDisplay: CaseIterable {
-    case standard
-    case hideAll
-    case showAll
-
-    // MARK: Internal
-
-    var title: String {
-        switch self {
-        case .standard:
-            "Default"
-
-        case .hideAll:
-            "Hide All"
-
-        case .showAll:
-            "Show All"
-        }
-    }
-}
 
 // MARK: - FileCollapseCaret
 
@@ -55,12 +30,31 @@ struct FileCollapseCaret: View {
     private static let expandedDegrees: Double = 90
 }
 
+// MARK: - DiffStatText
+
+/// The compact `+n −n` insertion and deletion counts shown beside
+/// diffs, green and red like every diffstat.
+struct DiffStatText: View {
+    let additions: Int
+    let deletions: Int
+
+    var body: some View {
+        HStack(spacing: DiffFileView.statSpacing) {
+            Text("+" + String(additions)).foregroundStyle(.green)
+            Text("\u{2212}" + String(deletions)).foregroundStyle(.red)
+        }
+        .font(.caption.monospaced())
+    }
+}
+
 // MARK: - DiffFileView
 
 /// One file's hunks with tappable, selectable changed lines, hidden
 /// behind the caret when collapsed.
 struct DiffFileView: View {
     // MARK: Internal
+
+    static let statSpacing: CGFloat = 4
 
     let file: DiffFile
     let model: ReviewModel
@@ -79,8 +73,22 @@ struct DiffFileView: View {
                 FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
                 Text(file.path).font(.headline.monospaced())
                 Spacer()
-                Button("Edit file", action: onEdit)
-                    .hoverHelp("Open this file in the built-in editor for review-time fixes")
+                DiffStatText(additions: file.additions, deletions: file.deletions)
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(file.path, forType: .string)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .accessibilityLabel("Copy file path")
+                }
+                .buttonStyle(.borderless)
+                .hoverHelp("Copy this file's path to the clipboard")
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .accessibilityLabel("Edit file")
+                }
+                .buttonStyle(.borderless)
+                .hoverHelp("Open this file in the built-in editor for review-time fixes")
             }
             if isCollapsed == false {
                 ForEach(Array(file.hunks.enumerated()), id: \.offset) { hunkIndex, hunk in
@@ -88,11 +96,12 @@ struct DiffFileView: View {
                 }
             }
         }
-        .padding(.bottom, Self.filePadding)
+        .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
     }
 
     // MARK: Private
 
+    private static let collapsedPadding: CGFloat = 1
     private static let lineSpacing: CGFloat = 2
     private static let gutterSpacing: CGFloat = 6
     private static let selectionBarWidth: CGFloat = 3
@@ -190,37 +199,76 @@ struct DiffFileView: View {
         return String(repeating: " ", count: max(0, numberWidth - text.count)) + text
     }
 
+    /// Splits a token into runs, marked when a character is a tab or
+    /// sits in the line's trailing whitespace.
+    private static func whitespaceRuns(
+        of text: String,
+        from offset: Int,
+        trailingStart: Int,
+    ) -> [(text: String, isMarked: Bool)] {
+        var runs = [(text: String, isMarked: Bool)]()
+        for (position, character) in text.enumerated() {
+            let isWhitespace = character == " " || character == "\t"
+            let marked = character == "\t" || (isWhitespace && offset + position >= trailingStart)
+            if var last = runs.last, last.isMarked == marked {
+                last.text.append(character)
+                runs[runs.count - 1] = last
+            } else {
+                runs.append((String(character), marked))
+            }
+        }
+        return runs
+    }
+
     /// The hunk's code as one attributed string: syntax colours per
     /// token and change backgrounds per line, markers excluded so
     /// copies paste cleanly.
     private func hunkText(_ hunk: DiffHunk) -> AttributedString {
         var result = AttributedString()
         for (index, line) in hunk.lines.enumerated() {
-            var content = AttributedString()
-            for token in CodeHighlighter.tokens(for: line.content, language: language) {
-                var piece = AttributedString(token.text)
-                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
-                content += piece
-            }
-            if content.characters.isEmpty {
-                content = AttributedString(" ")
-            }
-            switch line.kind {
-            case .addition:
-                content.backgroundColor = Color.green.opacity(Self.changeOpacity)
-
-            case .deletion:
-                content.backgroundColor = Color.red.opacity(Self.changeOpacity)
-
-            case .context:
-                break
-            }
-            result += content
+            result += lineText(line)
             if index < hunk.lines.count - 1 {
                 result += AttributedString("\n")
             }
         }
         return result
+    }
+
+    /// One line's text: a whitespace tint covers tabs and the
+    /// trailing whitespace run, so whitespace-only changes stay
+    /// reviewable while copies remain character-exact (a background
+    /// rather than the substitute glyphs the editor uses).
+    private func lineText(_ line: DiffLine) -> AttributedString {
+        let base: Color? =
+            switch line.kind {
+            case .addition:
+                Color.green.opacity(Self.changeOpacity)
+
+            case .deletion:
+                Color.red.opacity(Self.changeOpacity)
+
+            case .context:
+                nil
+            }
+        let trailingStart = line.content.count
+            - line.content.reversed().prefix { $0 == " " || $0 == "\t" }.count
+        var content = AttributedString()
+        var offset = 0
+        for token in CodeHighlighter.tokens(for: line.content, language: language) {
+            for run in Self.whitespaceRuns(of: token.text, from: offset, trailingStart: trailingStart) {
+                var piece = AttributedString(run.text)
+                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
+                piece.backgroundColor = run.isMarked ? CodeStyle.whitespaceColour : base
+                content += piece
+            }
+            offset += token.text.count
+        }
+        if content.characters.isEmpty {
+            var blank = AttributedString(" ")
+            blank.backgroundColor = base
+            content = blank
+        }
+        return content
     }
 
     /// Joins each line with its old and new line numbers; deletions
@@ -274,7 +322,7 @@ struct ReviewFileListView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                ForEach(model.visibleFiles) { file in
+                ForEach(model.files) { file in
                     fileSection(file)
                 }
             }
@@ -303,6 +351,17 @@ struct ReviewFileListView: View {
                 },
             )
         }
+        if isCollapsed(file) == false {
+            ForEach(model.threads(for: file.path)) { thread in
+                ReviewThreadRow(
+                    thread: thread,
+                    onEdit: {
+                        FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath)
+                    },
+                    onToggleResolved: { await model.toggleResolved(thread) },
+                )
+            }
+        }
     }
 
     /// Uncommitted changes edit in place: the shared editor embeds
@@ -329,7 +388,9 @@ struct ReviewFileListView: View {
     }
 
     private func isCollapsed(_ file: DiffFile) -> Bool {
-        collapseOverrides[file.path] ?? hideAllByDefault
+        // Generated files always start collapsed, whatever the
+        // expand-all state says; only their own caret opens them.
+        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path))
     }
 
     private func toggleCollapse(_ file: DiffFile) {

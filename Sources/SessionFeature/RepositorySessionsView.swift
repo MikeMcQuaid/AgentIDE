@@ -111,16 +111,21 @@ public struct RepositorySessionsView: View {
                     .controlSize(.small)
                     .hoverHelp("Start a fresh agent session in this repository instead of resuming")
             }
-            Button("Resume here") { model.resumeSelectedHere(onResumed: onResumed) }
-                .controlSize(.small)
-                .disabled(model.selectedWorktreePath == nil)
-                .hoverHelp(
-                    "Continue the selected conversation in the worktree it ran in; dimmed when that worktree is gone",
-                )
-            Button("Resume in new worktree") { model.resumeSelected(onResumed: onResumed) }
-                .controlSize(.small)
-                .disabled(model.selected == nil)
-                .hoverHelp("Create a fresh worktree and branch and continue the selected conversation there")
+            // One resume button: in place when the conversation's
+            // worktree still exists, into a fresh worktree only when
+            // it is gone and that is all that can be done.
+            if model.selected == nil || model.selectedWorktreePath != nil {
+                Button("Resume here") { model.resumeSelectedHere(onResumed: onResumed) }
+                    .controlSize(.small)
+                    .disabled(model.selectedWorktreePath == nil)
+                    .hoverHelp("Continue the selected conversation in the worktree it ran in")
+            } else {
+                Button("Resume in new worktree") { model.resumeSelected(onResumed: onResumed) }
+                    .controlSize(.small)
+                    .hoverHelp(
+                        "This conversation's worktree is gone; continue it in a fresh worktree and branch",
+                    )
+            }
         }
         // Flush with the window's top: the page ignores the toolbar
         // inset, so only a hairline of breathing room remains.

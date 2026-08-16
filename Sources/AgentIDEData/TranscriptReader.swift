@@ -189,6 +189,9 @@ public struct TranscriptReader: Sendable {
     /// machinery, not conversation, and stay hidden. The flat
     /// `user_message`, `agent_message` and `function_call` shapes
     /// are older rollouts, kept readable.
+    /// Rollouts often record one utterance twice: as a flat event
+    /// payload and again as a typed response item. Adjacent repeats
+    /// of the same role and text collapse to one entry.
     private func appendCodexEntry(_ payload: CodexPayload, to results: inout [TranscriptEntry]) {
         let entry: TranscriptEntry? =
             switch payload.type {
@@ -214,7 +217,7 @@ public struct TranscriptReader: Sendable {
             default:
                 nil
             }
-        if let entry {
+        if let entry, results.last.map({ $0.role == entry.role && $0.text == entry.text }) != true {
             results.append(entry)
         }
     }

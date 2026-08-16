@@ -10,6 +10,18 @@ struct CodexTranscriptIndexTests {
     // MARK: Internal
 
     @Test
+    func `head decoding survives a cut inside a multi-byte character`() {
+        let ellipsis = Array("…".utf8)
+        let whole = Data(Array("line one\n".utf8) + ellipsis)
+        #expect(CodexTranscriptIndex.decodeHead(whole) == "line one\n…")
+        // A fixed-size read can end mid-character; the partial
+        // trailing bytes drop rather than losing the whole session.
+        let cut = whole.dropLast()
+        #expect(CodexTranscriptIndex.decodeHead(Data(cut)) == "line one\n")
+        #expect(CodexTranscriptIndex.decodeHead(Data()) != nil)
+    }
+
+    @Test
     func `indexes sessions by their embedded working directory`() throws {
         let root = try TestSupport.temporaryDirectory("codex-index")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -39,6 +51,27 @@ struct CodexTranscriptIndexTests {
         // No metadata line: the file cannot be resumed, so it hides.
         try #"{"type":"response_item","payload":{"type":"user_message","message":"orphan"}}"#
             .write(toFile: day + "/rollout-broken.jsonl", atomically: true, encoding: .utf8)
+        // A subagent rollout shares its parent's session id and cwd;
+        // it is machinery, not a conversation, and stays hidden.
+        let subagent = #"{"type":"session_meta","payload":"# +
+            #"{"cwd":"/worktrees/one","id":"session-new","thread_source":"subagent"}}"#
+        try (subagent + "\n").write(toFile: day + "/rollout-subagent.jsonl", atomically: true, encoding: .utf8)
+
+        let sessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/one")
+        // The file stem is the row identity; the embedded session id
+        // is what resume passes to Codex.
+        #expect(sessions.map(\.id) == ["rollout-newer", "rollout-older"])
+        #expect(sessions.map(\.resumeID) == ["session-new", "session-old"])
+        #expect(sessions.first?.title == "fix the crash")
+        #expect(sessions.allSatisfy { $0.agent == .codexCLI })
+    }
+
+    @Test
+    func `titles current-generation rollouts by the typed prompt`() throws {
+        let root = try TestSupport.temporaryDirectory("codex-index-current")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let day = root + "/2026/08/12"
+        try FileManager.default.createDirectory(atPath: day, withIntermediateDirectories: true)
         // The current rollout generation: role-and-content messages,
         // with Codex's injected preamble before the typed prompt.
         let current = """
@@ -49,19 +82,11 @@ struct CodexTranscriptIndexTests {
         "content":[{"type":"input_text","text":"ship the feature\\nplease"}]}}
         """
         try (current + "\n").write(toFile: day + "/rollout-current.jsonl", atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes(
-            [.modificationDate: Date(timeIntervalSince1970: 4)],
-            ofItemAtPath: day + "/rollout-current.jsonl",
-        )
 
-        let sessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/one")
-        #expect(sessions.map(\.id) == ["session-new", "session-old"])
-        #expect(sessions.first?.title == "fix the crash")
-        #expect(sessions.allSatisfy { $0.agent == .codexCLI })
-
-        let currentSessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/three")
-        #expect(currentSessions.map(\.id) == ["session-current"])
-        #expect(currentSessions.first?.title == "ship the feature")
+        let sessions = CodexTranscriptIndex().sessions(inRoot: root, workingDirectory: "/worktrees/three")
+        #expect(sessions.map(\.id) == ["rollout-current"])
+        #expect(sessions.map(\.resumeID) == ["session-current"])
+        #expect(sessions.first?.title == "ship the feature")
     }
 
     // MARK: Private
