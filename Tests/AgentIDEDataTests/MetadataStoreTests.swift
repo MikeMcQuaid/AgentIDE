@@ -77,7 +77,7 @@ struct MetadataStoreTests {
 
         var repository = CachedRepository()
         repository.name = "AgentIDE"
-        repository.fullName = "MikeMcQuaid/AgentIDE"
+        repository.fullName = "octocat/example"
         repository.path = "/r"
         var worktree = CachedWorktree()
         worktree.branch = "agent/fix"
@@ -88,7 +88,7 @@ struct MetadataStoreTests {
         store.save(metadata)
 
         let cached = store.load().cachedSidebar
-        #expect(cached.first?.fullName == "MikeMcQuaid/AgentIDE")
+        #expect(cached.first?.fullName == "octocat/example")
         #expect(cached.first?.worktrees.first?.branch == "agent/fix")
     }
 }

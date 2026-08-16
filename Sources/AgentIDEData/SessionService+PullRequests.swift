@@ -72,8 +72,8 @@ public extension SessionService {
             return
         }
 
-        if let counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: "origin/" + branch),
-           counts.ahead == 0 {
+        let counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: "origin/" + branch)
+        if counts?.ahead == 0 {
             try? await git.resetHard(worktreePath: worktree.path, ref: "origin/" + branch)
         }
         await git.deleteMergedBranch(worktreePath: worktree.path, branch: mergedBranch)

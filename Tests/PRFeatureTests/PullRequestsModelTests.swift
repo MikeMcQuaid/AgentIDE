@@ -174,8 +174,8 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `creating a pull request pushes then appends the template`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+    func `creating a pull request appends the template, never pushes`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         var pushed = false
         model.performPush = { _ in pushed = true }
         var created: (title: String, body: String)?
@@ -186,14 +186,17 @@ struct PullRequestsModelTests {
         model.prTitle = "A change"
         model.prBody = "Why it changed."
         model.prTemplate = "- [ ] Checked"
+        #expect(model.isFullyPushed)
         #expect(await model.createPullRequest())
-        #expect(pushed)
-        #expect(model.isPushed)
+        #expect(pushed == false)
         #expect(created?.title == "A change")
         #expect(created?.body == "Why it changed.\n\n- [ ] Checked")
         #expect(model.prTitle.isEmpty)
 
-        let untitled = makeModel(items: [item(branch: "feature", ahead: 1)])
+        // Unpushed commits dim Open PR instead of pushing for it.
+        #expect(makeModel(items: [item(branch: "feature", ahead: 1)]).isFullyPushed == false)
+
+        let untitled = makeModel(items: [item(branch: "feature", ahead: 0)])
         #expect(await untitled.createPullRequest() == false)
     }
 

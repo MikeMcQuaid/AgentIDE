@@ -466,9 +466,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    shell out as the host user.
 5. When the branch has no open pull request, the worktree scope shows a
    creation form instead of the list: title, body and the repository's
-   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Opening
-   pushes when needed, then runs `gh pr create` with the template
-   appended below the body after an empty line. Open PR sits in the
+   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Open PR
+   dims until the branch is pushed, then runs `gh pr create` with the
+   template appended below the body after an empty line; while the form
+   shows, revisiting the tab does not re-poll for a pull request that
+   cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and
    push in click order. Blank fields fill from the branch's commits:
    a one-commit branch defaults to that commit's own message, and a

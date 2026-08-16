@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import Foundation
@@ -51,7 +52,7 @@ extension PullRequestsModel {
     /// instantly, then refreshes it; the open scope's light rows
     /// gain their status icons here.
     func select(_ summary: PullRequestSummary) {
-        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)] ?? summary
+        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)]?.summary ?? summary
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
@@ -67,7 +68,7 @@ extension PullRequestsModel {
     /// or restarting the app paints its header instantly.
     func cacheEnriched(_ summary: PullRequestSummary) {
         var metadata = store.load()
-        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = summary
+        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = CachedSummary(summary: summary)
         store.save(metadata)
     }
 
@@ -88,6 +89,25 @@ extension PullRequestsModel {
             current = next
         }
         return depth
+    }
+
+    /// Whether every local commit is already on the upstream; Open
+    /// PR stays dimmed until then.
+    var isFullyPushed: Bool {
+        isPushed || branchItem?.aheadOfUpstream == 0
+    }
+
+    /// A one-commit branch is its own description: the form
+    /// defaults to that commit, no model involved.
+    func prefillFromSingleCommit(_ worktree: Worktree) async {
+        guard prTitle.isEmpty, prBody.isEmpty else {
+            return
+        }
+
+        let commits = await fetchCommitMessages(worktree)
+        if commits.count == 1, let only = commits.first {
+            apply(description: Self.description(splitFromMessage: only))
+        }
     }
 
     /// Fills the form's blank fields from the branch's commits: the
@@ -144,9 +164,10 @@ extension PullRequestsModel {
         return (title, body)
     }
 
-    /// Pushes when needed, then opens the pull request from the
-    /// form's title and body, with the template appended below the
-    /// body after an empty line; false opens the errors surface.
+    /// Opens the pull request from the form's title and body, with
+    /// the template appended below the body after an empty line;
+    /// false opens the errors surface. The button dims until the
+    /// branch is pushed, so nothing pushes implicitly here.
     func createPullRequest() async -> Bool {
         guard let worktree = actionWorktree else {
             return false
@@ -155,10 +176,6 @@ extension PullRequestsModel {
         let title = prTitle.trimmingCharacters(in: .whitespaces)
         guard title.isEmpty == false else {
             ErrorLog.shared.report("The pull request needs a title.")
-            return false
-        }
-
-        if canPush, await push() == false {
             return false
         }
 

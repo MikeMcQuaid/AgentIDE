@@ -135,6 +135,10 @@ final class PullRequestsModel {
 
     private(set) var summaries: [PullRequestSummary] = []
     private(set) var isLoading = false
+
+    /// True once the first listing answered; the creation form only
+    /// appears after that, and mid-reload churn never hides it.
+    private(set) var hasLoaded = false
     private(set) var fetchedLimit = 0
     private(set) var hasMergeQueue = false
 
@@ -175,7 +179,7 @@ final class PullRequestsModel {
     /// Whether the list pane shows the creation form instead: the
     /// worktree scope with no open pull request for the branch.
     var needsCreateForm: Bool {
-        scope == .worktree && branchItem != nil && isLoading == false
+        scope == .worktree && branchItem != nil && hasLoaded
             && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
     }
 
@@ -287,14 +291,7 @@ final class PullRequestsModel {
             if prTemplate.isEmpty {
                 prTemplate = template ?? ""
             }
-            // A one-commit branch is its own description: the form
-            // defaults to that commit, no model involved.
-            if prTitle.isEmpty, prBody.isEmpty {
-                let commits = await fetchCommitMessages(worktree)
-                if commits.count == 1, let only = commits.first {
-                    apply(description: Self.description(splitFromMessage: only))
-                }
-            }
+            await prefillFromSingleCommit(worktree)
             if let live = await fetchCurrentBranch(worktree.path) {
                 currentBranch = live
             }
@@ -304,7 +301,10 @@ final class PullRequestsModel {
             selected = nil
             summaries = store.load().pullRequestListsCache[cacheKey]?.summaries ?? []
         }
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
         // Captured before the await: a slow answer for an already
         // switched scope must neither show nor cache under the new
         // scope's key.

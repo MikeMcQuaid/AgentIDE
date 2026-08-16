@@ -205,15 +205,17 @@ struct PullRequestFooterView: View {
             busy: "Opening",
             prominent: true,
             // Trimmed like the validation, so a title of spaces
-            // dims the button rather than failing on click.
-            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty,
+            // dims the button rather than failing on click; the
+            // push comes first, explicitly.
+            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
+                || model.isFullyPushed == false,
         ) {
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
             }
         }
         .keyboardShortcut(.return, modifiers: .command)
-        .hoverHelp("Push if needed, then open the pull request with the form's title and body (Cmd-Return)")
+        .hoverHelp("Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed")
     }
 
     /// The copy actions for the open conversation, in the footer's

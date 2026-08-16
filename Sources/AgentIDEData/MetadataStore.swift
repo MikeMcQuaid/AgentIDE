@@ -88,9 +88,9 @@ public struct AppMetadata: Codable, Sendable {
         conversationCache = try container
             .decodeIfPresent([String: CachedConversation].self, forKey: .conversationCache) ?? [:]
         enrichedSummaryCache = try container
-            .decodeIfPresent([String: PullRequestSummary].self, forKey: .enrichedSummaryCache) ?? [:]
+            .decodeIfPresent([String: CachedSummary].self, forKey: .enrichedSummaryCache) ?? [:]
         threadsCache = try container
-            .decodeIfPresent([String: [ReviewThread]].self, forKey: .threadsCache) ?? [:]
+            .decodeIfPresent([String: CachedThreads].self, forKey: .threadsCache) ?? [:]
         intentionallyClosed = try container
             .decodeIfPresent([String].self, forKey: .intentionallyClosed) ?? []
     }
@@ -155,11 +155,11 @@ public struct AppMetadata: Codable, Sendable {
 
     /// Enriched pull request headers by `repositoryPath#number`, so
     /// reopening a conversation paints its status icons instantly.
-    public var enrichedSummaryCache: [String: PullRequestSummary] = [:]
+    public var enrichedSummaryCache: [String: CachedSummary] = [:]
 
     /// Review conversation threads by `repositoryPath#number`, so a
     /// reopened conversation paints them instantly.
-    public var threadsCache: [String: [ReviewThread]] = [:]
+    public var threadsCache: [String: CachedThreads] = [:]
 
     /// Worktrees whose last session the user closed deliberately;
     /// automatic resumes leave them alone until a session starts
@@ -181,6 +181,18 @@ public struct AppMetadata: Codable, Sendable {
                 .prefix(Self.listingCap)
             pullRequestListsCache = Dictionary(uniqueKeysWithValues: Array(newest))
         }
+        if enrichedSummaryCache.count > Self.conversationCap {
+            let newest = enrichedSummaryCache
+                .sorted { $0.value.savedAt > $1.value.savedAt }
+                .prefix(Self.conversationCap)
+            enrichedSummaryCache = Dictionary(uniqueKeysWithValues: Array(newest))
+        }
+        if threadsCache.count > Self.conversationCap {
+            let newest = threadsCache
+                .sorted { $0.value.savedAt > $1.value.savedAt }
+                .prefix(Self.conversationCap)
+            threadsCache = Dictionary(uniqueKeysWithValues: Array(newest))
+        }
     }
 
     // MARK: Private
@@ -189,6 +201,50 @@ public struct AppMetadata: Codable, Sendable {
     /// without the file growing forever.
     private static let conversationCap = 80
     private static let listingCap = 40
+}
+
+// MARK: - CachedSummary
+
+/// One enriched pull request header, stamped so the cap can evict
+/// the oldest.
+public struct CachedSummary: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates a cached header stamped now by default.
+    public init(summary: PullRequestSummary, savedAt: Date = Date()) {
+        self.summary = summary
+        self.savedAt = savedAt
+    }
+
+    // MARK: Public
+
+    /// The enriched summary.
+    public let summary: PullRequestSummary
+
+    /// When the header was cached.
+    public let savedAt: Date
+}
+
+// MARK: - CachedThreads
+
+/// One conversation's review threads, stamped so the cap can evict
+/// the oldest.
+public struct CachedThreads: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates cached threads stamped now by default.
+    public init(threads: [ReviewThread], savedAt: Date = Date()) {
+        self.threads = threads
+        self.savedAt = savedAt
+    }
+
+    // MARK: Public
+
+    /// The conversation threads.
+    public let threads: [ReviewThread]
+
+    /// When the threads were cached.
+    public let savedAt: Date
 }
 
 // MARK: - CachedPullRequestList
