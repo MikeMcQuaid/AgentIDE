@@ -35,7 +35,11 @@ github_actions_style() {
 }
 
 docs_style() {
-  awk 'length > 72 { print FILENAME ":" FNR ": longer than 72 characters"; failed = 1 } END { exit failed }' AGENTS.md
+  # Explicit status: this awk's failure was silently lost to errexit
+  # rules for non-final commands, so over-long lines never failed
+  # the run before.
+  awk 'length > 72 { print FILENAME ":" FNR ": longer than 72 characters"; failed = 1 } END { exit failed }' \
+    AGENTS.md || return 1
   if [[ "$(readlink CLAUDE.md)" != "AGENTS.md" ]]; then
     echo "CLAUDE.md must be a symlink to AGENTS.md" >&2
     return 1
@@ -71,7 +75,45 @@ swift_style() {
   swiftlint --strict --quiet
 }
 
-shell_style
-github_actions_style
-docs_style
-swift_style
+# The four families touch disjoint files with independent tools, so
+# they run concurrently and the run takes the slowest, not the sum;
+# swift_style keeps its own two fixers sequenced since both edit the
+# same files. Each family runs in a subshell with errexit re-asserted
+# (bash suspends errexit inside conditions, which once let a family
+# whose failing command was not its last report success), writes its
+# status to a file and keeps its output whole in a log printed as one
+# block, so nothing interleaves and no exit code has to survive the
+# trip through a background job.
+scratch="$(mktemp -d -t agentide-style)"
+trap 'rm -rf "${scratch}"' EXIT
+run_family() {
+  # Direct calls, so shellcheck sees every family invoked.
+  case "$1" in
+    shell) shell_style ;;
+    github_actions) github_actions_style ;;
+    docs) docs_style ;;
+    swift) swift_style ;;
+    *) return 1 ;;
+  esac
+}
+
+families=(shell github_actions docs swift)
+for family in "${families[@]}"; do
+  (
+    status=0
+    (
+      set -e
+      run_family "${family}"
+    ) >"${scratch}/${family}.log" 2>&1 || status=$?
+    echo "${status}" >"${scratch}/${family}.status"
+  ) &
+done
+wait
+failed=0
+for family in "${families[@]}"; do
+  cat "${scratch}/${family}.log"
+  if [[ "$(cat "${scratch}/${family}.status" 2>/dev/null || echo 1)" != "0" ]]; then
+    failed=1
+  fi
+done
+exit "${failed}"
