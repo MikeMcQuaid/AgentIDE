@@ -163,12 +163,26 @@ extension TerminalRepresentable {
             sendCommand(TmuxControl.resizeCommand(columns: newCols, rows: newRows), expecting: .acknowledgement)
         }
 
+        /// Bytes for the pane. A bracketed paste arrives as three
+        /// separate sends (start marker, text, end marker); shipped as
+        /// three commands, the pieces could straddle the agent's input
+        /// reads and Codex dropped the paste as unterminated. Bytes
+        /// are therefore gathered for one run loop turn and shipped
+        /// as one command, so a paste lands in a single write.
         func send(source _: TerminalView, data: ArraySlice<UInt8>) {
             guard data.isEmpty == false else {
                 return
             }
 
-            sendCommand(TmuxControl.sendKeysCommand(bytes: data), expecting: .acknowledgement)
+            outgoing.append(contentsOf: data)
+            guard flushScheduled == false else {
+                return
+            }
+
+            flushScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                self?.flushOutgoing()
+            }
         }
 
         func setTerminalTitle(source _: TerminalView, title _: String) {
@@ -206,6 +220,8 @@ extension TerminalRepresentable {
 
         private var started = false
         private var seenClearRequest: Int?
+        private var outgoing: [UInt8] = []
+        private var flushScheduled = false
         private var startedTransport: TerminalTransport?
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
@@ -213,6 +229,19 @@ extension TerminalRepresentable {
         private var pendingTransport: TerminalTransport?
 
         private var pump: Task<Void, Never>?
+
+        /// Ships everything gathered since the last turn as one
+        /// `send-keys`, in order.
+        private func flushOutgoing() {
+            flushScheduled = false
+            let bytes = outgoing
+            outgoing.removeAll(keepingCapacity: true)
+            guard bytes.isEmpty == false else {
+                return
+            }
+
+            sendCommand(TmuxControl.sendKeysCommand(bytes: bytes), expecting: .acknowledgement)
+        }
 
         /// Drops the running client and resets the conversation
         /// state so a new command can attach through the same view;

@@ -193,7 +193,12 @@ final class BlockSelector {
                 continue
             }
 
+            // Cells never written hold NUL; the pasteboard must carry
+            // spaces there, as SwiftTerm's own copy does, or a pasted
+            // script arrives peppered with ^@ where its indentation
+            // and word gaps were.
             let text = line.translateToString(trimRight: true, startCol: left, endCol: right + 1)
+                .replacing("\u{0}", with: " ")
             lines.append(PasteableText.strippingGutter(text))
         }
         let joined = lines.joined(separator: "\n")

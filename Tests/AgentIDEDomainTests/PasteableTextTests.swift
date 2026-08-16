@@ -54,4 +54,33 @@ struct PasteableTextTests {
     func `blank runs collapse to one paragraph break`() {
         #expect(PasteableText.reflow("a\n\n\n\nb") == "a\n\nb")
     }
+
+    @Test
+    func `command blocks keep their lines instead of flowing together`() {
+        // The exact shape that once pasted as one broken line: a
+        // rectangle copy of an agent's suggested commands.
+        let script = """
+        ▎ cd /Users/Shared/sv-mike/worktrees/64f574f9/administrate-sentry-audit
+        ▎ git fetch --prune
+        ▎ git checkout sentry-errors-aug-16-backend
+        ▎ git rebase --gpg-sign --force-rebase origin/HEAD
+        ▎ git push -u origin sentry-errors-aug-16-backend sentry-errors-aug-16-integrations \\
+        ▎   sentry-errors-aug-16-legacy-ui sentry-errors-aug-16-workspaces
+        """
+        let reflowed = PasteableText.reflow(script)
+        #expect(reflowed.split(separator: "\n").count == 6)
+        let firstTwo = "cd /Users/Shared/sv-mike/worktrees/64f574f9/administrate-sentry-audit\ngit fetch --prune"
+        #expect(reflowed.hasPrefix(firstTwo))
+        #expect(reflowed.contains("\\\nsentry-errors-aug-16-legacy-ui"))
+    }
+
+    @Test
+    func `prose that merely mentions a flag still reflows`() {
+        let prose = """
+        ▎ You can pass --verbose to see more, and the wrapped line
+        ▎ continues here as ordinary explanation of the option.
+        """
+        #expect(PasteableText.reflow(prose).contains("\n") == false)
+        #expect(PasteableText.looksLikeCode(["one plain sentence", "another plain sentence"]) == false)
+    }
 }
