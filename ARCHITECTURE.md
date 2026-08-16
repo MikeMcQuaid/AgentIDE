@@ -341,8 +341,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
 ### Create a worktree and launch an agent (Start work)
 
 1. Input: a typed prompt, or an issue or pull request number with optional
-   extra context, plus a target repository, agent, model and effort. An
-   issue's title and body become the prompt. A pull request instead gets a
+   extra context, plus a target repository, agent, model and effort. The
+   form is a middle-pane action on its repository, so opening it (from a
+   repository's plus button, a worktree's new session action or Cmd-N and
+   the picker) selects that repository's main checkout in the sidebar
+   without closing the form. An issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
 2. The branch name summarises the prompt: the on-device Apple foundation

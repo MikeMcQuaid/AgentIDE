@@ -109,8 +109,7 @@ public struct DashboardView: View {
             .buttonStyle(.plain)
             .hoverHelp("Click to show or hide this repository's worktrees")
             Button {
-                model.newSessionRepository = group.repository
-                model.showsNewSession = true
+                model.openNewSession(for: group.repository)
             } label: {
                 Image(systemName: "plus")
                     .font(.caption2.weight(.semibold))

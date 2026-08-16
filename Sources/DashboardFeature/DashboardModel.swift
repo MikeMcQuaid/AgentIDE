@@ -119,6 +119,32 @@ public final class DashboardModel {
         ErrorLog.shared.report(message)
     }
 
+    /// Opens the new session form for a repository (nil leaves the
+    /// picker open) and points the sidebar at that repository's main
+    /// checkout: the form is a middle-pane action on the repository,
+    /// so the sidebar reflects it. Selection is set directly rather
+    /// than through `select`, which would cancel the form it opens.
+    public func openNewSession(for repository: Repository?) {
+        newSessionRepository = repository
+        showsNewSession = true
+        selectMainCheckout(of: repository)
+    }
+
+    /// Points the sidebar at a repository's main checkout without
+    /// touching whatever the middle pane shows; the picker in the
+    /// new session form calls this as its choice changes.
+    public func selectMainCheckout(of repository: Repository?) {
+        guard let repository,
+              let group = groups.first(where: { $0.repository.path == repository.path }),
+              let main = group.items.first,
+              selection?.id != main.id
+        else {
+            return
+        }
+
+        selection = main
+    }
+
     /// Selecting from the sidebar is a middle-pane action, so it
     /// cancels any form the middle pane is showing.
     public func select(_ item: WorktreeItem) {

@@ -86,8 +86,7 @@ extension RootView {
 
     /// Opens the new session form preset to the item's repository.
     func newSession(for item: WorktreeItem) {
-        dependencies.dashboard.newSessionRepository = repository(of: item)
-        dependencies.dashboard.showsNewSession = true
+        dependencies.dashboard.openNewSession(for: repository(of: item))
     }
 
     /// Continues the worktree's most recent conversation: the newest

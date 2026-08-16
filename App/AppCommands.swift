@@ -14,8 +14,7 @@ struct AppCommands: Commands {
             Button("New Agent Session") {
                 // No preset: the menu is repository-agnostic, and a
                 // stale preset would lock the picker.
-                dashboard.newSessionRepository = nil
-                dashboard.showsNewSession = true
+                dashboard.openNewSession(for: nil)
             }
             .keyboardShortcut("n", modifiers: .command)
             Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
