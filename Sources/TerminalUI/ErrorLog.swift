@@ -42,11 +42,6 @@ public final class ErrorLog {
     /// The messages reported this session, oldest first.
     public private(set) var entries: [Entry] = []
 
-    /// Whether a failure was ever reported this session; the
-    /// messages tab appears on the first failure and then stays,
-    /// even across a clear.
-    public private(set) var everReported = false
-
     /// How many failures the log holds, for the tab's badge; plain
     /// status notes deliberately carry no number.
     public var errorCount: Int {
@@ -56,7 +51,6 @@ public final class ErrorLog {
     /// Appends a failure to the log, dropping the oldest entries
     /// beyond the cap so a noisy session never grows without bound.
     public func report(_ message: String) {
-        everReported = true
         append(message, isError: true)
     }
 
@@ -66,7 +60,7 @@ public final class ErrorLog {
         append(message, isError: false)
     }
 
-    /// Empties the log; the errors tab stays for the session.
+    /// Empties the log; the messages tab stays either way.
     public func clear() {
         entries = []
     }

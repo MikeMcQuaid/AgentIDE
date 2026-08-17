@@ -1,7 +1,31 @@
 import AgentIDEDomain
 
-/// Pushing branches and inspecting pull
-/// requests.
+// MARK: - MergeCleanupReport
+
+/// What a post-merge cleanup did and what it could not do, so the
+/// caller can put both in the messages pane rather than the work
+/// happening silently.
+public struct MergeCleanupReport: Sendable {
+    // MARK: Lifecycle
+
+    /// Creates an empty report.
+    public init() {
+        // Both lists fill as the cleanup runs.
+    }
+
+    // MARK: Public
+
+    /// What the cleanup did, in order.
+    public var notes: [String] = []
+
+    /// What it could not do, each naming the step and the reason.
+    public var failures: [String] = []
+}
+
+// MARK: - Pull requests
+
+/// Pushing branches, drafting and opening pull requests, and
+/// tidying up after a merge.
 public extension SessionService {
     /// Pushes the branch to origin without opening anything. An
     /// unsigned tip refuses: every pushed commit must be GPG signed
@@ -61,31 +85,84 @@ public extension SessionService {
     /// own, and delete the merged branch with `-d` so an unmerged
     /// branch survives. Dirty checkouts and worktrees other than
     /// the main checkout are left untouched.
-    func cleanUpAfterMerge(worktree: Worktree, mergedBranch: String) async {
-        guard worktree.path == worktree.repositoryPath,
-              await git.isDirty(worktreePath: worktree.path) == false
-        else {
-            return
+    func cleanUpAfterMerge(worktree: Worktree, mergedBranch _: String) async -> MergeCleanupReport {
+        var report = MergeCleanupReport()
+        guard worktree.path == worktree.repositoryPath else {
+            return report
+        }
+        guard await git.isDirty(worktreePath: worktree.path) == false else {
+            report.failures.append("\(worktree.repositoryName) has uncommitted changes, so it was left alone.")
+            return report
         }
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
-        try? await git.fetch(repositoryPath: worktree.path)
+        do {
+            try await git.fetch(repositoryPath: worktree.path)
+        } catch {
+            report.failures.append("Fetching \(worktree.repositoryName) failed: " + error.localizedDescription)
+        }
         guard let base = await git.defaultBaseRef(of: repository) else {
-            return
+            report.failures.append("\(worktree.repositoryName) has no default branch to return to.")
+            return report
         }
 
         // defaultBaseRef answers `origin/main` or a bare local name.
         let branch = Self.branchName(fromBaseRef: base)
-        guard branch != mergedBranch,
-              await (try? git.checkout(worktreePath: worktree.path, branch: branch)) != nil
-        else {
+        if await git.currentBranch(worktreePath: worktree.path) != branch {
+            do {
+                try await git.checkout(worktreePath: worktree.path, branch: branch)
+                report.notes.append("Checked out \(branch) in \(worktree.repositoryName).")
+            } catch {
+                report.failures.append("Checking out \(branch) failed: " + error.localizedDescription)
+                return report
+            }
+        }
+        await catchUp(worktreePath: worktree.path, branch: branch, into: &report)
+        await deleteMerged(worktreePath: worktree.path, branch: branch, into: &report)
+        return report
+    }
+
+    /// Brings the default branch level with origin: a checkout with
+    /// nothing of its own fast-forwards by reset, one carrying local
+    /// commits rebases them on top so nothing is thrown away.
+    private func catchUp(worktreePath: String, branch: String, into report: inout MergeCleanupReport) async {
+        let upstream = "origin/" + branch
+        guard let counts = await git.aheadBehind(worktreePath: worktreePath, baseRef: upstream) else {
+            return
+        }
+        guard counts.behind > 0 || counts.ahead > 0 else {
             return
         }
 
-        let counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: "origin/" + branch)
-        if counts?.ahead == 0 {
-            try? await git.resetHard(worktreePath: worktree.path, ref: "origin/" + branch)
+        do {
+            if counts.ahead == 0 {
+                try await git.resetHard(worktreePath: worktreePath, ref: upstream)
+                report.notes.append("Pulled \(branch) up to \(upstream).")
+            } else {
+                try await git.rebaseSigned(worktreePath: worktreePath, onto: upstream)
+                report.notes.append("Rebased \(counts.ahead) local commits onto \(upstream).")
+            }
+        } catch {
+            report.failures.append("Updating \(branch) failed: " + error.localizedDescription)
         }
-        await git.deleteMergedBranch(worktreePath: worktree.path, branch: mergedBranch)
+    }
+
+    /// Deletes every branch already merged into the default branch,
+    /// not just the one that prompted the cleanup; `-d` refuses
+    /// anything unmerged, so this cannot lose work.
+    private func deleteMerged(worktreePath: String, branch: String, into report: inout MergeCleanupReport) async {
+        let merged = await git.mergedBranches(worktreePath: worktreePath, into: branch)
+        for name in merged {
+            await git.deleteMergedBranch(worktreePath: worktreePath, branch: name)
+        }
+        let remaining = await git.mergedBranches(worktreePath: worktreePath, into: branch)
+        let deleted = merged.filter { remaining.contains($0) == false }
+        if deleted.isEmpty == false {
+            report.notes.append("Deleted merged \(deleted.count == 1 ? "branch" : "branches"): "
+                + deleted.joined(separator: ", ") + ".")
+        }
+        for name in remaining {
+            report.failures.append("Deleting merged branch \(name) failed; it is still there.")
+        }
     }
 }

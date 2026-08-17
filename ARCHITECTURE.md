@@ -526,9 +526,13 @@ Sendable` and `nonisolated(unsafe)` are banned.
    merge-safe by construction: a real worktree's branch is deleted
    with `git branch -d`, which git refuses for an unmerged branch, and
    a dirty worktree is refused before anything runs; the main checkout
-   is tidied in place instead: back to the default branch, a hard reset
-   to origin when the local default carries nothing of its own, and the
-   same safe `-d` delete. A refusal reports why rather than forcing.
+   is tidied in place instead: back to the default branch, brought level
+   with origin (a reset when the local default carries nothing of its
+   own, a signed rebase when it does, so nothing local is thrown away),
+   then every branch already merged into it deleted with the same safe
+   `-d`, not only the branch that prompted the cleanup. Each step's
+   outcome, including anything it could not do, goes to the messages
+   pane rather than happening silently. A refusal reports why rather than forcing.
    Only the explicit Delete worktree action force-deletes (`--force`,
    `git branch -D`), and it confirms first with a dialog naming exactly
    what would be lost (uncommitted changes, unmerged commits); the poll

@@ -7,6 +7,13 @@ import TerminalUI
 /// The footer's branch actions, split from the model body for
 /// length.
 extension PullRequestsModel {
+    /// Shows a status in the footer and keeps it in the messages
+    /// pane, where a line that scrolls past can still be read.
+    func setStatus(_ message: String) {
+        status = message
+        ErrorLog.shared.note(message)
+    }
+
     /// The branch item's worktree with the checked-out branch
     /// substituted, so pushes and pull requests act on what is
     /// actually checked out.
@@ -206,7 +213,7 @@ extension PullRequestsModel {
         do {
             try await performPush(worktree)
             isPushed = true
-            status = "Pushed."
+            setStatus("Pushed.")
             ErrorLog.shared.note("Pushed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
@@ -226,7 +233,7 @@ extension PullRequestsModel {
 
         do {
             try await performRebase(worktree)
-            status = "Rebased and signed."
+            setStatus("Rebased and signed.")
             ErrorLog.shared.note("Rebased and signed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
@@ -296,7 +303,7 @@ extension PullRequestsModel {
     func act(_ work: () async throws -> Void) async -> Bool {
         do {
             try await work()
-            status = "Done."
+            setStatus("Done.")
             await reload(keepingSelection: true)
             return true
         } catch {

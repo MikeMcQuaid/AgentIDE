@@ -65,6 +65,7 @@ public extension DashboardModel {
         do {
             screenError = nil
             status = "Cloning \(fullName)…"
+            ErrorLog.shared.note("Cloning \(fullName)…")
             _ = try await service.cloneRepository(fullName: fullName)
             await refresh()
             _ = selectMainCheckout(fullName: fullName, name: name)

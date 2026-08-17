@@ -74,7 +74,13 @@ final class PullRequestsModel {
             }
         }
         performPostMergeCleanup = { worktree, mergedBranch in
-            await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)
+            let report = await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)
+            for note in report.notes {
+                ErrorLog.shared.note(note)
+            }
+            for failure in report.failures {
+                ErrorLog.shared.report(failure)
+            }
         }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
@@ -190,13 +196,6 @@ final class PullRequestsModel {
 
     var prTemplate = "" {
         didSet { saveDraft() }
-    }
-
-    /// Whether the list pane shows the creation form instead: the
-    /// worktree scope with no open pull request for the branch.
-    var needsCreateForm: Bool {
-        scope == .worktree && branchItem != nil && hasLoaded
-            && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
     }
 
     /// The repository's worktree items, refreshed by the view as the

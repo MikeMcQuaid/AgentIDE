@@ -11,9 +11,7 @@ struct UtilityTabStrip: View {
         // The errors tab hides until the first failure of the
         // session, then sticks around even across a clear.
         ForEach(UtilityTab.allCases, id: \.self) { tab in
-            if tab != .errors || errorLog.everReported {
-                button(tab)
-            }
+            button(tab)
         }
     }
 
