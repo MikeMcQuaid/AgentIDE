@@ -614,6 +614,12 @@ can neither read nor corrupt it. Deleting it loses only unread state, prompt
 history, settings and the attribution of conversations to worktrees that no
 longer exist; everything else re-derives from the system (P1).
 
+Repository icons are GitHub owner avatars, cached one per owner (not per
+repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a
+sidebar of many repositories under a few owners fetches a few times and a
+GitHub outage leaves the icons showing. A failed fetch is silent: the icon
+is decoration and the messages pane is for what the user can act on.
+
 ## Security model
 
 Trust boundaries, numbered:

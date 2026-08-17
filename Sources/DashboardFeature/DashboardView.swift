@@ -244,15 +244,11 @@ public struct DashboardView: View {
         }
     }
 
+    /// One image per owner, cached on disk: every repository of an
+    /// owner shares it, and a GitHub outage leaves the icons alone.
     private func avatar(for repository: Repository) -> some View {
-        AsyncImage(url: avatarURL(for: repository)) { image in
-            image.resizable()
-        } placeholder: {
-            Image(systemName: "folder.fill").font(.caption2)
-        }
-        .frame(width: Self.avatarSize, height: Self.avatarSize)
-        .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
-        .accessibilityHidden(true)
+        OwnerAvatar(owner: repository.owner, size: Self.avatarSize)
+            .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
     }
 
     private func forceDeleteBinding(for item: WorktreeItem) -> Binding<Bool> {
@@ -308,9 +304,5 @@ public struct DashboardView: View {
             collapsed.insert(path)
         }
         collapsedRepositories = collapsed.sorted().joined(separator: "\n")
-    }
-
-    private func avatarURL(for repository: Repository) -> URL? {
-        repository.owner.flatMap { URL(string: "https://github.com/" + $0 + ".png?size=64") }
     }
 }
