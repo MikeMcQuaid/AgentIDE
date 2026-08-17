@@ -157,6 +157,13 @@ final class ReviewModel {
             // last commit's invited amending it by accident, so the
             // field stays as typed and the sparkles button drafts one.
             if showsUncommitted {
+                // Switching scopes must not carry a commit's message
+                // into uncommitted work, where Commit would reuse it;
+                // anything typed here survives, since only an
+                // unedited message came from a commit.
+                if messageEdited == false {
+                    commitMessage = ""
+                }
                 originalMessage = ""
             } else {
                 commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)

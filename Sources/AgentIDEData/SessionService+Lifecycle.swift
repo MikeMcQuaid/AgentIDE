@@ -42,6 +42,12 @@ public extension SessionService {
             try await removeAsSandboxUser(path: worktree.path)
             try await git.forgetWorktree(repository: repository, branch: worktree.branch)
         }
+        removeFriendlySymlink(worktree: worktree)
+    }
+
+    /// Removes a worktree's human-friendly symlink; the canonical
+    /// path is what git knows, so this is cosmetic cleanup.
+    internal func removeFriendlySymlink(worktree: Worktree) {
         let link = paths.friendlyWorktreesDirectory + "/" + worktree.repositoryName
             + "/" + worktree.branch.replacing("/", with: "-")
         try? FileManager.default.removeItem(atPath: link)
@@ -70,7 +76,21 @@ public extension SessionService {
             return .unmerged
         }
 
-        try await deleteWorktree(item: item)
+        // Merge-safe git as well as merge-safe checks: `git worktree
+        // remove` without `--force` and `git branch -d` refuse dirty
+        // or unmerged work themselves, so a wrong or raced check
+        // above cannot destroy anything.
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        let sessionName = item.session?.name
+            ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
+        rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
+        try? await tmux.killSession(name: sessionName)
+        try await git.removeMergedWorktree(
+            repository: repository,
+            worktreePath: worktree.path,
+            branch: worktree.branch,
+        )
+        removeFriendlySymlink(worktree: worktree)
         return nil
     }
 

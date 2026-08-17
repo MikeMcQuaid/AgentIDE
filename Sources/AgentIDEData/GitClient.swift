@@ -292,6 +292,16 @@ public struct GitClient: Sendable {
         try await forgetWorktree(repository: repository, branch: branch)
     }
 
+    /// Removes a worktree and deletes its branch the way git itself
+    /// judges safe: no `--force`, and `-d` rather than `-D`, so git
+    /// refuses a dirty worktree or an unmerged branch even if the
+    /// caller's own checks were wrong or raced.
+    public func removeMergedWorktree(repository: Repository, worktreePath: String, branch: String) async throws {
+        try await git(["worktree", "remove", worktreePath], in: repository.path)
+        try await git(["worktree", "prune"], in: repository.path)
+        try await git(["branch", "-d", branch], in: repository.path)
+    }
+
     /// Prunes gone worktrees and deletes the branch, the git-side
     /// half of removal for callers that deleted the files another
     /// way.
