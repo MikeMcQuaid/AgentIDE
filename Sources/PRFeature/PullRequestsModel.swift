@@ -225,12 +225,6 @@ final class PullRequestsModel {
         }
     }
 
-    /// Whether the last fetch filled its limit, so more pages may
-    /// exist beyond what is loaded.
-    var branchItem: WorktreeItem? {
-        items.first { $0.worktree.branch == branch }
-    }
-
     /// Push makes sense with unpushed commits that this tab has not
     /// already pushed and a GPG-signed tip; nil upstream means
     /// nothing was ever pushed.
@@ -346,8 +340,9 @@ final class PullRequestsModel {
                     select(chosen)
                 }
             }
+            ServiceStatus.shared.recordSuccess()
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)
         }
     }
 
