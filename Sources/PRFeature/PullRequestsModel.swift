@@ -81,6 +81,11 @@ final class PullRequestsModel {
             for failure in report.failures {
                 ErrorLog.shared.report(failure)
             }
+            // The cleanup changed the checked-out branch and deleted
+            // others, so the sidebar's rows are stale the moment it
+            // finishes; waiting for the next poll showed a branch
+            // that no longer exists.
+            Self.requestSidebarRefresh()
         }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)

@@ -295,7 +295,6 @@ extension PullRequestsModel {
         let succeeded = await act { try await performMergeChange(selected) }
         if succeeded, merges, let worktree = actionWorktree {
             await performPostMergeCleanup(worktree, selected.headBranch)
-            Self.requestSidebarRefresh()
         }
         await refreshSummary(selected.number)
     }

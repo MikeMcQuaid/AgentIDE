@@ -166,7 +166,18 @@ public final class DashboardModel {
         if let selection {
             service.acknowledgeActivity(worktreePath: selection.worktree.path)
         }
+        // Reading the whole system takes a while, and the poll is
+        // always doing it too. Without this the poll's older reading
+        // could land after an action's newer one and put the state
+        // it just changed back on screen: a cleaned-up branch would
+        // reappear in the sidebar until the next tick.
+        refreshGeneration += 1
+        let generation = refreshGeneration
         let overview = await service.overview()
+        guard generation == refreshGeneration else {
+            return
+        }
+
         notifyChanges(from: groups, to: overview.groups)
         groups = overview.groups
         foreign = overview.foreign
@@ -322,6 +333,10 @@ public final class DashboardModel {
 
     /// Models each CLI reported at startup; absent agents fall back.
     private var discoveredModels: [AgentKind: [String]] = [:]
+
+    /// Counts refreshes, so a slower one that started earlier can
+    /// tell it has been superseded and drop its reading.
+    private var refreshGeneration = 0
 
     /// Whether the persisted selection has been re-applied, tried on
     /// the first refresh only so a deliberate deselection sticks.
