@@ -17,7 +17,16 @@ public extension DashboardModel {
     @discardableResult
     func cleanUp(item: WorktreeItem) async -> SessionService.CleanupRefusal? {
         if item.worktree.path == item.worktree.repositoryPath {
-            await service.cleanUpAfterMerge(worktree: item.worktree, mergedBranch: item.worktree.branch)
+            let report = await service.cleanUpAfterMerge(
+                worktree: item.worktree,
+                mergedBranch: item.worktree.branch,
+            )
+            for note in report.notes {
+                ErrorLog.shared.note(note)
+            }
+            for failure in report.failures {
+                ErrorLog.shared.report(failure)
+            }
             await refresh()
             return nil
         }

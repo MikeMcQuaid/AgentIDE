@@ -36,6 +36,11 @@ extension DashboardModel {
                 if await isFinal(branchPullRequests[key].flatMap(\.self), for: item) {
                     continue
                 }
+                // An outage answers every branch identically, so one
+                // branch probes for a recovery and the rest wait.
+                if ServiceStatus.shared.isUnavailable, item.id != selection?.id {
+                    continue
+                }
 
                 nextPullRequestFetch[key] = Date().addingTimeInterval(interval(for: item, collapsed: collapsed))
                 do {
@@ -48,8 +53,12 @@ extension DashboardModel {
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
                     await cleanUpIfMerged(item, previous: previous, fresh: summaries)
+                    ServiceStatus.shared.recordSuccess()
                 } catch {
-                    ErrorLog.shared.report("Pull requests for \(group.repository.name): " + error.localizedDescription)
+                    ServiceStatus.shared.record(
+                        failure: error,
+                        doing: "Pull requests for " + group.repository.name,
+                    )
                 }
             }
         }

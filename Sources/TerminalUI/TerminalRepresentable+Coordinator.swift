@@ -240,7 +240,11 @@ extension TerminalRepresentable {
                 return
             }
 
-            sendCommand(TmuxControl.sendKeysCommand(bytes: bytes), expecting: .acknowledgement)
+            // A paste becomes several commands: literal text in
+            // chunks tmux will not drop, control bytes exactly.
+            for command in TmuxControl.sendCommands(bytes: bytes) {
+                sendCommand(command, expecting: .acknowledgement)
+            }
         }
 
         /// Drops the running client and resets the conversation

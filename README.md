@@ -110,10 +110,10 @@ before shipping.
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
-- **Collects** every failure and status message into a Messages utility tab,
-  shown from the first error and inline on screens without the utility
-  pane (so background failures are never lost to a log you were not
-  watching)
+- **Collects** every failure and status message into a Messages utility tab
+  that is always there, and shows failures inline on screens without the
+  utility pane (so nothing is lost to a status line that scrolled past or
+  a log you were not watching)
 
 ## 🚫 Out of Scope Features
 

@@ -92,7 +92,7 @@ struct TmuxControlParserTests {
 
     @Test
     func `command builders emit the documented forms`() {
-        #expect(TmuxControl.sendKeysCommand(bytes: [0x68, 0x0D]) == "send-keys -H 68 d")
+        // Key delivery has its own suite; this pins the rest.
         #expect(TmuxControl.resizeCommand(columns: 120, rows: 40) == "refresh-client -C 120x40")
         #expect(TmuxControl.seedText(lines: ["one", "two", "", ""]) == "one\r\ntwo\r\n")
         #expect(TmuxControl.seedText(lines: []).isEmpty)

@@ -191,6 +191,13 @@ final class ReviewModel {
         return true
     }
 
+    /// Shows a status in the footer and keeps it in the messages
+    /// pane, where a line that scrolls past can still be read.
+    func setStatus(_ message: String) {
+        status = message
+        ErrorLog.shared.note(message)
+    }
+
     /// Reports a failure into the app-wide error log; the local
     /// status line keeps success reports only.
     func report(_ message: String) {
@@ -222,7 +229,7 @@ final class ReviewModel {
             if showsUncommitted == false {
                 try await git.amend(worktreePath: worktreePath, message: nil)
             }
-            status = "Rejected selected lines."
+            setStatus("Rejected selected lines.")
             await reload()
         } catch {
             report(error.localizedDescription)
@@ -234,7 +241,7 @@ final class ReviewModel {
         do {
             try await git.amend(worktreePath: worktreePath, message: commitMessage)
             originalMessage = commitMessage
-            status = "Commit message updated."
+            setStatus("Commit message updated.")
         } catch {
             report(error.localizedDescription)
         }
@@ -258,7 +265,7 @@ final class ReviewModel {
     private func loadUpstream(currentBranch: String?) async throws {
         branchCommits = []
         guard let currentBranch, hasUpstream else {
-            status = "This branch has not been pushed yet."
+            setStatus("This branch has not been pushed yet.")
             files = []
             return
         }
@@ -277,7 +284,7 @@ final class ReviewModel {
     private func loadBranch() async throws {
         branchCommits = []
         guard let baseRef = await baseRefProvider() else {
-            status = "No base branch to diff against."
+            setStatus("No base branch to diff against.")
             files = []
             return
         }

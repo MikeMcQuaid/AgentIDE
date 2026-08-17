@@ -5,6 +5,19 @@ import AgentIDEDomain
 /// from the model body for length: a branch's unfinished title, body
 /// and template survive leaving the tab and quitting the app.
 extension PullRequestsModel {
+    /// The worktree item this tab acts on: the one checked out on
+    /// the branch the tab lists.
+    var branchItem: WorktreeItem? {
+        items.first { $0.worktree.branch == branch }
+    }
+
+    /// Whether the list pane shows the creation form instead: the
+    /// worktree scope with no open pull request for the branch.
+    var needsCreateForm: Bool {
+        scope == .worktree && branchItem != nil && hasLoaded
+            && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
+    }
+
     /// Whether the last fetch filled its limit, so more pages may
     /// exist beyond what is loaded.
     var hasMore: Bool {
