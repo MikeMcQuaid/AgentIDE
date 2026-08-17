@@ -20,6 +20,25 @@ public extension GitHubClient {
         20_000
     }
 
+    /// `gh run view --log-failed` prefixes every line with its job
+    /// and step names, tab separated.
+    private static var stepPrefixFields: Int {
+        // swiftlint:disable:next no_magic_numbers
+        2
+    }
+
+    /// How many lines of a failed step to keep, and how many before
+    /// its first error line for context.
+    private static var stepTailLines: Int {
+        // swiftlint:disable:next no_magic_numbers
+        60
+    }
+
+    private static var errorContextLines: Int {
+        // swiftlint:disable:next no_magic_numbers
+        5
+    }
+
     // MARK: Public
 
     /// The pull request's review conversation threads with a REST
@@ -117,12 +136,55 @@ public extension GitHubClient {
                 continue
             }
 
-            sections += "\n\nFailed steps of run " + runID + ":\n" + String(output.prefix(Self.runLogLimit))
+            sections += "\n\nFailed steps of run " + runID + ":\n" + Self.failureExcerpt(fromRunLog: output)
         }
         return sections
     }
 
     // MARK: Internal
+
+    /// The useful part of a `gh run view --log-failed` dump: its
+    /// lines carry a repeated `job\tstep\t` prefix, and the failure
+    /// is at the end, so the head of a long log was setup noise
+    /// rather than the error. Each failed step keeps its own tail,
+    /// from its first error line where one exists.
+    internal static func failureExcerpt(fromRunLog log: String) -> String {
+        var steps = [String]()
+        var lines = [String: [String]]()
+        for raw in log.split(separator: "\n", omittingEmptySubsequences: false) {
+            let fields = raw.split(separator: "\t", maxSplits: stepPrefixFields, omittingEmptySubsequences: false)
+            let step = fields.count > stepPrefixFields
+                ? fields[0 ..< stepPrefixFields].joined(separator: " / ")
+                : ""
+            let text = fields.count > stepPrefixFields ? String(fields[stepPrefixFields]) : String(raw)
+            if lines[step] == nil {
+                steps.append(step)
+                lines[step] = []
+            }
+            lines[step]?.append(text)
+        }
+        return steps
+            .map { step in
+                let body = Self.tail(of: lines[step] ?? [])
+                return step.isEmpty ? body : step + "\n" + body
+            }
+            .joined(separator: "\n\n")
+            .prefixWithinLimit(runLogLimit)
+    }
+
+    /// One step's last lines, starting at its first error line when
+    /// it has one: the message that explains the failure sits there,
+    /// with the lines after it as context.
+    internal static func tail(of lines: [String]) -> String {
+        let markers = ["error:", "##[error]", "error ", "failed", "fatal:", "assertion"]
+        let firstError = lines.firstIndex { line in
+            let lowered = line.lowercased()
+            return markers.contains { lowered.contains($0) }
+        }
+        let start = firstError.map { max($0 - errorContextLines, 0) }
+            ?? max(lines.count - stepTailLines, 0)
+        return lines[start...].suffix(stepTailLines).joined(separator: "\n")
+    }
 
     /// Groups the REST inline comments into anchored threads; the
     /// REST rows carry no resolvable thread id, so these render
