@@ -192,15 +192,19 @@ Two visually unmistakable flavours ride that one client:
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
   to agent sessions (SSH, `script/attach`) still get tmux-native mouse
-  scrolling and
-  OSC 52 copying from the server config. An agent pane attaching
-  detaches any
-  other client of its session (`-d`): clients leaked by an earlier app
-  run would otherwise linger forever, so an SSH viewer is dropped when
-  the app's pane (re)attaches and simply reattaches when wanted.
+  scrolling and OSC 52 copying from the server config. An agent pane
+  attaching detaches any other client of its session (`-d`): clients
+  leaked by an earlier app run would otherwise linger forever, so an
+  SSH viewer is dropped when the app's pane (re)attaches and simply
+  reattaches when wanted. Cmd-K clears the shell pane the way a
+  terminal app's clear does, screen and local scrollback wiped and the
+  prompt redrawn; agent panes ignore it, so an agent's conversation
+  can never be cleared from view by a stray shortcut.
 
 Remote access is SSH to the Mac as the host user from an iOS client, then
 `script/attach <session>` (which also works from inside sandbox sessions).
+A session picker for that shell is a later slice: today the session name
+must be known or listed by hand.
 Remote Login must be enabled in macOS settings first. An SSH session is
 isolated by user permissions rather than sandbox-exec whichever account it
 targets, but attaching connects it to the sandboxed tmux server, so agent
@@ -341,8 +345,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
 ### Create a worktree and launch an agent (Start work)
 
 1. Input: a typed prompt, or an issue or pull request number with optional
-   extra context, plus a target repository, agent, model and effort. An
-   issue's title and body become the prompt. A pull request instead gets a
+   extra context, plus a target repository, agent, model and effort. The
+   form is a middle-pane action on its repository, so opening it (from a
+   repository's plus button, a worktree's new session action or Cmd-N and
+   the picker) selects that repository's main checkout in the sidebar
+   without closing the form. The agent, model and effort come back as
+   they were last time; the pickers re-validate the pair on appearance
+   as well as on change, since a persisted model of one agent must never
+   launch another (a Codex id once reached Claude that way). Submitting
+   inserts a greyed placeholder row under a provisional name into the
+   repository the instant the click lands and selects it, with the
+   primary pane showing creation progress; the real worktree replaces
+   the row on the refresh that follows, and a failure removes it and
+   returns to the form. An issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
 2. The branch name summarises the prompt: the on-device Apple foundation
@@ -507,14 +522,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
    merge, at any time) and the pull request poll, which fires it by
    itself when a branch's pull request that was open at the last poll
    is found merged, so a merge made on GitHub or elsewhere is tidied
-   on the next refresh without being noticed first. A real worktree is
-   deleted; the main checkout is tidied in place instead: back to the
-   default branch, a hard reset to origin when the local default
-   carries nothing of its own, and a safe `-d` delete of the merged
-   branch. Dirty worktrees and checkouts are left alone, and the poll
-   never cleans up on a merely missing pull request (a stale cache or a
-   branch that never had one), only on an observed open-to-merged
-   transition.
+   on the next refresh without being noticed first. Cleanup is
+   merge-safe by construction: a real worktree's branch is deleted
+   with `git branch -d`, which git refuses for an unmerged branch, and
+   a dirty worktree is refused before anything runs; the main checkout
+   is tidied in place instead: back to the default branch, a hard reset
+   to origin when the local default carries nothing of its own, and the
+   same safe `-d` delete. A refusal reports why rather than forcing.
+   Only the explicit Delete worktree action force-deletes (`--force`,
+   `git branch -D`), and it confirms first with a dialog naming exactly
+   what would be lost (uncommitted changes, unmerged commits); the poll
+   never prompts and never forces, and never cleans up on a merely
+   missing pull request (a stale cache or a branch that never had one),
+   only on an observed open-to-merged transition.
 2. Deletion records the session's agent-native resume id, kills the tmux
    session, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes the friendly symlink. Nothing is archived:

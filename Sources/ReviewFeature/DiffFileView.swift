@@ -69,27 +69,7 @@ struct DiffFileView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.lineSpacing) {
-            HStack {
-                FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
-                Text(file.path).font(.headline.monospaced())
-                Spacer()
-                DiffStatText(additions: file.additions, deletions: file.deletions)
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(file.path, forType: .string)
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .accessibilityLabel("Copy file path")
-                }
-                .buttonStyle(.borderless)
-                .hoverHelp("Copy this file's path to the clipboard")
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .accessibilityLabel("Edit file")
-                }
-                .buttonStyle(.borderless)
-                .hoverHelp("Open this file in the built-in editor for review-time fixes")
-            }
+            headerRow
             if isCollapsed == false {
                 ForEach(Array(file.hunks.enumerated()), id: \.offset) { hunkIndex, hunk in
                     hunkView(hunkIndex: hunkIndex, hunk: hunk)
@@ -102,6 +82,7 @@ struct DiffFileView: View {
     // MARK: Private
 
     private static let collapsedPadding: CGFloat = 1
+
     private static let lineSpacing: CGFloat = 2
     private static let gutterSpacing: CGFloat = 6
     private static let selectionBarWidth: CGFloat = 3
@@ -109,6 +90,38 @@ struct DiffFileView: View {
     private static let selectedOpacity = 0.35
     private static let filePadding: CGFloat = 8
     private static let numberWidth = 4
+
+    /// The file's name, its new-file marker, diffstat and the
+    /// copy and edit actions.
+    private var headerRow: some View {
+        HStack {
+            FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
+            Text(file.path).font(.headline.monospaced())
+            if file.isNew {
+                Text("new file")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .hoverHelp("Added or untracked: the whole file is the diff, so it starts collapsed")
+            }
+            Spacer()
+            DiffStatText(additions: file.additions, deletions: file.deletions)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(file.path, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .accessibilityLabel("Copy file path")
+            }
+            .buttonStyle(.borderless)
+            .hoverHelp("Copy this file's path to the clipboard")
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .accessibilityLabel("Edit file")
+            }
+            .buttonStyle(.borderless)
+            .hoverHelp("Open this file in the built-in editor for review-time fixes")
+        }
+    }
 
     /// Numbers and markers sit in a tappable gutter while the code
     /// itself is one selectable text block, so dragging copies
@@ -338,18 +351,27 @@ struct ReviewFileListView: View {
 
     @ViewBuilder
     private func fileSection(_ file: DiffFile) -> some View {
-        if model.showsUncommitted {
-            uncommittedFile(file)
-        } else {
-            DiffFileView(
-                file: file,
-                model: model,
-                isCollapsed: isCollapsed(file),
-                onToggleCollapse: { toggleCollapse(file) },
-                onEdit: {
-                    FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
-                },
+        // Every scope leads with the diff, uncommitted included: it
+        // once showed the whole file in an editor instead, which read
+        // as a broken diff. Uncommitted files keep that editor for
+        // fixing in place, below their diff.
+        DiffFileView(
+            file: file,
+            model: model,
+            isCollapsed: isCollapsed(file),
+            onToggleCollapse: { toggleCollapse(file) },
+            onEdit: {
+                FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
+            },
+        )
+        if model.showsUncommitted, isCollapsed(file) == false, file.isNew == false {
+            FileEditorView(
+                worktreePath: worktreePath,
+                relativePath: file.path,
+                service: service,
+                showsClose: false,
             )
+            .frame(minHeight: Self.editorMinimumHeight, maxHeight: Self.editorMaximumHeight)
         }
         if isCollapsed(file) == false {
             ForEach(model.threads(for: file.path)) { thread in
@@ -364,33 +386,10 @@ struct ReviewFileListView: View {
         }
     }
 
-    /// Uncommitted changes edit in place: the shared editor embeds
-    /// under the caret, so fixes are typed directly and saved with
-    /// Cmd-S or the save button.
-    @ViewBuilder
-    private func uncommittedFile(_ file: DiffFile) -> some View {
-        HStack {
-            FileCollapseCaret(isCollapsed: isCollapsed(file)) { toggleCollapse(file) }
-            if isCollapsed(file) {
-                Text(file.path).font(.headline.monospaced())
-            }
-            Spacer(minLength: 0)
-        }
-        if isCollapsed(file) == false {
-            FileEditorView(
-                worktreePath: worktreePath,
-                relativePath: file.path,
-                service: service,
-                showsClose: false,
-            )
-            .frame(minHeight: Self.editorMinimumHeight, maxHeight: Self.editorMaximumHeight)
-        }
-    }
-
     private func isCollapsed(_ file: DiffFile) -> Bool {
         // Generated files always start collapsed, whatever the
         // expand-all state says; only their own caret opens them.
-        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path))
+        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path) || file.isNew)
     }
 
     private func toggleCollapse(_ file: DiffFile) {

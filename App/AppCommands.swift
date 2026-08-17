@@ -14,8 +14,7 @@ struct AppCommands: Commands {
             Button("New Agent Session") {
                 // No preset: the menu is repository-agnostic, and a
                 // stale preset would lock the picker.
-                dashboard.newSessionRepository = nil
-                dashboard.showsNewSession = true
+                dashboard.openNewSession(for: nil)
             }
             .keyboardShortcut("n", modifiers: .command)
             Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
@@ -24,6 +23,8 @@ struct AppCommands: Commands {
             Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
         CommandMenu("Worktree") {
+            Button("Clear Shell") { clearShellRequest += 1 }
+                .keyboardShortcut("k", modifiers: .command)
             Button("Push") { bump("pushRequest") }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
             Button("Rebase on Origin") { bump("rebaseRequest") }
@@ -64,6 +65,11 @@ struct AppCommands: Commands {
     private var finderSearchesContents = false
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
+
+    /// Cmd-K's counter: the active shell pane clears once per raise;
+    /// agent panes ignore it.
+    @AppStorage("clearShellRequest")
+    private var clearShellRequest = 0
 
     /// Increments a storage-bus counter; the pane owning the
     /// action observes it and runs.

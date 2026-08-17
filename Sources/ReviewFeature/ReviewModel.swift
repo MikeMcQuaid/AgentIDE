@@ -17,6 +17,7 @@ final class ReviewModel {
         worktreePath: String,
         git: GitClient,
         baseRefProvider: @escaping () async -> String? = { nil },
+        draftMessage: @escaping () async -> String? = { nil },
         fetchThreads: @escaping () async -> [ReviewThread] = { [] },
         setThreadResolved: @escaping (String, Bool) async throws -> Void = { _, _ in
             // Without GitHub wiring resolve toggles are no-ops.
@@ -24,6 +25,7 @@ final class ReviewModel {
     ) {
         self.worktreePath = worktreePath
         self.git = git
+        self.draftMessage = draftMessage
         self.baseRefProvider = baseRefProvider
         self.fetchThreads = fetchThreads
         self.setThreadResolved = setThreadResolved
@@ -151,12 +153,42 @@ final class ReviewModel {
                 showsUncommitted = false
                 try await loadBranch()
             }
-            commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
-            originalMessage = commitMessage
+            // Uncommitted work has no message yet: prefilling the
+            // last commit's invited amending it by accident, so the
+            // field stays as typed and the sparkles button drafts one.
+            if showsUncommitted {
+                // Switching scopes must not carry a commit's message
+                // into uncommitted work, where Commit would reuse it;
+                // anything typed here survives, since only an
+                // unedited message came from a commit.
+                if messageEdited == false {
+                    commitMessage = ""
+                }
+                originalMessage = ""
+            } else {
+                commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
+                originalMessage = commitMessage
+            }
             threads = await fetchThreads()
         } catch {
             report(error.localizedDescription)
         }
+    }
+
+    /// Fills the commit message from the uncommitted diff using the
+    /// on-device model; false when it could not help, so the caller
+    /// can show the errors surface. Only ever fills a blank field.
+    func generateCommitMessage() async -> Bool {
+        guard commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return true
+        }
+        guard let drafted = await draftMessage() else {
+            report("The on-device model could not draft a commit message for these changes.")
+            return false
+        }
+
+        commitMessage = drafted
+        return true
     }
 
     /// Reports a failure into the app-wide error log; the local
@@ -216,6 +248,7 @@ final class ReviewModel {
 
     private let worktreePath: String
     private let git: GitClient
+    private let draftMessage: () async -> String?
     private let baseRefProvider: () async -> String?
     private let fetchThreads: () async -> [ReviewThread]
     private let setThreadResolved: (String, Bool) async throws -> Void

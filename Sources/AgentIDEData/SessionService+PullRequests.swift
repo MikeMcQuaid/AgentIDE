@@ -40,6 +40,16 @@ public extension SessionService {
         await summariser.pullRequestDescription(fromCommits: commits)
     }
 
+    /// A commit message drafted from a worktree's uncommitted diff,
+    /// nil when the on-device model is unavailable or unhelpful.
+    func draftCommitMessage(worktreePath: String) async -> String? {
+        guard let diff = try? await git.uncommittedDiff(worktreePath: worktreePath), diff.isEmpty == false else {
+            return nil
+        }
+
+        return await summariser.commitMessage(fromDiff: diff)
+    }
+
     /// The pull request template completed from the commits by the
     /// on-device model, nil when it is unavailable or unhelpful.
     func fillPullRequestTemplate(fromCommits commits: [String], template: String) async -> String? {
@@ -65,7 +75,7 @@ public extension SessionService {
         }
 
         // defaultBaseRef answers `origin/main` or a bare local name.
-        let branch = base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
+        let branch = Self.branchName(fromBaseRef: base)
         guard branch != mergedBranch,
               await (try? git.checkout(worktreePath: worktree.path, branch: branch)) != nil
         else {

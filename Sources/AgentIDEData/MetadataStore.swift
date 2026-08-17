@@ -93,6 +93,8 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: CachedThreads].self, forKey: .threadsCache) ?? [:]
         intentionallyClosed = try container
             .decodeIfPresent([String].self, forKey: .intentionallyClosed) ?? []
+        pullRequestDrafts = try container
+            .decodeIfPresent([String: PullRequestFormDraft].self, forKey: .pullRequestDrafts) ?? [:]
     }
 
     // MARK: Public
@@ -161,6 +163,10 @@ public struct AppMetadata: Codable, Sendable {
     /// reopened conversation paints them instantly.
     public var threadsCache: [String: CachedThreads] = [:]
 
+    /// Unfinished pull request text by `repositoryPath#branch`, so
+    /// the creation form survives leaving the tab.
+    public var pullRequestDrafts: [String: PullRequestFormDraft] = [:]
+
     /// Worktrees whose last session the user closed deliberately;
     /// automatic resumes leave them alone until a session starts
     /// there again.
@@ -201,6 +207,32 @@ public struct AppMetadata: Codable, Sendable {
     /// without the file growing forever.
     private static let conversationCap = 80
     private static let listingCap = 40
+}
+
+// MARK: - PullRequestFormDraft
+
+/// A branch's unfinished pull request text, kept so leaving the tab
+/// and coming back does not lose the writing.
+public struct PullRequestFormDraft: Codable, Sendable {
+    // MARK: Lifecycle
+
+    /// Creates a draft.
+    public init(title: String, body: String, template: String) {
+        self.title = title
+        self.body = body
+        self.template = template
+    }
+
+    // MARK: Public
+
+    /// The drafted title.
+    public let title: String
+
+    /// The drafted body.
+    public let body: String
+
+    /// The template as edited.
+    public let template: String
 }
 
 // MARK: - CachedSummary

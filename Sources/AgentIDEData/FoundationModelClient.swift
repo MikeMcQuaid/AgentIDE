@@ -44,6 +44,25 @@ public struct FoundationModelClient: Sendable {
         return Self.branchName(fromModelAnswer: raw)
     }
 
+    /// A commit message drafted from a diff: a subject line, a
+    /// blank line and a short body. Nil when the model cannot help,
+    /// so the field stays exactly as the user left it.
+    public func commitMessage(fromDiff diff: String) async -> String? {
+        let instructions = """
+        Summarise this git diff as a commit message: a sentence-case imperative \
+        subject under fifty characters, then a blank line, then one short \
+        paragraph on why. No conventional-commit prefix, no quotes, no code \
+        fences. Answer with the message alone.
+        """
+        guard let raw = await respond(instructions: instructions, to: String(diff.prefix(Self.diffLimit)))
+        else {
+            return nil
+        }
+
+        let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
     /// A pull request title and body drafted from the branch's
     /// commit messages, nil when the model cannot help.
     public func pullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
@@ -192,6 +211,10 @@ public struct FoundationModelClient: Sendable {
     }
 
     // MARK: Private
+
+    /// Enough of a diff to summarise without paying for a whole
+    /// refactor's worth of context.
+    private static let diffLimit = 8_000
 
     /// Enough prompt for a name without paying for a whole spec.
     private static let promptLimit = 500

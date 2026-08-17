@@ -84,12 +84,6 @@ extension RootView {
         )
     }
 
-    /// Opens the new session form preset to the item's repository.
-    func newSession(for item: WorktreeItem) {
-        dependencies.dashboard.newSessionRepository = repository(of: item)
-        dependencies.dashboard.showsNewSession = true
-    }
-
     /// Continues the worktree's most recent conversation: the newest
     /// transcript when one lists here, otherwise the recorded closed
     /// session. The state refreshes first, so a stale cached item

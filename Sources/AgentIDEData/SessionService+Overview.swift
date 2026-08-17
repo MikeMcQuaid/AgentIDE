@@ -190,4 +190,15 @@ public extension SessionService {
         let panes = await (try? tmux.panes()) ?? []
         return panes.contains { $0.sessionName == name }
     }
+
+    /// The bare branch name of a base ref: only the known remote and
+    /// ref prefixes come off, so a default branch that itself
+    /// contains slashes (`release/2026`) survives intact where
+    /// splitting on `/` would have left `2026`.
+    internal static func branchName(fromBaseRef baseRef: String) -> String {
+        for prefix in ["refs/remotes/origin/", "refs/heads/", "origin/"] where baseRef.hasPrefix(prefix) {
+            return String(baseRef.dropFirst(prefix.count))
+        }
+        return baseRef
+    }
 }

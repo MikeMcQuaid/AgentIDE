@@ -46,6 +46,7 @@ public struct ReviewView: View {
                 worktreePath: worktree.path,
                 git: git,
                 baseRefProvider: { await service.reviewBase(for: worktree) },
+                draftMessage: { await service.draftCommitMessage(worktreePath: worktree.path) },
                 fetchThreads: fetchThreads,
                 setThreadResolved: setThreadResolved,
             )

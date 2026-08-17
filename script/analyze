@@ -29,7 +29,25 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-xcodebuild "${args[@]}" clean build >"$log" 2>&1
+# A failed build must never be analysed: SwiftLint and periphery
+# both read what the build produced, so a broken or stale build
+# reports a confident "0 violations" while CI, building cleanly,
+# finds real dead code. Xcode 27 beta's swift-plugin-server also
+# fails to expand SwiftUI macros now and then, which looks exactly
+# like a compile error, so one retry separates the flake from a
+# genuine failure before giving up.
+build() {
+  xcodebuild "${args[@]}" clean build >"$log" 2>&1
+}
+
+if ! build; then
+  echo "build failed; retrying once in case the macro plugin server flaked" >&2
+  if ! build; then
+    echo "analyze aborted: the build failed, so there is nothing trustworthy to analyse" >&2
+    grep -E "error:" "$log" | head -20 >&2
+    exit 1
+  fi
+fi
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # The sandbox's SourceKit misreads one import as unused; the
   # baseline swallows exactly that known false positive so real

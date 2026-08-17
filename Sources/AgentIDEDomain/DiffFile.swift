@@ -63,9 +63,10 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     /// Creates a file diff; the diffstat counts are computed once
     /// here rather than on every read, since the UI reads them per
     /// row on large diffs.
-    public init(path: String, hunks: [DiffHunk]) {
+    public init(path: String, hunks: [DiffHunk], isNew: Bool = false) {
         self.path = path
         self.hunks = hunks
+        self.isNew = isNew
         let lines = hunks.flatMap(\.lines)
         additions = lines.count { $0.kind == .addition }
         deletions = lines.count { $0.kind == .deletion }
@@ -75,6 +76,12 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
 
     /// The file's path on the new side.
     public let path: String
+
+    /// Whether the file is new: added or untracked, so its whole
+    /// content is the diff and every line is an addition. The review
+    /// says so and collapses it, since a wall of additions otherwise
+    /// reads as a broken diff beside real hunks.
+    public let isNew: Bool
 
     /// The file's hunks in order.
     public let hunks: [DiffHunk]

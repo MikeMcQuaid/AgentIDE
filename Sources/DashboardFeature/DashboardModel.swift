@@ -48,7 +48,9 @@ public final class DashboardModel {
     // MARK: Public
 
     /// The grouped worktrees per repository.
-    public private(set) var groups: [RepositoryGroup] = []
+    /// Written by refresh and, for the placeholder row a new session
+    /// shows while it is created, the sessions extension.
+    public internal(set) var groups: [RepositoryGroup] = []
 
     /// Sessions not created by AgentIDE.
     public private(set) var foreign: [AgentSession] = []
@@ -100,7 +102,11 @@ public final class DashboardModel {
                 return
             }
 
-            UserDefaults.standard.set(selection.worktree.path, forKey: Self.selectedWorktreeKey)
+            // A creation placeholder is selected for seconds only and
+            // must not become the worktree the next launch restores.
+            if selection.isPlaceholder == false {
+                UserDefaults.standard.set(selection.worktree.path, forKey: Self.selectedWorktreeKey)
+            }
             service.markSeen(worktreePath: selection.worktree.path)
             clearUnread(at: selection.worktree.path)
             // The freshly selected branch jumps the polling queue.
@@ -117,6 +123,32 @@ public final class DashboardModel {
     /// actions views run against services directly.
     public func report(_ message: String) {
         ErrorLog.shared.report(message)
+    }
+
+    /// Opens the new session form for a repository (nil leaves the
+    /// picker open) and points the sidebar at that repository's main
+    /// checkout: the form is a middle-pane action on the repository,
+    /// so the sidebar reflects it. Selection is set directly rather
+    /// than through `select`, which would cancel the form it opens.
+    public func openNewSession(for repository: Repository?) {
+        newSessionRepository = repository
+        showsNewSession = true
+        selectMainCheckout(of: repository)
+    }
+
+    /// Points the sidebar at a repository's main checkout without
+    /// touching whatever the middle pane shows; the picker in the
+    /// new session form calls this as its choice changes.
+    public func selectMainCheckout(of repository: Repository?) {
+        guard let repository,
+              let group = groups.first(where: { $0.repository.path == repository.path }),
+              let main = group.items.first,
+              selection?.id != main.id
+        else {
+            return
+        }
+
+        selection = main
     }
 
     /// Selecting from the sidebar is a middle-pane action, so it
@@ -195,35 +227,6 @@ public final class DashboardModel {
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
-    }
-
-    /// Tidies a worktree whose pull request has merged: a real
-    /// worktree is deleted outright, the main checkout is returned to
-    /// the default branch with the merged branch safely deleted. The
-    /// one path behind the Merge button, the context menu and the
-    /// poll's own merge detection.
-    public func cleanUp(item: WorktreeItem) async {
-        if item.worktree.path == item.worktree.repositoryPath {
-            await service.cleanUpAfterMerge(worktree: item.worktree, mergedBranch: item.worktree.branch)
-            await refresh()
-        } else {
-            await delete(item: item)
-        }
-    }
-
-    /// Whether a main checkout sits on a branch other than its
-    /// repository's default, the only state in which cleaning it up
-    /// after a merge means anything; false when the default is
-    /// unknown, so the offer never appears on a guess.
-    public func isOffDefaultBranch(_ item: WorktreeItem) -> Bool {
-        guard item.worktree.path == item.worktree.repositoryPath,
-              let group = groups.first(where: { $0.repository.path == item.worktree.repositoryPath }),
-              let defaultBranch = group.defaultBranch
-        else {
-            return false
-        }
-
-        return item.worktree.branch != defaultBranch
     }
 
     /// Flags the item unread until it is next viewed.

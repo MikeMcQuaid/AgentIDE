@@ -12,7 +12,7 @@ public struct RepositorySessionsView: View {
     // MARK: Lifecycle
 
     /// Creates the browser; `worktreePath` scopes the list to one
-    /// worktree, `onNewSession` opens the new session page,
+    /// worktree,
     /// `onResumed` runs after a resume launches and
     /// `onWorktreeFocus` reports the selected conversation's still
     /// existing worktree, so other panes can follow along.
@@ -21,11 +21,9 @@ public struct RepositorySessionsView: View {
         repository: Repository,
         service: SessionService,
         worktreePath: String? = nil,
-        onNewSession: (@MainActor () -> Void)? = nil,
         onWorktreeFocus: (@MainActor (String?) -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
-        self.onNewSession = onNewSession
         self.onWorktreeFocus = onWorktreeFocus
         self.onResumed = onResumed
         identity = repository.id + "#" + (worktreePath ?? "")
@@ -92,7 +90,6 @@ public struct RepositorySessionsView: View {
     @State private var model: RepositorySessionsModel
 
     private let identity: String
-    private let onNewSession: (@MainActor () -> Void)?
     private let onWorktreeFocus: (@MainActor (String?) -> Void)?
     private let onResumed: @MainActor () async -> Void
     private let makeModel: () -> RepositorySessionsModel
@@ -106,11 +103,6 @@ public struct RepositorySessionsView: View {
             )
             .font(.subheadline.weight(.semibold))
             Spacer()
-            if let onNewSession {
-                Button("New session", action: onNewSession)
-                    .controlSize(.small)
-                    .hoverHelp("Start a fresh agent session in this repository instead of resuming")
-            }
             // One resume button: in place when the conversation's
             // worktree still exists, into a fresh worktree only when
             // it is gone and that is all that can be done.

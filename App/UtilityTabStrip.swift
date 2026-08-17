@@ -41,7 +41,7 @@ struct UtilityTabStrip: View {
                     .font(.callout)
                 if tab == .errors, errorLog.errorCount > 0 {
                     Text(String(errorLog.errorCount))
-                        .font(.caption2.bold())
+                        .font(.caption.bold())
                         .foregroundStyle(.white)
                         .padding(.horizontal, Self.badgeSpacing)
                         .background(Capsule().fill(.red))

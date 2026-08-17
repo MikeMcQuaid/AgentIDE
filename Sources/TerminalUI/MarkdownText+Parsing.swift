@@ -126,7 +126,34 @@ extension MarkdownText {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
         )
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        let source = ticked(text)
+        return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
+    }
+
+    /// Task list markers render as their box glyphs: markdown's
+    /// inline parser leaves `- [x]` as literal brackets, so a
+    /// checklist read as punctuation rather than state.
+    static func ticked(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { tickedLine(String($0)) }
+            .joined(separator: "\n")
+    }
+
+    /// One line's task marker as its box glyph, the indentation and
+    /// list marker kept so nesting still reads.
+    private static func tickedLine(_ line: String) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        for marker in ["- ", "* ", "+ "] where trimmed.hasPrefix(marker) {
+            let rest = String(trimmed.dropFirst(marker.count))
+            let indent = String(line.prefix(while: \.isWhitespace))
+            if rest.hasPrefix("[ ] ") {
+                return indent + marker + "\u{2610} " + rest.dropFirst("[ ] ".count)
+            }
+            if rest.lowercased().hasPrefix("[x] ") {
+                return indent + marker + "\u{2611} " + rest.dropFirst("[x] ".count)
+            }
+        }
+        return line
     }
 
     /// Merges consecutive prose into one block; the regenerated

@@ -42,9 +42,56 @@ public extension SessionService {
             try await removeAsSandboxUser(path: worktree.path)
             try await git.forgetWorktree(repository: repository, branch: worktree.branch)
         }
+        removeFriendlySymlink(worktree: worktree)
+    }
+
+    /// Removes a worktree's human-friendly symlink; the canonical
+    /// path is what git knows, so this is cosmetic cleanup.
+    internal func removeFriendlySymlink(worktree: Worktree) {
         let link = paths.friendlyWorktreesDirectory + "/" + worktree.repositoryName
             + "/" + worktree.branch.replacing("/", with: "-")
         try? FileManager.default.removeItem(atPath: link)
+    }
+
+    /// Why a merge-safe cleanup refused a worktree, so the caller can
+    /// name what a forced deletion would destroy.
+    enum CleanupRefusal: Equatable, Sendable {
+        /// Uncommitted changes would be lost.
+        case dirty
+        /// Commits not on the base branch would be lost.
+        case unmerged
+    }
+
+    /// The merge-safe cleanup of a real worktree: refused outright
+    /// when the worktree is dirty or its branch has commits the base
+    /// branch lacks, so nothing this path does can lose work; the
+    /// force delete is a separate, confirmed action. Returns the
+    /// refusal, nil when the worktree was removed.
+    func cleanUpMergedWorktree(item: WorktreeItem, baseRef: String) async throws -> CleanupRefusal? {
+        let worktree = item.worktree
+        guard await git.isDirty(worktreePath: worktree.path) == false else {
+            return .dirty
+        }
+        guard await git.isMerged(worktreePath: worktree.path, branch: worktree.branch, into: baseRef) else {
+            return .unmerged
+        }
+
+        // Merge-safe git as well as merge-safe checks: `git worktree
+        // remove` without `--force` and `git branch -d` refuse dirty
+        // or unmerged work themselves, so a wrong or raced check
+        // above cannot destroy anything.
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        let sessionName = item.session?.name
+            ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
+        rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
+        try? await tmux.killSession(name: sessionName)
+        try await git.removeMergedWorktree(
+            repository: repository,
+            worktreePath: worktree.path,
+            branch: worktree.branch,
+        )
+        removeFriendlySymlink(worktree: worktree)
+        return nil
     }
 
     /// Deletes a path as the sandbox user through the launcher, for

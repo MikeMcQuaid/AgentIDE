@@ -93,12 +93,32 @@ extension DashboardModel {
         fresh: [PullRequestSummary],
     ) async {
         guard Self.observedMerge(previous: previous, fresh: fresh),
-              deletingPaths.contains(item.worktree.path) == false
+              deletingPaths.contains(item.worktree.path) == false,
+              // Never pull the ground from under the worktree being
+              // looked at: it would vanish mid-action and read as a
+              // crash. Its context menu still offers the cleanup.
+              selection?.worktree.path != item.worktree.path
         else {
             return
         }
 
-        await cleanUp(item: item)
+        // The poll never prompts and never forces: a worktree the
+        // merge-safe path refuses stays, with a note saying why, for
+        // the user to clean up or delete by hand.
+        switch await cleanUp(item: item) {
+        case .dirty:
+            ErrorLog.shared.report(
+                "\(item.worktree.branch) merged but has uncommitted changes; left in place for you to review",
+            )
+
+        case .unmerged:
+            ErrorLog.shared.report(
+                "\(item.worktree.branch) merged but has commits not on the base branch; left in place",
+            )
+
+        case nil:
+            break
+        }
     }
 
     /// Whether a poll observed the branch's pull request go from

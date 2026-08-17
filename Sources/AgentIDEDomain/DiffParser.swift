@@ -11,6 +11,7 @@ public enum DiffParser {
         var lines = [DiffLine]()
         var starts: (old: Int, new: Int) = (0, 0)
         var inHunk = false
+        var sawOldPath = false
 
         func closeHunk() {
             guard inHunk else {
@@ -27,8 +28,11 @@ public enum DiffParser {
             // Prefer the new path; fall back to the old path so deleted
             // files (whose new path is /dev/null) are still represented.
             if let path = newPath ?? oldPath {
-                files.append(DiffFile(path: path, hunks: hunks))
+                // `--- /dev/null` (a git-added file) and the synthetic
+                // untracked diff both leave the old path empty.
+                files.append(DiffFile(path: path, hunks: hunks, isNew: sawOldPath && oldPath == nil))
             }
+            sawOldPath = false
             newPath = nil
             oldPath = nil
             hunks = []
@@ -47,6 +51,7 @@ public enum DiffParser {
                     lines.append(parsed)
                 }
             } else if line.hasPrefix("--- ") {
+                sawOldPath = true
                 oldPath = strippedPath(String(line.dropFirst("--- ".count)))
             } else if line.hasPrefix("+++ ") {
                 newPath = strippedPath(String(line.dropFirst("+++ ".count)))

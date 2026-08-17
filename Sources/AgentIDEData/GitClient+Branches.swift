@@ -81,6 +81,18 @@ public extension GitClient {
         _ = try? await git(["branch", "-d", branch], in: worktreePath, allowFailure: true)
     }
 
+    /// Whether every commit of a branch is reachable from a base ref,
+    /// which is what makes deleting it lossless. False when either
+    /// ref is unreadable, keeping the safe path shut when in doubt.
+    func isMerged(worktreePath: String, branch: String, into baseRef: String) async -> Bool {
+        let result = try? await git(
+            ["merge-base", "--is-ancestor", branch, baseRef],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return result?.succeeded ?? false
+    }
+
     /// The branch's full commit messages beyond the base ref,
     /// oldest first, for drafting pull request descriptions.
     func commitMessages(worktreePath: String, baseRef: String) async -> [String] {

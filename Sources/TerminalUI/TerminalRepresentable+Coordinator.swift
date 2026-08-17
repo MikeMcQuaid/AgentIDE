@@ -120,6 +120,26 @@ extension TerminalRepresentable {
             }
         }
 
+        /// Cmd-K on the shell: a full terminal reset wipes the screen
+        /// and local scrollback, then Ctrl-L asks the running shell to
+        /// redraw its prompt, which is what a terminal app's clear
+        /// does. Each raise of the counter clears once; the first
+        /// observed value only records the baseline, so a stale count
+        /// from a previous launch never clears on appearance.
+        func clearIfRequested(_ request: Int, in view: PaneTerminalView) {
+            guard let seen = seenClearRequest else {
+                seenClearRequest = request
+                return
+            }
+            guard request != seen else {
+                return
+            }
+
+            seenClearRequest = request
+            view.feed(text: "\u{1B}c")
+            view.send(txt: "\u{0C}")
+        }
+
         /// Releases keyboard focus when the pane goes invisible: the
         /// shell stays mounted behind other tabs to survive
         /// switches, and a hidden terminal holding first responder
@@ -143,12 +163,26 @@ extension TerminalRepresentable {
             sendCommand(TmuxControl.resizeCommand(columns: newCols, rows: newRows), expecting: .acknowledgement)
         }
 
+        /// Bytes for the pane. A bracketed paste arrives as three
+        /// separate sends (start marker, text, end marker); shipped as
+        /// three commands, the pieces could straddle the agent's input
+        /// reads and Codex dropped the paste as unterminated. Bytes
+        /// are therefore gathered for one run loop turn and shipped
+        /// as one command, so a paste lands in a single write.
         func send(source _: TerminalView, data: ArraySlice<UInt8>) {
             guard data.isEmpty == false else {
                 return
             }
 
-            sendCommand(TmuxControl.sendKeysCommand(bytes: data), expecting: .acknowledgement)
+            outgoing.append(contentsOf: data)
+            guard flushScheduled == false else {
+                return
+            }
+
+            flushScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                self?.flushOutgoing()
+            }
         }
 
         func setTerminalTitle(source _: TerminalView, title _: String) {
@@ -185,6 +219,9 @@ extension TerminalRepresentable {
         // MARK: Private
 
         private var started = false
+        private var seenClearRequest: Int?
+        private var outgoing: [UInt8] = []
+        private var flushScheduled = false
         private var startedTransport: TerminalTransport?
         private var blockMonitor: Any?
         private var frameObserver: NSObjectProtocol?
@@ -192,6 +229,19 @@ extension TerminalRepresentable {
         private var pendingTransport: TerminalTransport?
 
         private var pump: Task<Void, Never>?
+
+        /// Ships everything gathered since the last turn as one
+        /// `send-keys`, in order.
+        private func flushOutgoing() {
+            flushScheduled = false
+            let bytes = outgoing
+            outgoing.removeAll(keepingCapacity: true)
+            guard bytes.isEmpty == false else {
+                return
+            }
+
+            sendCommand(TmuxControl.sendKeysCommand(bytes: bytes), expecting: .acknowledgement)
+        }
 
         /// Drops the running client and resets the conversation
         /// state so a new command can attach through the same view;
