@@ -44,15 +44,22 @@ public enum TmuxControl {
 
         var commands = [String]()
         var chunk = ""
+        var escapedLength = 0
         for character in text {
-            chunk.append(character)
-            if chunk.count >= literalChunkLength {
-                commands.append("send-keys -l -- " + quoted(chunk))
+            let piece = escaped(character)
+            // Measured on the escaped text, since that is what tmux
+            // reads: counting source characters split pastes that
+            // would have fitted in one command comfortably.
+            if escapedLength + piece.count > escapedBudget, chunk.isEmpty == false {
+                commands.append(command(for: chunk))
                 chunk = ""
+                escapedLength = 0
             }
+            chunk.append(character)
+            escapedLength += piece.count
         }
         if chunk.isEmpty == false {
-            commands.append("send-keys -l -- " + quoted(chunk))
+            commands.append(command(for: chunk))
         }
         return commands
     }
@@ -81,38 +88,39 @@ public enum TmuxControl {
     /// (quotes, backslashes, environment variables, home directory
     /// expansion, command separators and formats) is escaped.
     static func quoted(_ text: String) -> String {
-        var escaped = ""
-        for character in text {
-            switch character {
-            case "\\":
-                escaped += "\\\\"
+        "\"" + text.map(escaped).joined() + "\""
+    }
 
-            case "\"":
-                escaped += "\\\""
+    /// One character as tmux would need to read it back.
+    static func escaped(_ character: Character) -> String {
+        switch character {
+        case "\\":
+            "\\\\"
 
-            case ";",
-                 "#",
-                 "~",
-                 "$":
-                escaped += "\\" + String(character)
+        case "\"":
+            "\\\""
 
-            case "\n":
-                escaped += "\\n"
+        case ";",
+             "#",
+             "~",
+             "$":
+            "\\" + String(character)
 
-            case "\r":
-                escaped += "\\r"
+        case "\n":
+            "\\n"
 
-            case "\t":
-                escaped += "\\t"
+        case "\r":
+            "\\r"
 
-            case "\u{1B}":
-                escaped += "\\e"
+        case "\t":
+            "\\t"
 
-            default:
-                escaped += controlEscape(character) ?? String(character)
-            }
+        case "\u{1B}":
+            "\\e"
+
+        default:
+            controlEscape(character) ?? String(character)
         }
-        return "\"" + escaped + "\""
     }
 
     // MARK: Private
@@ -120,14 +128,20 @@ public enum TmuxControl {
     /// `send-keys -H` reads bytes as hexadecimal.
     private static let hexRadix = 16
 
-    /// Characters per command. tmux carried 32,000 in one command
-    /// in testing; this leaves generous room below that even when
-    /// escaping quadruples a chunk, while keeping all but the
-    /// largest pastes in a single write.
-    private static let literalChunkLength = 4_000
+    /// Escaped characters per command. tmux carried 32,000 in one
+    /// command in testing; half of that leaves room for the command
+    /// itself and for whatever the untested ceiling really is, while
+    /// keeping every ordinary paste to a single write.
+    private static let escapedBudget = 16_000
 
     private static let asciiSpace: UInt32 = 0x20
     private static let asciiDelete: UInt32 = 0x7F
+
+    /// The command that sends one chunk literally; `--` keeps text
+    /// starting with a dash from reading as a flag.
+    private static func command(for chunk: String) -> String {
+        "send-keys -l -- " + quoted(chunk)
+    }
 
     /// Any other control character as tmux's three-digit octal
     /// escape; nil for ordinary text, which needs none.

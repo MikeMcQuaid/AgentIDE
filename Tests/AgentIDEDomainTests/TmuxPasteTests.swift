@@ -50,11 +50,22 @@ struct TmuxPasteTests {
     }
 
     @Test
-    func `a paste beyond one command still splits rather than being dropped`() {
-        let commands = TmuxControl.sendCommands(bytes: Array(String(repeating: "x", count: 9_000).utf8))
-        #expect(commands.count > 1)
-        // Comfortably inside what tmux carried in testing.
-        #expect(commands.allSatisfy { $0.count < 32_000 })
+    func `a paste splits only when the command itself would not fit`() {
+        // Chunking once counted source characters, so a paste this
+        // size split into several commands despite fitting easily.
+        let moderate = TmuxControl.sendCommands(bytes: Array(String(repeating: "x", count: 9_000).utf8))
+        #expect(moderate.count == 1)
+
+        // Past the budget it splits rather than being dropped, and
+        // every command stays inside what tmux carried in testing.
+        let huge = TmuxControl.sendCommands(bytes: Array(String(repeating: "x", count: 40_000).utf8))
+        #expect(huge.count > 1)
+        #expect(huge.allSatisfy { $0.count < 32_000 })
+
+        // Escaping is what fills the budget, so text that escapes
+        // to four characters each splits sooner than plain text.
+        let escaping = TmuxControl.sendCommands(bytes: Array(String(repeating: "\u{1}", count: 9_000).utf8))
+        #expect(escaping.count > 1)
     }
 
     // MARK: Private

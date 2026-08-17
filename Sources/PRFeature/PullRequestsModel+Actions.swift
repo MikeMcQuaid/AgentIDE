@@ -9,9 +9,12 @@ import TerminalUI
 extension PullRequestsModel {
     /// Shows a status in the footer and keeps it in the messages
     /// pane, where a line that scrolls past can still be read.
-    func setStatus(_ message: String) {
+    /// `detail` is what the messages pane keeps when the footer's
+    /// wording is too terse to mean anything later; without it the
+    /// footer's own line is kept, once.
+    func setStatus(_ message: String, detail: String? = nil) {
         status = message
-        ErrorLog.shared.note(message)
+        ErrorLog.shared.note(detail ?? message)
     }
 
     /// The branch item's worktree with the checked-out branch
@@ -213,8 +216,7 @@ extension PullRequestsModel {
         do {
             try await performPush(worktree)
             isPushed = true
-            setStatus("Pushed.")
-            ErrorLog.shared.note("Pushed " + worktree.branch + ".")
+            setStatus("Pushed.", detail: "Pushed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true
@@ -233,8 +235,7 @@ extension PullRequestsModel {
 
         do {
             try await performRebase(worktree)
-            setStatus("Rebased and signed.")
-            ErrorLog.shared.note("Rebased and signed " + worktree.branch + ".")
+            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true

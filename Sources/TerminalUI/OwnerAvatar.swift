@@ -46,8 +46,9 @@ public final class OwnerAvatarStore {
 
     // MARK: Private
 
-    /// An avatar that is not a 200 is not an avatar.
-    private static let httpOK = 200
+    /// An avatar that is not a 200 is not an avatar; nonisolated so
+    /// the off-main download can read it.
+    private nonisolated static let httpOK = 200
 
     private static var directory: URL {
         let base = URL(fileURLWithPath: NSHomeDirectory())
@@ -76,6 +77,22 @@ public final class OwnerAvatarStore {
         return NSImage(data: data)
     }
 
+    /// Fetches an avatar and keeps a copy, away from the main
+    /// actor: `@concurrent` because a plain nonisolated async
+    /// function would run on its caller's actor, which is the one
+    /// drawing the sidebar.
+    @concurrent
+    private nonisolated static func download(from url: URL, to file: URL) async -> Data? {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == httpOK
+        else {
+            return nil
+        }
+
+        try? data.write(to: file, options: .atomic)
+        return data
+    }
+
     /// Fetches an owner's avatar and keeps it. A failure is silent
     /// on purpose: the icon is decoration, the disk copy covers an
     /// outage, and the messages pane is for things the user can act
@@ -89,15 +106,15 @@ public final class OwnerAvatarStore {
 
         inFlight.insert(owner)
         Task { [weak self] in
-            defer { self?.inFlight.remove(owner) }
-            guard let (data, response) = try? await URLSession.shared.data(from: url),
-                  (response as? HTTPURLResponse)?.statusCode == Self.httpOK,
-                  let image = NSImage(data: data)
-            else {
+            // The fetch and the disk write run off the main actor;
+            // only the small decode and the state update come back
+            // to it, so a sidebar of owners cannot stutter the UI.
+            let data = await Self.download(from: url, to: Self.file(for: owner))
+            self?.inFlight.remove(owner)
+            guard let data, let image = NSImage(data: data) else {
                 return
             }
 
-            try? data.write(to: Self.file(for: owner), options: .atomic)
             self?.images[owner] = image
         }
     }
