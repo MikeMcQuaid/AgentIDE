@@ -92,7 +92,8 @@ struct TmuxControlParserTests {
 
     @Test
     func `command builders emit the documented forms`() {
-        #expect(TmuxControl.sendKeysCommand(bytes: [0x68, 0x0D]) == "send-keys -H 68 d")
+        // Text goes literally, the carriage return exactly.
+        #expect(TmuxControl.sendCommands(bytes: [0x68, 0x0D]) == ["send-keys -l -- 'h'", "send-keys -H d"])
         #expect(TmuxControl.resizeCommand(columns: 120, rows: 40) == "refresh-client -C 120x40")
         #expect(TmuxControl.seedText(lines: ["one", "two", "", ""]) == "one\r\ntwo\r\n")
         #expect(TmuxControl.seedText(lines: []).isEmpty)

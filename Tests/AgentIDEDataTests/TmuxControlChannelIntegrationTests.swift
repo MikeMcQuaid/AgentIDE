@@ -6,6 +6,8 @@ import Testing
 /// Exercises the control mode channel against a real tmux server on
 /// a private socket: the round trip the terminal panes are built on.
 struct TmuxControlChannelIntegrationTests {
+    // MARK: Internal
+
     @Test
     func `attaching streams history, live output and typed keys`() async throws {
         let (tmux, socket) = try TestSupport.makeTmuxClient()
@@ -49,7 +51,7 @@ struct TmuxControlChannelIntegrationTests {
             case let .response(lines, isError):
                 if isError == false, lines.contains(where: { $0.contains("ready") }), sawHistory == false {
                     sawHistory = true
-                    channel.send(TmuxControl.sendKeysCommand(bytes: Array("ping\r".utf8)))
+                    Self.type("ping\r", into: channel)
                 }
 
             case let .output(_, bytes):
@@ -69,5 +71,15 @@ struct TmuxControlChannelIntegrationTests {
         await channel.stop()
         #expect(sawHistory, "capture-pane should report the pane's history")
         #expect(sawEcho, "typed keys should echo back as pane output")
+    }
+
+    // MARK: Private
+
+    /// Types text the way a pane does, as the commands the paste
+    /// builder produces.
+    private static func type(_ text: String, into channel: TmuxControlChannel) {
+        for command in TmuxControl.sendCommands(bytes: Array(text.utf8)) {
+            channel.send(command)
+        }
     }
 }
