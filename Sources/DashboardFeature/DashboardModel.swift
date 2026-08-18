@@ -178,17 +178,18 @@ public final class DashboardModel {
             return
         }
 
-        notifyChanges(from: groups, to: overview.groups)
-        groups = overview.groups
+        let listed = Self.retainingLostRows(of: groups, in: overview.groups)
+        notifyChanges(from: groups, to: listed)
+        groups = listed
         foreign = overview.foreign
         if let selected = selection {
-            selection = overview.groups.flatMap(\.items).first { $0.id == selected.id }
+            selection = listed.flatMap(\.items).first { $0.id == selected.id }
         } else if hasRestoredSelection == false {
             let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
-            selection = overview.groups.flatMap(\.items).first { $0.worktree.path == stored }
+            selection = listed.flatMap(\.items).first { $0.worktree.path == stored }
         }
         hasRestoredSelection = true
-        cacheSidebar(overview.groups)
+        cacheSidebar(listed)
         await refreshStalePullRequests()
     }
 

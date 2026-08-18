@@ -3,9 +3,9 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-/// A syntax-highlighted editor for one file in the worktree, with
-/// line numbers, visible invisibles and uncommitted-line markers,
-/// for review-time fixes.
+/// A syntax-highlighted editor for one file, with line numbers,
+/// visible invisibles and uncommitted-line markers, for review-time
+/// fixes and for the files commands outside the app wait on.
 struct FileEditorView: View {
     // MARK: Lifecycle
 
@@ -21,46 +21,52 @@ struct FileEditorView: View {
         showsClose: Bool = true,
         onClose: (() -> Void)? = nil,
     ) {
-        self.worktreePath = worktreePath
-        self.relativePath = relativePath
-        self.service = service
+        // A hostile repository could put `../` in a diff path, so a
+        // file that resolves outside the worktree gets no path at
+        // all and the editor refuses to read or write it.
+        let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
+        let target = URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
+        path = target == base || target.hasPrefix(base + "/") ? target : nil
+        title = relativePath
+        language = SyntaxLanguage.language(forPath: relativePath)
+        changedLines = { await service.changedLineNumbers(worktreePath: worktreePath, file: relativePath) }
         self.jumpToLine = jumpToLine
         self.showsClose = showsClose
         self.onClose = onClose
+        onFinish = nil
+    }
+
+    /// Creates an editor for a file a command is waiting on, which
+    /// is regularly outside every worktree: git keeps a linked
+    /// worktree's rebase todo list in the repository's own `.git`
+    /// directory. Finishing releases the command, and cancelling
+    /// fails it, which is how a rebase is aborted.
+    init(waitingOn edit: ExternalEdit, onFinish: @escaping (Bool) -> Void) {
+        path = edit.path
+        title = edit.name
+        language = SyntaxLanguage.language(forPath: edit.path)
+        changedLines = nil
+        jumpToLine = nil
+        showsClose = false
+        onClose = nil
+        self.onFinish = onFinish
     }
 
     // MARK: Internal
 
-    /// The editor with icon save and close actions. Save enables
-    /// only with unsaved changes and reports Saved after writing.
+    /// The editor under its header. Save enables only with unsaved
+    /// changes and reports Saved after writing; a file some command
+    /// waits on says so and finishes it instead of closing.
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(relativePath).font(.headline.monospaced())
-                Spacer()
-                if let status {
-                    Text(status).font(.callout).foregroundStyle(.secondary)
-                }
-                Button("Save", systemImage: "square.and.arrow.down") { save() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .disabled(hasChanges == false)
-                    .keyboardShortcut("s", modifiers: .command)
-                    .hoverHelp("Write the buffer back to the file (Cmd-S); dims until there are changes")
-                if showsClose {
-                    Button("Close", systemImage: "xmark") { close() }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .hoverHelp("Close the editor without saving")
-                }
-            }
-            .padding(Self.padding)
+            header
+                .padding(Self.padding)
             Divider()
             HighlightingTextEditor(
                 text: $content,
-                language: SyntaxLanguage.language(forPath: relativePath),
+                language: language,
                 jumpToLine: jumpToLine,
-                changedLines: changedLines,
+                changedLines: markedLines,
             )
         }
         .onAppear { load() }
@@ -80,51 +86,89 @@ struct FileEditorView: View {
 
     @State private var content = ""
     @State private var saved = ""
-    @State private var changedLines: Set<Int> = []
+    @State private var markedLines: Set<Int> = []
     @State private var status: String?
 
     @Environment(\.dismiss)
     private var dismiss
 
-    private let worktreePath: String
-    private let relativePath: String
-    private let service: SessionService
+    /// The file, absolute and already checked; nil when the path
+    /// resolved outside the worktree it claimed to be in.
+    private let path: String?
+    private let title: String
+    private let language: SyntaxLanguage?
+
+    /// Which lines the gutter marks as uncommitted, absent for a
+    /// file that belongs to no worktree.
+    private let changedLines: (() async -> Set<Int>)?
     private let jumpToLine: Int?
     private let showsClose: Bool
     private let onClose: (() -> Void)?
+
+    /// Releases the command waiting on this file, saved or not.
+    private let onFinish: ((Bool) -> Void)?
 
     private var hasChanges: Bool {
         content != saved
     }
 
-    /// The resolved path, but only when it stays inside the worktree:
-    /// a hostile repository could put `../` in a diff path.
-    private var safePath: String? {
-        let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
-        let target = URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
-        return target == base || target.hasPrefix(base + "/") ? target : nil
+    /// The file's name beside what can be done to it. The primary
+    /// action exists only while a command waits, since that is the
+    /// only time closing the editor decides anything.
+    private var header: some View {
+        HStack {
+            Text(title).font(.headline.monospaced())
+            if onFinish != nil {
+                Text("A command is waiting").font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let status {
+                Text(status).font(.callout).foregroundStyle(.secondary)
+            }
+            Button("Save", systemImage: "square.and.arrow.down") { save() }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .disabled(hasChanges == false)
+                .keyboardShortcut("s", modifiers: .command)
+                .hoverHelp("Write the buffer back to the file (Cmd-S); dims until there are changes")
+            if showsClose {
+                Button("Close", systemImage: "xmark") { close() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .hoverHelp("Close the editor without saving")
+            }
+            if let onFinish {
+                Button("Cancel") { onFinish(false) }
+                    .buttonStyle(.glass)
+                    .hoverHelp("Leave the file as it was and fail the waiting command, which aborts a rebase")
+                Button("Save and close") { save(); onFinish(true) }
+                    .buttonStyle(.glassProminent)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .hoverHelp("Write the file and let the waiting command carry on (Cmd-Return)")
+            }
+        }
     }
 
     private func load() {
-        guard let safePath else {
+        guard let path else {
             ErrorLog.shared.report("Refusing to open a path outside the worktree.")
             return
         }
 
-        content = (try? String(contentsOfFile: safePath, encoding: .utf8)) ?? ""
+        content = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
         saved = content
         reloadChangedLines()
     }
 
     private func save() {
-        guard let safePath else {
+        guard let path else {
             ErrorLog.shared.report("Refusing to write a path outside the worktree.")
             return
         }
 
         do {
             content = Whitespace.strippingTrailingWhitespace(content)
-            try content.write(toFile: safePath, atomically: true, encoding: .utf8)
+            try content.write(toFile: path, atomically: true, encoding: .utf8)
             saved = content
             status = Self.savedStatus
             reloadChangedLines()
@@ -144,8 +188,10 @@ struct FileEditorView: View {
     /// Marks lines uncommitted against HEAD in the gutter; buffer
     /// edits count only once saved to disk.
     private func reloadChangedLines() {
-        Task {
-            changedLines = await service.changedLineNumbers(worktreePath: worktreePath, file: relativePath)
+        guard let changedLines else {
+            return
         }
+
+        Task { markedLines = await changedLines() }
     }
 }

@@ -62,6 +62,10 @@ public struct ReviewView: View {
         VStack(spacing: 0) {
             toolbar
             Divider()
+            if showsFind {
+                ReviewFindBar(model: model, focusRequest: findRequest) { closeFind() }
+                Divider()
+            }
             diffList
             ReviewFooterView(
                 model: model,
@@ -76,6 +80,12 @@ public struct ReviewView: View {
             model = makeModel()
             await model.reload()
         }
+        // Cmd-F reaches the pane through the storage bus: a diff is
+        // not a text view, so AppKit's own find bar, which the
+        // editor and the terminals answer, has nothing to attach to.
+        .onChange(of: findRequest) { showsFind = true }
+        .onChange(of: findNextRequest) { model.moveFind(by: 1) }
+        .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
         // The menu bar's Commit Outstanding lands here through the
         // storage bus.
         .onChange(of: commitRequest) { Task { await commitOutstanding() } }
@@ -97,6 +107,18 @@ public struct ReviewView: View {
     @AppStorage("commitRequest")
     private var commitRequest = 0
     @State private var collapseOverrides: [String: Bool] = [:]
+
+    /// Whether the find bar is showing; the menu's Find opens it
+    /// and Escape or its own button closes it.
+    @State private var showsFind = false
+
+    /// The find menu items' counters on the storage bus.
+    @AppStorage("reviewFindRequest")
+    private var findRequest = 0
+    @AppStorage("reviewFindNextRequest")
+    private var findNextRequest = 0
+    @AppStorage("reviewFindPreviousRequest")
+    private var findPreviousRequest = 0
 
     private let worktreePath: String
     private let service: SessionService
@@ -174,8 +196,6 @@ public struct ReviewView: View {
         )
     }
 
-    /// The collapsible file list; the uncommitted scope embeds the
-    /// shared editor per file so fixes are typed directly.
     @ViewBuilder private var diffList: some View {
         if model.files.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
@@ -236,6 +256,15 @@ public struct ReviewView: View {
         // The colour fill alone is invisible to VoiceOver.
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
+    }
+
+    /// The collapsible file list; the uncommitted scope embeds the
+    /// shared editor per file so fixes are typed directly.
+    /// Closing clears the query too, so the highlights go with the
+    /// bar rather than being left behind on the diff.
+    private func closeFind() {
+        showsFind = false
+        model.findQuery = ""
     }
 
     private func commitOutstanding() async {

@@ -177,17 +177,28 @@ select and scroll natively with no modifier.
 
 Two visually unmistakable flavours ride that one client:
 
+- **Pasting into an agent**: a paste goes into a tmux buffer and is pasted
+  from there (`set-buffer`, appending for anything long, then `paste-buffer
+  -d -p`), never typed in as keys. tmux brackets it when the pane's own
+  application asked for bracketed paste, which is knowledge the local
+  terminal does not reliably have: it learns modes from output it has seen,
+  and a pane attached mid-session never saw bracketed paste being enabled.
+  Without the markers an agent read a multi-line paste as several lines of
+  typing, which is how the cursor ended up inside the pasted text. Typing
+  still travels as `send-keys -l`.
 - **Sandbox terminal**: the launch shape with payload
   `exec tmux -C attach-session -t <name>`. The attaching client runs
   inside the sandbox too; tmux sockets are owner-only, so no attach
   path can skip sudo. Closing the view detaches and never kills the
   session.
 - **Host terminal** (Review): a plain login shell on the pane's own
-  PTY as the host user, no sudo, no sandbox, full `gh` credentials and
-  no tmux at all: shells stay mounted across tab switches but live and
-  die with the app, a deliberate trade after tmux-backed shells kept
-  wedging their control clients; the tab bar's Close shell ends one
-  instantly. Both
+  PTY as the host user, no sudo, no sandbox, full `gh` credentials, the
+  editor variables pointing at the app's own shim and no tmux at all:
+  shells live and die with the app, a deliberate trade after
+  tmux-backed shells kept wedging their control clients. The pane a
+  shell runs in stays mounted whatever else the window shows, as the
+  panes section above describes, and the tab bar's Close shell ends
+  one instantly. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
@@ -217,6 +228,16 @@ the launch shape, tolerating "no server running"), a `ps` scan for session
 ids in process arguments, `git worktree list` across tracked repositories,
 transcript directory scans and finally its own metadata store. Unmatched
 sessions surface as foreign rather than being hidden.
+
+Deriving is not the same as trusting one reading. A reading that loses a
+worktree or a repository is never taken as proof it went away: its listing
+can fail, and `git worktree list` reports a worktree as detached rather than
+on a branch for the whole of a rebase. A row the newest reading dropped is
+kept while its directory is there, and only its removal from disk takes the
+row away. This is a display rule, not a cache: nothing is persisted and the
+next reading that lists the worktree wins. It matters because a row holds
+its worktree's panes open, and a pane holds a running shell (P1 still
+applies; disk is one of the sources).
 
 There is no separate notification daemon in v1. The app switches to accessory
 activation policy when its last window closes, staying resident in the menu
@@ -456,9 +477,79 @@ Sendable` and `nonisolated(unsafe)` are banned.
    the message was edited too). Failed validation degrades to whole-hunk
    rejection. Uncommitted changes skip the amend.
 5. Manual edits happen in the same editor surface; saves trigger a diff
-   refresh via file watches.
-6. The pre-amend commit remains in the reflog and is surfaced as "revert last
+   refresh via file watches. Every text surface in the app has macOS text
+   substitution turned off, in the app's own defaults for the SwiftUI fields
+   and on the editor's text view directly: curly quotes and em dashes are
+   wrong in code, commit messages and pull request bodies alike.
+6. Cmd-F goes to whatever holds focus. The editor is an `NSTextView` and both
+   terminals answer `performTextFinderAction`, so they get the system find
+   bar, Cmd-G and Cmd-Shift-G for free. A diff is a list of views rather than
+   one text view, so when nothing on the responder chain takes the action the
+   menu falls back to the storage bus and the review pane opens its own bar:
+   it tints every match in place and walks the hunks holding one, since a
+   hunk is the smallest thing the list can scroll to.
+7. The pre-amend commit remains in the reflog and is surfaced as "revert last
    rejection".
+
+### Panes that outlive what is on screen (Review)
+
+Shells and browser pages die with their pane, so panes are mounted for as
+long as the thing inside them should live, not for as long as it is visible:
+
+1. Every running shell and every browser page opened so far stays mounted
+   whichever tab, worktree or middle page is on screen, with only the
+   selected worktree's shown and taking keys. The middle pages cover the
+   split rather than replacing it for the same reason.
+2. A shell ends when its Close button ends it, when the shell itself exits,
+   when its worktree is destroyed or when the app quits. A browser page ends
+   the same way, and its address is remembered per worktree, so a page closed
+   deliberately or lost to a restart opens again where it was.
+3. Because they accumulate, the session manager lists them beside the tmux
+   sessions: each browser page with what it is showing, the CPU and memory of
+   the web content process rendering it, and a Close. WebKit does not name
+   that process in public API, so it is asked for through the runtime only
+   when the view answers to the question, and a page it will not name shows
+   no figures rather than wrong ones.
+
+### Editing what a command is waiting on (Review)
+
+Commands run in a shell pane regularly want an editor: `git rebase -i` for
+its todo list, `git commit` for a message. They get the app's own, through a
+shim rather than a protocol:
+
+1. The shim is `bin/agentide` in the repository, shipped as a folder
+   reference inside the app bundle, so the script a shell runs is always the
+   one the running app was built with and the linters cover it like any other
+   script. A shell pane starts with that directory on `PATH`, `EDITOR`,
+   `VISUAL` and `GIT_EDITOR` naming it with `--wait`, `AGENTIDE=1` and
+   `AGENTIDE_EDITS` pointing at the spool to use. `GIT_SEQUENCE_EDITOR` is
+   deliberately left alone, so a `sequence.editor` chosen in git config still
+   wins for rebase todo lists. A login shell rebuilds `PATH` and re-exports
+   its own editor variables after all this, which is what `AGENTIDE` is for:
+   shell configuration can test for it and defer to the app. Dev builds hand
+   their panes their own spool, so a build under test never answers the
+   installed app's shells.
+2. The shim spools one request per file into the spool it was given, or
+   `~/.agentide/edits` when it was run from an ordinary terminal: a JSON file
+   named for a fresh uuid, carrying the file, the physical working directory
+   and its own process id, written to one side and renamed into place so the
+   app never reads half of one. Nothing inside the sandbox can reach that
+   directory, so an agent cannot queue an edit or see what is being edited.
+3. The window polls the spool (a small directory listing, off the main
+   actor), selects the worktree the command ran in, opens the utility pane on
+   its editor tab and shows the file, then writes an `.open` file. An
+   unclaimed request is how the shim knows no app is running: it says so and
+   exits non-zero rather than hanging.
+4. Saving and closing writes a `.done` file holding the exit status the shim
+   takes: zero when the file was saved, non-zero when the edit was cancelled,
+   which is how git is told to abort a rebase. The shim removes the files it
+   read, and a request whose process has gone is swept instead, so a shell
+   closed mid-rebase leaves nothing behind.
+5. The editor is the same one the review pane uses, with git's own files
+   highlighted by name rather than extension: rebase todo lists colour their
+   commands and commits, and commit messages colour the block git strips.
+   The file itself is regularly outside every worktree, since git keeps a
+   linked worktree's rebase state in the repository's own `.git` directory.
 
 ### Pull request dashboard (Ship)
 
@@ -491,9 +582,12 @@ Sendable` and `nonisolated(unsafe)` are banned.
    a one-commit branch defaults to that commit's own message, and a
    generate button inside the title field summarises several through
    the on-device model, locking the fields while it drafts; typed
-   text is never overwritten. A repository without a template shows
-   no template field, and with one the generate button also
-   completes the template from the commits.
+   text is never overwritten. A commit's body arrives unwrapped: commit
+   messages are hand-wrapped to a narrow column, which a pull request
+   reflows for its own width, so the hard wraps read as broken bullets
+   until the continuations are joined back on. A repository without a
+   template shows no template field, and with one the generate button
+   also completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.

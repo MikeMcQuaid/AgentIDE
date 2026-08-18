@@ -50,6 +50,38 @@ struct TmuxPasteTests {
     }
 
     @Test
+    func `a paste is staged in a buffer and pasted from it`() {
+        let commands = TmuxControl.pasteCommands(text: "a multi-line\npaste with 🙂")
+        #expect(commands == [
+            "set-buffer -b agentide-paste -- \"a multi-line\\npaste with 🙂\"",
+            "paste-buffer -d -p -b agentide-paste",
+        ])
+        #expect(TmuxControl.pasteCommands(text: "").isEmpty)
+    }
+
+    @Test
+    func `tmux decides the bracketing, so the markers come off first`() {
+        // The local terminal only knows the mode from output it has
+        // seen; a pane attached mid-session never saw it being set,
+        // and its missing markers stranded the cursor mid-paste.
+        let bracketed = "\u{1B}[200~pasted\u{1B}[201~"
+        #expect(TmuxControl.pasteCommands(text: bracketed).first == "set-buffer -b agentide-paste -- \"pasted\"")
+        #expect(TmuxControl.pasteCommands(text: bracketed).last?.contains("-p") == true)
+    }
+
+    @Test
+    func `a long paste is appended into one buffer and pasted once`() {
+        let commands = TmuxControl.pasteCommands(text: String(repeating: "x", count: 40_000))
+        #expect(commands.count > 2)
+        #expect(commands.first?.hasPrefix("set-buffer -b ") == true)
+        #expect(commands.dropFirst().dropLast().allSatisfy { $0.hasPrefix("set-buffer -a -b ") })
+        // However many commands stage it, one paste arrives.
+        let pastes = commands.count { $0.hasPrefix("paste-buffer") }
+        #expect(pastes == 1)
+        #expect(commands.last?.hasPrefix("paste-buffer") == true)
+    }
+
+    @Test
     func `a paste splits only when the command itself would not fit`() {
         // Chunking once counted source characters, so a paste this
         // size split into several commands despite fitting easily.

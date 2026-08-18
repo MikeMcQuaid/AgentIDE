@@ -8,11 +8,12 @@ STYLE_FIX=""
 [[ "${1-}" == "--fix" ]] && STYLE_FIX="1"
 
 shell_style() {
-  shellcheck script/*
+  # The shipped shim in bin is a shell script like the rest.
+  shellcheck script/* bin/*
   if [[ -n "${STYLE_FIX}" ]]; then
-    shfmt -i 2 -ci -w script/*
+    shfmt -i 2 -ci -w script/* bin/*
   else
-    shfmt -i 2 -ci -d script/*
+    shfmt -i 2 -ci -d script/* bin/*
   fi
 }
 

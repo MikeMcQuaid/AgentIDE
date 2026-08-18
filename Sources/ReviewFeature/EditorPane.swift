@@ -9,10 +9,13 @@ import TerminalUI
 public struct EditorPane: View {
     // MARK: Lifecycle
 
-    /// Creates the pane for a worktree.
-    public init(worktreePath: String, service: SessionService) {
+    /// Creates the pane for a worktree. `waitingEdit` is a file some
+    /// command outside the app is blocked on, which takes the pane
+    /// over until it is dealt with.
+    public init(worktreePath: String, service: SessionService, waitingEdit: ExternalEdit? = nil) {
         self.worktreePath = worktreePath
         self.service = service
+        self.waitingEdit = waitingEdit
     }
 
     // MARK: Public
@@ -21,19 +24,13 @@ public struct EditorPane: View {
     /// editor. Arrow keys move the highlight and return opens it.
     public var body: some View {
         VStack(spacing: 0) {
-            finderField
-            if query.isEmpty == false, results.isEmpty == false {
-                resultsList
-                Divider()
-            }
-            if let target {
-                editor(for: target)
+            if let edit = blockingEdit {
+                // The finder is beside the point while a command is
+                // stopped waiting on one particular file.
+                FileEditorView(waitingOn: edit) { saved in finish(edit, saved: saved) }
+                    .id(edit.id)
             } else {
-                ContentUnavailableView(
-                    "No file open",
-                    systemImage: "doc.text",
-                    description: Text("Cmd-T finds a file to edit."),
-                )
+                finder
             }
         }
         .task(id: worktreePath) {
@@ -81,6 +78,10 @@ public struct EditorPane: View {
     @State private var highlighted = 0
     @State private var handledFocusRequest = 0
 
+    /// The waiting file already dealt with, so the pane returns to
+    /// the finder as soon as the buttons are pressed.
+    @State private var finishedEdit: String?
+
     /// The query, mode and open file persist across restarts.
     @AppStorage("finderQuery")
     private var query = ""
@@ -101,6 +102,33 @@ public struct EditorPane: View {
 
     private let worktreePath: String
     private let service: SessionService
+    private let waitingEdit: ExternalEdit?
+
+    /// The file this pane is blocked on, until it is finished with:
+    /// the answer takes a moment to reach the spool and come back,
+    /// and the pane must not flash the file again in between.
+    private var blockingEdit: ExternalEdit? {
+        waitingEdit?.id == finishedEdit ? nil : waitingEdit
+    }
+
+    /// The finder over its results over the file being edited. Arrow
+    /// keys move the highlight and return opens it.
+    @ViewBuilder private var finder: some View {
+        finderField
+        if query.isEmpty == false, results.isEmpty == false {
+            resultsList
+            Divider()
+        }
+        if let target {
+            editor(for: target)
+        } else {
+            ContentUnavailableView(
+                "No file open",
+                systemImage: "doc.text",
+                description: Text("Cmd-T finds a file to edit."),
+            )
+        }
+    }
 
     /// A search-field look: magnifier, plain field and a clear
     /// button, pinned above everything else.
@@ -211,6 +239,13 @@ public struct EditorPane: View {
         }
 
         target = Result(file: editorFilePath, line: editorFileLine > 0 ? editorFileLine : nil)
+    }
+
+    /// Releases the command waiting on the file and returns the
+    /// pane to its finder.
+    private func finish(_ edit: ExternalEdit, saved: Bool) {
+        finishedEdit = edit.id
+        Task { await service.finishEdit(edit, saved: saved) }
     }
 
     private func consumeFocusRequest() {

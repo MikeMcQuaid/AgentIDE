@@ -13,6 +13,12 @@ targets:
     platform: macOS
     sources:
       - App
+      # A folder reference, so the shim keeps its name, its place and
+      # its executable bit inside Resources; a shell pane puts this
+      # directory on its PATH.
+      - path: bin
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: AgentIDEPackage
         product: DashboardFeature

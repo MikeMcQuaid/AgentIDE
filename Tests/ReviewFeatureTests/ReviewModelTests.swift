@@ -95,6 +95,49 @@ struct ReviewModelTests {
         #expect(model.branchCommits.last?.contains("origin/main") == true)
     }
 
+    @Test
+    func `finding walks the hunks that hold a match and highlights them`() async throws {
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-find-" + UUID().uuidString, isDirectory: true)
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+        try "needle here\n".write(toFile: path + "/one.txt", atomically: true, encoding: .utf8)
+        try "nothing\n".write(toFile: path + "/two.txt", atomically: true, encoding: .utf8)
+        try "a NEEDLE too\n".write(toFile: path + "/three.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+
+        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        model.scope = .uncommitted
+        await model.reload()
+        #expect(model.findTargets.isEmpty)
+        #expect(model.findSummary.isEmpty)
+
+        // Matching ignores case, and only the hunks holding a match
+        // are walked.
+        model.findQuery = "needle"
+        #expect(model.findTargets.map(\.file) == ["one.txt", "three.txt"])
+        #expect(model.findSummary == "1 of 2")
+        #expect(model.currentFindTarget == "one.txt#0")
+
+        model.moveFind(by: 1)
+        #expect(model.currentFindTarget == "three.txt#0")
+        // Walking wraps rather than stopping at the last match.
+        model.moveFind(by: 1)
+        #expect(model.currentFindTarget == "one.txt#0")
+        model.moveFind(by: -1)
+        #expect(model.currentFindTarget == "three.txt#0")
+
+        // The renderer asks for what to tint on each line.
+        #expect(model.findRanges(in: "a needle and a needle").count == 2)
+        #expect(model.findRanges(in: "nothing").isEmpty)
+
+        model.findQuery = ""
+        #expect(model.findTargets.isEmpty)
+        #expect(model.findRanges(in: "needle").isEmpty)
+    }
+
     // MARK: Private
 
     private func makeRepository(at path: String) async throws {

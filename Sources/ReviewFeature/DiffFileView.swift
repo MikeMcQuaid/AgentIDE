@@ -1,4 +1,3 @@
-import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import SwiftUI
@@ -72,7 +71,10 @@ struct DiffFileView: View {
             headerRow
             if isCollapsed == false {
                 ForEach(Array(file.hunks.enumerated()), id: \.offset) { hunkIndex, hunk in
+                    // The find bar scrolls to a hunk, since a hunk's
+                    // lines are drawn as one block of text.
                     hunkView(hunkIndex: hunkIndex, hunk: hunk)
+                        .id(ReviewModel.FindTarget(file: file.path, hunk: hunkIndex).id)
                 }
             }
         }
@@ -86,6 +88,9 @@ struct DiffFileView: View {
     private static let lineSpacing: CGFloat = 2
     private static let gutterSpacing: CGFloat = 6
     private static let selectionBarWidth: CGFloat = 3
+
+    /// Enough to find a match at a glance without hiding the code.
+    private static let foundOpacity = 0.45
     private static let changeOpacity = 0.15
     private static let selectedOpacity = 0.35
     private static let filePadding: CGFloat = 8
@@ -233,6 +238,27 @@ struct DiffFileView: View {
         return runs
     }
 
+    /// Tints what the find bar is looking for, over whatever the
+    /// syntax and whitespace colouring already put there.
+    private static func markFound(
+        _ ranges: [Range<String.Index>],
+        of line: String,
+        in content: inout AttributedString,
+    ) {
+        let characters = content.characters
+        for range in ranges {
+            let start = line.distance(from: line.startIndex, to: range.lowerBound)
+            let length = line.distance(from: range.lowerBound, to: range.upperBound)
+            guard let from = characters.index(characters.startIndex, offsetBy: start, limitedBy: characters.endIndex),
+                  let upTo = characters.index(from, offsetBy: length, limitedBy: characters.endIndex)
+            else {
+                return
+            }
+
+            content[from ..< upTo].backgroundColor = .yellow.opacity(Self.foundOpacity)
+        }
+    }
+
     /// The hunk's code as one attributed string: syntax colours per
     /// token and change backgrounds per line, markers excluded so
     /// copies paste cleanly.
@@ -276,6 +302,7 @@ struct DiffFileView: View {
             }
             offset += token.text.count
         }
+        Self.markFound(model.findRanges(in: line.content), of: line.content, in: &content)
         if content.characters.isEmpty {
             var blank = AttributedString(" ")
             blank.backgroundColor = base
@@ -312,87 +339,5 @@ struct DiffFileView: View {
     private func isSelected(hunkIndex: Int, lineIndex: Int) -> Bool {
         model.selections[file.path]?
             .contains(DiffSelection(hunkIndex: hunkIndex, lineIndex: lineIndex)) ?? false
-    }
-}
-
-// MARK: - ReviewFileListView
-
-/// The review pane's file list: collapsible diffs, or inline
-/// editors in the uncommitted scope so fixes are typed directly.
-struct ReviewFileListView: View {
-    // MARK: Internal
-
-    let model: ReviewModel
-    let worktreePath: String
-    let service: SessionService
-
-    /// Whether files start collapsed (the Hide All display mode);
-    /// the per-file carets override it.
-    let hideAllByDefault: Bool
-
-    @Binding var collapseOverrides: [String: Bool]
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                ForEach(model.files) { file in
-                    fileSection(file)
-                }
-            }
-            .padding(Self.spacing)
-        }
-    }
-
-    // MARK: Private
-
-    private static let spacing: CGFloat = 8
-    private static let editorMinimumHeight: CGFloat = 240
-    private static let editorMaximumHeight: CGFloat = 420
-
-    @ViewBuilder
-    private func fileSection(_ file: DiffFile) -> some View {
-        // Every scope leads with the diff, uncommitted included: it
-        // once showed the whole file in an editor instead, which read
-        // as a broken diff. Uncommitted files keep that editor for
-        // fixing in place, below their diff.
-        DiffFileView(
-            file: file,
-            model: model,
-            isCollapsed: isCollapsed(file),
-            onToggleCollapse: { toggleCollapse(file) },
-            onEdit: {
-                FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
-            },
-        )
-        if model.showsUncommitted, isCollapsed(file) == false, file.isNew == false {
-            FileEditorView(
-                worktreePath: worktreePath,
-                relativePath: file.path,
-                service: service,
-                showsClose: false,
-            )
-            .frame(minHeight: Self.editorMinimumHeight, maxHeight: Self.editorMaximumHeight)
-        }
-        if isCollapsed(file) == false {
-            ForEach(model.threads(for: file.path)) { thread in
-                ReviewThreadRow(
-                    thread: thread,
-                    onEdit: {
-                        FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath)
-                    },
-                    onToggleResolved: { await model.toggleResolved(thread) },
-                )
-            }
-        }
-    }
-
-    private func isCollapsed(_ file: DiffFile) -> Bool {
-        // Generated files always start collapsed, whatever the
-        // expand-all state says; only their own caret opens them.
-        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path) || file.isNew)
-    }
-
-    private func toggleCollapse(_ file: DiffFile) {
-        collapseOverrides[file.path] = isCollapsed(file) == false
     }
 }

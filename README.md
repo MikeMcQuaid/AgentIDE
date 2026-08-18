@@ -76,6 +76,19 @@ before shipping.
 - **Previews** web pages and rendered Markdown in an embedded browser and opens an
   embedded terminal running as your own user (so you can verify behaviour and
   use `git`, `gh` and other CLI tools without leaving the window)
+- **Keeps** each worktree's page loaded as you work in other worktrees,
+  remembers its address for the next time and lists every loaded page in
+  the session manager with what it costs and a Close (so a dev server stays
+  logged in and mid-flow, and a page eating memory is easy to find and end)
+- **Finds** with Cmd-F wherever you are: the editor and both terminals get
+  the system find bar, and the diff gets its own with match highlighting and
+  Cmd-G walking the matches; nothing anywhere turns your quotes curly or your
+  dashes long (so code and commit messages survive being typed)
+- **Edits** whatever that terminal's commands open, a `git rebase -i` todo list
+  or a commit message, in the same editor with their own highlighting, because
+  an `agentide` command on its `PATH` blocks until you save and close and
+  `EDITOR`, `VISUAL` and `GIT_EDITOR` there name it (so interactive rebasing
+  needs no terminal editor, and cancelling aborts the rebase as `:cq` would)
 
 ### 🚢 Ship
 
@@ -83,8 +96,9 @@ before shipping.
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
   template below your title and body, defaulting both from a single
-  commit or drafting them from many with the on-device model (so
-  shipping needs no retyping)
+  commit, unwrapped from the narrow column commit messages are written
+  to, or drafting them from many with the on-device model (so shipping
+  needs no retyping)
 - **Copies** unresolved review comments, or failing CI steps with their
   actual log output, straight into a prompt, resolves conversations one
   by one, resolves merge conflicts and enables automerge or merges,
@@ -107,6 +121,10 @@ before shipping.
   than the app (so agents survive AgentIDE quitting, crashing or
   updating, expectedly or not; the host shell tab deliberately does not,
   living and dying with the app)
+- **Keeps** every running shell alive while you move around the app and
+  keeps a worktree listed until it is really gone, rebases and failed
+  listings included (so only closing a shell or destroying its worktree
+  ends it)
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
@@ -162,6 +180,18 @@ open /Applications/AgentIDE.app
   for quick development runs.
 - **Features** land slice by slice (see [Status](#-status)); the app launches
   to an empty dashboard until the first slices fill it.
+
+A shell pane runs your login shell, so anything your shell configuration
+exports wins over what the pane was started with. It sets `AGENTIDE=1` and
+puts the bundled `agentide` command on `PATH`, so shell files that set an
+editor of their own can hand those panes back to the app:
+
+```bash
+if [ -n "${AGENTIDE}" ]; then
+  export EDITOR="$(command -v agentide) --wait"
+  export VISUAL="${EDITOR}"
+fi
+```
 
 ## 🚧 Status
 

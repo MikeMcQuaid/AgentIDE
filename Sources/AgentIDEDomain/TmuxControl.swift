@@ -42,25 +42,42 @@ public enum TmuxControl {
             return ["send-keys -H " + raw.map { String($0, radix: hexRadix) }.joined(separator: " ")]
         }
 
+        return chunks(of: text).map(command(for:))
+    }
+
+    /// The commands that paste text into the attached session's
+    /// active pane.
+    ///
+    /// A paste is not typing: it goes into a tmux buffer and is
+    /// pasted from there, so tmux wraps it in bracketed paste
+    /// markers when the pane's own application asked for them.
+    /// Deciding that here instead was wrong, since the local
+    /// terminal only learns the mode from output it has seen, and a
+    /// pane attached mid-session never saw it being set: the markers
+    /// went missing and the agent took a multi-line paste as several
+    /// lines of typing, which is how the cursor ended up inside the
+    /// pasted text rather than after it.
+    ///
+    /// Long text is appended to the same buffer chunk by chunk, so
+    /// however many commands it takes, one paste arrives.
+    public static func pasteCommands(text: String) -> [String] {
+        // Whatever the local terminal wrapped it in comes off: tmux
+        // adds the markers, and only when the pane wants them.
+        let stripped = text
+            .replacing(bracketedPasteStart, with: "")
+            .replacing(bracketedPasteEnd, with: "")
+        guard stripped.isEmpty == false else {
+            return []
+        }
+
         var commands = [String]()
-        var chunk = ""
-        var escapedLength = 0
-        for character in text {
-            let piece = escaped(character)
-            // Measured on the escaped text, since that is what tmux
-            // reads: counting source characters split pastes that
-            // would have fitted in one command comfortably.
-            if escapedLength + piece.count > escapedBudget, chunk.isEmpty == false {
-                commands.append(command(for: chunk))
-                chunk = ""
-                escapedLength = 0
-            }
-            chunk.append(character)
-            escapedLength += piece.count
+        for (index, chunk) in chunks(of: stripped).enumerated() {
+            // The first command starts the buffer and the rest add
+            // to it, so one paste arrives however long it is.
+            let opening = index == 0 ? "set-buffer -b " : "set-buffer -a -b "
+            commands.append(opening + pasteBuffer + " -- " + quoted(chunk))
         }
-        if chunk.isEmpty == false {
-            commands.append(command(for: chunk))
-        }
+        commands.append("paste-buffer -d -p -b " + pasteBuffer)
         return commands
     }
 
@@ -128,6 +145,14 @@ public enum TmuxControl {
     /// `send-keys -H` reads bytes as hexadecimal.
     private static let hexRadix = 16
 
+    /// The buffer a paste is staged in; it is deleted as it pastes.
+    private static let pasteBuffer = "agentide-paste"
+
+    /// What a terminal wraps a paste in when the application asked
+    /// for bracketed paste.
+    private static let bracketedPasteStart = "\u{1B}[200~"
+    private static let bracketedPasteEnd = "\u{1B}[201~"
+
     /// Escaped characters per command. tmux carried 32,000 in one
     /// command in testing; half of that leaves room for the command
     /// itself and for whatever the untested ceiling really is, while
@@ -141,6 +166,28 @@ public enum TmuxControl {
     /// starting with a dash from reading as a flag.
     private static func command(for chunk: String) -> String {
         "send-keys -l -- " + quoted(chunk)
+    }
+
+    /// Splits text into pieces each of which fits one command,
+    /// measured on the escaped text, since that is what tmux reads.
+    private static func chunks(of text: String) -> [String] {
+        var chunks = [String]()
+        var chunk = ""
+        var escapedLength = 0
+        for character in text {
+            let piece = escaped(character)
+            if escapedLength + piece.count > escapedBudget, chunk.isEmpty == false {
+                chunks.append(chunk)
+                chunk = ""
+                escapedLength = 0
+            }
+            chunk.append(character)
+            escapedLength += piece.count
+        }
+        if chunk.isEmpty == false {
+            chunks.append(chunk)
+        }
+        return chunks
     }
 
     /// Any other control character as tmux's three-digit octal
