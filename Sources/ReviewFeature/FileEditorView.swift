@@ -179,6 +179,9 @@ struct FileEditorView: View {
     @discardableResult
     private func save() -> Bool {
         guard let path else {
+            // The header says so too: a button that only writes to
+            // the errors tab reads as a button that does nothing.
+            status = Self.failedStatus
             ErrorLog.shared.report("Refusing to write a path outside the worktree.")
             return false
         }
