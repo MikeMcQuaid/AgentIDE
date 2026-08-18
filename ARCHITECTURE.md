@@ -477,8 +477,18 @@ Sendable` and `nonisolated(unsafe)` are banned.
    the message was edited too). Failed validation degrades to whole-hunk
    rejection. Uncommitted changes skip the amend.
 5. Manual edits happen in the same editor surface; saves trigger a diff
-   refresh via file watches.
-6. The pre-amend commit remains in the reflog and is surfaced as "revert last
+   refresh via file watches. Every text surface in the app has macOS text
+   substitution turned off, in the app's own defaults for the SwiftUI fields
+   and on the editor's text view directly: curly quotes and em dashes are
+   wrong in code, commit messages and pull request bodies alike.
+6. Cmd-F goes to whatever holds focus. The editor is an `NSTextView` and both
+   terminals answer `performTextFinderAction`, so they get the system find
+   bar, Cmd-G and Cmd-Shift-G for free. A diff is a list of views rather than
+   one text view, so when nothing on the responder chain takes the action the
+   menu falls back to the storage bus and the review pane opens its own bar:
+   it tints every match in place and walks the hunks holding one, since a
+   hunk is the smallest thing the list can scroll to.
+7. The pre-amend commit remains in the reflog and is surfaced as "revert last
    rejection".
 
 ### Panes that outlive what is on screen (Review)

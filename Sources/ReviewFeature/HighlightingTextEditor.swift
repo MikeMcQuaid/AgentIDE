@@ -112,6 +112,20 @@ struct HighlightingTextEditor: NSViewRepresentable {
         view.font = CodeStyle.nsFont
         view.isRichText = false
         view.allowsUndo = true
+        // Code is not prose: smart quotes, dashes, replacements and
+        // corrections all silently break what is typed here.
+        view.isAutomaticQuoteSubstitutionEnabled = false
+        view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false
+        view.isAutomaticSpellingCorrectionEnabled = false
+        view.isAutomaticDataDetectionEnabled = false
+        view.isAutomaticLinkDetectionEnabled = false
+        view.isContinuousSpellCheckingEnabled = false
+        view.isGrammarCheckingEnabled = false
+        // The find bar is AppKit's own, so Cmd-F, Cmd-G and
+        // Cmd-Shift-G work here exactly as they do everywhere else.
+        view.usesFindBar = true
+        view.isIncrementalSearchingEnabled = true
         view.string = text
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true

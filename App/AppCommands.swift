@@ -1,3 +1,4 @@
+import AppKit
 import DashboardFeature
 import SwiftUI
 
@@ -34,6 +35,14 @@ struct AppCommands: Commands {
             Divider()
             Button("Refresh") { bump("dashboardRefreshRequest") }
                 .keyboardShortcut("r", modifiers: .command)
+        }
+        CommandGroup(after: .textEditing) {
+            Button("Find…") { find(.showFindInterface) }
+                .keyboardShortcut("f", modifiers: .command)
+            Button("Find Next") { find(.nextMatch) }
+                .keyboardShortcut("g", modifiers: .command)
+            Button("Find Previous") { find(.previousMatch) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
         }
         CommandGroup(after: .sidebar) {
             // The repository sidebar never hides, only resizes, so
@@ -75,6 +84,33 @@ struct AppCommands: Commands {
     /// action observes it and runs.
     private func bump(_ key: String) {
         UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+    }
+
+    /// Finding goes to whatever is focused: the editor and the
+    /// terminals answer AppKit's standard action, and the review
+    /// pane, which is a list of views rather than a text view, gets
+    /// the request through the storage bus when nothing else took it.
+    private func find(_ action: NSTextFinder.Action) {
+        let item = NSMenuItem()
+        item.tag = action.rawValue
+        guard NSApp.sendAction(
+            #selector(NSResponder.performTextFinderAction(_:)),
+            to: nil,
+            from: item,
+        ) == false else {
+            return
+        }
+
+        switch action {
+        case .nextMatch:
+            bump("reviewFindNextRequest")
+
+        case .previousMatch:
+            bump("reviewFindPreviousRequest")
+
+        default:
+            bump("reviewFindRequest")
+        }
     }
 
     private func show(_ tab: UtilityTab) {

@@ -80,6 +80,10 @@ before shipping.
   remembers its address for the next time and lists every loaded page in
   the session manager with what it costs and a Close (so a dev server stays
   logged in and mid-flow, and a page eating memory is easy to find and end)
+- **Finds** with Cmd-F wherever you are: the editor and both terminals get
+  the system find bar, and the diff gets its own with match highlighting and
+  Cmd-G walking the matches; nothing anywhere turns your quotes curly or your
+  dashes long (so code and commit messages survive being typed)
 - **Edits** whatever that terminal's commands open, a `git rebase -i` todo list
   or a commit message, in the same editor with their own highlighting, because
   an `agentide` command on its `PATH` blocks until you save and close and

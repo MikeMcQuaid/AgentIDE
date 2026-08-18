@@ -68,6 +68,10 @@ final class ReviewModel {
     /// commit (false); rejection amends only in the latter mode.
     private(set) var showsUncommitted = false
 
+    /// Set only by the find extension, which recounts them.
+    var findTargets: [FindTarget] = []
+    var currentFind = 0
+
     /// The commit message being edited.
     var commitMessage = ""
 
@@ -91,6 +95,12 @@ final class ReviewModel {
     /// the upstream scope has something to diff against; refreshed
     /// on every reload.
     private(set) var hasUpstream = false
+
+    /// The find bar's query; the hunks holding a match and which of
+    /// them is showing are derived from it.
+    var findQuery = "" {
+        didSet { updateFindTargets() }
+    }
 
     /// Whether the commit message differs from the commit's actual
     /// message, so Amend only lights up with something to amend.
