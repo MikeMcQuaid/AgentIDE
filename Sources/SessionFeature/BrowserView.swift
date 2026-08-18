@@ -4,15 +4,20 @@ import WebKit
 
 // MARK: - BrowserView
 
-/// An embedded browser for dev servers and pull request pages. The
-/// data store persists and is shared, so a GitHub login survives
-/// tab switches and restarts.
+/// An embedded browser for dev servers and pull request pages, one
+/// per worktree. The data store persists and is shared, so a GitHub
+/// login survives tab switches and restarts, and each worktree's
+/// address is remembered so a page closed or lost to a restart comes
+/// back where it was.
 public struct BrowserView: View {
     // MARK: Lifecycle
 
-    /// Creates the browser.
-    public init() {
-        // State holds the address.
+    /// Creates the browser for a worktree. `isActive` says whether
+    /// this is the pane on screen: the others stay loaded, but only
+    /// this one takes an address asked for from elsewhere.
+    public init(worktreePath: String, isActive: Bool) {
+        self.worktreePath = worktreePath
+        self.isActive = isActive
     }
 
     // MARK: Public
@@ -37,7 +42,7 @@ public struct BrowserView: View {
             .padding(Self.padding)
             Divider()
             ZStack {
-                WebPane(request: $request)
+                WebPane(request: $request, onProcess: record(processIdentifier:))
                 if request == nil || (address.isEmpty && editingAddress == false) {
                     ContentUnavailableView(
                         "Nothing loaded",
@@ -51,23 +56,81 @@ public struct BrowserView: View {
                 }
             }
         }
-        .onAppear { load() }
+        .task(id: worktreePath) {
+            // A worktree with no address of its own takes the one
+            // last asked for, which is how a pull request page opens
+            // in a worktree that has never had a browser.
+            address = Self.addresses(in: storedAddresses)[worktreePath] ?? (isActive ? requestedAddress : "")
+            load()
+        }
         .onChange(of: address) {
+            remember()
             if editingAddress == false {
                 load()
             }
         }
+        // An address asked for from elsewhere goes to the pane on
+        // screen, never to the ones loaded behind it.
+        .onChange(of: requestedAddress) {
+            if isActive, requestedAddress.isEmpty == false {
+                address = requestedAddress
+            }
+        }
+        .onDisappear { BrowserPanes.shared.remove(worktreePath: worktreePath) }
     }
 
     // MARK: Private
 
     private static let padding: CGFloat = 8
 
+    /// The address bus other panes write to, and every worktree's
+    /// own address, stored as path-address lines.
     @AppStorage("browserAddress")
-    private var address = ""
+    private var requestedAddress = ""
+    @AppStorage("browserAddresses")
+    private var storedAddresses = ""
+
+    @State private var address = ""
     @State private var request: URLRequest?
 
     @FocusState private var editingAddress: Bool
+
+    private let worktreePath: String
+    private let isActive: Bool
+
+    /// Parses the stored path-address lines.
+    private static func addresses(in lines: String) -> [String: String] {
+        var addresses = [String: String]()
+        for line in lines.split(separator: "\n") {
+            let parts = line.split(separator: "\t", maxSplits: 1)
+            if let path = parts.first, parts.count > 1, let page = parts.last {
+                addresses[String(path)] = String(page)
+            }
+        }
+        return addresses
+    }
+
+    /// Tells the register what this page is and what is rendering
+    /// it, so the session manager can list and close it.
+    private func record(processIdentifier: Int32) {
+        BrowserPanes.shared.record(BrowserPane(
+            worktreePath: worktreePath,
+            address: address,
+            processIdentifier: processIdentifier,
+        ))
+    }
+
+    /// Keeps this worktree's address for the next time its browser
+    /// opens, including after a restart.
+    private func remember() {
+        var addresses = Self.addresses(in: storedAddresses)
+        addresses[worktreePath] = address
+        storedAddresses = addresses
+            .filter { $0.value.isEmpty == false }
+            .map { $0.key + "\t" + $0.value }
+            .sorted()
+            .joined(separator: "\n")
+    }
 
     private func load() {
         guard let url = URL(string: address) else {
@@ -88,14 +151,50 @@ public struct BrowserView: View {
 // MARK: - WebPane
 
 private struct WebPane: NSViewRepresentable {
+    /// Reports the web content process behind the page whenever a
+    /// navigation commits, since that is when WebKit has one and
+    /// when it may have swapped for another.
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        // MARK: Lifecycle
+
+        init(onProcess: @escaping (Int32) -> Void) {
+            self.onProcess = onProcess
+        }
+
+        deinit {
+            // The delegate dies with its view.
+        }
+
+        // MARK: Internal
+
+        // The delegate's own signature hands over an implicitly
+        // unwrapped navigation, which nothing here reads.
+        // swiftlint:disable:next implicitly_unwrapped_optional
+        func webView(_ webView: WKWebView, didCommit _: WKNavigation!) {
+            onProcess(BrowserPanes.processIdentifier(of: webView) ?? 0)
+        }
+
+        // MARK: Private
+
+        private let onProcess: (Int32) -> Void
+    }
+
     @Binding var request: URLRequest?
 
-    func makeNSView(context _: Context) -> WKWebView {
+    let onProcess: (Int32) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onProcess: onProcess)
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         // The shared persistent store keeps logins across tabs and
         // restarts.
         configuration.websiteDataStore = .default()
-        return WKWebView(frame: .zero, configuration: configuration)
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
+        return view
     }
 
     func updateNSView(_ view: WKWebView, context _: Context) {

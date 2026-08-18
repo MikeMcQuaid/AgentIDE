@@ -11,11 +11,13 @@ public struct WorkspacePaths: Sendable {
         sharedWorkspace: String,
         sandboxHome: String,
         metadataFile: String,
+        appDirectory: String? = nil,
     ) {
         self.hostUser = hostUser
         self.sharedWorkspace = sharedWorkspace
         self.sandboxHome = sandboxHome
         self.metadataFile = metadataFile
+        self.appDirectory = appDirectory ?? NSHomeDirectory() + "/.agentide"
     }
 
     // MARK: Public
@@ -45,6 +47,17 @@ public struct WorkspacePaths: Sendable {
 
     /// Where the app's own metadata file lives.
     public let metadataFile: String
+
+    /// The app's directory in the running user's home, holding the
+    /// files that shell commands have to reach by path.
+    public let appDirectory: String
+
+    /// Where the editor shim spools the files commands wait on. Dev
+    /// builds keep their own, so a build under test never answers
+    /// the installed app's shells.
+    public var editsDirectory: String {
+        appDirectory + (Self.isProductionBuild ? "/edits" : "/edits-dev")
+    }
 
     /// Where full repository checkouts live.
     public var repositoriesDirectory: String {

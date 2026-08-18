@@ -11,6 +11,10 @@ public enum UtilityTabTarget {
     /// The cross-module storage key that switches the utility tab.
     public static let key = "utilityTab"
 
+    /// The key that shows the utility pane, for the panes that must
+    /// be seen whether or not it was open.
+    public static let visibilityKey = "showsUtilityPane"
+
     /// The embedded browser tab.
     public static let browser = "browser"
 

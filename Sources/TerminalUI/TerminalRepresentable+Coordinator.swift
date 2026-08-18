@@ -280,14 +280,17 @@ extension TerminalRepresentable {
             case let .control(command):
                 startControl(command, in: view)
 
-            case let .shell(directory):
+            case let .shell(directory, environment):
                 // A login interactive shell so the user's own config
                 // applies; the PTY belongs to the view and dies with
-                // it, which is the whole design.
+                // it, which is the whole design. The extras join what
+                // a terminal always sets, so passing them cannot cost
+                // the shell its own variables.
                 view.startProcess(
                     executable: "/bin/zsh",
                     args: ["-il"],
-                    environment: nil,
+                    environment: Terminal.getEnvironmentVariables()
+                        + environment.sorted { $0.key < $1.key }.map { $0.key + "=" + $0.value },
                     execName: nil,
                     currentDirectory: directory,
                 )

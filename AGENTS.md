@@ -35,6 +35,8 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
   (the generated `.xcodeproj` stays gitignored)
+- `bin/`: commands shipped inside the app bundle (the `agentide`
+  editor shim a shell pane puts on its `PATH`)
 - `script/`: development tasks
 - `Brewfile`: development dependencies
 - `.github/workflows/tests.yml`: CI

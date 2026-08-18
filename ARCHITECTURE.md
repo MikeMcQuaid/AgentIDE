@@ -183,15 +183,13 @@ Two visually unmistakable flavours ride that one client:
   path can skip sudo. Closing the view detaches and never kills the
   session.
 - **Host terminal** (Review): a plain login shell on the pane's own
-  PTY as the host user, no sudo, no sandbox, full `gh` credentials and
-  no tmux at all: shells live and die with the app, a deliberate trade
-  after tmux-backed shells kept wedging their control clients. Because
-  a shell dies with its pane, every running shell stays mounted
-  whatever the window shows, and only the selected worktree's is
-  visible and takes keys: switching tabs, worktrees or pages leaves
-  shells running, and a shell ends only when the tab bar's Close shell
-  ends it, the shell itself exits, its worktree is destroyed or the
-  app quits. Both
+  PTY as the host user, no sudo, no sandbox, full `gh` credentials, the
+  editor variables pointing at the app's own shim and no tmux at all:
+  shells live and die with the app, a deliberate trade after
+  tmux-backed shells kept wedging their control clients. The pane a
+  shell runs in stays mounted whatever else the window shows, as the
+  panes section above describes, and the tab bar's Close shell ends
+  one instantly. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
@@ -473,6 +471,66 @@ Sendable` and `nonisolated(unsafe)` are banned.
    refresh via file watches.
 6. The pre-amend commit remains in the reflog and is surfaced as "revert last
    rejection".
+
+### Panes that outlive what is on screen (Review)
+
+Shells and browser pages die with their pane, so panes are mounted for as
+long as the thing inside them should live, not for as long as it is visible:
+
+1. Every running shell and every browser page opened so far stays mounted
+   whichever tab, worktree or middle page is on screen, with only the
+   selected worktree's shown and taking keys. The middle pages cover the
+   split rather than replacing it for the same reason.
+2. A shell ends when its Close button ends it, when the shell itself exits,
+   when its worktree is destroyed or when the app quits. A browser page ends
+   the same way, and its address is remembered per worktree, so a page closed
+   deliberately or lost to a restart opens again where it was.
+3. Because they accumulate, the session manager lists them beside the tmux
+   sessions: each browser page with what it is showing, the CPU and memory of
+   the web content process rendering it, and a Close. WebKit does not name
+   that process in public API, so it is asked for through the runtime only
+   when the view answers to the question, and a page it will not name shows
+   no figures rather than wrong ones.
+
+### Editing what a command is waiting on (Review)
+
+Commands run in a shell pane regularly want an editor: `git rebase -i` for
+its todo list, `git commit` for a message. They get the app's own, through a
+shim rather than a protocol:
+
+1. The shim is `bin/agentide` in the repository, shipped as a folder
+   reference inside the app bundle, so the script a shell runs is always the
+   one the running app was built with and the linters cover it like any other
+   script. A shell pane starts with that directory on `PATH`, `EDITOR`,
+   `VISUAL` and `GIT_EDITOR` naming it with `--wait`, `AGENTIDE=1` and
+   `AGENTIDE_EDITS` pointing at the spool to use. `GIT_SEQUENCE_EDITOR` is
+   deliberately left alone, so a `sequence.editor` chosen in git config still
+   wins for rebase todo lists. A login shell rebuilds `PATH` and re-exports
+   its own editor variables after all this, which is what `AGENTIDE` is for:
+   shell configuration can test for it and defer to the app. Dev builds hand
+   their panes their own spool, so a build under test never answers the
+   installed app's shells.
+2. The shim spools one request per file into the spool it was given, or
+   `~/.agentide/edits` when it was run from an ordinary terminal: a JSON file
+   named for a fresh uuid, carrying the file, the physical working directory
+   and its own process id, written to one side and renamed into place so the
+   app never reads half of one. Nothing inside the sandbox can reach that
+   directory, so an agent cannot queue an edit or see what is being edited.
+3. The window polls the spool (a small directory listing, off the main
+   actor), selects the worktree the command ran in, opens the utility pane on
+   its editor tab and shows the file, then writes an `.open` file. An
+   unclaimed request is how the shim knows no app is running: it says so and
+   exits non-zero rather than hanging.
+4. Saving and closing writes a `.done` file holding the exit status the shim
+   takes: zero when the file was saved, non-zero when the edit was cancelled,
+   which is how git is told to abort a rebase. The shim removes the files it
+   read, and a request whose process has gone is swept instead, so a shell
+   closed mid-rebase leaves nothing behind.
+5. The editor is the same one the review pane uses, with git's own files
+   highlighted by name rather than extension: rebase todo lists colour their
+   commands and commits, and commit messages colour the block git strips.
+   The file itself is regularly outside every worktree, since git keeps a
+   linked worktree's rebase state in the repository's own `.git` directory.
 
 ### Pull request dashboard (Ship)
 

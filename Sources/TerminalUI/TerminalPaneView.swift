@@ -35,14 +35,17 @@ public struct TerminalPaneView: View {
     }
 
     /// Creates a terminal running the user's login shell in a
-    /// directory on a local PTY.
+    /// directory on a local PTY. `environment` adds to what a shell
+    /// normally inherits, for the editor variables that point back
+    /// at the app.
     @preconcurrency
     public init(
         shellIn directory: String,
+        environment: [String: String] = [:],
         isActive: Bool = true,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
-        transport = .shell(directory: directory)
+        transport = .shell(directory: directory, environment: environment)
         reflowsCopies = false
         self.isActive = isActive
         self.onProcessTerminated = onProcessTerminated
@@ -80,7 +83,7 @@ public struct TerminalPaneView: View {
 /// or a local shell's working directory.
 enum TerminalTransport: Equatable {
     case control(command: [String])
-    case shell(directory: String)
+    case shell(directory: String, environment: [String: String])
 }
 
 // MARK: - TerminalRepresentable

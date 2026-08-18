@@ -48,11 +48,13 @@ public enum SyntaxLanguage: Hashable, Sendable {
     case dockerfile
     case yaml
     case markdown
+    case gitRebaseTodo
+    case gitMessage
 
     // MARK: Public
 
-    /// The language for a file path, judged by extension, nil when
-    /// unknown.
+    /// The language for a file path, judged by extension, or by whole
+    /// name for the files that have none; nil when unknown.
     public static func language(forPath path: String) -> Self? {
         let name = path.split(separator: "/").last.map(String.init) ?? path
         let extensionName = name.split(separator: ".").last.map(String.init) ?? ""
@@ -91,14 +93,34 @@ public enum SyntaxLanguage: Hashable, Sendable {
             return .markdown
 
         default:
-            if name == "Dockerfile" || name.hasPrefix("Dockerfile.") {
-                return .dockerfile
-            }
-            return name == "Gemfile" || name == "Rakefile" || name == "Brewfile" ? .ruby : nil
+            return language(forName: name)
         }
     }
 
+    /// The language of a file whose name carries it, git's own
+    /// editable files included.
+    public static func language(forName name: String) -> Self? {
+        if name == "Dockerfile" || name.hasPrefix("Dockerfile.") {
+            return .dockerfile
+        }
+        if name == "git-rebase-todo" || name == "git-rebase-todo.backup" {
+            return .gitRebaseTodo
+        }
+        if ["COMMIT_EDITMSG", "MERGE_MSG", "NOTES_EDITMSG", "SQUASH_MSG", "TAG_EDITMSG"].contains(name) {
+            return .gitMessage
+        }
+        return name == "Gemfile" || name == "Rakefile" || name == "Brewfile" ? .ruby : nil
+    }
+
     // MARK: Internal
+
+    /// Every rebase todo command, long and short, which are what a
+    /// todo list is edited by.
+    static let rebaseCommands: Set<String> = [
+        "p", "pick", "r", "reword", "e", "edit", "s", "squash", "f", "fixup",
+        "x", "exec", "b", "break", "d", "drop", "l", "label", "t", "reset",
+        "m", "merge", "u", "update-ref",
+    ]
 
     /// The line-comment introducer, empty for languages without one.
     var commentPrefix: String {
@@ -108,6 +130,8 @@ public enum SyntaxLanguage: Hashable, Sendable {
             "//"
 
         case .dockerfile,
+             .gitMessage,
+             .gitRebaseTodo,
              .python,
              .ruby,
              .shell,
@@ -182,7 +206,11 @@ public enum SyntaxLanguage: Hashable, Sendable {
         case .yaml:
             ["true", "false", "null", "yes", "no", "on", "off"]
 
-        case .markdown:
+        case .gitRebaseTodo:
+            Self.rebaseCommands
+
+        case .gitMessage,
+             .markdown:
             []
         }
     }
@@ -198,12 +226,30 @@ public enum SyntaxHighlighter {
     // MARK: Public
 
     /// Splits one line into coloured tokens; concatenating the token
-    /// texts reproduces the line.
+    /// texts reproduces the line. Languages whose lines mean
+    /// something by their shape are read positionally instead of by
+    /// the general tokenizer.
     public static func highlight(line: String, language: SyntaxLanguage) -> [SyntaxToken] {
-        if language == .markdown {
-            return markdownTokens(line: line)
-        }
+        switch language {
+        case .markdown:
+            markdownTokens(line: line)
 
+        case .gitRebaseTodo:
+            rebaseTokens(line: line)
+
+        case .gitMessage:
+            messageTokens(line: line)
+
+        default:
+            generalTokens(line: line, language: language)
+        }
+    }
+
+    // MARK: Internal
+
+    /// Strings, line comments, numbers and keywords, wherever they
+    /// fall on the line.
+    static func generalTokens(line: String, language: SyntaxLanguage) -> [SyntaxToken] {
         var tokens = [SyntaxToken]()
         var plain = ""
         let characters = Array(line)
@@ -253,6 +299,18 @@ public enum SyntaxHighlighter {
         }
         flushPlain()
         return merge(tokens)
+    }
+
+    /// Joins neighbouring tokens of one kind, so a line's colours
+    /// come back as runs; the git tokenizers share it.
+    static func merge(_ tokens: [SyntaxToken]) -> [SyntaxToken] {
+        tokens.reduce(into: [SyntaxToken]()) { merged, token in
+            if let last = merged.last, last.kind == token.kind {
+                merged[merged.count - 1] = SyntaxToken(kind: last.kind, text: last.text + token.text)
+            } else {
+                merged.append(token)
+            }
+        }
     }
 
     // MARK: Private
@@ -335,15 +393,5 @@ public enum SyntaxHighlighter {
 
     private static func isWordBoundary(_ characters: [Character], before index: Int) -> Bool {
         index == 0 || isWordCharacter(characters[index - 1]) == false
-    }
-
-    private static func merge(_ tokens: [SyntaxToken]) -> [SyntaxToken] {
-        tokens.reduce(into: [SyntaxToken]()) { merged, token in
-            if let last = merged.last, last.kind == token.kind {
-                merged[merged.count - 1] = SyntaxToken(kind: last.kind, text: last.text + token.text)
-            } else {
-                merged.append(token)
-            }
-        }
     }
 }

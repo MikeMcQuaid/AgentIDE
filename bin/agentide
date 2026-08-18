@@ -1,0 +1,81 @@
+#!/bin/sh
+# AgentIDE's editor shim, shipped inside the app bundle and put on a
+# shell pane's PATH. It hands a file to the app's own editor and
+# waits there until the file is saved and closed, so it can serve as
+# EDITOR, VISUAL or GIT_EDITOR. A cancelled edit exits non-zero,
+# which is how git is told to abort.
+set -eu
+
+# The app names its own spool, so a development build never answers
+# the installed app's shells; anything else means the installed one.
+spool="${AGENTIDE_EDITS:-${HOME}/.agentide/edits}"
+
+# How long to wait for the app to take a request, as a count of
+# polls: long enough to cover a busy app, short enough that a shell
+# without one says so rather than hanging.
+claim_tries=50
+poll_seconds=0.2
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    # Waiting is the only behaviour, but editors are configured with
+    # the flag, so it is accepted.
+    -w | --wait) shift ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      printf 'agentide: unknown option: %s\n' "$1" >&2
+      exit 64
+      ;;
+    *) break ;;
+  esac
+done
+
+if [ "$#" -eq 0 ]; then
+  printf 'usage: agentide [--wait] file...\n' >&2
+  exit 64
+fi
+
+mkdir -p "${spool}"
+
+# The physical directory, since that is how git names a worktree and
+# how the app matches one.
+cwd="$(pwd -P)"
+
+for file in "$@"; do
+  case "${file}" in
+    /*) path="${file}" ;;
+    *) path="${cwd}/${file}" ;;
+  esac
+  id="$(/usr/bin/uuidgen)"
+  request="${spool}/${id}.request"
+  trap 'rm -f "${request}" "${spool}/${id}.open" "${spool}/${id}.done"; exit 130' HUP INT TERM
+  printf '{"path":"%s","workingDirectory":"%s","processIdentifier":%s}\n' \
+    "$(printf '%s' "${path}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
+    "$(printf '%s' "${cwd}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
+    "$$" >"${request}.partial"
+  mv "${request}.partial" "${request}"
+
+  # The app claims a request as soon as it shows the file, so an
+  # unclaimed one means it is not running.
+  tries=0
+  while [ ! -e "${spool}/${id}.open" ] && [ ! -e "${spool}/${id}.done" ]; do
+    if [ "${tries}" -ge "${claim_tries}" ]; then
+      rm -f "${request}"
+      printf 'agentide: AgentIDE did not answer; is it running?\n' >&2
+      exit 69
+    fi
+    tries=$((tries + 1))
+    sleep "${poll_seconds}"
+  done
+  while [ ! -e "${spool}/${id}.done" ]; do
+    sleep "${poll_seconds}"
+  done
+
+  status="$(cat "${spool}/${id}.done")"
+  rm -f "${request}" "${spool}/${id}.open" "${spool}/${id}.done"
+  trap - HUP INT TERM
+  [ "${status}" = 0 ] || exit "${status}"
+done

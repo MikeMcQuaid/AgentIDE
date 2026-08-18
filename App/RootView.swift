@@ -1,6 +1,5 @@
 import AgentIDEDomain
 import DashboardFeature
-import SessionFeature
 import SwiftUI
 
 // MARK: - RootView
@@ -36,6 +35,17 @@ struct RootView: View {
         runningShells.sorted()
     }
 
+    /// The worktree whose conversation the review surfaces follow,
+    /// and the browsers already opened; internal accessors because
+    /// the extension files cannot see the view's own state.
+    var conversationWorktree: String? {
+        conversationWorktreePath
+    }
+
+    var visitedBrowserPaths: [String] {
+        visitedBrowsers.sorted()
+    }
+
     var body: some View {
         // Plain panes with our own dividers: the navigation split
         // view's floating toggle covered nearby controls and split
@@ -56,16 +66,18 @@ struct RootView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
-        .sheet(isPresented: sessionManagerBinding) {
-            SessionManagerSheet(service: dependencies.service) {
-                dependencies.dashboard.showsSessionManager = false
-            }
-        }
+        .sheet(isPresented: sessionManagerBinding) { sessionManager }
         .task {
             FlavourIcon.apply()
             finderFocusRequest = 0
             rememberedTabs = Self.decodeTabs(worktreeTabs)
             await dependencies.dashboard.poll()
+        }
+        // A shell command waiting on an editor is stopped until this
+        // window shows it the file, so it is watched for separately
+        // from the dashboard's own slower poll.
+        .task {
+            await waiting.watch(service: dependencies.service, dashboard: dependencies.dashboard)
         }
         // Sleep sometimes kills the sandbox tmux server; sessions
         // running at sleep that are gone at wake resume themselves,
@@ -88,11 +100,12 @@ struct RootView: View {
         .onChange(of: dashboardRefreshRequest) {
             Task { await dependencies.dashboard.refresh() }
         }
-        // A destroyed worktree takes its shell with it; a worktree
-        // the sidebar merely stopped listing keeps its row, so
-        // nothing else closes a shell pane behind the user's back.
+        // A destroyed worktree takes its shell and browser page with
+        // it; a worktree the sidebar merely stopped listing keeps its
+        // row, so nothing else closes a pane behind the user's back.
         .onChange(of: dependencies.dashboard.worktreePaths) { _, paths in
             runningShells.formIntersection(paths)
+            visitedBrowsers.formIntersection(paths)
         }
         // Reopening the app resumes the restored worktree's most
         // recent conversation: the default workflow is picking up
@@ -121,6 +134,29 @@ struct RootView: View {
                 isAutoResuming = false
             }
         }
+    }
+
+    /// The file a command is waiting on in a worktree, which its
+    /// editor pane shows instead of the finder.
+    func waitingEdit(in worktreePath: String) -> ExternalEdit? {
+        waiting.edit(in: worktreePath)
+    }
+
+    func visitBrowser(at path: String) {
+        visitedBrowsers.insert(path)
+    }
+
+    /// Closes a browser page: unmounting the pane ends the web
+    /// process it costs, and the address stays remembered so opening
+    /// the tab again brings the page back.
+    func closeBrowser(at path: String) {
+        visitedBrowsers.remove(path)
+    }
+
+    /// Points the review surfaces at the conversation picked on a
+    /// repository page, so clicking around retargets Review and PRs.
+    func focusConversation(at path: String?) {
+        conversationWorktreePath = path
     }
 
     /// Whether a worktree's shell runs.
@@ -186,6 +222,10 @@ struct RootView: View {
     /// Worktrees whose browser has been opened; it stays mounted so
     /// its page survives tab switches.
     @State private var visitedBrowsers: Set<String> = []
+
+    /// The files commands are waiting on, which take the utility
+    /// pane over until they are dealt with.
+    @State private var waiting: WaitingEdits = .init()
 
     /// Worktrees whose shell is running; started explicitly, removed
     /// when the shell process exits, is closed or its worktree is
@@ -319,21 +359,9 @@ struct RootView: View {
                     dropFiles(urls, into: session.name)
                 }
         } else if item.worktree.path == item.worktree.repositoryPath {
-            RepositorySessionsView(
-                repository: repository(of: item),
-                service: dependencies.service,
-                // The review surfaces follow the selected
-                // conversation's worktree, so clicking around the
-                // repository page retargets Review and PRs.
-                onWorktreeFocus: { conversationWorktreePath = $0 },
-                onResumed: { await dependencies.dashboard.refresh() },
-            )
+            repositoryConversations(for: item)
         } else if item.pastSessions.isEmpty == false {
-            RepositorySessionsView(
-                repository: repository(of: item),
-                service: dependencies.service,
-                worktreePath: item.worktree.path,
-            ) { await sessionStarted() }
+            worktreeConversations(for: item)
         } else {
             CreateSessionPane(
                 worktree: item.worktree,
@@ -342,50 +370,6 @@ struct RootView: View {
                 onResume: { await resumeLatest(in: item) },
                 onStarted: { await sessionStarted() },
             )
-        }
-    }
-
-    /// A running shell stays mounted whichever tab, worktree or page
-    /// shows, so its terminal survives everything short of destroying
-    /// the worktree it runs in. Both layers always fill the pane, so
-    /// switches never resize a hidden terminal; a resize would make
-    /// the shell reprint its prompt, which reads as stray newlines.
-    /// Shells start only from their button, and a quit shell (Ctrl-D)
-    /// returns to it.
-    private func utilityContent(for item: WorktreeItem) -> some View {
-        let showsShell = utilityTab == .shell
-        let showsBrowser = utilityTab == .browser
-        let path = item.worktree.path
-        return ZStack {
-            shellLayers(for: item)
-                .opacity(showsShell ? 1 : 0)
-                .allowsHitTesting(showsShell)
-            if showsShell == false, showsBrowser == false {
-                // Identity keyed by worktree, so switching in the
-                // sidebar always rebuilds the pane's state. The
-                // backgrounds must not expand into the ignored
-                // titlebar safe area, where they would paint over
-                // the tab header above.
-                switchedUtility(for: item, conversationPath: conversationWorktreePath)
-                    .id("utility-" + path)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(.background, ignoresSafeAreaEdges: [])
-            }
-            // Like the shell, a visited browser stays mounted so its
-            // page survives tab switches without reloading.
-            if visitedBrowsers.contains(path) {
-                BrowserView()
-                    .id("browser-" + path)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.background, ignoresSafeAreaEdges: [])
-                    .opacity(showsBrowser ? 1 : 0)
-                    .allowsHitTesting(showsBrowser)
-            }
-        }
-        .task(id: item.id + utilityTabName) {
-            if utilityTab == .browser {
-                visitedBrowsers.insert(path)
-            }
         }
     }
 }

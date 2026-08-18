@@ -13,6 +13,47 @@ struct SyntaxHighlighterTests {
         #expect(SyntaxLanguage.language(forPath: "config.yaml") == .yaml)
         #expect(SyntaxLanguage.language(forPath: "README.md") == .markdown)
         #expect(SyntaxLanguage.language(forPath: "binary.png") == nil)
+        // The files commands hand to an editor have no extension.
+        let rebase = ".git/worktrees/agent/rebase-merge/git-rebase-todo"
+        #expect(SyntaxLanguage.language(forPath: rebase) == .gitRebaseTodo)
+        #expect(SyntaxLanguage.language(forPath: ".git/COMMIT_EDITMSG") == .gitMessage)
+    }
+
+    @Test
+    func `highlights a rebase todo's commands, commits and instructions`() {
+        let line = "pick a1b2c3d Keep a worktree listed"
+        let tokens = SyntaxHighlighter.highlight(line: line, language: .gitRebaseTodo)
+        #expect(tokens.map(\.text).joined() == line)
+        #expect(tokens.first == SyntaxToken(kind: .keyword, text: "pick"))
+        #expect(tokens.contains(SyntaxToken(kind: .number, text: "a1b2c3d")))
+        #expect(tokens.contains { $0.kind == .plain && $0.text.contains("Keep a worktree listed") })
+
+        let instruction = "# Commands:"
+        #expect(SyntaxHighlighter.highlight(line: instruction, language: .gitRebaseTodo)
+            == [SyntaxToken(kind: .comment, text: instruction)])
+
+        // A label is not a commit, and an unknown first word is not a
+        // command, so neither is coloured as one.
+        let label = SyntaxHighlighter.highlight(line: "label onto", language: .gitRebaseTodo)
+        #expect(label.first == SyntaxToken(kind: .keyword, text: "label"))
+        #expect(label.contains { $0.kind == .number } == false)
+        let broken = SyntaxHighlighter.highlight(line: "picky a1b2c3d Work", language: .gitRebaseTodo)
+        #expect(broken.contains { $0.kind == .keyword } == false)
+    }
+
+    @Test
+    func `highlights only the block git strips from a commit message`() {
+        let subject = "Keep a worktree listed while it is detached"
+        #expect(SyntaxHighlighter.highlight(line: subject, language: .gitMessage)
+            == [SyntaxToken(kind: .plain, text: subject)])
+        // An apostrophe must not open a string that swallows the rest
+        // of the line, as the general tokenizer would have it.
+        let body = "- git's own listing hides it"
+        #expect(SyntaxHighlighter.highlight(line: body, language: .gitMessage)
+            == [SyntaxToken(kind: .plain, text: body)])
+        let comment = "# Please enter the commit message for your changes."
+        #expect(SyntaxHighlighter.highlight(line: comment, language: .gitMessage)
+            == [SyntaxToken(kind: .comment, text: comment)])
     }
 
     @Test

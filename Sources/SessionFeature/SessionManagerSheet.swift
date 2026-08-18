@@ -2,17 +2,25 @@ import AgentIDEData
 import SwiftUI
 import TerminalUI
 
-/// Lists every AgentIDE tmux session, sandboxed agents and host
-/// shells alike, with where each lives, what it costs and a kill
-/// per row: the escape hatch when something is running that should
-/// not be.
+/// Lists everything this app has running: every AgentIDE tmux
+/// session, sandboxed agents and host shells alike, and the browser
+/// pages it renders itself, with where each lives, what it costs and
+/// a way to stop it. The escape hatch when something is running that
+/// should not be.
 public struct SessionManagerSheet: View {
     // MARK: Lifecycle
 
-    /// Creates the manager; `onDismiss` closes the sheet.
+    /// Creates the manager; `onCloseBrowser` closes a browser page,
+    /// which only the window can do, and `onDismiss` closes the
+    /// sheet.
     @preconcurrency
-    public init(service: SessionService, onDismiss: @escaping @MainActor () -> Void) {
+    public init(
+        service: SessionService,
+        onCloseBrowser: @escaping @MainActor (String) -> Void,
+        onDismiss: @escaping @MainActor () -> Void,
+    ) {
         self.service = service
+        self.onCloseBrowser = onCloseBrowser
         self.onDismiss = onDismiss
     }
 
@@ -29,11 +37,11 @@ public struct SessionManagerSheet: View {
                 Button("Done") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
             }
-            if sessions.isEmpty {
+            if sessions.isEmpty, browsers.all.isEmpty {
                 ContentUnavailableView(
-                    "No sessions running",
+                    "Nothing running",
                     systemImage: "terminal",
-                    description: Text("Agent sessions and host shells appear here."),
+                    description: Text("Agent sessions, host shells and browser pages appear here."),
                 )
                 .frame(minHeight: Self.listHeight)
             } else {
@@ -48,31 +56,47 @@ public struct SessionManagerSheet: View {
     // MARK: Internal
 
     var list: some View {
-        List(sessions, id: \.name) { session in
-            HStack(spacing: Self.spacing) {
-                Image(systemName: session.isHostShell ? "terminal" : "cpu")
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(session.isHostShell ? "Host shell" : "Agent session")
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(session.name).font(CodeStyle.font).lineLimit(1)
-                    Text(location(of: session))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .hoverHelp(session.workingDirectory)
+        List {
+            ForEach(sessions, id: \.name) { session in
+                row(
+                    Entry(
+                        icon: session.isHostShell ? "terminal" : "cpu",
+                        label: session.isHostShell ? "Host shell" : "Agent session",
+                        title: session.name,
+                        directory: session.workingDirectory,
+                        usage: usage(of: session),
+                    ),
+                ) {
+                    killButton(for: session)
                 }
-                Spacer()
-                Text(usage(of: session))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .hoverHelp("CPU and memory summed over the session's process tree")
-                killButton(for: session)
+            }
+            ForEach(browsers.all) { pane in
+                row(
+                    Entry(
+                        icon: "safari",
+                        label: "Browser page",
+                        title: pane.address.isEmpty ? "Blank page" : pane.address,
+                        directory: pane.worktreePath,
+                        usage: usage(of: pane),
+                    ),
+                ) {
+                    closeButton(for: pane)
+                }
             }
         }
         .frame(minHeight: Self.listHeight)
     }
 
     // MARK: Private
+
+    /// What one row says, whatever it is a row of.
+    private struct Entry {
+        let icon: String
+        let label: String
+        let title: String
+        let directory: String
+        let usage: String
+    }
 
     private static let spacing: CGFloat = 10
     private static let listHeight: CGFloat = 260
@@ -83,9 +107,43 @@ public struct SessionManagerSheet: View {
 
     @State private var sessions: [SessionOverview] = []
     @State private var killed: Set<String> = []
+    @State private var browserUsage: [Int32: (cpuPercent: Double, memoryMegabytes: Int)] = [:]
 
+    private let browsers: BrowserPanes = .shared
     private let service: SessionService
+    private let onCloseBrowser: @MainActor (String) -> Void
     private let onDismiss: @MainActor () -> Void
+
+    /// One row: what it is, where it lives, what it costs and how to
+    /// stop it.
+    private func row(_ entry: Entry, @ViewBuilder action: () -> some View) -> some View {
+        HStack(spacing: Self.spacing) {
+            Image(systemName: entry.icon)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(entry.label)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.title).font(CodeStyle.font).lineLimit(1)
+                Text(location(of: entry.directory))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .hoverHelp(entry.directory)
+            }
+            Spacer()
+            Text(entry.usage)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .hoverHelp("CPU and memory summed over its process tree")
+            action()
+        }
+    }
+
+    /// Closing a page ends the web process rendering it; its address
+    /// is remembered, so the tab opens it again.
+    private func closeButton(for pane: BrowserPane) -> some View {
+        Button("Close") { onCloseBrowser(pane.worktreePath) }
+            .hoverHelp("Close this page and end the web process rendering it; its address is kept")
+    }
 
     /// Kill greys to Killing while it runs and Killed once the
     /// session is gone; the service escalates a stuck kill itself.
@@ -111,6 +169,7 @@ public struct SessionManagerSheet: View {
 
     private func reload() async {
         sessions = await service.sessionOverviews()
+        browserUsage = await service.usage(ofProcesses: browsers.all.map(\.processIdentifier))
         killed = killed.filter { name in sessions.contains { $0.name == name } }
         // A row killed and gone needs no marker; one killed and
         // still listed shows Killed until a refresh proves it away.
@@ -118,14 +177,28 @@ public struct SessionManagerSheet: View {
 
     /// The owning worktree, its repository and container: the
     /// path's tail places it.
-    private func location(of session: SessionOverview) -> String {
-        session.workingDirectory
+    private func location(of directory: String) -> String {
+        directory
             .split(separator: "/")
             .suffix(Self.locationComponents)
             .joined(separator: "/")
     }
 
     private func usage(of session: SessionOverview) -> String {
-        String(format: "%.0f%% · %d MB", session.cpuPercent, session.memoryMegabytes)
+        usage(cpuPercent: session.cpuPercent, memoryMegabytes: session.memoryMegabytes)
+    }
+
+    /// A page WebKit has not told us its process for shows no
+    /// figures rather than zeroes it cannot stand behind.
+    private func usage(of pane: BrowserPane) -> String {
+        guard let measured = browserUsage[pane.processIdentifier] else {
+            return ""
+        }
+
+        return usage(cpuPercent: measured.cpuPercent, memoryMegabytes: measured.memoryMegabytes)
+    }
+
+    private func usage(cpuPercent: Double, memoryMegabytes: Int) -> String {
+        String(format: "%.0f%% · %d MB", cpuPercent, memoryMegabytes)
     }
 }

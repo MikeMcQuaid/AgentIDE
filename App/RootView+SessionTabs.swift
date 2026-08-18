@@ -76,6 +76,34 @@ extension RootView {
         .padding(Self.stripSpacing)
     }
 
+    /// Everything the app has running, listed with what it costs.
+    var sessionManager: some View {
+        SessionManagerSheet(
+            service: dependencies.service,
+            onCloseBrowser: { closeBrowser(at: $0) },
+            onDismiss: { dependencies.dashboard.showsSessionManager = false },
+        )
+    }
+
+    /// A repository page's conversations, across all its worktrees.
+    func repositoryConversations(for item: WorktreeItem) -> some View {
+        RepositorySessionsView(
+            repository: repository(of: item),
+            service: dependencies.service,
+            onWorktreeFocus: { focusConversation(at: $0) },
+            onResumed: { await dependencies.dashboard.refresh() },
+        )
+    }
+
+    /// One worktree's own past conversations.
+    func worktreeConversations(for item: WorktreeItem) -> some View {
+        RepositorySessionsView(
+            repository: repository(of: item),
+            service: dependencies.service,
+            worktreePath: item.worktree.path,
+        ) { await sessionStarted() }
+    }
+
     func repository(of item: WorktreeItem) -> Repository {
         Repository(
             name: item.worktree.repositoryName,
@@ -242,6 +270,7 @@ extension RootView {
     ) -> TerminalPaneView {
         TerminalPaneView(
             shellIn: path,
+            environment: dependencies.service.shellEnvironment(),
             isActive: isActive,
             onProcessTerminated: onExit,
         )
@@ -266,7 +295,10 @@ extension RootView {
     func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
         let target = reviewTarget(for: item, conversationPath: conversationPath)
         switch utilityTab {
-        case .shell:
+        // Both keep their own always-mounted layers, so the
+        // switched content has nothing to show for them.
+        case .browser,
+             .shell:
             EmptyView()
 
         case .review:
@@ -278,7 +310,11 @@ extension RootView {
             )
 
         case .editor:
-            EditorPane(worktreePath: item.worktree.path, service: dependencies.service)
+            EditorPane(
+                worktreePath: item.worktree.path,
+                service: dependencies.service,
+                waitingEdit: waitingEdit(in: item.worktree.path),
+            )
 
         case .pullRequests:
             PullRequestsView(
@@ -290,9 +326,6 @@ extension RootView {
                 branch: target.worktree.branch,
                 isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )
-
-        case .browser:
-            BrowserView()
 
         case .errors:
             ErrorsPane()

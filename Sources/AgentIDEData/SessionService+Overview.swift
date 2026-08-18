@@ -96,6 +96,28 @@ public extension SessionService {
         }
     }
 
+    /// The usage of processes the app runs itself rather than tmux,
+    /// a browser page's web content process above all, in one `ps`
+    /// pass so a list of them costs no more than one session does.
+    func usage(ofProcesses identifiers: [Int32]) async -> [Int32: (cpuPercent: Double, memoryMegabytes: Int)] {
+        guard identifiers.isEmpty == false else {
+            return [:]
+        }
+
+        let listing = try? await processes.run(
+            ["ps", "-axo", "pid=,ppid=,%cpu=,rss="],
+            workingDirectory: nil,
+            environment: [:],
+        )
+        let samples = Self.processSamples(fromPS: listing?.standardOutput ?? "")
+        var usage = [Int32: (cpuPercent: Double, memoryMegabytes: Int)]()
+        for identifier in identifiers {
+            let tree = Self.treeUsage(root: Int(identifier), samples: samples)
+            usage[identifier] = (tree.cpuPercent, tree.megabytes)
+        }
+        return usage
+    }
+
     // MARK: Internal
 
     /// One `ps` row of the fields the usage sums need.

@@ -76,6 +76,15 @@ before shipping.
 - **Previews** web pages and rendered Markdown in an embedded browser and opens an
   embedded terminal running as your own user (so you can verify behaviour and
   use `git`, `gh` and other CLI tools without leaving the window)
+- **Keeps** each worktree's page loaded as you work in other worktrees,
+  remembers its address for the next time and lists every loaded page in
+  the session manager with what it costs and a Close (so a dev server stays
+  logged in and mid-flow, and a page eating memory is easy to find and end)
+- **Edits** whatever that terminal's commands open, a `git rebase -i` todo list
+  or a commit message, in the same editor with their own highlighting, because
+  an `agentide` command on its `PATH` blocks until you save and close and
+  `EDITOR`, `VISUAL` and `GIT_EDITOR` there name it (so interactive rebasing
+  needs no terminal editor, and cancelling aborts the rebase as `:cq` would)
 
 ### 🚢 Ship
 
@@ -167,6 +176,18 @@ open /Applications/AgentIDE.app
   for quick development runs.
 - **Features** land slice by slice (see [Status](#-status)); the app launches
   to an empty dashboard until the first slices fill it.
+
+A shell pane runs your login shell, so anything your shell configuration
+exports wins over what the pane was started with. It sets `AGENTIDE=1` and
+puts the bundled `agentide` command on `PATH`, so shell files that set an
+editor of their own can hand those panes back to the app:
+
+```bash
+if [ -n "${AGENTIDE}" ]; then
+  export EDITOR="$(command -v agentide) --wait"
+  export VISUAL="${EDITOR}"
+fi
+```
 
 ## 🚧 Status
 
