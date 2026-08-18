@@ -64,21 +64,41 @@ public struct GitClient: Sendable {
     public func worktrees(of repository: Repository) async throws -> [Worktree] {
         let output = try await git(["worktree", "list", "--porcelain"], in: repository.path).standardOutput
         var path: String?
+        var branch: String?
         var index = -1
         var results = [Worktree]()
+
+        func flush() {
+            guard let currentPath = path, index > 0 else {
+                return
+            }
+
+            results.append(Worktree(
+                repositoryName: repository.name,
+                repositoryPath: repository.path,
+                // A worktree with no branch line is detached, which
+                // is how git leaves one throughout a rebase. Its
+                // directory is named for its branch, which is what it
+                // was and will be again; requiring the branch line
+                // dropped the worktree from the sidebar mid-rebase,
+                // and taking its row away killed the shell running
+                // in it.
+                branch: branch ?? URL(fileURLWithPath: currentPath).lastPathComponent,
+                path: currentPath,
+            ))
+        }
+
         for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
             if line.hasPrefix("worktree ") {
+                flush()
                 path = String(line.dropFirst("worktree ".count))
+                branch = nil
                 index += 1
-            } else if line.hasPrefix("branch refs/heads/"), let currentPath = path, index > 0 {
-                results.append(Worktree(
-                    repositoryName: repository.name,
-                    repositoryPath: repository.path,
-                    branch: String(line.dropFirst("branch refs/heads/".count)),
-                    path: currentPath,
-                ))
+            } else if line.hasPrefix("branch refs/heads/") {
+                branch = String(line.dropFirst("branch refs/heads/".count))
             }
         }
+        flush()
         return results
     }
 

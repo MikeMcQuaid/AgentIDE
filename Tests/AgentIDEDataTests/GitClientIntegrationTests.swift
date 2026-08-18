@@ -33,6 +33,30 @@ struct GitClientIntegrationTests {
     }
 
     @Test
+    func `a worktree keeps its row while detached mid-rebase`() async throws {
+        let root = try TestSupport.temporaryDirectory("detached")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repoPath = root + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+        let repository = Repository(name: "repo", path: repoPath)
+        let worktreePath = root + "/worktrees/uuid/sentry_errors"
+        try await git.createWorktree(repository: repository, branch: "sentry_errors", at: worktreePath)
+
+        // git detaches HEAD for the whole of a rebase, and reporting
+        // no worktree took its sidebar row away, which killed the
+        // shell running in it.
+        try await TestSupport.runGit(["checkout", "--detach"], in: worktreePath)
+        let detached = try await git.worktrees(of: repository)
+        #expect(detached.map(\.path) == [worktreePath])
+        // Its directory is named for the branch it will return to.
+        #expect(detached.map(\.branch) == ["sentry_errors"])
+
+        try await TestSupport.runGit(["checkout", "sentry_errors"], in: worktreePath)
+        let reattached = try await git.worktrees(of: repository)
+        #expect(reattached.map(\.branch) == ["sentry_errors"])
+    }
+
+    @Test
     func `per-line rejection reverses only the selected change and amends`() async throws {
         let root = try TestSupport.temporaryDirectory("reject")
         defer { try? FileManager.default.removeItem(atPath: root) }
