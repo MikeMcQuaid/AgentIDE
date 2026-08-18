@@ -167,11 +167,14 @@ extension PullRequestsModel {
     }
 
     /// Splits one commit message into the form's title and body.
+    /// The body comes back unwrapped: commit messages are wrapped by
+    /// hand to a narrow column, and a pull request reflows its own
+    /// text, so the hand-wrapping reads as broken bullets there.
     static func description(splitFromMessage message: String) -> (title: String, body: String) {
         let lines = message.split(separator: "\n", omittingEmptySubsequences: false)
         let title = lines.first.map(String.init) ?? ""
         let body = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return (title, body)
+        return (title, Wrapping.unwrapped(body))
     }
 
     /// Opens the pull request from the form's title and body, with

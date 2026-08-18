@@ -505,9 +505,12 @@ Sendable` and `nonisolated(unsafe)` are banned.
    a one-commit branch defaults to that commit's own message, and a
    generate button inside the title field summarises several through
    the on-device model, locking the fields while it drafts; typed
-   text is never overwritten. A repository without a template shows
-   no template field, and with one the generate button also
-   completes the template from the commits.
+   text is never overwritten. A commit's body arrives unwrapped: commit
+   messages are hand-wrapped to a narrow column, which a pull request
+   reflows for its own width, so the hard wraps read as broken bullets
+   until the continuations are joined back on. A repository without a
+   template shows no template field, and with one the generate button
+   also completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.

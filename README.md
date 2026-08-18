@@ -83,8 +83,9 @@ before shipping.
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
   template below your title and body, defaulting both from a single
-  commit or drafting them from many with the on-device model (so
-  shipping needs no retyping)
+  commit, unwrapped from the narrow column commit messages are written
+  to, or drafting them from many with the on-device model (so shipping
+  needs no retyping)
 - **Copies** unresolved review comments, or failing CI steps with their
   actual log output, straight into a prompt, resolves conversations one
   by one, resolves merge conflicts and enables automerge or merges,
