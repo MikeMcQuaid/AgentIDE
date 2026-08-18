@@ -107,6 +107,10 @@ before shipping.
   than the app (so agents survive AgentIDE quitting, crashing or
   updating, expectedly or not; the host shell tab deliberately does not,
   living and dying with the app)
+- **Keeps** every running shell alive while you move around the app and
+  keeps a worktree listed until it is really gone, rebases and failed
+  listings included (so only closing a shell or destroying its worktree
+  ends it)
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)

@@ -221,25 +221,27 @@ extension RootView {
 extension RootView {
     /// The agent terminal: copies are prose, so multi-line copies
     /// reflow for pasting into chat and pull request bodies.
-    func agentTerminal(for session: AgentSession) -> TerminalPaneView {
+    func agentTerminal(for session: AgentSession, isActive: Bool) -> TerminalPaneView {
         TerminalPaneView(
             command: dependencies.service.attachCommand(sessionName: session.name),
             reflowsCopies: true,
+            isActive: isActive,
         )
     }
 
     /// The host shell terminal, a plain local shell on the pane's
     /// own PTY: no server to wedge and nothing left behind when the
     /// app quits. Copies stay verbatim for code. The pane stays
-    /// mounted behind other tabs, so it reports whether it is the
-    /// visible one and yields keyboard focus otherwise.
+    /// mounted behind other tabs, worktrees and pages, so it reports
+    /// whether it is the visible one and yields keyboard focus
+    /// otherwise.
     func shellTerminal(
-        for worktree: Worktree,
-        isActive: Bool,
+        at path: String,
         onExit: @escaping @MainActor () -> Void,
+        isActive: Bool,
     ) -> TerminalPaneView {
         TerminalPaneView(
-            shellIn: worktree.path,
+            shellIn: path,
             isActive: isActive,
             onProcessTerminated: onExit,
         )

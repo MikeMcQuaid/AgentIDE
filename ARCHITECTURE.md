@@ -184,10 +184,14 @@ Two visually unmistakable flavours ride that one client:
   session.
 - **Host terminal** (Review): a plain login shell on the pane's own
   PTY as the host user, no sudo, no sandbox, full `gh` credentials and
-  no tmux at all: shells stay mounted across tab switches but live and
-  die with the app, a deliberate trade after tmux-backed shells kept
-  wedging their control clients; the tab bar's Close shell ends one
-  instantly. Both
+  no tmux at all: shells live and die with the app, a deliberate trade
+  after tmux-backed shells kept wedging their control clients. Because
+  a shell dies with its pane, every running shell stays mounted
+  whatever the window shows, and only the selected worktree's is
+  visible and takes keys: switching tabs, worktrees or pages leaves
+  shells running, and a shell ends only when the tab bar's Close shell
+  ends it, the shell itself exits, its worktree is destroyed or the
+  app quits. Both
   terminals share one theme (black on white in light mode, white on
   black in dark); what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
@@ -217,6 +221,16 @@ the launch shape, tolerating "no server running"), a `ps` scan for session
 ids in process arguments, `git worktree list` across tracked repositories,
 transcript directory scans and finally its own metadata store. Unmatched
 sessions surface as foreign rather than being hidden.
+
+Deriving is not the same as trusting one reading. A reading that loses a
+worktree or a repository is never taken as proof it went away: its listing
+can fail, and `git worktree list` reports a worktree as detached rather than
+on a branch for the whole of a rebase. A row the newest reading dropped is
+kept while its directory is there, and only its removal from disk takes the
+row away. This is a display rule, not a cache: nothing is persisted and the
+next reading that lists the worktree wins. It matters because a row holds
+its worktree's panes open, and a pane holds a running shell (P1 still
+applies; disk is one of the sources).
 
 There is no separate notification daemon in v1. The app switches to accessory
 activation policy when its last window closes, staying resident in the menu
