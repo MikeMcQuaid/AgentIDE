@@ -83,6 +83,7 @@ struct FileEditorView: View {
 
     private static let padding: CGFloat = 8
     private static let savedStatus = "Saved."
+    private static let failedStatus = "Not saved."
 
     @State private var content = ""
     @State private var saved = ""
@@ -137,15 +138,29 @@ struct FileEditorView: View {
                     .buttonStyle(.borderless)
                     .hoverHelp("Close the editor without saving")
             }
-            if let onFinish {
-                Button("Cancel") { onFinish(false) }
-                    .buttonStyle(.glass)
-                    .hoverHelp("Leave the file as it was and fail the waiting command, which aborts a rebase")
-                Button("Save and close") { save(); onFinish(true) }
-                    .buttonStyle(.glassProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .hoverHelp("Write the file and let the waiting command carry on (Cmd-Return)")
+            waitingActions
+        }
+    }
+
+    /// What a file some command is waiting on offers instead of a
+    /// close: finish it, or fail it and let the command deal with
+    /// that, which is how a rebase is aborted.
+    @ViewBuilder private var waitingActions: some View {
+        if let onFinish {
+            Button("Cancel") { onFinish(false) }
+                .buttonStyle(.glass)
+                .hoverHelp("Leave the file as it was and fail the waiting command, which aborts a rebase")
+            // Only a file that actually reached the disk lets the
+            // command carry on: a failed write would otherwise leave
+            // git rebasing with the edit it never got.
+            Button("Save and close") {
+                if save() {
+                    onFinish(true)
+                }
             }
+            .buttonStyle(.glassProminent)
+            .keyboardShortcut(.return, modifiers: .command)
+            .hoverHelp("Write the file and let the waiting command carry on (Cmd-Return)")
         }
     }
 
@@ -160,10 +175,12 @@ struct FileEditorView: View {
         reloadChangedLines()
     }
 
-    private func save() {
+    /// Writes the buffer back, reporting whether it landed.
+    @discardableResult
+    private func save() -> Bool {
         guard let path else {
             ErrorLog.shared.report("Refusing to write a path outside the worktree.")
-            return
+            return false
         }
 
         do {
@@ -172,8 +189,11 @@ struct FileEditorView: View {
             saved = content
             status = Self.savedStatus
             reloadChangedLines()
+            return true
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
+            status = Self.failedStatus
+            return false
         }
     }
 

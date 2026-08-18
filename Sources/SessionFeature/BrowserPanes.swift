@@ -10,7 +10,7 @@ public struct BrowserPane: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a pane record.
-    public init(worktreePath: String, address: String, processIdentifier: Int32) {
+    public init(worktreePath: String, address: String, processIdentifier: Int32?) {
         self.worktreePath = worktreePath
         self.address = address
         self.processIdentifier = processIdentifier
@@ -25,9 +25,11 @@ public struct BrowserPane: Identifiable, Hashable, Sendable {
     /// What it has loaded, empty for a blank page.
     public let address: String
 
-    /// The web content process, zero when WebKit has not started one
-    /// or no longer says which it is.
-    public let processIdentifier: Int32
+    /// The web content process rendering it, nil when WebKit has
+    /// not started one or will not say which it is. Nothing may
+    /// stand in for it: sampling process zero would sum the usage of
+    /// everything the kernel owns.
+    public let processIdentifier: Int32?
 
     public var id: String {
         worktreePath

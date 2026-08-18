@@ -112,7 +112,7 @@ public struct BrowserView: View {
 
     /// Tells the register what this page is and what is rendering
     /// it, so the session manager can list and close it.
-    private func record(processIdentifier: Int32) {
+    private func record(processIdentifier: Int32?) {
         BrowserPanes.shared.record(BrowserPane(
             worktreePath: worktreePath,
             address: address,
@@ -157,7 +157,7 @@ private struct WebPane: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         // MARK: Lifecycle
 
-        init(onProcess: @escaping (Int32) -> Void) {
+        init(onProcess: @escaping (Int32?) -> Void) {
             self.onProcess = onProcess
         }
 
@@ -171,17 +171,17 @@ private struct WebPane: NSViewRepresentable {
         // unwrapped navigation, which nothing here reads.
         // swiftlint:disable:next implicitly_unwrapped_optional
         func webView(_ webView: WKWebView, didCommit _: WKNavigation!) {
-            onProcess(BrowserPanes.processIdentifier(of: webView) ?? 0)
+            onProcess(BrowserPanes.processIdentifier(of: webView))
         }
 
         // MARK: Private
 
-        private let onProcess: (Int32) -> Void
+        private let onProcess: (Int32?) -> Void
     }
 
     @Binding var request: URLRequest?
 
-    let onProcess: (Int32) -> Void
+    let onProcess: (Int32?) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onProcess: onProcess)

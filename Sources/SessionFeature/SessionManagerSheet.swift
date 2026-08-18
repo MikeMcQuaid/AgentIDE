@@ -169,7 +169,7 @@ public struct SessionManagerSheet: View {
 
     private func reload() async {
         sessions = await service.sessionOverviews()
-        browserUsage = await service.usage(ofProcesses: browsers.all.map(\.processIdentifier))
+        browserUsage = await service.usage(ofProcesses: browsers.all.compactMap(\.processIdentifier))
         killed = killed.filter { name in sessions.contains { $0.name == name } }
         // A row killed and gone needs no marker; one killed and
         // still listed shows Killed until a refresh proves it away.
@@ -189,9 +189,9 @@ public struct SessionManagerSheet: View {
     }
 
     /// A page WebKit has not told us its process for shows no
-    /// figures rather than zeroes it cannot stand behind.
+    /// figures rather than numbers it cannot stand behind.
     private func usage(of pane: BrowserPane) -> String {
-        guard let measured = browserUsage[pane.processIdentifier] else {
+        guard let identifier = pane.processIdentifier, let measured = browserUsage[identifier] else {
             return ""
         }
 
