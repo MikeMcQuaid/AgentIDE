@@ -177,6 +177,15 @@ select and scroll natively with no modifier.
 
 Two visually unmistakable flavours ride that one client:
 
+- **Pasting into an agent**: a paste goes into a tmux buffer and is pasted
+  from there (`set-buffer`, appending for anything long, then `paste-buffer
+  -d -p`), never typed in as keys. tmux brackets it when the pane's own
+  application asked for bracketed paste, which is knowledge the local
+  terminal does not reliably have: it learns modes from output it has seen,
+  and a pane attached mid-session never saw bracketed paste being enabled.
+  Without the markers an agent read a multi-line paste as several lines of
+  typing, which is how the cursor ended up inside the pasted text. Typing
+  still travels as `send-keys -l`.
 - **Sandbox terminal**: the launch shape with payload
   `exec tmux -C attach-session -t <name>`. The attaching client runs
   inside the sandbox too; tmux sockets are owner-only, so no attach

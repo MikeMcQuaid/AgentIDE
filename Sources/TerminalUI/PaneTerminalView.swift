@@ -20,6 +20,24 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
 
+    /// Takes a paste whole, before the local terminal turns it into
+    /// keystrokes; true means it was delivered, false leaves it to
+    /// the terminal's own handling. An agent pane pastes through
+    /// tmux, which knows whether the pane's application wants
+    /// bracketed paste; a shell pane is its own terminal and
+    /// already knows.
+    var onPaste: ((String) -> Bool)?
+
+    /// Pastes the clipboard, offering it to the owner first.
+    override func paste(_ sender: Any) {
+        guard let text = NSPasteboard.general.string(forType: .string),
+              onPaste?(text) == true
+        else {
+            super.paste(sender)
+            return
+        }
+    }
+
     /// The right-click menu: Copy and Paste, which terminals
     /// otherwise lack entirely.
     override func menu(for _: NSEvent) -> NSMenu? {

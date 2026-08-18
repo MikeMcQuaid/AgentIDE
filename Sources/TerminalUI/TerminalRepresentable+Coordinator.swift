@@ -278,6 +278,9 @@ extension TerminalRepresentable {
             self.view = view
             switch transport {
             case let .control(command):
+                view.onPaste = { [weak self] text in
+                    self?.paste(text) ?? false
+                }
                 startControl(command, in: view)
 
             case let .shell(directory, environment):
@@ -295,6 +298,21 @@ extension TerminalRepresentable {
                     currentDirectory: directory,
                 )
             }
+        }
+
+        /// Pastes through tmux's own buffer, which brackets the text
+        /// when the pane's application asked for it. Only a control
+        /// pane takes this path: a local shell is its own terminal
+        /// and pastes into itself.
+        private func paste(_ text: String) -> Bool {
+            guard channel != nil else {
+                return false
+            }
+
+            for command in TmuxControl.pasteCommands(text: text) {
+                sendCommand(command, expecting: .acknowledgement)
+            }
+            return true
         }
 
         private func startControl(_ command: [String], in view: PaneTerminalView) {
