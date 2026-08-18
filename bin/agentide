@@ -18,8 +18,8 @@ poll_seconds=0.2
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    # Waiting is the only behaviour, but editors are configured with
-    # the flag, so it is accepted.
+    # Waiting is the only behaviour, but editors are configured
+    # with the flag either way, so both spellings are accepted.
     -w | --wait) shift ;;
     --)
       shift
@@ -34,7 +34,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$#" -eq 0 ]; then
-  printf 'usage: agentide [--wait] file...\n' >&2
+  printf 'usage: agentide [-w|--wait] file...\n' >&2
   exit 64
 fi
 
