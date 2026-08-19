@@ -613,7 +613,11 @@ shim rather than a protocol:
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations, or the failing checks with their
    failed steps' actual log output, to the clipboard for pasting into
-   an agent, and open the page in the Browser tab. Conversations
+   an agent, and open the page in the Browser tab. A failing check names
+   its own job, and that job is what is read (`gh run view --job`),
+   since a run of fifty jobs where one failed would otherwise paste the
+   other forty-nine; while the run is still going `gh` refuses its logs,
+   so the job's log comes from the API instead. Conversations
    resolve individually through the GraphQL API, on the conversation
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
