@@ -35,6 +35,18 @@ extension SessionService {
         )
     }
 
+    /// Copies a worktree's newest conversation somewhere the sandbox
+    /// cannot reach, and says where it went. Called wherever a
+    /// conversation is about to be relied on or left behind, since
+    /// those are the moments it is worth having a copy of.
+    func backUpConversation(of worktree: Worktree) {
+        guard let newest = sessionsInDirectories(of: worktree.path, liveSession: nil).first else {
+            return
+        }
+
+        ConversationBackup(paths: paths).store(newest, worktree: worktree)
+    }
+
     /// The ways to continue a worktree's own agent, best first: the
     /// conversation recorded for it, then the conversations its
     /// transcripts still name, then a fresh one. Relaunching with

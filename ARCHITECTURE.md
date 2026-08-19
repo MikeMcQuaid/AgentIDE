@@ -718,6 +718,26 @@ encoded name extends one of the repository's `worktrees/<uuid>`
 containers is scanned too, so conversations from worktrees created and
 deleted by other tooling still appear.
 
+### Conversations outside the sandbox
+
+Everything the app derives from can be rebuilt except one thing: the
+conversations. Worktrees and git objects live in the shared workspace and on
+GitHub, tmux is ephemeral by design, agent credentials can be obtained again
+and configuration comes from the `user/` template. Transcripts live only in
+the sandbox user's home, which is disposable by design and was emptied by
+accident once, taking finished conversations with it.
+
+Each worktree's newest conversation is therefore copied out of the sandbox at
+the moments it is about to matter: when a session is closed, and when one is
+resumed. The copy goes to iCloud Drive when it is set up, and to the app's
+own directory when it is not, one file per worktree with a small index beside
+it naming the worktree, branch, agent and resume id, since a transcript alone
+says none of that. Deleting a worktree, or cleaning it up after a merge,
+takes its copy with it: the conversation is being thrown away deliberately
+and a backup nobody asked to keep is clutter. Only the conversation is
+copied, never the code or anything the agent read, because git and GitHub
+already hold the first and the second is not ours to put in anyone's cloud.
+
 ## State and persistence
 
 | Fact | Source of truth | The app's role |

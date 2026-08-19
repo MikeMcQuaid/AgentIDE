@@ -104,7 +104,10 @@ public extension SessionService {
     /// the polite kill does not take; worktree, transcript and
     /// metadata survive so it stays resumable. The deliberate close
     /// is recorded so automatic resumes leave this worktree alone.
-    func closeSession(sessionName: String, worktreePath: String) async {
+    func closeSession(sessionName: String, worktreePath: String, worktree: Worktree? = nil) async {
+        if let worktree {
+            backUpConversation(of: worktree)
+        }
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
         var metadata = store.load()
         if metadata.intentionallyClosed.contains(worktreePath) == false {
@@ -191,6 +194,7 @@ public extension SessionService {
             )
         }
 
+        backUpConversation(of: worktree)
         try await start(
             sessionName: sessionName,
             directory: worktree.path,
@@ -221,6 +225,7 @@ public extension SessionService {
         ).filter { commands.contains($0) == false }
         try await start(sessionName: sessionName, directory: worktree.path, trying: commands)
         remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
+        ConversationBackup(paths: paths).store(past, worktree: worktree)
         return sessionName
     }
 
