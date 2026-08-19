@@ -99,6 +99,10 @@ before shipping.
   commit, unwrapped from the narrow column commit messages are written
   to, or drafting them from many with the on-device model (so shipping
   needs no retyping)
+- **Pushes** to your own fork when the repository is not yours to write to,
+  creating it and its remote the first time and opening the pull request from
+  it (so working in someone else's repository needs no setup and no thinking
+  about where the branch goes)
 - **Copies** unresolved review comments, or failing CI steps with their
   actual log output, straight into a prompt, resolves conversations one
   by one, resolves merge conflicts and enables automerge or merges,

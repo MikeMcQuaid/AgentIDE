@@ -177,7 +177,10 @@ struct PullRequestsModelTests {
     func `creating a pull request appends the template, never pushes`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         var pushed = false
-        model.performPush = { _ in pushed = true }
+        model.performPush = { _ in
+            pushed = true
+            return .origin
+        }
         var created: (title: String, body: String)?
         model.performCreate = { _, title, body in
             created = (title, body)

@@ -581,6 +581,14 @@ shim rather than a protocol:
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
+5. Pushing asks GitHub what the viewer may do here (`viewerPermission`)
+   before choosing a remote. Write access pushes to the repository; anything
+   less pushes to the viewer's own fork, created with its remote on first
+   use by `gh repo fork`, which picks whatever protocol the checkout already
+   uses. The pull request then names its branch `owner:branch`, since it
+   belongs to the repository it is opened against rather than the one
+   holding the branch. An unanswerable permission question keeps the
+   repository, which is what every push did before asking was possible.
 5. When the branch has no open pull request, the worktree scope shows a
    creation form instead of the list: title, body and the repository's
    `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Open PR
