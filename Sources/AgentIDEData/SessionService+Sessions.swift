@@ -100,17 +100,18 @@ public extension SessionService {
         try await git.commitAll(worktreePath: worktreePath, message: "Commit outstanding agent work")
     }
 
-    /// Kills the tmux session; worktree, transcript and metadata
-    /// survive so it stays resumable. The deliberate close is
-    /// recorded so automatic resumes leave this worktree alone.
-    func closeSession(sessionName: String, worktreePath: String) async throws {
+    /// Ends the tmux session and everything in it, escalating when
+    /// the polite kill does not take; worktree, transcript and
+    /// metadata survive so it stays resumable. The deliberate close
+    /// is recorded so automatic resumes leave this worktree alone.
+    func closeSession(sessionName: String, worktreePath: String) async {
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
         var metadata = store.load()
         if metadata.intentionallyClosed.contains(worktreePath) == false {
             metadata.intentionallyClosed.append(worktreePath)
         }
         store.save(metadata)
-        try await tmux.killSession(name: sessionName)
+        await killTmuxSession(name: sessionName, isHostShell: false)
     }
 
     /// Whether the worktree's last session ended by explicit close,
@@ -172,7 +173,10 @@ public extension SessionService {
     }
 
     /// Resumes the session last recorded in a worktree, whether or
-    /// not a live tmux session still names it.
+    /// not a live tmux session still names it, and whether or not
+    /// the one that does is still alive: a refused conversation
+    /// leaves a dead pane holding the name, so every way in is tried
+    /// until one is still running.
     func resumeWorktree(_ worktree: Worktree) async throws {
         guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
             throw CommandError(
@@ -187,41 +191,35 @@ public extension SessionService {
             )
         }
 
-        let metadata = store.load()
-        let arguments = metadata.arguments[sessionName] ?? ""
-        if let resumeID = metadata.resumeIDs[sessionName] {
-            let command = runner(for: agent).resumeCommand(resumeID: resumeID, extraArguments: arguments)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-        } else if let past = sessionsInDirectories(of: worktree.path, liveSession: nil).first {
-            // Externally killed sessions never record a resume id,
-            // but their transcripts still name the conversation; the
-            // newest one is what resuming should continue.
-            _ = try await resumePast(past, worktree: worktree)
-        } else {
-            // Without any conversation to continue, relaunching with
-            // the original prompt would re-run the whole task against
-            // the already modified worktree; a fresh session there is
-            // the safe fallback.
-            let command = runner(for: agent).launchCommand(extraArguments: arguments, promptFile: nil)
-            try await tmux.newSession(name: sessionName, directory: worktree.path, command: command)
-        }
+        try await start(
+            sessionName: sessionName,
+            directory: worktree.path,
+            trying: resumeCommands(sessionName: sessionName, agent: agent, worktreePath: worktree.path),
+        )
         clearIntentionalClose(worktreePath: worktree.path)
     }
 
     /// Relaunches a past conversation in its own worktree, replacing
-    /// any session already there.
+    /// whatever session is already there. An agent that will not
+    /// take the conversation back (one it has rolled away, or a
+    /// version that no longer reads that transcript) exits at once,
+    /// so the worktree's other conversations and then a fresh
+    /// session are tried rather than leaving a dead pane behind.
+    @discardableResult
     func resumePast(_ past: TranscriptSession, worktree: Worktree) async throws -> String {
         let sessionName = SessionName.make(
             repository: worktree.repositoryName,
             branch: worktree.branch,
             agent: past.agent,
         )
-        try? await tmux.killSession(name: sessionName)
-        try await tmux.newSession(
-            name: sessionName,
-            directory: worktree.path,
-            command: runner(for: past.agent).resumeCommand(resumeID: past.resumeID, extraArguments: ""),
-        )
+        let agentRunner = runner(for: past.agent)
+        var commands = [agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: "")]
+        commands += resumeCommands(
+            sessionName: sessionName,
+            agent: past.agent,
+            worktreePath: worktree.path,
+        ).filter { commands.contains($0) == false }
+        try await start(sessionName: sessionName, directory: worktree.path, trying: commands)
         remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
         return sessionName
     }

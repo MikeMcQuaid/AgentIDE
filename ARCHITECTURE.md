@@ -657,15 +657,25 @@ shim rather than a protocol:
 
 ### Close and reopen a session
 
-Closing a session kills only the tmux session. The worktree, transcripts and
-metadata (including the resume id) remain, and the deliberate close is
-recorded so the automatic resumes below leave that worktree alone until a
-session starts there again. Reopening builds the agent's
-resume command (`claude --resume <id>`, or the Codex equivalent) through the
-normal launch shape in the same canonical cwd, restoring the full prior
-conversation. A worktree whose session never recorded a resume id falls
-back to a fresh session there, never a relaunch of the original prompt,
-which would re-run the whole task against the already modified worktree.
+Closing a session ends the tmux session and everything in it, escalating
+past the polite kill when that does not take, so the button ends the agent
+rather than asking it to stop. The worktree, transcripts and metadata
+(including the resume id) remain, and the deliberate close is recorded so
+the automatic resumes below leave that worktree alone until a session
+starts there again.
+
+Reopening builds the agent's resume command (`claude --resume <id>`, or the
+Codex equivalent) through the normal launch shape in the same canonical cwd,
+restoring the full prior conversation. Resuming fails in ways that look like
+success, though: an agent handed a conversation it has rolled away, or one a
+newer version will not read, exits at once, and `remain-on-exit` keeps the
+dead pane, so the name is taken and the terminal attaches to a corpse.
+Reopening therefore works through the ways in until one is still running a
+moment later: the recorded conversation, then the newest conversations the
+worktree's own transcripts name, then a fresh session there. Each attempt
+kills whatever holds the session name first. Relaunching with the original
+prompt is never among them, since it would re-run the whole task against the
+already modified worktree.
 
 While agents or shells run, the app holds a system activity that defers
 idle sleep (`SleepInhibitor`; closing the lid still sleeps), and sessions

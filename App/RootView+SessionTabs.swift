@@ -232,11 +232,11 @@ extension RootView {
                 .accessibilityLabel("Close session")
         }
         .buttonStyle(.plain)
-        .hoverHelp("Kill the tmux session; the worktree and conversation survive for resuming")
+        .hoverHelp("End the session and its tmux session now; the worktree and conversation survive for resuming")
     }
 
     private func close(_ session: AgentSession, in item: WorktreeItem) async {
-        try? await dependencies.service.closeSession(
+        await dependencies.service.closeSession(
             sessionName: session.name,
             worktreePath: item.worktree.path,
         )
