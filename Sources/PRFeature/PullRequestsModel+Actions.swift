@@ -166,6 +166,17 @@ extension PullRequestsModel {
         }
     }
 
+    /// What a push is reported as, which depends on where it went:
+    /// a branch that went to a fork is worth saying so about, since
+    /// it is not in the repository being looked at.
+    static func describe(push destination: PushDestination, branch: String) -> String {
+        guard case let .fork(owner) = destination else {
+            return "Pushed " + branch + "."
+        }
+
+        return "Pushed " + branch + " to " + owner + "'s fork, since this repository is not yours to push to."
+    }
+
     /// Splits one commit message into the form's title and body.
     /// The body comes back unwrapped: commit messages are wrapped by
     /// hand to a narrow column, and a pull request reflows its own
@@ -217,9 +228,9 @@ extension PullRequestsModel {
         }
 
         do {
-            try await performPush(worktree)
+            let destination = try await performPush(worktree)
             isPushed = true
-            setStatus("Pushed.", detail: "Pushed " + worktree.branch + ".")
+            setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true

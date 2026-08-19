@@ -45,6 +45,17 @@ public extension GitClient {
         return output.split(separator: "\n").allSatisfy { Self.signedStates.contains(String($0)) }
     }
 
+    /// Whether one ref is an ancestor of another, which is how an
+    /// appended branch is told from a rewritten one.
+    func isAncestor(worktreePath: String, ref: String, of descendant: String) async -> Bool {
+        let result = try? await git(
+            ["merge-base", "--is-ancestor", ref, descendant],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return result?.succeeded ?? false
+    }
+
     /// Whether origin already carries the branch, after a fetch.
     func remoteBranchExists(worktreePath: String, branch: String) async -> Bool {
         let result = try? await git(

@@ -62,6 +62,22 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     public var id: String {
         worktree.id
     }
+
+    /// The same row with no session running in it, for a close that
+    /// should show on screen before tmux has been asked again.
+    public func withoutSession() -> Self {
+        Self(
+            worktree: worktree,
+            session: nil,
+            isDirty: isDirty,
+            aheadOfUpstream: aheadOfUpstream,
+            hasUnread: hasUnread,
+            pastSessions: pastSessions,
+            aheadOfDefault: aheadOfDefault,
+            behindDefault: behindDefault,
+            lastActivityAt: lastActivityAt,
+        )
+    }
 }
 
 // MARK: - RepositoryGroup

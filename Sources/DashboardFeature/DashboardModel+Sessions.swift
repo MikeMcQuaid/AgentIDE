@@ -5,6 +5,23 @@ import TerminalUI
 /// Session creation: every entry point funnels through one runner
 /// that closes the form, refreshes and selects the new worktree.
 public extension DashboardModel {
+    /// Forgets a worktree's session without waiting to be told: a
+    /// dead pane is still a session, so closing one only cleared the
+    /// pane once the next reading of tmux landed, and a kill tmux
+    /// was slow to finish left the agent pane on screen as though
+    /// the button had done nothing.
+    func forgetSession(at worktreePath: String) {
+        for groupIndex in groups.indices {
+            for itemIndex in groups[groupIndex].items.indices
+                where groups[groupIndex].items[itemIndex].worktree.path == worktreePath {
+                groups[groupIndex].items[itemIndex] = groups[groupIndex].items[itemIndex].withoutSession()
+            }
+        }
+        if selection?.worktree.path == worktreePath {
+            selection = groups.flatMap(\.items).first { $0.worktree.path == worktreePath }
+        }
+    }
+
     /// Creates a session from a typed prompt.
     func createSession(
         repository: Repository,

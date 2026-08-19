@@ -12,10 +12,16 @@ public struct EditorPane: View {
     /// Creates the pane for a worktree. `waitingEdit` is a file some
     /// command outside the app is blocked on, which takes the pane
     /// over until it is dealt with.
-    public init(worktreePath: String, service: SessionService, waitingEdit: ExternalEdit? = nil) {
+    public init(
+        worktreePath: String,
+        service: SessionService,
+        onFinishedWaiting: (() -> Void)? = nil,
+        waitingEdit: ExternalEdit? = nil,
+    ) {
         self.worktreePath = worktreePath
         self.service = service
         self.waitingEdit = waitingEdit
+        self.onFinishedWaiting = onFinishedWaiting
     }
 
     // MARK: Public
@@ -103,6 +109,10 @@ public struct EditorPane: View {
     private let worktreePath: String
     private let service: SessionService
     private let waitingEdit: ExternalEdit?
+
+    /// Told when a waiting file is dealt with, so the pane the
+    /// command interrupted can come straight back.
+    private let onFinishedWaiting: (() -> Void)?
 
     /// The file this pane is blocked on, until it is finished with:
     /// the answer takes a moment to reach the spool and come back,
@@ -245,6 +255,7 @@ public struct EditorPane: View {
     /// pane to its finder.
     private func finish(_ edit: ExternalEdit, saved: Bool) {
         finishedEdit = edit.id
+        onFinishedWaiting?()
         Task { await service.finishEdit(edit, saved: saved) }
     }
 

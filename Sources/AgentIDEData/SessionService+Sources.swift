@@ -214,14 +214,21 @@ public extension SessionService {
     }
 
     /// The ref a signed rebase lands on. The branch's own origin ref
-    /// wins when it exists, every commit unique to it verifies and
-    /// local commits sit on top needing signatures: rebasing there
-    /// signs only the new commits, so pushed history keeps its
-    /// hashes. Anything else falls back to origin/HEAD, re-signing
-    /// the whole branch.
+    /// wins when it exists, is still an ancestor of the branch,
+    /// every commit unique to it verifies and local commits sit on
+    /// top needing signatures: rebasing there signs only the new
+    /// commits, so pushed history keeps its hashes. Anything else
+    /// falls back to origin/HEAD, re-signing the whole branch.
+    ///
+    /// The ancestor test is what keeps an amended branch out of
+    /// that path. Amending a pushed commit leaves the pushed one
+    /// behind as a stale twin rather than a parent, and rebasing on
+    /// it replays the amended work on top of what it replaced,
+    /// which is a conflict at best and a duplicated commit at worst.
     func signedRebaseTarget(worktreePath: String, branch: String) async -> String {
         let remote = "origin/" + branch
         guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch),
+              await git.isAncestor(worktreePath: worktreePath, ref: remote, of: "HEAD"),
               await git.allCommitsSigned(worktreePath: worktreePath, range: "origin/HEAD.." + remote),
               await (git.commitCount(worktreePath: worktreePath, range: remote + "..HEAD") ?? 0) > 0
         else {

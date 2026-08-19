@@ -50,7 +50,7 @@ final class PullRequestsModel {
             await github.failingChecks(repositoryPath: repository.path, number: number)
         }
         performCreate = { worktree, title, body in
-            try await github.createPullRequest(worktreePath: worktree.path, title: title, body: body)
+            try await service.createPullRequest(worktree: worktree, title: title, body: body)
         }
         fetchTemplate = { path in
             GitHubClient.pullRequestTemplate(in: path)
@@ -185,7 +185,7 @@ final class PullRequestsModel {
     var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
-    var performPush: (Worktree) async throws -> Void
+    var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
 

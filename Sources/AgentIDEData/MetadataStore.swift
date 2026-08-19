@@ -66,6 +66,8 @@ public struct AppMetadata: Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         lastSeen = try container.decodeIfPresent([String: Date].self, forKey: .lastSeen) ?? [:]
         seenAt = try container.decodeIfPresent([String: Date].self, forKey: .seenAt) ?? [:]
+        conversationBackupAt = try container
+            .decodeIfPresent([String: Date].self, forKey: .conversationBackupAt) ?? [:]
         unreadMarks = try container.decodeIfPresent([String].self, forKey: .unreadMarks) ?? []
         pullRequestCache = try container
             .decodeIfPresent([String: PullRequestSummary].self, forKey: .pullRequestCache) ?? [:]
@@ -104,6 +106,11 @@ public struct AppMetadata: Codable, Sendable {
 
     /// When each worktree path was last viewed, for unread state.
     public var seenAt: [String: Date] = [:]
+
+    /// When each worktree's conversation was last copied out of the
+    /// sandbox, so a long-running session is copied on a schedule
+    /// rather than on every poll.
+    public var conversationBackupAt: [String: Date] = [:]
 
     /// Worktree paths the user marked unread to revisit, cleared by
     /// viewing them.

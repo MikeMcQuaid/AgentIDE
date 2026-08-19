@@ -142,14 +142,24 @@ public struct GitHubClient: Sendable {
 
     /// Opens a pull request from the worktree's branch; returns its
     /// URL. The body travels by file: it can hold anything.
-    public func createPullRequest(worktreePath: String, title: String, body: String) async throws -> String {
+    public func createPullRequest(
+        worktreePath: String,
+        title: String,
+        body: String,
+        head: String? = nil,
+    ) async throws -> String {
         let bodyFile = FileManager.default
             .temporaryDirectory
             .appendingPathComponent("agentide-pr-body-" + UUID().uuidString + ".md")
             .path
         try body.write(toFile: bodyFile, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(atPath: bodyFile) }
-        return try await gh(["pr", "create", "--title", title, "--body-file", bodyFile], in: worktreePath)
+        // A branch in a fork has to name itself as `owner:branch`,
+        // since the pull request belongs to the repository it is
+        // opened against, not the one holding the branch.
+        let arguments = ["pr", "create", "--title", title, "--body-file", bodyFile]
+            + (head.map { ["--head", $0] } ?? [])
+        return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

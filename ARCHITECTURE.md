@@ -511,6 +511,17 @@ long as the thing inside them should live, not for as long as it is visible:
    when the view answers to the question, and a page it will not name shows
    no figures rather than wrong ones.
 
+4. Displays are not fixed either. Unplugging the display a fullscreen
+   window is on leaves the window black on a space with nothing behind it,
+   and coming out of fullscreen restores the frame it had on the display
+   that has gone, which the remaining screen can neither show nor let the
+   user drag smaller. The window leaves fullscreen when its screen goes and
+   fits its frame back inside whichever screen it lands on, and the panes
+   fit the width it ends up with: the utility pane narrows first, then the
+   sidebar, and a window too narrow for all three hides the utility pane
+   for the layout only, so it comes back with the room rather than being
+   forgotten.
+
 ### Editing what a command is waiting on (Review)
 
 Commands run in a shell pane regularly want an editor: `git rebase -i` for
@@ -570,6 +581,14 @@ shim rather than a protocol:
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
+5. Pushing asks GitHub what the viewer may do here (`viewerPermission`)
+   before choosing a remote. Write access pushes to the repository; anything
+   less pushes to the viewer's own fork, created with its remote on first
+   use by `gh repo fork`, which picks whatever protocol the checkout already
+   uses. The pull request then names its branch `owner:branch`, since it
+   belongs to the repository it is opened against rather than the one
+   holding the branch. An unanswerable permission question keeps the
+   repository, which is what every push did before asking was possible.
 5. When the branch has no open pull request, the worktree scope shows a
    creation form instead of the list: title, body and the repository's
    `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Open PR
@@ -594,7 +613,11 @@ shim rather than a protocol:
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations, or the failing checks with their
    failed steps' actual log output, to the clipboard for pasting into
-   an agent, and open the page in the Browser tab. Conversations
+   an agent, and open the page in the Browser tab. A failing check names
+   its own job, and that job is what is read (`gh run view --job`),
+   since a run of fifty jobs where one failed would otherwise paste the
+   other forty-nine; while the run is still going `gh` refuses its logs,
+   so the job's log comes from the API instead. Conversations
    resolve individually through the GraphQL API, on the conversation
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
@@ -605,9 +628,13 @@ shim rather than a protocol:
    dims until the tip commit verifies and the service refuses regardless.
    The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
    base to sign the minimum: the branch's own origin ref when it exists,
-   every commit unique to it verifies and only new local commits need
-   signatures, keeping pushed history's hashes; otherwise origin/HEAD,
-   re-signing the whole branch.
+   is still an ancestor of the branch, every commit unique to it verifies
+   and only new local commits need signatures, keeping pushed history's
+   hashes; otherwise origin/HEAD, re-signing the whole branch. The
+   ancestor test is what keeps an amended branch out of that path:
+   amending a pushed commit leaves the pushed one behind as a stale twin
+   rather than a parent, and rebasing on it replays the amended work on
+   top of what it replaced.
 
 ### Cleanup (Tidy up)
 
@@ -646,15 +673,25 @@ shim rather than a protocol:
 
 ### Close and reopen a session
 
-Closing a session kills only the tmux session. The worktree, transcripts and
-metadata (including the resume id) remain, and the deliberate close is
-recorded so the automatic resumes below leave that worktree alone until a
-session starts there again. Reopening builds the agent's
-resume command (`claude --resume <id>`, or the Codex equivalent) through the
-normal launch shape in the same canonical cwd, restoring the full prior
-conversation. A worktree whose session never recorded a resume id falls
-back to a fresh session there, never a relaunch of the original prompt,
-which would re-run the whole task against the already modified worktree.
+Closing a session ends the tmux session and everything in it, escalating
+past the polite kill when that does not take, so the button ends the agent
+rather than asking it to stop. The worktree, transcripts and metadata
+(including the resume id) remain, and the deliberate close is recorded so
+the automatic resumes below leave that worktree alone until a session
+starts there again.
+
+Reopening builds the agent's resume command (`claude --resume <id>`, or the
+Codex equivalent) through the normal launch shape in the same canonical cwd,
+restoring the full prior conversation. Resuming fails in ways that look like
+success, though: an agent handed a conversation it has rolled away, or one a
+newer version will not read, exits at once, and `remain-on-exit` keeps the
+dead pane, so the name is taken and the terminal attaches to a corpse.
+Reopening therefore works through the ways in until one is still running a
+moment later: the recorded conversation, then the newest conversations the
+worktree's own transcripts name, then a fresh session there. Each attempt
+kills whatever holds the session name first. Relaunching with the original
+prompt is never among them, since it would re-run the whole task against the
+already modified worktree.
 
 While agents or shells run, the app holds a system activity that defers
 idle sleep (`SleepInhibitor`; closing the lid still sleeps), and sessions
@@ -688,6 +725,29 @@ directory to its repository, and every transcript directory whose
 encoded name extends one of the repository's `worktrees/<uuid>`
 containers is scanned too, so conversations from worktrees created and
 deleted by other tooling still appear.
+
+### Conversations outside the sandbox
+
+Everything the app derives from can be rebuilt except one thing: the
+conversations. Worktrees and git objects live in the shared workspace and on
+GitHub, tmux is ephemeral by design, agent credentials can be obtained again
+and configuration comes from the `user/` template. Transcripts live only in
+the sandbox user's home, which is disposable by design and was emptied by
+accident once, taking finished conversations with it.
+
+Each worktree's newest conversation is therefore copied out of the sandbox at
+the moments it is about to matter: when a session is closed, when one is
+resumed, and hourly while one runs. The hourly copy rides the poll that
+already reads the world, skips a transcript that has not moved on and records
+when it last ran in the metadata store, so a session running for a day is
+never more than an hour stale. The copy goes to iCloud Drive when it is set up, and to the app's
+own directory when it is not, one file per worktree with a small index beside
+it naming the worktree, branch, agent and resume id, since a transcript alone
+says none of that. Deleting a worktree, or cleaning it up after a merge,
+takes its copy with it: the conversation is being thrown away deliberately
+and a backup nobody asked to keep is clutter. Only the conversation is
+copied, never the code or anything the agent read, because git and GitHub
+already hold the first and the second is not ours to put in anyone's cloud.
 
 ## State and persistence
 

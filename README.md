@@ -99,6 +99,10 @@ before shipping.
   commit, unwrapped from the narrow column commit messages are written
   to, or drafting them from many with the on-device model (so shipping
   needs no retyping)
+- **Pushes** to your own fork when the repository is not yours to write to,
+  creating it and its remote the first time and opening the pull request from
+  it (so working in someone else's repository needs no setup and no thinking
+  about where the branch goes)
 - **Copies** unresolved review comments, or failing CI steps with their
   actual log output, straight into a prompt, resolves conversations one
   by one, resolves merge conflicts and enables automerge or merges,
@@ -121,6 +125,14 @@ before shipping.
   than the app (so agents survive AgentIDE quitting, crashing or
   updating, expectedly or not; the host shell tab deliberately does not,
   living and dying with the app)
+- **Keeps** a copy of each worktree's newest conversation in iCloud Drive,
+  hourly while it runs and whenever it is closed or resumed, the conversation
+  only, and drops it when the worktree is deleted (so the sandbox user is
+  disposable: its transcripts are the one thing git and GitHub do not hold)
+- **Fits** itself to whatever display it is on: unplugging the monitor a
+  fullscreen window is on drops it back onto the screen that is left, at a
+  size that screen can show, with the panes narrowed to match (so a window
+  is never stranded larger than the display under it)
 - **Keeps** every running shell alive while you move around the app and
   keeps a worktree listed until it is really gone, rebases and failed
   listings included (so only closing a shell or destroying its worktree

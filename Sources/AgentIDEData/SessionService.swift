@@ -124,6 +124,11 @@ public struct SessionService: Sendable {
                     workingDirectory: pane.currentPath,
                 )
             }
+        // The poll is the only thing running while a session is, so
+        // it is what keeps the conversation copies current; the
+        // schedule inside means this costs a dictionary lookup on
+        // almost every tick.
+        await backUpRunningConversations(groups)
         return (groups, foreign)
     }
 

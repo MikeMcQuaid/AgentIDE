@@ -14,31 +14,6 @@ public extension GitHubClient {
         return Self.threads(fromRESTJSON: result?.standardOutput ?? "")
     }
 
-    /// Enough log to diagnose without flooding the clipboard.
-    private static var runLogLimit: Int {
-        // swiftlint:disable:next no_magic_numbers
-        20_000
-    }
-
-    /// `gh run view --log-failed` prefixes every line with its job
-    /// and step names, tab separated.
-    private static var stepPrefixFields: Int {
-        // swiftlint:disable:next no_magic_numbers
-        2
-    }
-
-    /// How many lines of a failed step to keep, and how many before
-    /// its first error line for context.
-    private static var stepTailLines: Int {
-        // swiftlint:disable:next no_magic_numbers
-        60
-    }
-
-    private static var errorContextLines: Int {
-        // swiftlint:disable:next no_magic_numbers
-        5
-    }
-
     // MARK: Public
 
     /// The pull request's review conversation threads with a REST
@@ -107,84 +82,7 @@ public extension GitHubClient {
         )
     }
 
-    /// The pull request's failing checks, one line each, followed by
-    /// each failing Actions run's failed step output; the links
-    /// alone were useless for pasting into an agent. Passing,
-    /// pending and skipped rows are noise for every caller.
-    func failingChecks(repositoryPath: String, number: Int) async -> String {
-        let checks = try? await gh(
-            ["pr", "checks", String(number)],
-            in: repositoryPath,
-            allowFailure: true,
-        )
-        let failing = (checks?.standardOutput ?? "")
-            .split(separator: "\n")
-            .filter { line in
-                let fields = line.split(separator: "\t")
-                return fields.count > 1 && fields[1].localizedCaseInsensitiveContains("fail")
-            }
-            .map(String.init)
-        var sections = failing.joined(separator: "\n")
-        for runID in Self.runIDs(fromCheckLines: failing) {
-            let log = try? await gh(
-                ["run", "view", runID, "--log-failed"],
-                in: repositoryPath,
-                allowFailure: true,
-            )
-            let output = (log?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard output.isEmpty == false else {
-                continue
-            }
-
-            sections += "\n\nFailed steps of run " + runID + ":\n" + Self.failureExcerpt(fromRunLog: output)
-        }
-        return sections
-    }
-
     // MARK: Internal
-
-    /// The useful part of a `gh run view --log-failed` dump: its
-    /// lines carry a repeated `job\tstep\t` prefix, and the failure
-    /// is at the end, so the head of a long log was setup noise
-    /// rather than the error. Each failed step keeps its own tail,
-    /// from its first error line where one exists.
-    internal static func failureExcerpt(fromRunLog log: String) -> String {
-        var steps = [String]()
-        var lines = [String: [String]]()
-        for raw in log.split(separator: "\n", omittingEmptySubsequences: false) {
-            let fields = raw.split(separator: "\t", maxSplits: stepPrefixFields, omittingEmptySubsequences: false)
-            let step = fields.count > stepPrefixFields
-                ? fields[0 ..< stepPrefixFields].joined(separator: " / ")
-                : ""
-            let text = fields.count > stepPrefixFields ? String(fields[stepPrefixFields]) : String(raw)
-            if lines[step] == nil {
-                steps.append(step)
-                lines[step] = []
-            }
-            lines[step]?.append(text)
-        }
-        return steps
-            .map { step in
-                let body = Self.tail(of: lines[step] ?? [])
-                return step.isEmpty ? body : step + "\n" + body
-            }
-            .joined(separator: "\n\n")
-            .prefixWithinLimit(runLogLimit)
-    }
-
-    /// One step's last lines, starting at its first error line when
-    /// it has one: the message that explains the failure sits there,
-    /// with the lines after it as context.
-    internal static func tail(of lines: [String]) -> String {
-        let markers = ["error:", "##[error]", "error ", "failed", "fatal:", "assertion"]
-        let firstError = lines.firstIndex { line in
-            let lowered = line.lowercased()
-            return markers.contains { lowered.contains($0) }
-        }
-        let start = firstError.map { max($0 - errorContextLines, 0) }
-            ?? max(lines.count - stepTailLines, 0)
-        return lines[start...].suffix(stepTailLines).joined(separator: "\n")
-    }
 
     /// Groups the REST inline comments into anchored threads; the
     /// REST rows carry no resolvable thread id, so these render
@@ -214,24 +112,6 @@ public extension GitHubClient {
                 resolveID: "",
             )
         }
-    }
-
-    /// Distinct Actions run ids from the failing check lines'
-    /// links, in order; external checks without an Actions link
-    /// contribute no logs.
-    internal static func runIDs(fromCheckLines lines: [String]) -> [String] {
-        var ids = [String]()
-        for line in lines {
-            guard let range = line.range(of: "/actions/runs/") else {
-                continue
-            }
-
-            let id = String(line[range.upperBound...].prefix(while: \.isNumber))
-            if id.isEmpty == false, ids.contains(id) == false {
-                ids.append(id)
-            }
-        }
-        return ids
     }
 
     /// Decodes the reviewThreads GraphQL answer; a decode failure

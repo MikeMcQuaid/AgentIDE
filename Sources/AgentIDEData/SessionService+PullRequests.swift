@@ -1,5 +1,26 @@
 import AgentIDEDomain
 
+// MARK: - PushDestination
+
+/// Where a branch can be pushed: the repository it came from, or the
+/// viewer's own fork of it when they may not write there.
+public enum PushDestination: Hashable, Sendable {
+    case origin
+    case fork(owner: String)
+
+    // MARK: Public
+
+    /// What `gh pr create` needs to name the branch when it lives in
+    /// a fork, nil when the branch is where the pull request is.
+    public func head(branch: String) -> String? {
+        guard case let .fork(owner) = self else {
+            return nil
+        }
+
+        return owner + ":" + branch
+    }
+}
+
 // MARK: - MergeCleanupReport
 
 /// What a post-merge cleanup did and what it could not do, so the
@@ -31,14 +52,48 @@ public extension SessionService {
     /// unsigned tip refuses: every pushed commit must be GPG signed
     /// (a local hook enforces the same), and Rebase on origin is the
     /// signing path.
-    func push(worktree: Worktree) async throws {
+    func push(worktree: Worktree) async throws -> PushDestination {
         guard await git.isCommitSigned(worktreePath: worktree.path) else {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )
         }
 
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+        let destination = await pushDestination(worktree: worktree)
+        guard case let .fork(owner) = destination else {
+            try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+            return destination
+        }
+
+        try await github.ensureFork(worktreePath: worktree.path, remoteName: owner)
+        try await git.push(worktreePath: worktree.path, branch: worktree.branch, remote: owner)
+        return destination
+    }
+
+    /// Opens the pull request for a worktree's branch, naming the
+    /// branch as `owner:branch` when it lives in a fork: the pull
+    /// request belongs to the repository it is opened against rather
+    /// than the one holding the branch.
+    func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
+        try await github.createPullRequest(
+            worktreePath: worktree.path,
+            title: title,
+            body: body,
+            head: pushDestination(worktree: worktree).head(branch: worktree.branch),
+        )
+    }
+
+    /// Where this branch belongs: the repository itself when GitHub
+    /// says the branch may be pushed there, and the viewer's own fork
+    /// of it otherwise.
+    func pushDestination(worktree: Worktree) async -> PushDestination {
+        guard await github.canPush(worktreePath: worktree.path) == false,
+              let owner = await github.viewer(worktreePath: worktree.path)
+        else {
+            return .origin
+        }
+
+        return .fork(owner: owner)
     }
 
     /// Whether the worktree's tip commit is GPG signed, gating Push.

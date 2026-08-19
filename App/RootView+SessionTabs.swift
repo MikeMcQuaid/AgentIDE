@@ -232,14 +232,13 @@ extension RootView {
                 .accessibilityLabel("Close session")
         }
         .buttonStyle(.plain)
-        .hoverHelp("Kill the tmux session; the worktree and conversation survive for resuming")
+        .hoverHelp("End the session and its tmux session now; the worktree and conversation survive for resuming")
     }
 
     private func close(_ session: AgentSession, in item: WorktreeItem) async {
-        try? await dependencies.service.closeSession(
-            sessionName: session.name,
-            worktreePath: item.worktree.path,
-        )
+        // The pane goes now, not when tmux has been asked again.
+        dependencies.dashboard.forgetSession(at: item.worktree.path)
+        await dependencies.service.closeSession(sessionName: session.name, worktree: item.worktree)
         await dependencies.dashboard.refresh()
     }
 }
@@ -313,6 +312,10 @@ extension RootView {
             EditorPane(
                 worktreePath: item.worktree.path,
                 service: dependencies.service,
+                // The closure stays a non-final argument: the
+                // formatter rewrites a trailing one after a
+                // multiline call.
+                onFinishedWaiting: { finishedWaitingEdit() },
                 waitingEdit: waitingEdit(in: item.worktree.path),
             )
 

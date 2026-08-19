@@ -10,6 +10,9 @@ public extension SessionService {
     /// session mapping survives, which is how the conversation stays
     /// attributed to the repository.
     func deleteWorktree(item: WorktreeItem) async throws {
+        // The conversation is being thrown away deliberately, so its
+        // copy goes too rather than lingering in iCloud.
+        ConversationBackup(paths: paths).forget(worktree: item.worktree)
         let worktree = item.worktree
         guard worktree.path != worktree.repositoryPath else {
             throw CommandError(
@@ -68,6 +71,9 @@ public extension SessionService {
     /// force delete is a separate, confirmed action. Returns the
     /// refusal, nil when the worktree was removed.
     func cleanUpMergedWorktree(item: WorktreeItem, baseRef: String) async throws -> CleanupRefusal? {
+        // A merged worktree is about to go; its conversation copy is
+        // dropped only once the removal itself succeeds, below.
+        let backup = ConversationBackup(paths: paths)
         let worktree = item.worktree
         guard await git.isDirty(worktreePath: worktree.path) == false else {
             return .dirty
@@ -91,6 +97,7 @@ public extension SessionService {
             branch: worktree.branch,
         )
         removeFriendlySymlink(worktree: worktree)
+        backup.forget(worktree: worktree)
         return nil
     }
 
