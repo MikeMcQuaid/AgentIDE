@@ -114,6 +114,27 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   name, never index, so reordering cannot repoint them.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
+- `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
+  every build of SwiftTerm-dependent targets, which is the app and
+  most tests. The toolchain is a downloadable asset each user mounts
+  under its own home, but mounts are visible to everyone: when the
+  host user has it mounted, Xcode finds that mount, cannot read it
+  across the sandbox boundary and refuses rather than making its own.
+  Eject the host user's mount, as the host user, then ask for the
+  component again inside the sandbox, which mounts its own copy at
+  `<hash>_1`:
+
+  ```bash
+  cd ~/Library/Developer/DVTDownloads/MetalToolchain/mounts
+  diskutil eject <hash>
+  xcodebuild -downloadComponent MetalToolchain  # in the sandbox
+  ```
+
+  The coordinator writes its failures to stderr, not `os_log`, so
+  `log show` finds nothing however good the predicate is. Until it is
+  fixed, `swift build --target AgentIDEDomain`, `--target
+  AgentIDEData` and `--target AgentIDEDataTests` still typecheck,
+  since none of them reach SwiftTerm.
 - tmux servers and sessions outlive the app and only read config at
   start, so changes to launch commands, configs or session shapes
   often need existing tmux sessions or servers restarted (or leaked
