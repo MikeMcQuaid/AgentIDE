@@ -277,24 +277,4 @@ struct PullRequestsModelTests {
         await pending.performMergeAction()
         #expect(pendingCleaned == false)
     }
-
-    @Test
-    func `the checked-out branch drives listing and actions`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        model.fetchCurrentBranch = { _ in "switched" }
-        var listed: GitHubClient.ListScope?
-        model.fetchList = { scope, _ in
-            listed = scope
-            return [summary(1, head: "switched")]
-        }
-        var pushed: String?
-        model.performPush = { worktree in pushed = worktree.branch }
-
-        await model.reload()
-        #expect(listed == .branch("switched"))
-        #expect(model.needsCreateForm == false)
-
-        _ = await model.push()
-        #expect(pushed == "switched")
-    }
 }

@@ -20,4 +20,27 @@ extension PullRequestsModelTests {
         #expect(PushDestination.fork(owner: "MikeMcQuaid").head(branch: "feature") == "MikeMcQuaid:feature")
         #expect(PushDestination.origin.head(branch: "feature") == nil)
     }
+
+    @Test
+    func `the checked-out branch drives listing and actions`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "switched" }
+        var listed: GitHubClient.ListScope?
+        model.fetchList = { scope, _ in
+            listed = scope
+            return [summary(1, head: "switched")]
+        }
+        var pushed: String?
+        model.performPush = { worktree in
+            pushed = worktree.branch
+            return .origin
+        }
+
+        await model.reload()
+        #expect(listed == .branch("switched"))
+        #expect(model.needsCreateForm == false)
+
+        _ = await model.push()
+        #expect(pushed == "switched")
+    }
 }

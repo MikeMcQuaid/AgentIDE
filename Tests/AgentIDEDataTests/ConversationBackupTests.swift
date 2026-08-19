@@ -32,7 +32,7 @@ struct ConversationBackupTests {
         )
 
         backup.store(past, worktree: worktree)
-        let copied = try #require(backup.stored(worktree: worktree))
+        let copied = root + "/cloud/platform-zendesk-sla-alignment/conversation.jsonl"
         #expect(try String(contentsOfFile: copied, encoding: .utf8) == "first\n")
 
         // A conversation that has moved on replaces its copy, so what
@@ -54,7 +54,7 @@ struct ConversationBackupTests {
 
         // Deleting the worktree is deliberate, so the copy goes too.
         backup.forget(worktree: worktree)
-        #expect(backup.stored(worktree: worktree) == nil)
+        #expect(FileManager.default.fileExists(atPath: copied) == false)
     }
 
     // MARK: Private

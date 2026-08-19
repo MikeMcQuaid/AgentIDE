@@ -11,27 +11,26 @@ import Foundation
 /// Drive carries it off the machine, and a copy is dropped when its
 /// worktree is deleted, so the backups track the work rather than
 /// accumulating behind it.
-public struct ConversationBackup: Sendable {
+struct ConversationBackup {
     // MARK: Lifecycle
 
     /// Creates a backup store. `directory` overrides where copies go,
     /// for tests; the default is iCloud Drive when it is set up on
     /// this Mac and the app's own support directory when it is not.
-    public init(paths: WorkspacePaths, directory: String? = nil) {
-        self.paths = paths
+    init(paths: WorkspacePaths, directory: String? = nil) {
         self.directory = directory ?? Self.cloudDirectory ?? paths.appDirectory + "/conversations"
     }
 
-    // MARK: Public
+    // MARK: Internal
 
     /// Where copies are kept, so the app can say so.
-    public let directory: String
+    let directory: String
 
     /// Copies a worktree's newest conversation, replacing the copy
     /// already there: one file per worktree, the one a resume would
     /// continue. Cheap enough to call on every poll, since an
     /// unchanged transcript is not copied again.
-    public func store(_ past: TranscriptSession, worktree: Worktree) {
+    func store(_ past: TranscriptSession, worktree: Worktree) {
         let destination = path(worktree: worktree, extension: URL(fileURLWithPath: past.path).pathExtension)
         let manager = FileManager.default
         guard let source = try? manager.attributesOfItem(atPath: past.path) else {
@@ -57,21 +56,10 @@ public struct ConversationBackup: Sendable {
     /// Drops a worktree's copy, which deleting the worktree does:
     /// the conversation is being thrown away deliberately, and a
     /// backup nobody asked to keep is clutter in iCloud.
-    public func forget(worktree: Worktree) {
+    func forget(worktree: Worktree) {
         let manager = FileManager.default
         let folder = directory + "/" + slug(worktree)
         try? manager.removeItem(atPath: folder)
-    }
-
-    /// The copy kept for a worktree, nil when there is none: what a
-    /// restore reads back into the sandbox.
-    public func stored(worktree: Worktree) -> String? {
-        let folder = directory + "/" + slug(worktree)
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder)) ?? []
-        return names
-            .filter { $0.hasPrefix(Self.transcriptName + ".") }
-            .min()
-            .map { folder + "/" + $0 }
     }
 
     // MARK: Private
@@ -94,8 +82,6 @@ public struct ConversationBackup: Sendable {
         try? FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
         return container.path
     }
-
-    private let paths: WorkspacePaths
 
     /// One folder per worktree, named for what it is rather than the
     /// uuid its path carries.
