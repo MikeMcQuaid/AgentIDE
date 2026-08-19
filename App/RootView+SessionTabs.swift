@@ -238,10 +238,7 @@ extension RootView {
     private func close(_ session: AgentSession, in item: WorktreeItem) async {
         // The pane goes now, not when tmux has been asked again.
         dependencies.dashboard.forgetSession(at: item.worktree.path)
-        await dependencies.service.closeSession(
-            sessionName: session.name,
-            worktreePath: item.worktree.path,
-        )
+        await dependencies.service.closeSession(sessionName: session.name, worktree: item.worktree)
         await dependencies.dashboard.refresh()
     }
 }

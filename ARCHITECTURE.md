@@ -628,9 +628,13 @@ shim rather than a protocol:
    dims until the tip commit verifies and the service refuses regardless.
    The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
    base to sign the minimum: the branch's own origin ref when it exists,
-   every commit unique to it verifies and only new local commits need
-   signatures, keeping pushed history's hashes; otherwise origin/HEAD,
-   re-signing the whole branch.
+   is still an ancestor of the branch, every commit unique to it verifies
+   and only new local commits need signatures, keeping pushed history's
+   hashes; otherwise origin/HEAD, re-signing the whole branch. The
+   ancestor test is what keeps an amended branch out of that path:
+   amending a pushed commit leaves the pushed one behind as a stale twin
+   rather than a parent, and rebasing on it replays the amended work on
+   top of what it replaced.
 
 ### Cleanup (Tidy up)
 

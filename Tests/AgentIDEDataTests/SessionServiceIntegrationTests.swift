@@ -105,7 +105,7 @@ struct SessionServiceIntegrationTests {
         let overview = await world.service.overview()
         let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("doomed_work") })
         let worktreePath = item.worktree.path
-        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktreePath)
+        await world.service.closeSession(sessionName: sessionName, worktree: item.worktree)
 
         // A conversation the deleted worktree leaves behind.
         let runner = PromptCaptureRunner()
@@ -140,7 +140,7 @@ struct SessionServiceIntegrationTests {
         )
         var overview = await world.service.overview()
         var item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("anchor_work") })
-        try await world.service.closeSession(sessionName: sessionName, worktreePath: item.worktree.path)
+        await world.service.closeSession(sessionName: sessionName, worktree: item.worktree)
         let git = GitClient(runner: FoundationProcessRunner())
         let base = "main"
 
@@ -178,7 +178,7 @@ struct SessionServiceIntegrationTests {
         let worktree = try #require(
             overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("original_work") }?.worktree,
         )
-        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
+        await world.service.closeSession(sessionName: sessionName, worktree: worktree)
 
         // A finished conversation left behind by any tool.
         let runner = PromptCaptureRunner()
@@ -228,7 +228,7 @@ struct SessionServiceIntegrationTests {
                 .first { $0.worktree.branch.hasPrefix("doomed_worktree") }?
                 .worktree,
         )
-        try await world.service.closeSession(sessionName: sessionName, worktreePath: worktree.path)
+        await world.service.closeSession(sessionName: sessionName, worktree: worktree)
 
         let runner = PromptCaptureRunner()
         let directory = try #require(runner.transcriptDirectory(

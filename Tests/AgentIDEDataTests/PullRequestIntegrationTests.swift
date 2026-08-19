@@ -45,5 +45,12 @@ struct PullRequestIntegrationTests {
         try await TestSupport.runGit(["push", "-q", "-u", "origin", "feature"], in: path)
         #expect(await git.remoteBranchExists(worktreePath: path, branch: "feature"))
         #expect(await world.service.signedRebaseTarget(worktreePath: path, branch: "feature") == "origin/HEAD")
+
+        // Amending a pushed commit leaves what was pushed behind as
+        // a stale twin rather than a parent, so rebasing there would
+        // replay the amended work on top of what it replaced.
+        try await TestSupport.runGit(["commit", "-q", "--amend", "-m", "Add more, again"], in: path)
+        #expect(await git.isAncestor(worktreePath: path, ref: "origin/feature", of: "HEAD") == false)
+        #expect(await world.service.signedRebaseTarget(worktreePath: path, branch: "feature") == "origin/HEAD")
     }
 }

@@ -12,13 +12,26 @@ struct WindowConfigurator: NSViewRepresentable {
         // MARK: Lifecycle
 
         deinit {
-            // The observers are removed with the view.
+            // The observers go when the view leaves its window,
+            // which AppKit always tells it about; a deinit cannot
+            // touch them, since Swift will not let one reach
+            // non-Sendable state.
         }
 
         // MARK: Internal
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            guard window != nil else {
+                // Block-based observers outlive their view: the
+                // centre holds the token, so one left behind keeps
+                // being delivered for the life of the process.
+                let centre = NotificationCenter.default
+                observers.forEach(centre.removeObserver)
+                observers = []
+                return
+            }
+
             configureWindow()
             observeDisplays()
         }
