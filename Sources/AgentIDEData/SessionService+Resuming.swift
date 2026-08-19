@@ -47,6 +47,35 @@ extension SessionService {
         ConversationBackup(paths: paths).store(newest, worktree: worktree)
     }
 
+    /// Copies the conversation of every worktree with a running
+    /// session, at most once an hour each and only when the
+    /// transcript has moved on. A session can run for a day between
+    /// being started and being closed, and a copy taken only at
+    /// those two moments would be a day stale when the sandbox went
+    /// away. Off the caller's actor: this reads and copies files
+    /// while the window is being used.
+    @concurrent
+    func backUpRunningConversations(_ groups: [RepositoryGroup]) async {
+        var metadata = store.load()
+        var copied = false
+        let now = Date()
+        for item in groups.flatMap(\.items) where item.session?.status == .running {
+            let last = metadata.conversationBackupAt[item.worktree.path] ?? .distantPast
+            guard now.timeIntervalSince(last) >= Self.backupIntervalSeconds else {
+                continue
+            }
+
+            backUpConversation(of: item.worktree)
+            metadata.conversationBackupAt[item.worktree.path] = now
+            copied = true
+        }
+        guard copied else {
+            return
+        }
+
+        store.save(metadata)
+    }
+
     /// The ways to continue a worktree's own agent, best first: the
     /// conversation recorded for it, then the conversations its
     /// transcripts still name, then a fresh one. Relaunching with
@@ -70,6 +99,11 @@ extension SessionService {
     }
 
     // MARK: Private
+
+    /// How often a running session's conversation is copied: often
+    /// enough that little is lost, rarely enough that copying a long
+    /// transcript is never in anyone's way.
+    private static let backupIntervalSeconds = 3_600.0
 
     /// How many recorded conversations to offer the agent before
     /// giving up on continuing one: the newest few are the ones a

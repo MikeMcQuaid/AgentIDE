@@ -126,9 +126,9 @@ before shipping.
   updating, expectedly or not; the host shell tab deliberately does not,
   living and dying with the app)
 - **Keeps** a copy of each worktree's newest conversation in iCloud Drive,
-  the conversation only, and drops it when the worktree is deleted (so the
-  sandbox user is disposable: its transcripts are the one thing git and
-  GitHub do not already hold)
+  hourly while it runs and whenever it is closed or resumed, the conversation
+  only, and drops it when the worktree is deleted (so the sandbox user is
+  disposable: its transcripts are the one thing git and GitHub do not hold)
 - **Fits** itself to whatever display it is on: unplugging the monitor a
   fullscreen window is on drops it back onto the screen that is left, at a
   size that screen can show, with the panes narrowed to match (so a window

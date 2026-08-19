@@ -728,8 +728,11 @@ the sandbox user's home, which is disposable by design and was emptied by
 accident once, taking finished conversations with it.
 
 Each worktree's newest conversation is therefore copied out of the sandbox at
-the moments it is about to matter: when a session is closed, and when one is
-resumed. The copy goes to iCloud Drive when it is set up, and to the app's
+the moments it is about to matter: when a session is closed, when one is
+resumed, and hourly while one runs. The hourly copy rides the poll that
+already reads the world, skips a transcript that has not moved on and records
+when it last ran in the metadata store, so a session running for a day is
+never more than an hour stale. The copy goes to iCloud Drive when it is set up, and to the app's
 own directory when it is not, one file per worktree with a small index beside
 it naming the worktree, branch, agent and resume id, since a transcript alone
 says none of that. Deleting a worktree, or cleaning it up after a merge,
