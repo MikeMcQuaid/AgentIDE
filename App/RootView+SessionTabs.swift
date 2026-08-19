@@ -313,6 +313,10 @@ extension RootView {
             EditorPane(
                 worktreePath: item.worktree.path,
                 service: dependencies.service,
+                // The closure stays a non-final argument: the
+                // formatter rewrites a trailing one after a
+                // multiline call.
+                onFinishedWaiting: { finishedWaitingEdit() },
                 waitingEdit: waitingEdit(in: item.worktree.path),
             )
 

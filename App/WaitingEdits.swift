@@ -37,7 +37,7 @@ final class WaitingEdits {
         for await edits in service.pendingEdits() {
             all = edits
             if edits.isEmpty {
-                restorePane()
+                restorePreviousPane()
             }
             guard let edit = edits.first, edit.id != shown else {
                 continue
@@ -47,6 +47,20 @@ final class WaitingEdits {
             takeOverPane(for: edit, dashboard: dashboard)
             await service.claimEdit(edit)
         }
+    }
+
+    /// Puts back whatever the utility pane was showing before a
+    /// waiting file took it over. Called when the editor's own
+    /// buttons finish one, so the pane comes back immediately rather
+    /// than when the spool next answers, and again when nothing is
+    /// waiting, which covers a command that went away by itself.
+    func restorePreviousPane() {
+        guard let previousTab else {
+            return
+        }
+
+        self.previousTab = nil
+        UserDefaults.standard.set(previousTab, forKey: UtilityTabTarget.key)
     }
 
     // MARK: Private
@@ -62,17 +76,11 @@ final class WaitingEdits {
             dashboard.select(item)
         }
         let defaults = UserDefaults.standard
-        previousTab = previousTab ?? defaults.string(forKey: UtilityTabTarget.key)
+        // A tab the user has never switched by hand is not in the
+        // defaults at all, and without a name to go back to the pane
+        // used to stay on the editor once the command was answered.
+        previousTab = previousTab ?? defaults.string(forKey: UtilityTabTarget.key) ?? UtilityTab.review.rawValue
         defaults.set(true, forKey: UtilityTabTarget.visibilityKey)
         defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
-    }
-
-    private func restorePane() {
-        guard let previousTab else {
-            return
-        }
-
-        self.previousTab = nil
-        UserDefaults.standard.set(previousTab, forKey: UtilityTabTarget.key)
     }
 }

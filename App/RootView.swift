@@ -166,6 +166,12 @@ struct RootView: View {
         waiting.edit(in: worktreePath)
     }
 
+    /// Dealing with a waiting file puts the pane back where it was,
+    /// which is nearly always the shell the command was typed in.
+    func finishedWaitingEdit() {
+        waiting.restorePreviousPane()
+    }
+
     func visitBrowser(at path: String) {
         visitedBrowsers.insert(path)
     }
