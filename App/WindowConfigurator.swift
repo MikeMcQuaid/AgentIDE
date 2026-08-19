@@ -12,7 +12,7 @@ struct WindowConfigurator: NSViewRepresentable {
         // MARK: Lifecycle
 
         deinit {
-            // Nothing to clean up.
+            // The observers are removed with the view.
         }
 
         // MARK: Internal
@@ -20,6 +20,7 @@ struct WindowConfigurator: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             configureWindow()
+            observeDisplays()
         }
 
         func configureWindow() {
@@ -45,6 +46,83 @@ struct WindowConfigurator: NSViewRepresentable {
         // MARK: Private
 
         private static let autosaveName = "AgentIDEMainWindow"
+
+        /// Long enough for the fullscreen animation to finish before
+        /// the frame is measured; the notification arrives while the
+        /// window is still leaving its space.
+        private static let settleSeconds = 0.6
+
+        private var observers: [any NSObjectProtocol] = []
+
+        /// Displays come and go. Unplugging the one a fullscreen
+        /// window is on leaves the window black on a space with no
+        /// screen behind it, and coming out of fullscreen restores
+        /// the frame it had on the display that has gone: wider than
+        /// the remaining screen, so its edges cannot be dragged and
+        /// its green button cannot fill a screen it does not fit.
+        /// Both are handled here rather than left to the user.
+        private func observeDisplays() {
+            guard observers.isEmpty, let window else {
+                return
+            }
+
+            let centre = NotificationCenter.default
+            observers.append(centre.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification,
+                object: nil,
+                queue: .main,
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.displaysChanged() }
+            })
+            observers.append(centre.addObserver(
+                forName: NSWindow.didExitFullScreenNotification,
+                object: window,
+                queue: .main,
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.fitToScreen() }
+            })
+        }
+
+        private func displaysChanged() {
+            guard let window else {
+                return
+            }
+
+            // A fullscreen window whose screen has gone cannot be
+            // recovered in place: leaving fullscreen puts it back on
+            // a screen that exists.
+            if window.styleMask.contains(.fullScreen), window.screen == nil {
+                window.toggleFullScreen(nil)
+            }
+            fitToScreen()
+            // Leaving fullscreen is animated, so the frame that
+            // needs fitting is not there yet.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
+                self?.fitToScreen()
+            }
+        }
+
+        /// Brings the frame back inside the screen it is on, keeping
+        /// its size where it fits and its corner where it can.
+        private func fitToScreen() {
+            guard let window,
+                  window.styleMask.contains(.fullScreen) == false,
+                  let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+            else {
+                return
+            }
+
+            var frame = window.frame
+            frame.size.width = min(frame.width, visible.width)
+            frame.size.height = min(frame.height, visible.height)
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+            frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+            guard frame != window.frame else {
+                return
+            }
+
+            window.setFrame(frame, display: true, animate: false)
+        }
 
         /// The frame autosave restores position and size. Fullscreen
         /// deliberately does not restore: macOS reopens fullscreen

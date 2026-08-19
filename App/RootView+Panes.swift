@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import DashboardFeature
 import SessionFeature
 import SwiftUI
 
@@ -6,6 +7,43 @@ import SwiftUI
 
 /// The shell tab's layers, split from the view for length.
 extension RootView {
+    /// One conversations UI everywhere: a live session shows its
+    /// terminal; anything else shows the conversation list, scoped
+    /// to the worktree or covering the whole repository on its page;
+    /// a worktree with nothing to list offers the new session form.
+    @ViewBuilder
+    func primary(for item: WorktreeItem) -> some View {
+        if item.isPlaceholder {
+            // The row exists before the worktree does.
+            ProgressView("Creating worktree and starting the agent…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if isResuming, item.session == nil {
+            ProgressView("Resuming conversation…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let session = item.session {
+            agentTerminal(for: session, isActive: isCovered == false)
+                .id(session.name)
+                // Dropped files stage into the shared workspace (the
+                // sandbox cannot read host paths) and their staged
+                // paths type into the agent.
+                .dropDestination(for: URL.self) { urls, _ in
+                    dropFiles(urls, into: session.name)
+                }
+        } else if item.worktree.path == item.worktree.repositoryPath {
+            repositoryConversations(for: item)
+        } else if item.pastSessions.isEmpty == false {
+            worktreeConversations(for: item)
+        } else {
+            CreateSessionPane(
+                worktree: item.worktree,
+                model: dependencies.dashboard,
+                canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
+                onResume: { await resumeLatest(in: item) },
+                onStarted: { await sessionStarted() },
+            )
+        }
+    }
+
     /// A running shell stays mounted whichever tab, worktree or page
     /// shows, so its terminal survives everything short of destroying
     /// the worktree it runs in. Both layers always fill the pane, so

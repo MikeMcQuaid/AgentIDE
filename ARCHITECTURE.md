@@ -511,6 +511,17 @@ long as the thing inside them should live, not for as long as it is visible:
    when the view answers to the question, and a page it will not name shows
    no figures rather than wrong ones.
 
+4. Displays are not fixed either. Unplugging the display a fullscreen
+   window is on leaves the window black on a space with nothing behind it,
+   and coming out of fullscreen restores the frame it had on the display
+   that has gone, which the remaining screen can neither show nor let the
+   user drag smaller. The window leaves fullscreen when its screen goes and
+   fits its frame back inside whichever screen it lands on, and the panes
+   fit the width it ends up with: the utility pane narrows first, then the
+   sidebar, and a window too narrow for all three hides the utility pane
+   for the layout only, so it comes back with the room rather than being
+   forgotten.
+
 ### Editing what a command is waiting on (Review)
 
 Commands run in a shell pane regularly want an editor: `git rebase -i` for

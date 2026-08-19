@@ -22,6 +22,25 @@ struct RootView: View {
     @AppStorage("showsUtilityPane")
     var showsUtilityPane = true
 
+    /// Whether the launch's one automatic resume is running, so the
+    /// pane it fills can say so; internal because the extension
+    /// files cannot see the view's own state.
+    var isResuming: Bool {
+        isAutoResuming
+    }
+
+    /// Whether the utility pane is both wanted and able to fit: a
+    /// window too narrow for three panes shows the two the work
+    /// happens in, without forgetting the pane was asked for.
+    var showsUtility: Bool {
+        PaneLayout(
+            width: windowWidth,
+            sidebar: sidebarWidth,
+            utility: utilityPaneWidth,
+            showsUtility: showsUtilityPane,
+        ).showsUtility
+    }
+
     /// Whether a middle page covers the split: its panes stay
     /// mounted underneath and must not take clicks or keystrokes.
     var isCovered: Bool {
@@ -52,13 +71,17 @@ struct RootView: View {
         // views neither persisted divider positions nor honoured
         // ideal widths on this OS. The sidebar never hides; it
         // resizes down to a slim strip instead.
+        // The window's width decides what the panes may be: widths
+        // dragged on a large display do not fit a small one, and a
+        // window whose display was unplugged lands on whatever is
+        // left.
         HStack(spacing: 0) {
             DashboardView(model: dependencies.dashboard)
                 .frame(width: sidebarWidth)
                 .frame(maxHeight: .infinity)
                 .background(SidebarMaterial())
                 .ignoresSafeArea(.container, edges: .top)
-            PaneDivider(width: $sidebarWidth, range: Self.sidebarRange, controlsLeadingPane: true)
+            PaneDivider(width: $sidebarWidth, range: PaneLayout.sidebarRange, controlsLeadingPane: true)
                 .ignoresSafeArea(.container, edges: .top)
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,6 +89,7 @@ struct RootView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fitPanes(to: $0) }
         .sheet(isPresented: sessionManagerBinding) { sessionManager }
         .task {
             FlavourIcon.apply()
@@ -179,9 +203,6 @@ struct RootView: View {
 
     /// Slim enough for icon-and-truncated-text rows while staying
     /// wider than the traffic lights band.
-    private static let sidebarRange = 150.0 ... 440.0
-    private static let utilityRange = 340.0 ... 1_200.0
-    private static let primaryMinimum: CGFloat = 420
     private static let stripSpacing: CGFloat = 4
 
     /// The utility header row's height: the tab capsules plus the
@@ -246,6 +267,9 @@ struct RootView: View {
     @AppStorage("utilityPaneWidth")
     private var utilityPaneWidth = 480.0
 
+    /// What the window is now, which the panes are fitted to.
+    @State private var windowWidth: CGFloat = 0
+
     /// Whether anything is running that idle sleep would interrupt.
     private var hasLiveWork: Bool {
         runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
@@ -286,21 +310,21 @@ struct RootView: View {
             // session strip's empty right end, in exactly the spot
             // the pane header shows it, so it never moves on toggle.
             .overlay(alignment: .topTrailing) {
-                if showsUtilityPane == false {
+                if showsUtility == false {
                     utilityToggleButton
                         .frame(height: Self.toggleRowHeight)
                         .padding(.trailing, Self.stripSpacing)
                 }
             }
             .frame(
-                minWidth: Self.primaryMinimum,
+                minWidth: PaneLayout.primaryMinimum,
                 maxWidth: .infinity,
                 maxHeight: .infinity,
                 alignment: .top,
             )
             .ignoresSafeArea(.container, edges: .top)
-            if showsUtilityPane {
-                PaneDivider(width: $utilityPaneWidth, range: Self.utilityRange, controlsLeadingPane: false)
+            if showsUtility {
+                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false)
                     .ignoresSafeArea(.container, edges: .top)
                 utilityPane(for: item)
                     .frame(width: utilityPaneWidth)
@@ -336,40 +360,22 @@ struct RootView: View {
         }
     }
 
-    /// One conversations UI everywhere: a live session shows its
-    /// terminal; anything else shows the conversation list, scoped
-    /// to the worktree or covering the whole repository on its page;
-    /// a worktree with nothing to list offers the new session form.
-    @ViewBuilder
-    private func primary(for item: WorktreeItem) -> some View {
-        if item.isPlaceholder {
-            // The row exists before the worktree does.
-            ProgressView("Creating worktree and starting the agent…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if isAutoResuming, item.session == nil {
-            ProgressView("Resuming conversation…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let session = item.session {
-            agentTerminal(for: session, isActive: isCovered == false)
-                .id(session.name)
-                // Dropped files stage into the shared workspace (the
-                // sandbox cannot read host paths) and their staged
-                // paths type into the agent.
-                .dropDestination(for: URL.self) { urls, _ in
-                    dropFiles(urls, into: session.name)
-                }
-        } else if item.worktree.path == item.worktree.repositoryPath {
-            repositoryConversations(for: item)
-        } else if item.pastSessions.isEmpty == false {
-            worktreeConversations(for: item)
-        } else {
-            CreateSessionPane(
-                worktree: item.worktree,
-                model: dependencies.dashboard,
-                canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
-                onResume: { await resumeLatest(in: item) },
-                onStarted: { await sessionStarted() },
-            )
+    /// Narrows the panes to what the window can hold. The widths
+    /// are written back, so the dividers keep dragging from where
+    /// the panes actually are.
+    private func fitPanes(to width: CGFloat) {
+        windowWidth = width
+        let layout = PaneLayout(
+            width: width,
+            sidebar: sidebarWidth,
+            utility: utilityPaneWidth,
+            showsUtility: showsUtilityPane,
+        )
+        if layout.sidebar != sidebarWidth {
+            sidebarWidth = layout.sidebar
+        }
+        if layout.utility != utilityPaneWidth {
+            utilityPaneWidth = layout.utility
         }
     }
 }
