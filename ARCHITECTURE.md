@@ -524,7 +524,14 @@ long as the thing inside them should live, not for as long as it is visible:
    window is on leaves the window black on a space with nothing behind it,
    and coming out of fullscreen restores the frame it had on the display
    that has gone, which the remaining screen can neither show nor let the
-   user drag smaller. The window leaves fullscreen when its screen goes and
+   user drag smaller. A fullscreen window that macOS moves to a surviving
+   screen keeps the frame of the one that went, drawing its content outside
+   the new screen so only the black behind it shows, which is why fitting
+   covers fullscreen too: the frame is set to the screen the window is now
+   on, and a redraw asked for, on entering and leaving fullscreen, on
+   changing screen and on any change to the displays themselves, each
+   fitted twice since those transitions animate. A window left with no
+   screen at all leaves fullscreen, and then
    fits its frame back inside whichever screen it lands on, and the panes
    fit the width it ends up with: the utility pane narrows first, then the
    sidebar, and a window too narrow for all three hides the utility pane
