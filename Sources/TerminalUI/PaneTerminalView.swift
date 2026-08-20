@@ -28,6 +28,21 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// already knows.
     var onPaste: ((String) -> Bool)?
 
+    /// Keeps a selection while output arrives. SwiftTerm drops the
+    /// selection on every line feed whenever mouse reporting is on,
+    /// which it always is here so that an agent's own scrolling and
+    /// pagers work, and an agent writing a long answer feeds a line
+    /// at a time: selecting anything while one was thinking was
+    /// therefore impossible. Nothing is lost by keeping it, since
+    /// SwiftTerm already moves a selection with the text it covers,
+    /// and that is exactly what it does when mouse reporting is off.
+    override func linefeed(source: Terminal) {
+        guard selectionActive else {
+            super.linefeed(source: source)
+            return
+        }
+    }
+
     /// Pastes the clipboard, offering it to the owner first.
     override func paste(_ sender: Any) {
         guard let text = NSPasteboard.general.string(forType: .string),
