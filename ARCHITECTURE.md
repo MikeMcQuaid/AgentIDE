@@ -170,8 +170,9 @@ outlive the app; agent panes additionally reflow multi-line copies for
 prose and Option-drag copies a rectangle with gutter marks trimmed.
 Programs that request the mouse get it, matching every terminal:
 Claude Code scrolls its own internal transcript (which never reaches
-scrollback, so no scrollbar can exist for it) and pagers scroll
-natively, with Shift bypassing to local selection and scrolling;
+scrollback, so no scrollbar can exist for it; agent panes hide the
+scroll indicator for that reason, and SwiftTerm gives the reserved
+width back to the terminal) and pagers scroll natively, with Shift bypassing to local selection and scrolling;
 programs that leave the mouse alone, Codex and plain shells included,
 select and scroll natively with no modifier.
 

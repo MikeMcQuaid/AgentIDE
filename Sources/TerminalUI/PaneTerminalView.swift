@@ -80,6 +80,16 @@ final class PaneTerminalView: LocalProcessTerminalView {
         pasteboard.clearContents()
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
     }
+
+    /// Hides the scroll indicator. An agent pane's scrollback lives
+    /// in tmux, which owns the scrolling, so the knob never moves
+    /// and only takes up room; SwiftTerm gives the reserved width
+    /// back to the terminal once it is hidden.
+    func hideScroller() {
+        for scroller in subviews.compactMap({ $0 as? NSScroller }) {
+            scroller.isHidden = true
+        }
+    }
 }
 
 // MARK: - BlockSelector

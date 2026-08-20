@@ -112,6 +112,7 @@ struct TerminalRepresentable: NSViewRepresentable {
             // The coordinator speaks the control protocol; a local
             // shell keeps the view's own PTY wiring instead.
             view.terminalDelegate = context.coordinator
+            view.hideScroller()
         } else {
             view.processDelegate = context.coordinator
         }
