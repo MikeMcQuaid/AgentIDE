@@ -589,7 +589,13 @@ shim rather than a protocol:
    matching one is a name collision rather than the branch's work.
    No cached answer is ever treated as final, however green: an
    approved, passing pull request is exactly the one about to
-   merge, and skipping it froze rows as open forever.
+   merge, and skipping it froze rows as open forever. Refresh, on
+   the context menu of every sidebar row and repository header,
+   drops the waits for the repository right-clicked and asks about
+   its branches and its merge queue at once, including during an
+   outage the poll is riding out; one repository rather than all of
+   them, since asking about everything is how a rate limit
+   arrives.
 3. Poll cadence is tiered by attention and cached per branch: the selected
    worktree refreshes most often, then its repository's other worktrees,
    then other expanded repositories; repositories collapsed in the sidebar

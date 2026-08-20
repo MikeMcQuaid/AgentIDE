@@ -125,6 +125,7 @@ public struct DashboardView: View {
             .buttonStyle(.plain)
             .hoverHelp("Start a new agent session in this repository")
         }
+        .contextMenu { refreshAction(for: group.repository.path) }
     }
 
     private func headerLabel(for group: RepositoryGroup) -> some View {
@@ -205,6 +206,7 @@ public struct DashboardView: View {
 
     @ViewBuilder
     private func contextActions(for item: WorktreeItem) -> some View {
+        refreshAction(for: item.worktree.repositoryPath)
         Button("Copy branch name") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(item.worktree.branch, forType: .string)
@@ -242,6 +244,15 @@ public struct DashboardView: View {
             Button("Delete worktree", role: .destructive) { pendingForceDelete = (item.worktree.path, nil) }
                 .hoverHelp("Force-deletes the worktree and branch after confirming what would be lost")
         }
+    }
+
+    /// Refreshing by hand, offered on every row and repository
+    /// header: the poll waits minutes between asking about an
+    /// unselected branch, and GitHub state changes while it waits.
+    /// The right-clicked repository alone is asked about.
+    private func refreshAction(for repositoryPath: String) -> some View {
+        Button("Refresh") { Task { await model.refreshRepository(path: repositoryPath) } }
+            .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
     }
 
     /// One image per owner, cached on disk: every repository of an

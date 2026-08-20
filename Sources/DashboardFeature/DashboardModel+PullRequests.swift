@@ -22,6 +22,17 @@ extension DashboardModel {
         return summary.map { stamped($0, repositoryPath: item.worktree.repositoryPath) }
     }
 
+    /// Asks about one repository now, however recently the poll last
+    /// asked: the manual answer to state GitHub changed between
+    /// ticks, and to an outage that dropped a round of answers. One
+    /// repository rather than all of them, since asking about every
+    /// branch everywhere is how a rate limit is reached.
+    public func refreshRepository(path: String) async {
+        nextPullRequestFetch = nextPullRequestFetch.filter { $0.key.hasPrefix(path + "#") == false }
+        queuesFetchedAt.removeValue(forKey: path)
+        await refresh(forcing: path)
+    }
+
     /// Refreshes which pull requests are in each repository's merge
     /// queue. One query per repository names every entry, which no
     /// per-pull-request field can answer, and it runs on the poll
@@ -86,7 +97,7 @@ extension DashboardModel {
     /// gateway on very large repositories. Failures keep the last
     /// cached answer, and a branch whose cached result is green and
     /// approved for its current commit is final and never refetched.
-    func refreshStalePullRequests() async {
+    func refreshStalePullRequests(forcing repositoryPath: String? = nil) async {
         hydratePullRequestCache()
         await refreshMergeQueues()
         let collapsed = Set(
@@ -95,14 +106,16 @@ extension DashboardModel {
                 .map(String.init),
         )
         for group in groups {
+            // An outage answers every branch identically, so one
+            // branch probes for a recovery and the rest wait; the
+            // repository a refresh was asked for keeps asking.
+            let ridesOutOutage = ServiceStatus.shared.isUnavailable && repositoryPath != group.repository.path
             for item in group.items.dropFirst() {
                 let key = item.worktree.repositoryPath + "#" + item.worktree.branch
                 if let due = nextPullRequestFetch[key], due > Date() {
                     continue
                 }
-                // An outage answers every branch identically, so one
-                // branch probes for a recovery and the rest wait.
-                if ServiceStatus.shared.isUnavailable, item.id != selection?.id {
+                if ridesOutOutage, item.id != selection?.id {
                     continue
                 }
 

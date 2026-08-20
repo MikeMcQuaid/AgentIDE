@@ -162,7 +162,7 @@ public final class DashboardModel {
     /// Reloads everything and notifies about newly finished or
     /// newly unread sessions. The selected worktree is on screen, so
     /// its activity counts as seen; a manual unread mark survives.
-    public func refresh() async {
+    public func refresh(forcing repositoryPath: String? = nil) async {
         if let selection {
             service.acknowledgeActivity(worktreePath: selection.worktree.path)
         }
@@ -190,7 +190,7 @@ public final class DashboardModel {
         }
         hasRestoredSelection = true
         cacheSidebar(listed)
-        await refreshStalePullRequests()
+        await refreshStalePullRequests(forcing: repositoryPath)
     }
 
     /// Polls the system on an interval while the dashboard is alive.
