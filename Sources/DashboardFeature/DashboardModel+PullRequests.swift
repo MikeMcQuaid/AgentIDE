@@ -9,8 +9,8 @@ import TerminalUI
 /// repositories; repositories collapsed in the sidebar poll rarely.
 /// GitHub rate limits, and attention rarely spans everything.
 extension DashboardModel {
-    /// The open pull request for a worktree's branch, when the last
-    /// fetch found one.
+    /// The pull request a worktree's branch is showing, when the
+    /// last fetch found one.
     public func pullRequest(for item: WorktreeItem) -> PullRequestSummary? {
         // flatMap flattens the dictionary's double optional.
         let summary = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
@@ -111,7 +111,7 @@ extension DashboardModel {
                         repositoryPath: group.repository.path,
                         scope: .branch(item.worktree.branch),
                     )
-                    let summary = summaries.first { $0.state == "OPEN" }
+                    let summary = Self.displayed(summaries)
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
@@ -133,7 +133,10 @@ extension DashboardModel {
     public func stackDepth(for item: WorktreeItem) -> Int {
         let prefix = item.worktree.repositoryPath + "#"
         var byHead = [String: PullRequestSummary]()
-        for case let (key, summary?) in branchPullRequests where key.hasPrefix(prefix) {
+        let cached = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
+        // Stacking is a question about open pull requests; a merged
+        // one's base is history.
+        for summary in cached where summary.state == "OPEN" {
             byHead[summary.headBranch] = summary
         }
         guard var current = byHead[item.worktree.branch] else {
@@ -192,6 +195,14 @@ extension DashboardModel {
         case nil:
             break
         }
+    }
+
+    /// What a branch shows: its open pull request, or failing that
+    /// its most recent one, so a branch whose pull request merged
+    /// reads as merged rather than as never having had one. Pure so
+    /// the choice tests without GitHub.
+    static func displayed(_ summaries: [PullRequestSummary]) -> PullRequestSummary? {
+        summaries.first { $0.state == "OPEN" } ?? summaries.max { $0.number < $1.number }
     }
 
     /// Whether a poll observed the branch's pull request go from

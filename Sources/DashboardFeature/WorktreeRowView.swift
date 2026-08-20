@@ -141,12 +141,17 @@ struct WorktreeRowView: View {
                 .buttonStyle(.plain)
                 .hoverHelp("Open pull request #" + String(pullRequest.number)
                     + " in the Browser tab; Cmd-click for the system browser")
-                checksDot(for: pullRequest)
-                if let review = ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) {
+                // CI, reviews and conversations are what a pull
+                // request still needs; once it is merged or closed
+                // they are history, and the state icon says it all.
+                if pullRequest.state == "OPEN" {
+                    checksDot(for: pullRequest)
+                }
+                if let review = reviewIcon(for: pullRequest) {
                     Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))
                         .hoverHelp("Review: " + pullRequest.reviewDecision.lowercased())
                 }
-                if pullRequest.unresolvedComments > 0 {
+                if pullRequest.state == "OPEN", pullRequest.unresolvedComments > 0 {
                     Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
                         .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
                 }
@@ -157,6 +162,12 @@ struct WorktreeRowView: View {
                 }
             }
         }
+    }
+
+    /// The review badge, absent once the pull request is merged or
+    /// closed: its verdict stopped being something to act on.
+    private func reviewIcon(for pullRequest: PullRequestSummary) -> String? {
+        pullRequest.state == "OPEN" ? ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) : nil
     }
 
     private func checksDot(for pullRequest: PullRequestSummary) -> some View {

@@ -13,6 +13,15 @@ struct MergeCleanupTests {
     // MARK: Internal
 
     @Test
+    func `a branch shows its open pull request, or its last one once merged`() {
+        let open = summary(number: 12, state: "OPEN")
+        let merged = summary(number: 11, state: "MERGED")
+        #expect(DashboardModel.displayed([merged, open])?.number == 12)
+        #expect(DashboardModel.displayed([summary(number: 9, state: "CLOSED"), merged])?.number == 11)
+        #expect(DashboardModel.displayed([]) == nil)
+    }
+
+    @Test
     func `cleans up only on an observed open to merged transition`() {
         let open = summary(number: 12, state: "OPEN")
         let merged = summary(number: 12, state: "MERGED")

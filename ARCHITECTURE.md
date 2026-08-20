@@ -574,10 +574,15 @@ shim rather than a protocol:
 
 1. The token comes from a one-shot `gh auth token`, held in memory only and
    refreshed on 401 (P6).
-2. Each worktree branch is polled with its own narrow query for its open
-   pull request's mergeable state, review decision and check rollup;
+2. Each worktree branch is polled with its own narrow query for its pull
+   request's mergeable state, review decision and check rollup;
    repository-wide queries timed out GitHub's gateway on very large
-   repositories.
+   repositories. The branch shows its open pull request, or its most
+   recent one once that merged, so a branch reads as merged until its
+   worktree is tidied. Membership of a merge queue is asked of the
+   queue itself, once per repository: no pull request field reports it
+   (`isInMergeQueue` does not exist, `mergeStateStatus` has no queued
+   state), and an unknown field fails the whole listing.
 3. Poll cadence is tiered by attention and cached per branch: the selected
    worktree refreshes most often, then its repository's other worktrees,
    then other expanded repositories; repositories collapsed in the sidebar
