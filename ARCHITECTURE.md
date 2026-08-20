@@ -478,7 +478,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    slice deepens, alongside the move to STTextView), with line numbers
    and visible whitespace in both the diff (tabs and trailing whitespace
    carry a background tint, so copied diff text stays character-exact)
-   and the editor (substitute glyphs).
+   and the editor (substitute glyphs). Diff lines wrap to the pane's
+   width as the editor's do, each line beside its own gutter entry so
+   the numbers keep their places; a hunk's context menu copies its
+   lines whole, since wrapping ends the drag across a single text
+   block. The branch's commit listing wraps for the same reason.
 4. Rejecting selected lines builds a minimal reverse patch with
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and
