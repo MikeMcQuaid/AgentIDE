@@ -89,6 +89,7 @@ extension TerminalRepresentable.Coordinator {
             outputsSeen += 1
             if seeded {
                 view?.feed(byteArray: bytes[...])
+                blockSelector?.follow()
             } else {
                 queuedOutput.append(bytes)
             }

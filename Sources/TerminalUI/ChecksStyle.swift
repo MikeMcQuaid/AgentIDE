@@ -65,8 +65,9 @@ public nonisolated enum ChecksStyle {
         }
     }
 
-    /// The colour for a checks rollup state: GitHub's green, red and
-    /// pending yellow.
+    /// The colour for a checks rollup state: green, red, and orange
+    /// while they run, which reads against a sidebar's background
+    /// where yellow did not.
     public static func colour(for checks: String) -> Color {
         switch checks {
         case "SUCCESS":
@@ -76,7 +77,7 @@ public nonisolated enum ChecksStyle {
             .red
 
         default:
-            .yellow
+            .orange
         }
     }
 
@@ -165,21 +166,25 @@ public nonisolated enum ChecksStyle {
         }
     }
 
-    /// The colour for a pull request's overall state: purple for one
-    /// that exists, merged or open, yellow while it waits in the
-    /// queue, red for closed and grey for a draft nobody is asked to
-    /// look at yet.
+    /// The colour for a pull request's overall state: GitHub's
+    /// purple once merged, green while open, orange in the queue,
+    /// red closed and grey for a draft nobody is asked to look at
+    /// yet. Orange rather than yellow, which a sidebar's own
+    /// background leaves almost invisible.
     public static func stateColour(state: String, isDraft: Bool, isQueued: Bool = false) -> Color {
         if isQueued {
-            return .yellow
+            return .orange
         }
 
         switch state {
+        case "MERGED":
+            return .purple
+
         case "CLOSED":
             return .red
 
         default:
-            return isDraft ? .secondary : .purple
+            return isDraft ? .secondary : .green
         }
     }
 }

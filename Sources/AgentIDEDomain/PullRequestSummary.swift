@@ -23,6 +23,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         author: String? = nil,
         body: String? = nil,
         unresolvedComments: Int = 0,
+        isQueued: Bool = false,
     ) {
         self.number = number
         self.title = title
@@ -40,6 +41,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.author = author
         self.body = body
         self.unresolvedComments = unresolvedComments
+        self.isQueued = isQueued
     }
 
     // MARK: Public
@@ -91,6 +93,12 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// The description, carried from the listing so a click-through
     /// shows the conversation immediately; optional like the author.
     public let body: String?
+
+    /// Whether it is in a merge queue right now. A repository
+    /// having a queue, or a pull request being set to merge
+    /// automatically, is not the same thing: only this says the
+    /// queue is what happens next.
+    public let isQueued: Bool
 
     /// Review conversations still open on it, which the listing
     /// query cannot answer: GitHub only counts them through GraphQL,

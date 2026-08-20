@@ -101,12 +101,12 @@ struct WorktreeRowView: View {
                 ChecksStyle.stateOcticonName(
                     state: pullRequest.state,
                     isDraft: pullRequest.isDraft,
-                    isQueued: pullRequest.hasAutomerge,
+                    isQueued: pullRequest.isQueued,
                 ),
                 colour: ChecksStyle.stateColour(
                     state: pullRequest.state,
                     isDraft: pullRequest.isDraft,
-                    isQueued: pullRequest.hasAutomerge,
+                    isQueued: pullRequest.isQueued,
                 ),
             )
             .hoverHelp(stateHelp(for: pullRequest))
@@ -175,8 +175,10 @@ struct WorktreeRowView: View {
     }
 
     private func stateHelp(for pullRequest: PullRequestSummary) -> String {
-        if pullRequest.hasAutomerge {
-            "Automerge enabled"
+        if pullRequest.isQueued {
+            "In the merge queue"
+        } else if pullRequest.hasAutomerge {
+            "Set to merge automatically"
         } else if pullRequest.isDraft {
             "Draft pull request"
         } else {

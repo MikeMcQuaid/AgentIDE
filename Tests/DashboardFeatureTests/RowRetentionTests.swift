@@ -86,12 +86,14 @@ struct PullRequestBadgeTests {
         // looks like otherwise.
         #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: false, isQueued: true)
             == "octicon-git-merge-queue")
-        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false, isQueued: true) == .yellow)
+        // Orange, since yellow all but disappears into the sidebar.
+        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false, isQueued: true) == .orange)
 
         #expect(ChecksStyle.stateOcticonName(state: "MERGED", isDraft: false) == "octicon-git-merge")
         #expect(ChecksStyle.stateColour(state: "MERGED", isDraft: false) == .purple)
         #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: false) == "octicon-git-pull-request")
-        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false) == .purple)
+        // Purple is the merged one; an open pull request is green.
+        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false) == .green)
         #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: true) == "octicon-git-pull-request-draft")
         #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: true) == .secondary)
         #expect(ChecksStyle.stateColour(state: "CLOSED", isDraft: false) == .red)

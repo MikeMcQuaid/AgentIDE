@@ -56,6 +56,9 @@ extension TerminalRepresentable {
         var outputsSeen = 0
         var notificationsSeen = 0
 
+        /// The Option-drag selector, owned by its event monitor.
+        weak var blockSelector: BlockSelector?
+
         /// Installs the Option-drag rectangular selection: its
         /// events arrive through a monitor because SwiftTerm's
         /// mouse handling is not overridable.
@@ -65,8 +68,11 @@ extension TerminalRepresentable {
             }
 
             // The monitor's closure is the selector's owner: it
-            // captures it strongly and tearDown releases both.
+            // captures it strongly and tearDown releases both. The
+            // coordinator keeps a weak hold so output can move a
+            // held selection with the text under it.
             let selector = BlockSelector(view: view)
+            blockSelector = selector
             blockMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp],
             ) { [weak view] event in

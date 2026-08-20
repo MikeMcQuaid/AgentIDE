@@ -98,7 +98,7 @@ final class BlockSelector {
     }
 
     deinit {
-        // The overlay is removed with the view.
+        // The overlay is a subview, removed with the view itself.
     }
 
     // MARK: Internal
@@ -116,6 +116,9 @@ final class BlockSelector {
                   view.isHiddenOrHasHiddenAncestor == false,
                   Self.hitsTerminal(event, in: view)
             else {
+                // Any other click puts the last block selection away,
+                // as clicking does to an ordinary one.
+                clear()
                 return event
             }
 
@@ -135,6 +138,36 @@ final class BlockSelector {
         }
     }
 
+    /// Puts the marquee away, which is what a click elsewhere and a
+    /// new drag both mean.
+    func clear() {
+        overlay?.removeFromSuperview()
+        overlay = nil
+        anchor = nil
+        heldRows = nil
+        heldColumns = nil
+    }
+
+    /// Moves the held marquee to wherever its text is now, and puts
+    /// it away once that text has scrolled out of the buffer
+    /// entirely. Called as output arrives.
+    func follow() {
+        guard let view, let heldRows, let heldColumns, let overlay else {
+            return
+        }
+
+        let terminal = view.getTerminal()
+        let top = terminal.getTopVisibleRow()
+        let rows = (heldRows.lowerBound - top) ... (heldRows.upperBound - top)
+        guard rows.upperBound >= 0, rows.lowerBound < terminal.rows else {
+            clear()
+            return
+        }
+
+        let visible = max(rows.lowerBound, 0) ... min(rows.upperBound, terminal.rows - 1)
+        overlay.frame = rectangle(of: (rows: visible, columns: heldColumns), in: view)
+    }
+
     // MARK: Private
 
     private static let marqueeOpacity = 0.2
@@ -142,6 +175,13 @@ final class BlockSelector {
     private weak var view: PaneTerminalView?
     private var anchor: CGPoint?
     private var overlay: NSView?
+
+    /// What the held selection covers, in the buffer's own rows
+    /// rather than the screen's: output scrolls the text under a
+    /// marquee, and a rectangle that stayed where it was drawn would
+    /// end up highlighting whatever arrived next.
+    private var heldRows: ClosedRange<Int>?
+    private var heldColumns: ClosedRange<Int>?
 
     /// Whether the window resolves the click to this terminal: a
     /// pane kept mounted but covered or hidden must not steal drags
@@ -156,6 +196,7 @@ final class BlockSelector {
     }
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
+        clear()
         anchor = point
         let marquee = NSView(frame: CGRect(origin: point, size: .zero))
         marquee.wantsLayer = true
@@ -227,16 +268,21 @@ final class BlockSelector {
     }
 
     private func finish(at point: CGPoint, in view: PaneTerminalView) {
-        defer {
-            overlay?.removeFromSuperview()
-            overlay = nil
-            anchor = nil
-        }
+        // The marquee stays: a selection you can no longer see is one
+        // you cannot tell has survived the output arriving under it,
+        // and this one survives until it is replaced or clicked away.
+        defer { anchor = nil }
         guard let anchor, let cells = cells(from: anchor, to: point, in: view) else {
+            clear()
             return
         }
 
         copy(cells: cells, in: view)
+        // Held in the buffer's rows, so it can be followed as the
+        // text under it scrolls.
+        let top = view.getTerminal().getTopVisibleRow()
+        heldRows = (cells.rows.lowerBound + top) ... (cells.rows.upperBound + top)
+        heldColumns = cells.columns
     }
 
     /// Copies the rectangle's rows, each sliced to its columns.
