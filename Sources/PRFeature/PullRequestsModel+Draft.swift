@@ -88,13 +88,13 @@ extension PullRequestsModel {
         }
 
         loadingDraft = true
-        if prTitle.isEmpty {
+        if Self.isBlank(prTitle) {
             prTitle = draft.title
         }
-        if prBody.isEmpty {
+        if Self.isBlank(prBody) {
             prBody = draft.body
         }
-        if prTemplate.isEmpty {
+        if Self.isBlank(prTemplate) {
             prTemplate = draft.template
         }
         loadingDraft = false

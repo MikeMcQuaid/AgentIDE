@@ -108,16 +108,11 @@ extension PullRequestsModel {
     }
 
     /// A one-commit branch is its own description: the form
-    /// defaults to that commit, no model involved.
+    /// defaults to that commit, no model involved. Blank is blank
+    /// however it got that way, whitespace included, so a saved
+    /// draft holding nothing is no reason to leave the form empty.
     func prefillFromSingleCommit(_ worktree: Worktree) async {
-        guard prTitle.isEmpty, prBody.isEmpty else {
-            return
-        }
-
-        // A draft that exists but reads empty was emptied on purpose;
-        // refilling it from the commit would undo that every time
-        // pushing or rebasing reloaded the form.
-        guard draftKey.map({ store.load().pullRequestDrafts[$0] == nil }) ?? true else {
+        guard Self.isBlank(prTitle), Self.isBlank(prBody) else {
             return
         }
 
@@ -125,6 +120,12 @@ extension PullRequestsModel {
         if commits.count == 1, let only = commits.first {
             apply(description: Self.description(splitFromMessage: only))
         }
+    }
+
+    /// Whether a field holds nothing to lose: empty, or whitespace
+    /// alone.
+    static func isBlank(_ text: String) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Fills the form's blank fields from the branch's commits: the
@@ -165,10 +166,10 @@ extension PullRequestsModel {
 
     /// Fills only the blank fields, so typed text always wins.
     func apply(description: (title: String, body: String)) {
-        if prTitle.isEmpty {
+        if Self.isBlank(prTitle) {
             prTitle = description.title
         }
-        if prBody.isEmpty {
+        if Self.isBlank(prBody) {
             prBody = description.body
         }
     }

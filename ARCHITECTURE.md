@@ -621,7 +621,9 @@ shim rather than a protocol:
    shows, revisiting the tab does not re-poll for a pull request that
    cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and
-   push in click order. Blank fields fill from the branch's commits:
+   push in click order. Blank fields fill from the branch's commits,
+   blank meaning empty or whitespace alone whatever a saved draft
+   holds, since neither has anything to lose:
    a one-commit branch defaults to that commit's own message, and a
    generate button inside the title field summarises several through
    the on-device model, locking the fields while it drafts; typed
