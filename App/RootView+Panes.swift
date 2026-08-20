@@ -31,13 +31,16 @@ extension RootView {
                 }
         } else if item.worktree.path == item.worktree.repositoryPath {
             repositoryConversations(for: item)
-        } else if item.pastSessions.isEmpty == false {
+        } else if item.pastSessions.isEmpty == false, startingSession != item.worktree.path {
             worktreeConversations(for: item)
         } else {
             CreateSessionPane(
                 worktree: item.worktree,
                 model: dependencies.dashboard,
                 canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
+                // Only a worktree with conversations to go back to
+                // shows the way back.
+                onShowConversations: item.pastSessions.isEmpty ? nil : { startingSession = nil },
                 onResume: { await resumeLatest(in: item) },
                 onStarted: { await sessionStarted() },
             )

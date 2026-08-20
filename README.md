@@ -124,8 +124,8 @@ before shipping.
   on GitHub (so finished work disappears without ceremony)
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
-  even after that worktree is deleted (so tidying up never loses a
-  conversation)
+  even after that worktree is deleted, and starts a fresh session in a
+  worktree from the same list (so tidying up never loses a conversation)
 
 ### 🛟 Resilience
 

@@ -15,16 +15,20 @@ public struct RepositorySessionsView: View {
     /// worktree,
     /// `onResumed` runs after a resume launches and
     /// `onWorktreeFocus` reports the selected conversation's still
-    /// existing worktree, so other panes can follow along.
+    /// existing worktree, so other panes can follow along, and
+    /// `onNewSession`, when given, offers a fresh session in the
+    /// worktree the list is scoped to.
     @preconcurrency
     public init(
         repository: Repository,
         service: SessionService,
         worktreePath: String? = nil,
         onWorktreeFocus: (@MainActor (String?) -> Void)? = nil,
+        onNewSession: (@MainActor () -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
         self.onWorktreeFocus = onWorktreeFocus
+        self.onNewSession = onNewSession
         self.onResumed = onResumed
         identity = repository.id + "#" + (worktreePath ?? "")
         makeModel = {
@@ -91,6 +95,7 @@ public struct RepositorySessionsView: View {
 
     private let identity: String
     private let onWorktreeFocus: (@MainActor (String?) -> Void)?
+    private let onNewSession: (@MainActor () -> Void)?
     private let onResumed: @MainActor () async -> Void
     private let makeModel: () -> RepositorySessionsModel
 
@@ -103,6 +108,14 @@ public struct RepositorySessionsView: View {
             )
             .font(.subheadline.weight(.semibold))
             Spacer()
+            // Starting fresh comes before continuing something, in
+            // the order the two are read; resuming stays the
+            // prominent one, since it is why the list is here.
+            if let onNewSession {
+                Button("New session", action: onNewSession)
+                    .controlSize(.small)
+                    .hoverHelp("Start a fresh agent session in this worktree instead of continuing one")
+            }
             // One resume button: in place when the conversation's
             // worktree still exists, into a fresh worktree only when
             // it is gone and that is all that can be done.

@@ -751,6 +751,9 @@ Beyond the one live session, every earlier conversation in a worktree is
 discovered by listing its transcript directory, whoever created it, and
 shown as an inactive session tab with a readable log: Markdown rendered,
 code fences highlighted and tool steps showing the actual command run.
+The same list starts a fresh session in that worktree, since a worktree
+with conversations otherwise only offered to continue one; the form it
+opens is the one an empty worktree shows, with the way back beside it.
 An inactive session resumes either in place or into a fresh worktree and
 branch; in the latter case the transcript is first copied into the new
 working directory's transcript directory, because agents look

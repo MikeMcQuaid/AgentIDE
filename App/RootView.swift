@@ -65,6 +65,16 @@ struct RootView: View {
         visitedBrowsers.sorted()
     }
 
+    /// The worktree showing its new session form rather than its
+    /// conversations, which is how a worktree that already has
+    /// conversations starts a fresh session; internal and settable
+    /// because the extension files that build those panes cannot
+    /// see the view's own state.
+    var startingSession: String? {
+        get { startingIn }
+        nonmutating set { startingIn = newValue }
+    }
+
     var body: some View {
         // Plain panes with our own dividers: the navigation split
         // view's floating toggle covered nearby controls and split
@@ -219,6 +229,8 @@ struct RootView: View {
     /// The selected conversation's worktree on the repository page,
     /// nil when none exists; the review surfaces follow it. Internal
     /// so the extension file's tabs can read it.
+    @State private var startingIn: String?
+
     @State private var conversationWorktreePath: String?
 
     /// Whether the launch's one automatic resume has run, so later
