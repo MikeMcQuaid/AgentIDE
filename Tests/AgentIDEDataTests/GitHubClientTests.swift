@@ -86,6 +86,23 @@ struct GitHubClientTests {
     }
 
     @Test
+    func `the merge queue names the pull requests actually queued`() {
+        let json = """
+        {"data": {"repository": {"mergeQueue": {"entries": {"nodes": [
+          {"pullRequest": {"number": 12}}, {"pullRequest": {"number": 15}}
+        ]}}}}}
+        """
+        #expect(GitHubClient.queuedNumbers(fromJSON: json) == [12, 15])
+    }
+
+    @Test
+    func `a repository without a merge queue has nothing queued`() {
+        let json = #"{"data": {"repository": {"mergeQueue": null}}}"#
+        #expect(GitHubClient.queuedNumbers(fromJSON: json).isEmpty)
+        #expect(GitHubClient.queuedNumbers(fromJSON: "").isEmpty)
+    }
+
+    @Test
     func `issue and pull request prompts compose title, body and context`() {
         let issue = GitHubClient.issuePrompt(number: 3, title: "Crash", body: "Steps", context: "Be careful")
         #expect(issue.contains("issue #3: Crash"))

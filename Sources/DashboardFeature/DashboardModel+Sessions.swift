@@ -12,9 +12,9 @@ public extension DashboardModel {
     /// the button had done nothing.
     func forgetSession(at worktreePath: String) {
         for groupIndex in groups.indices {
-            for itemIndex in groups[groupIndex].items.indices
-                where groups[groupIndex].items[itemIndex].worktree.path == worktreePath {
-                groups[groupIndex].items[itemIndex] = groups[groupIndex].items[itemIndex].withoutSession()
+            let items = groups[groupIndex].items
+            for itemIndex in items.indices where items[itemIndex].worktree.path == worktreePath {
+                groups[groupIndex].items[itemIndex] = items[itemIndex].withoutSession()
             }
         }
         if selection?.worktree.path == worktreePath {

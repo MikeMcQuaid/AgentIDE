@@ -15,20 +15,44 @@ extension DashboardModel {
         // flatMap flattens the dictionary's double optional.
         let summary = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
-        return summary.map { withUnresolved($0, repositoryPath: item.worktree.repositoryPath) }
+        return summary.map { stamped($0, repositoryPath: item.worktree.repositoryPath) }
     }
 
-    /// The summary with its unresolved conversations counted from
-    /// the cache the conversation pane fills. GitHub only counts
+    /// Refreshes which pull requests are in each repository's merge
+    /// queue. One query per repository names every entry, which no
+    /// per-pull-request field can answer, and it runs on the poll
+    /// rather than per row.
+    func refreshMergeQueues() async {
+        for repository in groups.map(\.repository) where queuesDue(repository.path) {
+            queuedNumbers[repository.path] = await github.queuedNumbers(repositoryPath: repository.path)
+            queuesFetchedAt[repository.path] = Date()
+        }
+    }
+
+    /// Whether a repository's queue is due another look: it changes
+    /// as pull requests merge, so it is asked for regularly, but far
+    /// less often than the branches themselves.
+    private func queuesDue(_ repositoryPath: String) -> Bool {
+        guard let fetched = queuesFetchedAt[repositoryPath] else {
+            return true
+        }
+
+        return Date().timeIntervalSince(fetched) >= Self.queueInterval
+    }
+
+    /// The summary as the sidebar shows it: queued from the
+    /// repository's own queue, and its unresolved conversations
+    /// counted from the cache the conversation pane fills. GitHub only counts
     /// them through GraphQL, which the listing query cannot ask for
     /// and which is far too expensive to ask per branch per poll, so
     /// the row shows what the app has already read rather than
     /// fetching to find out.
-    private func withUnresolved(_ summary: PullRequestSummary, repositoryPath: String) -> PullRequestSummary {
+    private func stamped(_ summary: PullRequestSummary, repositoryPath: String) -> PullRequestSummary {
         let key = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: summary.number)
         let threads = store.load().threadsCache[key]?.threads ?? []
         let unresolved = threads.count { $0.isResolved == false }
-        guard unresolved != summary.unresolvedComments else {
+        let queued = queuedNumbers[repositoryPath]?.contains(summary.number) ?? false
+        guard unresolved != summary.unresolvedComments || queued != summary.isQueued else {
             return summary
         }
 
@@ -49,6 +73,7 @@ extension DashboardModel {
             author: summary.author,
             body: summary.body,
             unresolvedComments: unresolved,
+            isQueued: queued,
         )
     }
 
@@ -59,6 +84,7 @@ extension DashboardModel {
     /// approved for its current commit is final and never refetched.
     func refreshStalePullRequests() async {
         hydratePullRequestCache()
+        await refreshMergeQueues()
         let collapsed = Set(
             (UserDefaults.standard.string(forKey: "collapsedRepositories") ?? "")
                 .split(separator: "\n")
@@ -126,6 +152,7 @@ extension DashboardModel {
     // MARK: Private
 
     private static let selectedInterval: TimeInterval = 30
+    private static let queueInterval: TimeInterval = 60
 
     /// A merge made on GitHub or elsewhere is tidied on the poll that
     /// first sees it: the branch's pull request that was open at the
