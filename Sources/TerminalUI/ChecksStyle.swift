@@ -18,7 +18,9 @@ public struct Octicon: View {
     /// The scaled template image. Decorative by default; interactive
     /// owners label their surrounding control.
     public var body: some View {
-        let image = Image(name)
+        // GitHub has no octicon for everything the app shows; a name
+        // without the vendored prefix is an SF Symbol.
+        let image = (name.hasPrefix(Self.octiconPrefix) ? Image(name) : Image(systemName: name))
             .resizable()
             .scaledToFit()
             .frame(width: Self.size, height: Self.size)
@@ -33,6 +35,7 @@ public struct Octicon: View {
     // MARK: Private
 
     private static let size: CGFloat = 12
+    private static let octiconPrefix = "octicon-"
 
     private let name: String
     private let colour: Color?
@@ -44,6 +47,10 @@ public struct Octicon: View {
 /// and colours per check, review and pull request state, shared by
 /// the sidebar rows and the pull request list.
 public nonisolated enum ChecksStyle {
+    /// The badge for unresolved review conversations, which are
+    /// something to answer rather than a verdict on the branch.
+    public static let commentOcticonName = "octicon-comment"
+
     /// The octicon asset for a checks rollup state.
     public static func octiconName(for checks: String) -> String {
         switch checks {
@@ -74,24 +81,27 @@ public nonisolated enum ChecksStyle {
     }
 
     /// The octicon for an aggregate review decision, nil when there
-    /// is none to show.
+    /// is none to show. A review that is required but has not
+    /// happened is waiting rather than failing, so it gets a clock
+    /// rather than a verdict.
     public static func reviewOcticonName(for decision: String) -> String? {
         switch decision {
         case "APPROVED":
-            "octicon-check"
+            "octicon-check-circle-fill"
 
         case "CHANGES_REQUESTED":
-            "octicon-file-diff"
+            "octicon-x-circle-fill"
 
         case "REVIEW_REQUIRED":
-            "octicon-eye"
+            "clock"
 
         default:
             nil
         }
     }
 
-    /// The colour for a review decision.
+    /// The colour for a review decision: a verdict is green or red,
+    /// and waiting is neither.
     public static func reviewColour(for decision: String) -> Color {
         switch decision {
         case "APPROVED":
@@ -135,33 +145,41 @@ public nonisolated enum ChecksStyle {
         return login.replacing("[bot]", with: "")
     }
 
-    /// The octicon for a pull request's overall state.
-    public static func stateOcticonName(state: String, isDraft: Bool) -> String {
+    /// The octicon for a pull request's overall state. A queued one
+    /// says so first: what happens next is the queue, whatever the
+    /// pull request itself looks like.
+    public static func stateOcticonName(state: String, isDraft: Bool, isQueued: Bool = false) -> String {
+        if isQueued {
+            return "octicon-git-merge-queue"
+        }
+
         switch state {
         case "MERGED":
-            "octicon-git-merge"
+            return "octicon-git-merge"
 
         case "CLOSED":
-            "octicon-git-pull-request-closed"
+            return "octicon-git-pull-request-closed"
 
         default:
-            isDraft ? "octicon-git-pull-request-draft" : "octicon-git-pull-request"
+            return isDraft ? "octicon-git-pull-request-draft" : "octicon-git-pull-request"
         }
     }
 
-    /// The colour for a pull request's overall state: GitHub's
-    /// purple for merged, red for closed, grey for drafts and green
-    /// for open.
-    public static func stateColour(state: String, isDraft: Bool) -> Color {
-        switch state {
-        case "MERGED":
-            .purple
+    /// The colour for a pull request's overall state: purple for one
+    /// that exists, merged or open, yellow while it waits in the
+    /// queue, red for closed and grey for a draft nobody is asked to
+    /// look at yet.
+    public static func stateColour(state: String, isDraft: Bool, isQueued: Bool = false) -> Color {
+        if isQueued {
+            return .yellow
+        }
 
+        switch state {
         case "CLOSED":
-            .red
+            return .red
 
         default:
-            isDraft ? .secondary : .green
+            return isDraft ? .secondary : .purple
         }
     }
 }

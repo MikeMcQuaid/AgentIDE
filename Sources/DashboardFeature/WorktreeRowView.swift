@@ -18,6 +18,10 @@ struct WorktreeRowView: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Self.spacing) {
                     Text(item.worktree.branch).lineLimit(1)
+                    // The dot sits at the row's edge, where a column
+                    // of them reads at a glance, rather than tight
+                    // against branch names of every length.
+                    Spacer(minLength: Self.spacing)
                     if item.hasUnread {
                         Circle()
                             .fill(.tint)
@@ -26,14 +30,19 @@ struct WorktreeRowView: View {
                     }
                 }
                 HStack(spacing: Self.spacing) {
-                    Text(badges)
-                        .hoverHelp(badgesExplanation)
+                    if let agent = item.session?.agent {
+                        Text(agent.displayName)
+                    }
                     pullRequestBadge
+                    // The counts come after what the pull request is
+                    // doing: its state is the news, they are detail.
+                    Text(counts)
+                        .hoverHelp(countsExplanation)
+                    Spacer(minLength: 0)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
         }
     }
 
@@ -42,17 +51,12 @@ struct WorktreeRowView: View {
     private static let unreadDotSize: CGFloat = 6
     private static let spacing: CGFloat = 4
     private static let badgeSpacing: CGFloat = 2
-    private static let iconStackSpacing: CGFloat = 1
-
     /// Sits the icon on the branch line's baseline rather than the
     /// row's very top.
     private static let iconDrop: CGFloat = 2
 
-    private var badges: String {
+    private var counts: String {
         var parts = [String]()
-        if let agent = item.session?.agent {
-            parts.append(agent.displayName)
-        }
         if let ahead = item.aheadOfDefault, ahead > 0 {
             parts.append("↑\(ahead)")
         }
@@ -65,33 +69,47 @@ struct WorktreeRowView: View {
         if item.isDirty {
             parts.append("±")
         }
-        return parts.isEmpty ? "idle" : parts.joined(separator: " ")
+        // Something has to say the row is not just quiet but idle,
+        // and only when nothing else on the line does.
+        if parts.isEmpty {
+            return item.session == nil ? "idle" : ""
+        }
+
+        return parts.joined(separator: " ")
     }
 
-    private var badgesExplanation: String {
+    private var countsExplanation: String {
         """
         ↑ commits ahead of the default branch, ↓ behind it, \
         ⇡ committed but not pushed, ± uncommitted changes
         """
     }
 
-    /// A worktree with a pull request leads with its state icon over
-    /// a clickable CI dot; otherwise the session symbol or branch
-    /// octicon shows.
+    /// Whether the row is a repository's own checkout rather than a
+    /// worktree, which is where its default branch lives.
+    private var isMainCheckout: Bool {
+        item.worktree.path == item.worktree.repositoryPath
+    }
+
+    /// A worktree with a pull request leads with its state; anything
+    /// else leads with what is running, or with the branch itself,
+    /// green on a repository's own checkout since that branch is
+    /// where merged work lands rather than something to open.
     @ViewBuilder private var leadingIcon: some View {
         if let pullRequest {
-            VStack(spacing: Self.iconStackSpacing) {
-                Octicon(
-                    pullRequest.hasAutomerge
-                        ? "octicon-git-merge-queue"
-                        : ChecksStyle.stateOcticonName(state: pullRequest.state, isDraft: pullRequest.isDraft),
-                    colour: pullRequest.hasAutomerge
-                        ? .blue
-                        : ChecksStyle.stateColour(state: pullRequest.state, isDraft: pullRequest.isDraft),
-                )
-                .hoverHelp(stateHelp(for: pullRequest))
-                checksDot(for: pullRequest)
-            }
+            Octicon(
+                ChecksStyle.stateOcticonName(
+                    state: pullRequest.state,
+                    isDraft: pullRequest.isDraft,
+                    isQueued: pullRequest.hasAutomerge,
+                ),
+                colour: ChecksStyle.stateColour(
+                    state: pullRequest.state,
+                    isDraft: pullRequest.isDraft,
+                    isQueued: pullRequest.hasAutomerge,
+                ),
+            )
+            .hoverHelp(stateHelp(for: pullRequest))
         } else {
             switch item.session?.status {
             case .running:
@@ -107,7 +125,7 @@ struct WorktreeRowView: View {
                     .accessibilityHidden(true)
 
             case nil:
-                Octicon("octicon-git-branch", colour: .secondary)
+                Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
             }
         }
     }
@@ -123,9 +141,14 @@ struct WorktreeRowView: View {
                 .buttonStyle(.plain)
                 .hoverHelp("Open pull request #" + String(pullRequest.number)
                     + " in the Browser tab; Cmd-click for the system browser")
+                checksDot(for: pullRequest)
                 if let review = ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) {
                     Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))
                         .hoverHelp("Review: " + pullRequest.reviewDecision.lowercased())
+                }
+                if pullRequest.unresolvedComments > 0 {
+                    Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
+                        .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
                 }
                 if stackDepth > 1 {
                     Octicon("octicon-stack", colour: .secondary)

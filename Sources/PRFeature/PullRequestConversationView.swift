@@ -122,7 +122,7 @@ struct PullRequestConversationView: View {
     @State private var isLoading = true
 
     private var cacheKey: String {
-        repositoryPath + "#" + String(number)
+        AppMetadata.threadsKey(repositoryPath: repositoryPath, number: number)
     }
 
     @ViewBuilder private var content: some View {

@@ -300,10 +300,6 @@ public struct GitClient: Sendable {
     }
 
     /// Pushes the branch, creating its upstream.
-    public func push(worktreePath: String, branch: String, remote: String = "origin") async throws {
-        try await git(["push", "--set-upstream", remote, branch], in: worktreePath)
-    }
-
     /// Removes a worktree and deletes its branch; the archive bundle
     /// keeps the commits recoverable. Pruning drops any stale
     /// bookkeeping so the listing never shows a removed worktree.

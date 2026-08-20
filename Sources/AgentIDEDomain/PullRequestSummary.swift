@@ -22,6 +22,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         headOID: String = "",
         author: String? = nil,
         body: String? = nil,
+        unresolvedComments: Int = 0,
     ) {
         self.number = number
         self.title = title
@@ -38,6 +39,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.headOID = headOID
         self.author = author
         self.body = body
+        self.unresolvedComments = unresolvedComments
     }
 
     // MARK: Public
@@ -89,6 +91,12 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// The description, carried from the listing so a click-through
     /// shows the conversation immediately; optional like the author.
     public let body: String?
+
+    /// Review conversations still open on it, which the listing
+    /// query cannot answer: GitHub only counts them through GraphQL,
+    /// so this stays zero until the pull request is looked at and
+    /// the count is remembered.
+    public let unresolvedComments: Int
 
     /// The pull request's checks page.
     public var checksPageURL: String {

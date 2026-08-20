@@ -1,7 +1,11 @@
 import AgentIDEDomain
 import DashboardFeature
 import Foundation
+import SwiftUI
+import TerminalUI
 import Testing
+
+// MARK: - RowRetentionTests
 
 /// The sidebar keeps rows one reading lost, so the panes they hold
 /// open, and the shells running in those panes, only close when the
@@ -68,5 +72,40 @@ struct RowRetentionTests {
                 )
             },
         )
+    }
+}
+
+// MARK: - PullRequestBadgeTests
+
+/// What the sidebar says about a pull request at a glance: the icons
+/// and colours are the whole message, so they are pinned.
+struct PullRequestBadgeTests {
+    @Test
+    func `each pull request state has its own icon and colour`() {
+        // A queued pull request says the queue first, whatever it
+        // looks like otherwise.
+        #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: false, isQueued: true)
+            == "octicon-git-merge-queue")
+        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false, isQueued: true) == .yellow)
+
+        #expect(ChecksStyle.stateOcticonName(state: "MERGED", isDraft: false) == "octicon-git-merge")
+        #expect(ChecksStyle.stateColour(state: "MERGED", isDraft: false) == .purple)
+        #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: false) == "octicon-git-pull-request")
+        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: false) == .purple)
+        #expect(ChecksStyle.stateOcticonName(state: "OPEN", isDraft: true) == "octicon-git-pull-request-draft")
+        #expect(ChecksStyle.stateColour(state: "OPEN", isDraft: true) == .secondary)
+        #expect(ChecksStyle.stateColour(state: "CLOSED", isDraft: false) == .red)
+    }
+
+    @Test
+    func `a review shows its verdict, or that it is still waiting`() {
+        #expect(ChecksStyle.reviewOcticonName(for: "APPROVED") == "octicon-check-circle-fill")
+        #expect(ChecksStyle.reviewColour(for: "APPROVED") == .green)
+        #expect(ChecksStyle.reviewOcticonName(for: "CHANGES_REQUESTED") == "octicon-x-circle-fill")
+        #expect(ChecksStyle.reviewColour(for: "CHANGES_REQUESTED") == .red)
+        // Required but not given is waiting, not failing.
+        #expect(ChecksStyle.reviewOcticonName(for: "REVIEW_REQUIRED") == "clock")
+        #expect(ChecksStyle.reviewColour(for: "REVIEW_REQUIRED") == .secondary)
+        #expect(ChecksStyle.reviewOcticonName(for: "") == nil)
     }
 }

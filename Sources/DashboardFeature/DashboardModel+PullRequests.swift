@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import Foundation
 import TerminalUI
@@ -12,7 +13,43 @@ extension DashboardModel {
     /// fetch found one.
     public func pullRequest(for item: WorktreeItem) -> PullRequestSummary? {
         // flatMap flattens the dictionary's double optional.
-        branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch].flatMap(\.self)
+        let summary = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
+            .flatMap(\.self)
+        return summary.map { withUnresolved($0, repositoryPath: item.worktree.repositoryPath) }
+    }
+
+    /// The summary with its unresolved conversations counted from
+    /// the cache the conversation pane fills. GitHub only counts
+    /// them through GraphQL, which the listing query cannot ask for
+    /// and which is far too expensive to ask per branch per poll, so
+    /// the row shows what the app has already read rather than
+    /// fetching to find out.
+    private func withUnresolved(_ summary: PullRequestSummary, repositoryPath: String) -> PullRequestSummary {
+        let key = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: summary.number)
+        let threads = store.load().threadsCache[key]?.threads ?? []
+        let unresolved = threads.count { $0.isResolved == false }
+        guard unresolved != summary.unresolvedComments else {
+            return summary
+        }
+
+        return PullRequestSummary(
+            number: summary.number,
+            title: summary.title,
+            url: summary.url,
+            headBranch: summary.headBranch,
+            mergeable: summary.mergeable,
+            reviewDecision: summary.reviewDecision,
+            checks: summary.checks,
+            failingCheckLinks: summary.failingCheckLinks,
+            baseBranch: summary.baseBranch,
+            state: summary.state,
+            isDraft: summary.isDraft,
+            hasAutomerge: summary.hasAutomerge,
+            headOID: summary.headOID,
+            author: summary.author,
+            body: summary.body,
+            unresolvedComments: unresolved,
+        )
     }
 
     /// One narrow query per due worktree branch instead of whole

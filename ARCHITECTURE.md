@@ -635,7 +635,12 @@ shim rather than a protocol:
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
    request's header and row immediately.
-8. Push and rebase together enforce that every pushed commit is GPG
+8. Pushing a branch whose history has been rewritten, by an amend or a
+   rebase, leases the push (`--force-with-lease`) rather than being
+   refused as a non-fast-forward. The lease is what makes that safe: it
+   still refuses if the remote moved since the last fetch. A branch whose
+   remote ref is still an ancestor pushes plainly, as before.
+9. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
    dims until the tip commit verifies and the service refuses regardless.

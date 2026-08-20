@@ -56,14 +56,44 @@ public extension GitClient {
         return result?.succeeded ?? false
     }
 
+    /// Pushes the branch to a remote and tracks it there, leasing
+    /// the push when the branch's history has been rewritten.
+    func push(worktreePath: String, branch: String, remote: String = "origin") async throws {
+        // Amending or rebasing a pushed branch rewrites what the
+        // remote holds, and a plain push refuses that as a
+        // non-fast-forward. The lease is what makes forcing safe:
+        // it still refuses if the remote moved since the last fetch,
+        // so someone else's work is never overwritten.
+        let rewrites = await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote)
+        let force = rewrites ? ["--force-with-lease"] : []
+        try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+    }
+
     /// Whether origin already carries the branch, after a fetch.
     func remoteBranchExists(worktreePath: String, branch: String) async -> Bool {
+        await refExists(worktreePath: worktreePath, ref: "refs/remotes/origin/" + branch)
+    }
+
+    /// Whether a ref resolves here at all.
+    func refExists(worktreePath: String, ref: String) async -> Bool {
         let result = try? await git(
-            ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + branch],
+            ["rev-parse", "--verify", "--quiet", ref],
             in: worktreePath,
             allowFailure: true,
         )
         return result?.succeeded ?? false
+    }
+
+    /// Whether pushing this branch would rewrite what the remote
+    /// already has: its ref exists and is no longer an ancestor,
+    /// which is what an amend or a rebase leaves behind.
+    func rewritesRemoteHistory(worktreePath: String, branch: String, remote: String) async -> Bool {
+        let ref = "refs/remotes/" + remote + "/" + branch
+        guard await refExists(worktreePath: worktreePath, ref: ref) else {
+            return false
+        }
+
+        return await isAncestor(worktreePath: worktreePath, ref: ref, of: "HEAD") == false
     }
 
     /// How many commits a range spans, nil when unreadable.
