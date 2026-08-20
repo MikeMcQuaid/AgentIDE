@@ -164,12 +164,6 @@ struct WorktreeRowView: View {
         }
     }
 
-    /// The review badge, absent once the pull request is merged or
-    /// closed: its verdict stopped being something to act on.
-    private func reviewIcon(for pullRequest: PullRequestSummary) -> String? {
-        pullRequest.state == "OPEN" ? ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) : nil
-    }
-
     private func checksDot(for pullRequest: PullRequestSummary) -> some View {
         Button {
             LinkOpener.open(pullRequest.checksClickURL)
@@ -183,6 +177,12 @@ struct WorktreeRowView: View {
                 ? "CI \(pullRequest.checks.lowercased()): open the one failing run; Cmd-click for the system browser"
                 : "CI \(pullRequest.checks.lowercased()): open the checks page; Cmd-click for the system browser",
         )
+    }
+
+    /// The review badge, absent once the pull request is merged or
+    /// closed: its verdict stopped being something to act on.
+    private func reviewIcon(for pullRequest: PullRequestSummary) -> String? {
+        pullRequest.state == "OPEN" ? ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) : nil
     }
 
     private func stateHelp(for pullRequest: PullRequestSummary) -> String {

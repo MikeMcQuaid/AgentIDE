@@ -223,16 +223,6 @@ public struct GitClient: Sendable {
         return Self.changedLines(fromUnifiedDiff: result?.standardOutput ?? "")
     }
 
-    /// The worktree's current HEAD commit, nil when unreadable.
-    public func headCommit(worktreePath: String) async -> String? {
-        let result = try? await git(["rev-parse", "HEAD"], in: worktreePath, allowFailure: true)
-        guard let result, result.succeeded else {
-            return nil
-        }
-
-        return result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     /// When the branch last committed, in seconds since 1970.
     public func lastCommitDate(worktreePath: String) async -> Int {
         let result = try? await git(["log", "-1", "--format=%ct"], in: worktreePath, allowFailure: true)

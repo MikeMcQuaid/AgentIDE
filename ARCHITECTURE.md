@@ -582,7 +582,13 @@ shim rather than a protocol:
    worktree is tidied. Membership of a merge queue is asked of the
    queue itself, once per repository: no pull request field reports it
    (`isInMergeQueue` does not exist, `mergeStateStatus` has no queued
-   state), and an unknown field fails the whole listing.
+   state), and an unknown field fails the whole listing. A pull
+   request that merged or closed more than thirty days ago is
+   ignored: branch names are reused, and an old pull request
+   matching one is a name collision rather than the branch's work.
+   No cached answer is ever treated as final, however green: an
+   approved, passing pull request is exactly the one about to
+   merge, and skipping it froze rows as open forever.
 3. Poll cadence is tiered by attention and cached per branch: the selected
    worktree refreshes most often, then its repository's other worktrees,
    then other expanded repositories; repositories collapsed in the sidebar

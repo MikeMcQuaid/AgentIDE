@@ -178,7 +178,8 @@ public struct GitHubClient: Sendable {
     /// The expensive dashboard fields; computing these across every
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
-    static let statusFields = "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid"
+    static let statusFields =
+        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid,closedAt"
 
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one
@@ -217,7 +218,9 @@ public struct GitHubClient: Sendable {
             return []
         }
 
-        let rows = (try? JSONDecoder().decode([PullRequestRow].self, from: data)) ?? []
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let rows = (try? decoder.decode([PullRequestRow].self, from: data)) ?? []
         return rows.map { row in
             let rollup = row.statusCheckRollup ?? []
             return PullRequestSummary(
@@ -238,6 +241,7 @@ public struct GitHubClient: Sendable {
                 headOID: row.headRefOid ?? "",
                 author: row.author?.login,
                 body: row.body,
+                closedAt: row.closedAt,
             )
         }
     }
@@ -283,6 +287,7 @@ public struct GitHubClient: Sendable {
         let isDraft: Bool?
         let autoMergeRequest: AutoMergeRow?
         let headRefOid: String?
+        let closedAt: Date?
         // Absent from the JSON when a pull request has no checks.
         // swiftlint:disable:next discouraged_optional_collection
         let statusCheckRollup: [CheckRow]?

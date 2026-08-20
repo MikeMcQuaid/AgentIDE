@@ -1,5 +1,6 @@
 import AgentIDEDomain
 @testable import DashboardFeature
+import Foundation
 import Testing
 
 // MARK: - MergeCleanupTests
@@ -14,11 +15,22 @@ struct MergeCleanupTests {
 
     @Test
     func `a branch shows its open pull request, or its last one once merged`() {
+        let now = Date()
         let open = summary(number: 12, state: "OPEN")
-        let merged = summary(number: 11, state: "MERGED")
-        #expect(DashboardModel.displayed([merged, open])?.number == 12)
-        #expect(DashboardModel.displayed([summary(number: 9, state: "CLOSED"), merged])?.number == 11)
-        #expect(DashboardModel.displayed([]) == nil)
+        let merged = summary(number: 11, state: "MERGED", closedAt: now)
+        #expect(DashboardModel.displayed([merged, open], now: now)?.number == 12)
+        let closed = summary(number: 9, state: "CLOSED", closedAt: now)
+        #expect(DashboardModel.displayed([closed, merged], now: now)?.number == 11)
+        #expect(DashboardModel.displayed([], now: now) == nil)
+    }
+
+    @Test
+    func `a pull request that finished long ago is a name collision, not this branch`() {
+        let now = Date()
+        let ancient = summary(number: 3, state: "MERGED", closedAt: now.addingTimeInterval(-Self.twoMonths))
+        #expect(DashboardModel.displayed([ancient], now: now) == nil)
+        let recent = summary(number: 4, state: "MERGED", closedAt: now.addingTimeInterval(-Self.oneWeek))
+        #expect(DashboardModel.displayed([ancient, recent], now: now)?.number == 4)
     }
 
     @Test
@@ -42,7 +54,10 @@ struct MergeCleanupTests {
 
     // MARK: Private
 
-    private func summary(number: Int, state: String) -> PullRequestSummary {
+    private static let twoMonths: TimeInterval = 5_184_000
+    private static let oneWeek: TimeInterval = 604_800
+
+    private func summary(number: Int, state: String, closedAt: Date? = nil) -> PullRequestSummary {
         PullRequestSummary(
             number: number,
             title: "Title",
@@ -52,6 +67,7 @@ struct MergeCleanupTests {
             reviewDecision: "",
             checks: "",
             state: state,
+            closedAt: closedAt,
         )
     }
 }

@@ -13,8 +13,12 @@ extension DashboardModel {
     /// last fetch found one.
     public func pullRequest(for item: WorktreeItem) -> PullRequestSummary? {
         // flatMap flattens the dictionary's double optional.
-        let summary = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
+        let cached = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
+        // Through the same choice the fetch makes, so a cache
+        // holding a long-finished pull request stops speaking for
+        // the branch the moment it is read, not at the next poll.
+        let summary = cached.flatMap { Self.displayed([$0]) }
         return summary.map { stamped($0, repositoryPath: item.worktree.repositoryPath) }
     }
 
@@ -96,9 +100,6 @@ extension DashboardModel {
                 if let due = nextPullRequestFetch[key], due > Date() {
                     continue
                 }
-                if await isFinal(branchPullRequests[key].flatMap(\.self), for: item) {
-                    continue
-                }
                 // An outage answers every branch identically, so one
                 // branch probes for a recovery and the rest wait.
                 if ServiceStatus.shared.isUnavailable, item.id != selection?.id {
@@ -157,6 +158,10 @@ extension DashboardModel {
     private static let selectedInterval: TimeInterval = 30
     private static let queueInterval: TimeInterval = 60
 
+    /// How long after merging or closing a pull request still speaks
+    /// for a branch of the same name: thirty days.
+    private static let collisionAge: TimeInterval = 2_592_000
+
     /// A merge made on GitHub or elsewhere is tidied on the poll that
     /// first sees it: the branch's pull request that was open at the
     /// last poll now reports merged. Only that observed transition
@@ -198,11 +203,25 @@ extension DashboardModel {
     }
 
     /// What a branch shows: its open pull request, or failing that
-    /// its most recent one, so a branch whose pull request merged
-    /// reads as merged rather than as never having had one. Pure so
-    /// the choice tests without GitHub.
-    static func displayed(_ summaries: [PullRequestSummary]) -> PullRequestSummary? {
-        summaries.first { $0.state == "OPEN" } ?? summaries.max { $0.number < $1.number }
+    /// its most recent recently-finished one, so a branch whose pull
+    /// request merged reads as merged rather than as never having
+    /// had one. Branch names get reused, and a pull request that
+    /// finished long ago is a name collision rather than this
+    /// branch's work, so it is ignored. Pure so the choice tests
+    /// without GitHub.
+    static func displayed(_ summaries: [PullRequestSummary], now: Date = Date()) -> PullRequestSummary? {
+        if let open = summaries.first(where: { $0.state == "OPEN" }) {
+            return open
+        }
+
+        let recent = summaries.filter { summary in
+            guard let closed = summary.closedAt else {
+                return false
+            }
+
+            return now.timeIntervalSince(closed) < Self.collisionAge
+        }
+        return recent.max { $0.number < $1.number }
     }
 
     /// Whether a poll observed the branch's pull request go from
@@ -240,22 +259,6 @@ extension DashboardModel {
             metadata.pullRequestCache.removeValue(forKey: key)
         }
         store.save(metadata)
-    }
-
-    /// Green checks and an approving review for the branch's current
-    /// commit never regress, so that state needs no refetch.
-    private func isFinal(_ cached: PullRequestSummary?, for item: WorktreeItem) async -> Bool {
-        guard let cached,
-              cached.state == "OPEN",
-              cached.checks == "SUCCESS",
-              cached.reviewDecision == "APPROVED",
-              cached.headOID.isEmpty == false
-        else {
-            return false
-        }
-
-        let local = await service.headCommit(worktreePath: item.worktree.path)
-        return local == cached.headOID
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {

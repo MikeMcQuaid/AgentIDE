@@ -1,3 +1,5 @@
+import Foundation
+
 // MARK: - PullRequestSummary
 
 /// The dashboard-relevant state of an open pull request. Codable so
@@ -24,6 +26,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         body: String? = nil,
         unresolvedComments: Int = 0,
         isQueued: Bool = false,
+        closedAt: Date? = nil,
     ) {
         self.number = number
         self.title = title
@@ -42,6 +45,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.body = body
         self.unresolvedComments = unresolvedComments
         self.isQueued = isQueued
+        self.closedAt = closedAt
     }
 
     // MARK: Public
@@ -82,8 +86,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// Whether automerge is enabled.
     public let hasAutomerge: Bool
 
-    /// The head commit the states describe; green results for a
-    /// commit are treated as final, so caches key on it.
+    /// The head commit the states describe.
     public let headOID: String
 
     /// The author's GitHub login; optional so summaries cached by
@@ -99,6 +102,12 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// automatically, is not the same thing: only this says the
     /// queue is what happens next.
     public let isQueued: Bool
+
+    /// When it was merged or closed, nil while open. Branch names
+    /// are reused, so a long-finished pull request matching a
+    /// branch is a coincidence rather than its work; optional so
+    /// summaries cached by earlier releases still decode.
+    public let closedAt: Date?
 
     /// Review conversations still open on it, which the listing
     /// query cannot answer: GitHub only counts them through GraphQL,
