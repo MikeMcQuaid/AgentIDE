@@ -200,7 +200,15 @@ Two visually unmistakable flavours ride that one client:
   panes section above describes, and the tab bar's Close shell ends
   one instantly. Both
   terminals share one theme (black on white in light mode, white on
-  black in dark); what separates them visually is position, the agent
+  black in dark). Copies from the agent pane are reflowed for pasting
+  into prose, block by block rather than by the copy as a whole: a
+  paragraph loses the terminal's hard wraps, while a run of lines that
+  opens like a command keeps every one of them, so an answer that
+  explains, then gives a script, then explains again pastes with the
+  script still runnable. Option-drag copies a rectangle, and the
+  marquee is drawn on the character grid rather than at the pointer,
+  since half a character is neither in a selection nor out of it as
+  far as the eye can tell; what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
   to agent sessions (SSH, `script/attach`) still get tmux-native mouse
   scrolling and OSC 52 copying from the server config. An agent pane
@@ -591,7 +599,12 @@ shim rather than a protocol:
    repository, which is what every push did before asking was possible.
 5. When the branch has no open pull request, the worktree scope shows a
    creation form instead of the list: title, body and the repository's
-   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Open PR
+   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields, each
+   saved to the metadata store as it is typed and each restored on its
+   own. A saved draft only ever fills a field that is empty, so the
+   reloads that pushing and rebasing trigger cannot take back what is
+   being written, and a commit message never refills a form whose draft
+   was deliberately emptied. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
    template appended below the body after an empty line; while the form
    shows, revisiting the tab does not re-poll for a pull request that

@@ -153,21 +153,62 @@ final class BlockSelector {
         overlay = marquee
     }
 
+    /// The cells the drag covers, in the grid's own terms: the
+    /// selection is decided here once, so the marquee and the copy
+    /// can never disagree about which characters are in it.
+    private func cells(
+        from start: CGPoint,
+        to end: CGPoint,
+        in view: PaneTerminalView,
+    ) -> (rows: ClosedRange<Int>, columns: ClosedRange<Int>)? {
+        let terminal = view.getTerminal()
+        guard terminal.rows > 0, terminal.cols > 0, view.frame.width > 0, view.frame.height > 0 else {
+            return nil
+        }
+
+        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        func row(_ vertical: CGFloat) -> Int {
+            // The view's origin is at the bottom; rows from the top.
+            min(max(Int((view.frame.height - vertical) / size.height), 0), terminal.rows - 1)
+        }
+        func column(_ horizontal: CGFloat) -> Int {
+            min(max(Int(horizontal / size.width), 0), terminal.cols - 1)
+        }
+        return (
+            min(row(start.y), row(end.y)) ... max(row(start.y), row(end.y)),
+            min(column(start.x), column(end.x)) ... max(column(start.x), column(end.x)),
+        )
+    }
+
+    /// Where those cells are on screen, so the marquee covers whole
+    /// characters: a rectangle drawn at the pointer cuts characters
+    /// in half down its edges, and half a character is neither in
+    /// the selection nor out of it as far as the eye can tell.
+    private func rectangle(
+        of cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>),
+        in view: PaneTerminalView,
+    ) -> CGRect {
+        let terminal = view.getTerminal()
+        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        let height = CGFloat(cells.rows.count) * size.height
+        return CGRect(
+            x: CGFloat(cells.columns.lowerBound) * size.width,
+            y: view.frame.height - CGFloat(cells.rows.lowerBound) * size.height - height,
+            width: CGFloat(cells.columns.count) * size.width,
+            height: height,
+        )
+    }
+
+    private func cellSize(of view: PaneTerminalView, rows: Int, columns: Int) -> CGSize {
+        CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
+    }
+
     private func update(to point: CGPoint, in view: PaneTerminalView) {
-        guard let anchor else {
+        guard let anchor, let cells = cells(from: anchor, to: point, in: view) else {
             return
         }
 
-        let clamped = CGPoint(
-            x: min(max(point.x, 0), view.bounds.width),
-            y: min(max(point.y, 0), view.bounds.height),
-        )
-        overlay?.frame = CGRect(
-            x: min(anchor.x, clamped.x),
-            y: min(anchor.y, clamped.y),
-            width: abs(clamped.x - anchor.x),
-            height: abs(clamped.y - anchor.y),
-        )
+        overlay?.frame = rectangle(of: cells, in: view)
     }
 
     private func finish(at point: CGPoint, in view: PaneTerminalView) {
@@ -176,37 +217,18 @@ final class BlockSelector {
             overlay = nil
             anchor = nil
         }
-        guard let anchor else {
+        guard let anchor, let cells = cells(from: anchor, to: point, in: view) else {
             return
         }
 
-        copyRectangle(from: anchor, to: point, in: view)
+        copy(cells: cells, in: view)
     }
 
     /// Copies the rectangle's rows, each sliced to its columns.
-    private func copyRectangle(from start: CGPoint, to end: CGPoint, in view: PaneTerminalView) {
+    private func copy(cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>), in view: PaneTerminalView) {
         let terminal = view.getTerminal()
-        guard terminal.rows > 0, terminal.cols > 0 else {
-            return
-        }
-
-        let rowHeight = view.frame.height / CGFloat(terminal.rows)
-        let colWidth = view.frame.width / CGFloat(terminal.cols)
-        func gridRow(_ vertical: CGFloat) -> Int {
-            // The view's origin is at the bottom; rows count from
-            // the top.
-            min(max(Int((view.frame.height - vertical) / rowHeight), 0), terminal.rows - 1)
-        }
-        func gridCol(_ horizontal: CGFloat) -> Int {
-            min(max(Int(horizontal / colWidth), 0), terminal.cols - 1)
-        }
-        let top = min(gridRow(start.y), gridRow(end.y))
-        let bottom = max(gridRow(start.y), gridRow(end.y))
-        let left = min(gridCol(start.x), gridCol(end.x))
-        let right = max(gridCol(start.x), gridCol(end.x))
-
         var lines = [String]()
-        for row in top ... bottom {
+        for row in cells.rows {
             guard let line = terminal.getLine(row: row) else {
                 continue
             }
@@ -215,8 +237,12 @@ final class BlockSelector {
             // spaces there, as SwiftTerm's own copy does, or a pasted
             // script arrives peppered with ^@ where its indentation
             // and word gaps were.
-            let text = line.translateToString(trimRight: true, startCol: left, endCol: right + 1)
-                .replacing("\u{0}", with: " ")
+            let text = line.translateToString(
+                trimRight: true,
+                startCol: cells.columns.lowerBound,
+                endCol: cells.columns.upperBound + 1,
+            )
+            .replacing("\u{0}", with: " ")
             lines.append(PasteableText.strippingGutter(text))
         }
         let joined = lines.joined(separator: "\n")

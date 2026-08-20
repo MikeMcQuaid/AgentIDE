@@ -114,6 +114,13 @@ extension PullRequestsModel {
             return
         }
 
+        // A draft that exists but reads empty was emptied on purpose;
+        // refilling it from the commit would undo that every time
+        // pushing or rebasing reloaded the form.
+        guard draftKey.map({ store.load().pullRequestDrafts[$0] == nil }) ?? true else {
+            return
+        }
+
         let commits = await fetchCommitMessages(worktree)
         if commits.count == 1, let only = commits.first {
             apply(description: Self.description(splitFromMessage: only))

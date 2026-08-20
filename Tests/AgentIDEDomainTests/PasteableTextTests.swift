@@ -75,12 +75,37 @@ struct PasteableTextTests {
     }
 
     @Test
+    func `commands keep their lines even when prose surrounds them`() {
+        // The copy that prompted this: an answer explaining what to
+        // run, the commands, then more explanation. Judged over the
+        // whole copy the prose outvoted the commands and the script
+        // came out as one unrunnable line.
+        let answer = """
+        ▎ Rebase both branches onto trunk and force push them, which
+        ▎ is safe here because nobody else has them:
+        ▎ cd $A
+        ▎ git fetch origin
+        ▎ git checkout sentry-errors-aug-18-backend
+        ▎ git rebase --gpg-sign --force-rebase origin/trunk
+        ▎ git push --force-with-lease -u origin sentry-errors-aug-18-backend
+        ▎ Then check the pull requests still show the right base
+        ▎ branch before merging either of them.
+        """
+        let reflowed = PasteableText.reflow(answer)
+        #expect(reflowed.hasPrefix("Rebase both branches onto trunk and force push them, which is safe here"))
+        #expect(reflowed.contains("cd $A\ngit fetch origin\ngit checkout sentry-errors-aug-18-backend"))
+        #expect(reflowed.contains("origin/trunk\ngit push --force-with-lease -u origin"))
+        let closing = "Then check the pull requests still show the right base branch "
+            + "before merging either of them."
+        #expect(reflowed.hasSuffix(closing))
+    }
+
+    @Test
     func `prose that merely mentions a flag still reflows`() {
         let prose = """
         ▎ You can pass --verbose to see more, and the wrapped line
         ▎ continues here as ordinary explanation of the option.
         """
         #expect(PasteableText.reflow(prose).contains("\n") == false)
-        #expect(PasteableText.looksLikeCode(["one plain sentence", "another plain sentence"]) == false)
     }
 }
