@@ -67,29 +67,13 @@ extension DashboardModel {
         let threads = store.load().threadsCache[key]?.threads ?? []
         let unresolved = threads.count { $0.isResolved == false }
         let queued = queuedNumbers[repositoryPath]?.contains(summary.number) ?? false
-        guard unresolved != summary.unresolvedComments || queued != summary.isQueued else {
-            return summary
-        }
-
-        return PullRequestSummary(
-            number: summary.number,
-            title: summary.title,
-            url: summary.url,
-            headBranch: summary.headBranch,
-            mergeable: summary.mergeable,
-            reviewDecision: summary.reviewDecision,
-            checks: summary.checks,
-            failingCheckLinks: summary.failingCheckLinks,
-            baseBranch: summary.baseBranch,
-            state: summary.state,
-            isDraft: summary.isDraft,
-            hasAutomerge: summary.hasAutomerge,
-            headOID: summary.headOID,
-            author: summary.author,
-            body: summary.body,
-            unresolvedComments: unresolved,
-            isQueued: queued,
-        )
+        // Copied rather than rebuilt field by field: a rebuild
+        // silently drops whatever field it forgets, as it did with
+        // the date a pull request closed.
+        var stamped = summary
+        stamped.unresolvedComments = unresolved
+        stamped.isQueued = queued
+        return stamped
     }
 
     /// One narrow query per due worktree branch instead of whole

@@ -179,7 +179,7 @@ public struct GitHubClient: Sendable {
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields =
-        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,headRefOid,closedAt"
+        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt"
 
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one
@@ -238,7 +238,6 @@ public struct GitHubClient: Sendable {
                 state: row.state ?? "OPEN",
                 isDraft: row.isDraft ?? false,
                 hasAutomerge: row.autoMergeRequest != nil,
-                headOID: row.headRefOid ?? "",
                 author: row.author?.login,
                 body: row.body,
                 closedAt: row.closedAt,
@@ -286,7 +285,6 @@ public struct GitHubClient: Sendable {
         // swiftlint:disable:next discouraged_optional_boolean
         let isDraft: Bool?
         let autoMergeRequest: AutoMergeRow?
-        let headRefOid: String?
         let closedAt: Date?
         // Absent from the JSON when a pull request has no checks.
         // swiftlint:disable:next discouraged_optional_collection
