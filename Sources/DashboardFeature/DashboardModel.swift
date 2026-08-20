@@ -162,7 +162,7 @@ public final class DashboardModel {
     /// Reloads everything and notifies about newly finished or
     /// newly unread sessions. The selected worktree is on screen, so
     /// its activity counts as seen; a manual unread mark survives.
-    public func refresh() async {
+    public func refresh(forcing repositoryPath: String? = nil) async {
         if let selection {
             service.acknowledgeActivity(worktreePath: selection.worktree.path)
         }
@@ -190,7 +190,7 @@ public final class DashboardModel {
         }
         hasRestoredSelection = true
         cacheSidebar(listed)
-        await refreshStalePullRequests()
+        await refreshStalePullRequests(forcing: repositoryPath)
     }
 
     /// Polls the system on an interval while the dashboard is alive.
@@ -322,6 +322,14 @@ public final class DashboardModel {
 
     /// When each branch's pull request is next due, by cache key.
     var nextPullRequestFetch: [String: Date] = [:]
+
+    /// The pull requests in each repository's merge queue, by
+    /// repository path, and when that answer was last fetched. The
+    /// queue is asked once per repository rather than per branch,
+    /// so it is held here rather than beside the branch caches.
+    var queuedNumbers: [String: Set<Int>] = [:]
+
+    var queuesFetchedAt: [String: Date] = [:]
 
     /// Internal so the pull request extension file can persist its
     /// cache.

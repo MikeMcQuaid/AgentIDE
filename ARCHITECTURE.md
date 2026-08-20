@@ -170,8 +170,9 @@ outlive the app; agent panes additionally reflow multi-line copies for
 prose and Option-drag copies a rectangle with gutter marks trimmed.
 Programs that request the mouse get it, matching every terminal:
 Claude Code scrolls its own internal transcript (which never reaches
-scrollback, so no scrollbar can exist for it) and pagers scroll
-natively, with Shift bypassing to local selection and scrolling;
+scrollback, so no scrollbar can exist for it; agent panes hide the
+scroll indicator for that reason, and SwiftTerm gives the reserved
+width back to the terminal) and pagers scroll natively, with Shift bypassing to local selection and scrolling;
 programs that leave the mouse alone, Codex and plain shells included,
 select and scroll natively with no modifier.
 
@@ -200,7 +201,15 @@ Two visually unmistakable flavours ride that one client:
   panes section above describes, and the tab bar's Close shell ends
   one instantly. Both
   terminals share one theme (black on white in light mode, white on
-  black in dark); what separates them visually is position, the agent
+  black in dark). Copies from the agent pane are reflowed for pasting
+  into prose, block by block rather than by the copy as a whole: a
+  paragraph loses the terminal's hard wraps, while a run of lines that
+  opens like a command keeps every one of them, so an answer that
+  explains, then gives a script, then explains again pastes with the
+  script still runnable. Option-drag copies a rectangle, and the
+  marquee is drawn on the character grid rather than at the pointer,
+  since half a character is neither in a selection nor out of it as
+  far as the eye can tell; what separates them visually is position, the agent
   pane on the left and the shell in the utility pane. External attaches
   to agent sessions (SSH, `script/attach`) still get tmux-native mouse
   scrolling and OSC 52 copying from the server config. An agent pane
@@ -515,7 +524,14 @@ long as the thing inside them should live, not for as long as it is visible:
    window is on leaves the window black on a space with nothing behind it,
    and coming out of fullscreen restores the frame it had on the display
    that has gone, which the remaining screen can neither show nor let the
-   user drag smaller. The window leaves fullscreen when its screen goes and
+   user drag smaller. A fullscreen window that macOS moves to a surviving
+   screen keeps the frame of the one that went, drawing its content outside
+   the new screen so only the black behind it shows, which is why fitting
+   covers fullscreen too: the frame is set to the screen the window is now
+   on, and a redraw asked for, on entering and leaving fullscreen, on
+   changing screen and on any change to the displays themselves, each
+   fitted twice since those transitions animate. A window left with no
+   screen at all leaves fullscreen, and then
    fits its frame back inside whichever screen it lands on, and the panes
    fit the width it ends up with: the utility pane narrows first, then the
    sidebar, and a window too narrow for all three hides the utility pane
@@ -566,10 +582,27 @@ shim rather than a protocol:
 
 1. The token comes from a one-shot `gh auth token`, held in memory only and
    refreshed on 401 (P6).
-2. Each worktree branch is polled with its own narrow query for its open
-   pull request's mergeable state, review decision and check rollup;
+2. Each worktree branch is polled with its own narrow query for its pull
+   request's mergeable state, review decision and check rollup;
    repository-wide queries timed out GitHub's gateway on very large
-   repositories.
+   repositories. The branch shows its open pull request, or its most
+   recent one once that merged, so a branch reads as merged until its
+   worktree is tidied. Membership of a merge queue is asked of the
+   queue itself, once per repository: no pull request field reports it
+   (`isInMergeQueue` does not exist, `mergeStateStatus` has no queued
+   state), and an unknown field fails the whole listing. A pull
+   request that merged or closed more than thirty days ago is
+   ignored: branch names are reused, and an old pull request
+   matching one is a name collision rather than the branch's work.
+   No cached answer is ever treated as final, however green: an
+   approved, passing pull request is exactly the one about to
+   merge, and skipping it froze rows as open forever. Refresh, on
+   the context menu of every sidebar row and repository header,
+   drops the waits for the repository right-clicked and asks about
+   its branches and its merge queue at once, including during an
+   outage the poll is riding out; one repository rather than all of
+   them, since asking about everything is how a rate limit
+   arrives.
 3. Poll cadence is tiered by attention and cached per branch: the selected
    worktree refreshes most often, then its repository's other worktrees,
    then other expanded repositories; repositories collapsed in the sidebar
@@ -591,13 +624,20 @@ shim rather than a protocol:
    repository, which is what every push did before asking was possible.
 5. When the branch has no open pull request, the worktree scope shows a
    creation form instead of the list: title, body and the repository's
-   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields. Open PR
+   `.github/PULL_REQUEST_TEMPLATE.md` as three editable fields, each
+   saved to the metadata store as it is typed and each restored on its
+   own. A saved draft only ever fills a field that is empty, so the
+   reloads that pushing and rebasing trigger cannot take back what is
+   being written, and a commit message never refills a form whose draft
+   was deliberately emptied. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
    template appended below the body after an empty line; while the form
    shows, revisiting the tab does not re-poll for a pull request that
    cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and
-   push in click order. Blank fields fill from the branch's commits:
+   push in click order. Blank fields fill from the branch's commits,
+   blank meaning empty or whitespace alone whatever a saved draft
+   holds, since neither has anything to lose:
    a one-commit branch defaults to that commit's own message, and a
    generate button inside the title field summarises several through
    the on-device model, locking the fields while it drafts; typed
@@ -622,7 +662,12 @@ shim rather than a protocol:
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
    request's header and row immediately.
-8. Push and rebase together enforce that every pushed commit is GPG
+8. Pushing a branch whose history has been rewritten, by an amend or a
+   rebase, leases the push (`--force-with-lease`) rather than being
+   refused as a non-fast-forward. The lease is what makes that safe: it
+   still refuses if the remote moved since the last fetch. A branch whose
+   remote ref is still an ancestor pushes plainly, as before.
+9. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
    dims until the tip commit verifies and the service refuses regardless.

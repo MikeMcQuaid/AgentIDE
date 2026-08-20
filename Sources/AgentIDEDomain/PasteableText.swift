@@ -15,17 +15,11 @@ public enum PasteableText {
             return strippingGutter(content)
         }
 
-        if let verbatim = codeBlock(content) {
-            return verbatim
-        }
-
-        let blocks = proseBlocks(content)
+        let blocks = blocks(in: content)
         var result = ""
-        for (index, block) in blocks.enumerated() {
+        for (index, block) in blocks.enumerated() where block.text.isEmpty == false {
             if index > 0 {
-                // Consecutive list items stay a tight list; anything
-                // else is a fresh paragraph.
-                result += block.isListItem && blocks[index - 1].isListItem ? "\n" : "\n\n"
+                result += separator(before: block, after: blocks[index - 1])
             }
             result += block.text
         }
@@ -43,28 +37,30 @@ public enum PasteableText {
         return trimmed
     }
 
-    /// Whether stripped lines read as commands or code rather than
-    /// prose: most non-blank lines carry a code signature (a shell
-    /// command word, a path, an option flag, a pipe or redirect, a
-    /// line continuation, or a prompt). Deliberately conservative
-    /// so an ordinary sentence mentioning `--verbose` still reflows.
-    public static func looksLikeCode(_ lines: [String]) -> Bool {
-        let meaningful = lines.filter { $0.isEmpty == false }
-        guard meaningful.count >= minimumCodeLines, let first = meaningful.first, hasCodeSignature(first) else {
-            return false
-        }
-
-        return meaningful.filter(hasCodeSignature).count * codeMajority > meaningful.count
-    }
-
     // MARK: Private
 
-    /// One line alone is never a block; two can be.
-    private static let minimumCodeLines = 2
+    /// What a run of lines is, which decides whether it may be
+    /// joined into one line.
+    private enum Kind {
+        /// Wrapped prose, joined back into one line.
+        case paragraph
+        /// A bullet or numbered item, which keeps its own line and
+        /// swallows its wrapped continuations.
+        case listItem
+        /// Commands or code, kept exactly as they are: joining
+        /// `git fetch` onto the `cd` before it turns a runnable
+        /// script into one broken line.
+        case code
+    }
 
-    /// Signature lines times this must exceed the line count, so a
-    /// strict majority of lines must look like code.
-    private static let codeMajority = 2
+    private struct Block {
+        var text: String
+        var kind: Kind
+        /// Whether a blank line stood before it, which decides
+        /// whether it is a new paragraph or the next line of one
+        /// thing.
+        var followsBlank: Bool
+    }
 
     /// The block glyphs terminal interfaces use as gutters and
     /// borders.
@@ -78,30 +74,46 @@ public enum PasteableText {
         "gh", "docker", "ssh", "source", "exec", "printf", "grep", "sed", "awk", "find", "chmod",
     ]
 
-    /// Gathers prose into paragraphs and list items: a blank line
-    /// ends a paragraph, a list marker starts its own item and any
-    /// other line continues the current block.
-    private static func proseBlocks(_ content: String) -> [(text: String, isListItem: Bool)] {
-        var blocks = [(text: String, isListItem: Bool)]()
-        var current: (text: String, isListItem: Bool)?
+    /// Gathers the lines into blocks. A blank line ends whatever is
+    /// open, a list marker starts its own item, a line that reads as
+    /// a command starts or continues a code block, and any other
+    /// line continues the current one. Classifying per block rather
+    /// than per copy is what lets an agent's answer of a sentence,
+    /// then a script, then another sentence come out with the
+    /// sentences reflowed and the script still runnable.
+    private static func blocks(in content: String) -> [Block] {
+        var blocks = [Block]()
+        var current: Block?
+        var followsBlank = false
         for raw in content.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = strippingGutter(String(raw))
-            if line.isEmpty {
+            guard line.isEmpty == false else {
                 if let block = current {
                     blocks.append(block)
                     current = nil
                 }
+                followsBlank = true
                 continue
             }
-            if isListItem(line) {
+
+            let continuesCode = current?.kind == .code
+                && (hasCodeSignature(line) || current?.text.hasSuffix("\\") == true)
+            let kind: Kind = startsCode(line) || continuesCode
+                ? .code
+                : (isListItem(line) ? .listItem : .paragraph)
+            if var block = current, block.kind == kind, kind != .listItem {
+                // Code keeps its line breaks; prose loses them.
+                block.text += kind == .code ? "\n" + line : " " + line
+                current = block
+            } else if var block = current, kind == .paragraph, block.kind == .listItem {
+                block.text += " " + line
+                current = block
+            } else {
                 if let block = current {
                     blocks.append(block)
                 }
-                current = (line, true)
-            } else if let block = current {
-                current = (block.text + " " + line, block.isListItem)
-            } else {
-                current = (line, false)
+                current = Block(text: line, kind: kind, followsBlank: followsBlank)
+                followsBlank = false
             }
         }
         if let block = current {
@@ -110,15 +122,33 @@ public enum PasteableText {
         return blocks
     }
 
-    /// Reflowing is for prose. A copied command block or code
-    /// listing keeps its lines exactly, gutters stripped: joining
-    /// `git fetch` onto the `cd` before it once turned a runnable
-    /// script into one broken line. Nil when the text is prose.
-    private static func codeBlock(_ content: String) -> String? {
-        let stripped = content
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { strippingGutter(String($0)) }
-        return looksLikeCode(stripped) ? stripped.joined(separator: "\n") : nil
+    /// What goes between two blocks: what the copy had where it had
+    /// a blank line, one line between the items of a list, and one
+    /// between prose and the commands it introduces, since a
+    /// sentence and its command belong together.
+    private static func separator(before block: Block, after previous: Block) -> String {
+        if block.followsBlank {
+            return "\n\n"
+        }
+        if block.kind == .listItem, previous.kind == .listItem {
+            return "\n"
+        }
+
+        return block.kind == .code || previous.kind == .code ? "\n" : "\n\n"
+    }
+
+    /// Whether a line opens like a command: a shell word, a prompt,
+    /// a path or a shebang at its start. Weaker signs of code, a
+    /// flag or a pipe somewhere in the line, deliberately do not
+    /// count here, or a sentence mentioning `--verbose` would stop
+    /// being prose.
+    private static func startsCode(_ line: String) -> Bool {
+        let first = line.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+        return commandWords.contains(first)
+            || first.hasPrefix("$")
+            || first.hasPrefix("./")
+            || first.hasPrefix("~/")
+            || line.hasPrefix("#!")
     }
 
     /// Whether one line carries a code signature.

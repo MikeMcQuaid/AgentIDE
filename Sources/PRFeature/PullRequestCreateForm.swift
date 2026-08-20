@@ -35,6 +35,7 @@ struct PullRequestCreateForm: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 8
+
     private static let overlayPadding: CGFloat = 4
 
     private static let bodyMinimumHeight: CGFloat = 120
@@ -95,11 +96,17 @@ struct PullRequestCreateForm: View {
             }
         }
         .buttonStyle(.borderless)
-        .disabled(isGenerating || model.prTitle.isEmpty == false || model.prBody.isEmpty == false)
+        .disabled(isGenerating || Self.hasText(model.prTitle) || Self.hasText(model.prBody))
         .hoverHelp(
             "Fill the empty fields from the branch's commits: one commit's own message "
                 + "directly, several summarised by the on-device model, and the template "
                 + "completed from the commits when the repository has one",
         )
+    }
+
+    /// Whether a field holds anything worth keeping; whitespace
+    /// alone is as good as empty, and generating replaces it.
+    private static func hasText(_ text: String) -> Bool {
+        PullRequestsModel.isBlank(text) == false
     }
 }

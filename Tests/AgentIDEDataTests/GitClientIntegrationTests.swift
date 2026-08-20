@@ -231,6 +231,16 @@ struct GitClientIntegrationTests {
         try "more\n".write(toFile: repoPath + "/more.txt", atomically: true, encoding: .utf8)
         try await git.commitAll(worktreePath: repoPath, message: "More")
         #expect(await git.aheadOfUpstream(worktreePath: repoPath) == 1)
+
+        // Amending what was pushed rewrites the remote's history,
+        // which a plain push refuses as a non-fast-forward; the push
+        // leases instead, so the work still lands.
+        try await git.push(worktreePath: repoPath, branch: "main")
+        try await TestSupport.runGit(["commit", "-q", "--amend", "-m", "More, amended"], in: repoPath)
+        #expect(await git.rewritesRemoteHistory(worktreePath: repoPath, branch: "main", remote: "origin"))
+        try await git.push(worktreePath: repoPath, branch: "main")
+        #expect(await git.aheadOfUpstream(worktreePath: repoPath) == 0)
+        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "More, amended")
     }
 
     // MARK: Private

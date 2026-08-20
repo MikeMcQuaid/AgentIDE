@@ -27,8 +27,10 @@ public extension DashboardModel {
 
             var items = fresh.items
             let paths = Set(items.map(\.worktree.path))
-            for (index, item) in old.items.enumerated()
-                where paths.contains(item.worktree.path) == false && stillExists(item.worktree.path) {
+            let lost = old.items.enumerated().filter { row in
+                paths.contains(row.element.worktree.path) == false && stillExists(row.element.worktree.path)
+            }
+            for (index, item) in lost {
                 // Back where it was, so a row the reading lost does
                 // not jump down the list and back on the next tick.
                 items.insert(item, at: min(index, items.count))

@@ -1,3 +1,5 @@
+import Foundation
+
 // MARK: - PullRequestSummary
 
 /// The dashboard-relevant state of an open pull request. Codable so
@@ -22,6 +24,9 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         headOID: String = "",
         author: String? = nil,
         body: String? = nil,
+        unresolvedComments: Int = 0,
+        isQueued: Bool = false,
+        closedAt: Date? = nil,
     ) {
         self.number = number
         self.title = title
@@ -38,6 +43,9 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.headOID = headOID
         self.author = author
         self.body = body
+        self.unresolvedComments = unresolvedComments
+        self.isQueued = isQueued
+        self.closedAt = closedAt
     }
 
     // MARK: Public
@@ -78,8 +86,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// Whether automerge is enabled.
     public let hasAutomerge: Bool
 
-    /// The head commit the states describe; green results for a
-    /// commit are treated as final, so caches key on it.
+    /// The head commit the states describe.
     public let headOID: String
 
     /// The author's GitHub login; optional so summaries cached by
@@ -89,6 +96,24 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// The description, carried from the listing so a click-through
     /// shows the conversation immediately; optional like the author.
     public let body: String?
+
+    /// Whether it is in a merge queue right now. A repository
+    /// having a queue, or a pull request being set to merge
+    /// automatically, is not the same thing: only this says the
+    /// queue is what happens next.
+    public let isQueued: Bool
+
+    /// When it was merged or closed, nil while open. Branch names
+    /// are reused, so a long-finished pull request matching a
+    /// branch is a coincidence rather than its work; optional so
+    /// summaries cached by earlier releases still decode.
+    public let closedAt: Date?
+
+    /// Review conversations still open on it, which the listing
+    /// query cannot answer: GitHub only counts them through GraphQL,
+    /// so this stays zero until the pull request is looked at and
+    /// the count is remembered.
+    public let unresolvedComments: Int
 
     /// The pull request's checks page.
     public var checksPageURL: String {

@@ -80,48 +80,69 @@ struct WindowConfigurator: NSViewRepresentable {
             }
 
             let centre = NotificationCenter.default
-            observers.append(centre.addObserver(
-                forName: NSApplication.didChangeScreenParametersNotification,
-                object: nil,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.displaysChanged() }
-            })
-            observers.append(centre.addObserver(
-                forName: NSWindow.didExitFullScreenNotification,
-                object: window,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.fitToScreen() }
-            })
+            let names: [(Notification.Name, Any?)] = [
+                (NSApplication.didChangeScreenParametersNotification, nil),
+                (NSWindow.didEnterFullScreenNotification, window),
+                (NSWindow.didExitFullScreenNotification, window),
+                (NSWindow.didChangeScreenNotification, window),
+            ]
+            for (name, object) in names {
+                observers.append(centre.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.moved() }
+                })
+            }
         }
 
-        private func displaysChanged() {
+        /// The window changed screen or fullscreen state. Fitting
+        /// runs twice: entering and leaving fullscreen are animated,
+        /// so the frame that needs fitting is not there yet when the
+        /// notification arrives.
+        private func moved() {
+            fit()
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
+                self?.fit()
+            }
+        }
+
+        private func fit() {
             guard let window else {
                 return
             }
 
-            // A fullscreen window whose screen has gone cannot be
-            // recovered in place: leaving fullscreen puts it back on
-            // a screen that exists.
-            if window.styleMask.contains(.fullScreen), window.screen == nil {
+            if window.styleMask.contains(.fullScreen) {
+                fitFullScreen(of: window)
+            } else {
+                fitToScreen()
+            }
+            // The space a fullscreen window lands on paints black
+            // behind it; a window that fitted itself into one must
+            // ask for the redraw that the move itself never did.
+            window.viewsNeedDisplay = true
+            window.displayIfNeeded()
+        }
+
+        /// A fullscreen window keeps the size of the display it was
+        /// on when that display goes. macOS moves the space to a
+        /// screen that exists, but the content stays drawn to the
+        /// old, larger frame: what shows is the black behind it.
+        private func fitFullScreen(of window: NSWindow) {
+            guard let screen = window.screen else {
+                // No screen at all to fit: leaving fullscreen puts
+                // the window back on one that exists.
                 window.toggleFullScreen(nil)
+                return
             }
-            fitToScreen()
-            // Leaving fullscreen is animated, so the frame that
-            // needs fitting is not there yet.
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
-                self?.fitToScreen()
+            guard window.frame != screen.frame else {
+                return
             }
+
+            window.setFrame(screen.frame, display: true, animate: false)
         }
 
         /// Brings the frame back inside the screen it is on, keeping
         /// its size where it fits and its corner where it can.
         private func fitToScreen() {
-            guard let window,
-                  window.styleMask.contains(.fullScreen) == false,
-                  let visible = (window.screen ?? NSScreen.main)?.visibleFrame
-            else {
+            guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
                 return
             }
 

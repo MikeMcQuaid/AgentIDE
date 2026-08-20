@@ -1,4 +1,5 @@
 import AgentIDEData
+import Foundation
 @testable import PRFeature
 import Testing
 
@@ -42,5 +43,39 @@ extension PullRequestsModelTests {
 
         _ = await model.push()
         #expect(pushed == "switched")
+    }
+
+    @Test
+    func `pushing and rebasing never take back what was typed`() async {
+        // One store for both models, so the draft one saves is the
+        // draft the other reads.
+        let metadataFile = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-draft-" + UUID().uuidString + ".json")
+            .path
+        defer { try? FileManager.default.removeItem(atPath: metadataFile) }
+        let model = makeModel(items: [item(branch: "feature", ahead: 2)], metadataFile: metadataFile)
+        model.prTitle = "A change"
+        model.prBody = "Why it matters"
+        model.prTemplate = "- [x] Tested"
+        // The commit would otherwise fill a form it thinks is empty.
+        model.fetchCommitMessages = { _ in ["Some commit\n\nIts body"] }
+
+        // Push and rebase both reload the form underneath the user.
+        #expect(await model.push())
+        #expect(model.prTitle == "A change")
+        #expect(model.prBody == "Why it matters")
+        #expect(model.prTemplate == "- [x] Tested")
+
+        #expect(await model.rebaseSigned())
+        #expect(model.prBody == "Why it matters")
+        #expect(model.prTemplate == "- [x] Tested")
+
+        // A reload of a fresh model still restores the draft, which
+        // is what the draft is for.
+        let reopened = makeModel(items: [item(branch: "feature", ahead: 2)], metadataFile: metadataFile)
+        await reopened.reload()
+        #expect(reopened.prBody == "Why it matters")
+        #expect(reopened.prTemplate == "- [x] Tested")
     }
 }

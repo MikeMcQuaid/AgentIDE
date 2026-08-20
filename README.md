@@ -46,7 +46,15 @@ before shipping.
 - **Groups** worktrees by repository, showing unread terminal and agent activity
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to
-  revisit (so you always know where you are needed)
+  revisit, with a right-click Refresh that asks GitHub about that
+  repository's branches at once (so you always know where you are
+  needed)
+- **Says** what a branch is doing in GitHub's own icons: green for an open
+  pull request or a repository's own branch, purple once merged, orange
+  while it actually sits in the merge queue, grey for a draft; then its
+  number, a CI dot, a review that has approved, asked for changes or not
+  happened yet, any unresolved conversations, and its commit counts last
+  (so one glance across the sidebar says where everything stands)
 - **Notifies** you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
 - **Renders** terminals locally from a `tmux` control mode client, so selecting,

@@ -76,18 +76,31 @@ extension PullRequestsModel {
         store.save(metadata)
     }
 
-    /// Restores a saved draft, if any; reload calls this before the
-    /// template is fetched, so typed text always wins over it.
+    /// Restores a saved draft into whatever is still empty. Only
+    /// empty fields are filled, so a reload, which push and rebase
+    /// both trigger, can never overwrite what is being typed: the
+    /// draft is a fallback for a fresh model, not the truth about a
+    /// live one. Title, body and template each answer for
+    /// themselves, since they are edited separately.
     func loadDraft() {
         guard let key = draftKey, let draft = store.load().pullRequestDrafts[key] else {
             return
         }
 
         loadingDraft = true
-        prTitle = draft.title
-        prBody = draft.body
-        prTemplate = draft.template
+        if Self.isBlank(prTitle) {
+            prTitle = draft.title
+        }
+        if Self.isBlank(prBody) {
+            prBody = draft.body
+        }
+        if Self.isBlank(prTemplate) {
+            prTemplate = draft.template
+        }
         loadingDraft = false
+        // What was already typed may be newer than the draft, so the
+        // draft is brought back up to date rather than left behind.
+        saveDraft()
     }
 
     /// Forgets a branch's draft once its pull request exists.

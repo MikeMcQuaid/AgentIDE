@@ -28,6 +28,21 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// already knows.
     var onPaste: ((String) -> Bool)?
 
+    /// Keeps a selection while output arrives. SwiftTerm drops the
+    /// selection on every line feed whenever mouse reporting is on,
+    /// which it always is here so that an agent's own scrolling and
+    /// pagers work, and an agent writing a long answer feeds a line
+    /// at a time: selecting anything while one was thinking was
+    /// therefore impossible. Nothing is lost by keeping it, since
+    /// SwiftTerm already moves a selection with the text it covers,
+    /// and that is exactly what it does when mouse reporting is off.
+    override func linefeed(source: Terminal) {
+        guard selectionActive else {
+            super.linefeed(source: source)
+            return
+        }
+    }
+
     /// Pastes the clipboard, offering it to the owner first.
     override func paste(_ sender: Any) {
         guard let text = NSPasteboard.general.string(forType: .string),
@@ -65,6 +80,16 @@ final class PaneTerminalView: LocalProcessTerminalView {
         pasteboard.clearContents()
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
     }
+
+    /// Hides the scroll indicator. An agent pane's scrollback lives
+    /// in tmux, which owns the scrolling, so the knob never moves
+    /// and only takes up room; SwiftTerm gives the reserved width
+    /// back to the terminal once it is hidden.
+    func hideScroller() {
+        for scroller in subviews.compactMap({ $0 as? NSScroller }) {
+            scroller.isHidden = true
+        }
+    }
 }
 
 // MARK: - BlockSelector
@@ -83,7 +108,7 @@ final class BlockSelector {
     }
 
     deinit {
-        // The overlay is removed with the view.
+        // The overlay is a subview, removed with the view itself.
     }
 
     // MARK: Internal
@@ -101,6 +126,9 @@ final class BlockSelector {
                   view.isHiddenOrHasHiddenAncestor == false,
                   Self.hitsTerminal(event, in: view)
             else {
+                // Any other click puts the last block selection away,
+                // as clicking does to an ordinary one.
+                clear()
                 return event
             }
 
@@ -120,6 +148,36 @@ final class BlockSelector {
         }
     }
 
+    /// Puts the marquee away, which is what a click elsewhere and a
+    /// new drag both mean.
+    func clear() {
+        overlay?.removeFromSuperview()
+        overlay = nil
+        anchor = nil
+        heldRows = nil
+        heldColumns = nil
+    }
+
+    /// Moves the held marquee to wherever its text is now, and puts
+    /// it away once that text has scrolled out of the buffer
+    /// entirely. Called as output arrives.
+    func follow() {
+        guard let view, let heldRows, let heldColumns, let overlay else {
+            return
+        }
+
+        let terminal = view.getTerminal()
+        let top = terminal.getTopVisibleRow()
+        let rows = (heldRows.lowerBound - top) ... (heldRows.upperBound - top)
+        guard rows.upperBound >= 0, rows.lowerBound < terminal.rows else {
+            clear()
+            return
+        }
+
+        let visible = max(rows.lowerBound, 0) ... min(rows.upperBound, terminal.rows - 1)
+        overlay.frame = rectangle(of: (rows: visible, columns: heldColumns), in: view)
+    }
+
     // MARK: Private
 
     private static let marqueeOpacity = 0.2
@@ -127,6 +185,13 @@ final class BlockSelector {
     private weak var view: PaneTerminalView?
     private var anchor: CGPoint?
     private var overlay: NSView?
+
+    /// What the held selection covers, in the buffer's own rows
+    /// rather than the screen's: output scrolls the text under a
+    /// marquee, and a rectangle that stayed where it was drawn would
+    /// end up highlighting whatever arrived next.
+    private var heldRows: ClosedRange<Int>?
+    private var heldColumns: ClosedRange<Int>?
 
     /// Whether the window resolves the click to this terminal: a
     /// pane kept mounted but covered or hidden must not steal drags
@@ -141,6 +206,7 @@ final class BlockSelector {
     }
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
+        clear()
         anchor = point
         let marquee = NSView(frame: CGRect(origin: point, size: .zero))
         marquee.wantsLayer = true
@@ -153,60 +219,87 @@ final class BlockSelector {
         overlay = marquee
     }
 
+    /// The cells the drag covers, in the grid's own terms: the
+    /// selection is decided here once, so the marquee and the copy
+    /// can never disagree about which characters are in it.
+    private func cells(
+        from start: CGPoint,
+        to end: CGPoint,
+        in view: PaneTerminalView,
+    ) -> (rows: ClosedRange<Int>, columns: ClosedRange<Int>)? {
+        let terminal = view.getTerminal()
+        guard terminal.rows > 0, terminal.cols > 0, view.frame.width > 0, view.frame.height > 0 else {
+            return nil
+        }
+
+        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        func row(_ vertical: CGFloat) -> Int {
+            // The view's origin is at the bottom; rows from the top.
+            min(max(Int((view.frame.height - vertical) / size.height), 0), terminal.rows - 1)
+        }
+        func column(_ horizontal: CGFloat) -> Int {
+            min(max(Int(horizontal / size.width), 0), terminal.cols - 1)
+        }
+        return (
+            min(row(start.y), row(end.y)) ... max(row(start.y), row(end.y)),
+            min(column(start.x), column(end.x)) ... max(column(start.x), column(end.x)),
+        )
+    }
+
+    /// Where those cells are on screen, so the marquee covers whole
+    /// characters: a rectangle drawn at the pointer cuts characters
+    /// in half down its edges, and half a character is neither in
+    /// the selection nor out of it as far as the eye can tell.
+    private func rectangle(
+        of cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>),
+        in view: PaneTerminalView,
+    ) -> CGRect {
+        let terminal = view.getTerminal()
+        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        let height = CGFloat(cells.rows.count) * size.height
+        return CGRect(
+            x: CGFloat(cells.columns.lowerBound) * size.width,
+            y: view.frame.height - CGFloat(cells.rows.lowerBound) * size.height - height,
+            width: CGFloat(cells.columns.count) * size.width,
+            height: height,
+        )
+    }
+
+    private func cellSize(of view: PaneTerminalView, rows: Int, columns: Int) -> CGSize {
+        CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
+    }
+
     private func update(to point: CGPoint, in view: PaneTerminalView) {
-        guard let anchor else {
+        guard let anchor, let cells = cells(from: anchor, to: point, in: view) else {
             return
         }
 
-        let clamped = CGPoint(
-            x: min(max(point.x, 0), view.bounds.width),
-            y: min(max(point.y, 0), view.bounds.height),
-        )
-        overlay?.frame = CGRect(
-            x: min(anchor.x, clamped.x),
-            y: min(anchor.y, clamped.y),
-            width: abs(clamped.x - anchor.x),
-            height: abs(clamped.y - anchor.y),
-        )
+        overlay?.frame = rectangle(of: cells, in: view)
     }
 
     private func finish(at point: CGPoint, in view: PaneTerminalView) {
-        defer {
-            overlay?.removeFromSuperview()
-            overlay = nil
-            anchor = nil
-        }
-        guard let anchor else {
+        // The marquee stays: a selection you can no longer see is one
+        // you cannot tell has survived the output arriving under it,
+        // and this one survives until it is replaced or clicked away.
+        defer { anchor = nil }
+        guard let anchor, let cells = cells(from: anchor, to: point, in: view) else {
+            clear()
             return
         }
 
-        copyRectangle(from: anchor, to: point, in: view)
+        copy(cells: cells, in: view)
+        // Held in the buffer's rows, so it can be followed as the
+        // text under it scrolls.
+        let top = view.getTerminal().getTopVisibleRow()
+        heldRows = (cells.rows.lowerBound + top) ... (cells.rows.upperBound + top)
+        heldColumns = cells.columns
     }
 
     /// Copies the rectangle's rows, each sliced to its columns.
-    private func copyRectangle(from start: CGPoint, to end: CGPoint, in view: PaneTerminalView) {
+    private func copy(cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>), in view: PaneTerminalView) {
         let terminal = view.getTerminal()
-        guard terminal.rows > 0, terminal.cols > 0 else {
-            return
-        }
-
-        let rowHeight = view.frame.height / CGFloat(terminal.rows)
-        let colWidth = view.frame.width / CGFloat(terminal.cols)
-        func gridRow(_ vertical: CGFloat) -> Int {
-            // The view's origin is at the bottom; rows count from
-            // the top.
-            min(max(Int((view.frame.height - vertical) / rowHeight), 0), terminal.rows - 1)
-        }
-        func gridCol(_ horizontal: CGFloat) -> Int {
-            min(max(Int(horizontal / colWidth), 0), terminal.cols - 1)
-        }
-        let top = min(gridRow(start.y), gridRow(end.y))
-        let bottom = max(gridRow(start.y), gridRow(end.y))
-        let left = min(gridCol(start.x), gridCol(end.x))
-        let right = max(gridCol(start.x), gridCol(end.x))
-
         var lines = [String]()
-        for row in top ... bottom {
+        for row in cells.rows {
             guard let line = terminal.getLine(row: row) else {
                 continue
             }
@@ -215,8 +308,12 @@ final class BlockSelector {
             // spaces there, as SwiftTerm's own copy does, or a pasted
             // script arrives peppered with ^@ where its indentation
             // and word gaps were.
-            let text = line.translateToString(trimRight: true, startCol: left, endCol: right + 1)
-                .replacing("\u{0}", with: " ")
+            let text = line.translateToString(
+                trimRight: true,
+                startCol: cells.columns.lowerBound,
+                endCol: cells.columns.upperBound + 1,
+            )
+            .replacing("\u{0}", with: " ")
             lines.append(PasteableText.strippingGutter(text))
         }
         let joined = lines.joined(separator: "\n")

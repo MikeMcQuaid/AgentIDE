@@ -290,11 +290,6 @@ public extension SessionService {
         await git.changedLineNumbers(worktreePath: worktreePath, file: file)
     }
 
-    /// The worktree's current HEAD commit, for cache freshness.
-    func headCommit(worktreePath: String) async -> String? {
-        await git.headCommit(worktreePath: worktreePath)
-    }
-
     /// Starts an agent on an issue in an existing worktree: the issue
     /// becomes the prompt, plus the user's context.
     func launchAgent(
