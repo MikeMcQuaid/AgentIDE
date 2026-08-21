@@ -49,3 +49,5 @@ disabled_rules:
 excluded:
   - .build
   - .DerivedData
+  # Scratch repositories the integration tests build and sweep.
+  - .test-scratch

@@ -180,5 +180,6 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    by product name, in every committed file.
 9. Never place app files in bare `/tmp`: cross-user files belong in
    the shared workspace or the owning user's home, per-user scratch
-   in that user's macOS temporary directory.
+   in that user's macOS temporary directory, and test scratch in the
+   gitignored `.test-scratch` of the checkout, which each run sweeps.
 10. Keep diffs minimal and follow existing structure.

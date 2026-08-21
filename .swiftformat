@@ -5,3 +5,6 @@
 # Group digits from four up so numberFormatting agrees with
 # SwiftLint's number_separator instead of fighting it.
 --decimalgrouping 3,4
+
+# Scratch repositories the integration tests build and sweep.
+--exclude .build,.DerivedData,.test-scratch
