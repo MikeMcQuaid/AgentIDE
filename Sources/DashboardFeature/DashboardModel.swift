@@ -55,7 +55,7 @@ public final class DashboardModel {
     /// Sessions not created by AgentIDE.
     public private(set) var foreign: [AgentSession] = []
 
-    /// Whether the tmux session manager sheet is shown.
+    /// Whether the session manager sheet is shown.
     public var showsSessionManager = false
 
     /// The repository the sheet preselects, set by the toolbar's new

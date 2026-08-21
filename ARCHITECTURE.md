@@ -15,10 +15,10 @@ Status section.
 
 The architectural thesis, referenced throughout: **AgentIDE holds no
 session-critical state**. Agents run as the sandvault sandbox user inside a
-tmux server that AgentIDE introduces. The app derives its entire view of the
-world from tmux, `ps`, git, agent transcripts and GitHub, and persists only
-its own metadata in SQLite. Killing, crashing or updating the app therefore
-loses nothing (Resilience).
+[herdr](https://herdr.dev) server that AgentIDE introduces. The app derives
+its entire view of the world from herdr, `ps`, git, agent transcripts and
+GitHub, and persists only its own metadata in SQLite. Killing, crashing or
+updating the app therefore loses nothing (Resilience).
 
 ## System context
 
@@ -30,21 +30,21 @@ flowchart LR
             app["AgentIDE.app<br/>gh token in memory only"]
         end
         subgraph sandbox["Sandbox user (sandvault-&lt;user&gt;)"]
-            tmux["tmux server"]
+            herdr["herdr server"]
             agents["Agent sessions:<br/>Claude Code, Codex CLI"]
         end
         shared[("Shared workspace<br/>/Users/Shared/sv-&lt;user&gt;")]
     end
     github["GitHub"]
 
-    app -->|"sudo, env -i, sandbox-exec, zsh:<br/>the only privilege crossing"| tmux
-    tmux --- agents
+    app -->|"sudo, env -i, sandbox-exec, zsh:<br/>the only privilege crossing"| herdr
+    herdr --- agents
     app -.->|"read-only observation:<br/>FSEvents, transcripts, ps"| sandbox
     app <--> shared
     agents <--> shared
     app -->|"GraphQL and REST via URLSession,<br/>gh CLI for one-shots"| github
     agents -.->|"no credentials by default;<br/>optional read-only deploy key"| github
-    ios -->|"SSH as sandbox user,<br/>then tmux attach"| tmux
+    ios -->|"SSH as sandbox user,<br/>then herdr attach"| herdr
 ```
 
 Boundary facts the design relies on:
@@ -62,8 +62,8 @@ Boundary facts the design relies on:
 
 ## Guiding principles
 
-1. **P1: Derive, don't own.** tmux, git, `ps`, transcripts and GitHub are the
-   sources of truth. The app reconciles from them on every launch.
+1. **P1: Derive, don't own.** herdr, git, `ps`, transcripts and GitHub are
+   the sources of truth. The app reconciles from them on every launch.
 2. **P2: Unprivileged glue.** The only privilege crossing is the sudoers path
    sandvault already configured. AgentIDE never widens it.
 3. **P3: Compiler-enforced boundaries.** Clean architecture mapped onto SPM
@@ -84,9 +84,10 @@ Two independent lifecycles:
 
 - **The app process** is ephemeral. It can quit, crash or update at any time
   and holds nothing that cannot be rebuilt (P1).
-- **Sessions** are tmux sessions owned by the sandbox user. They survive app
-  restarts, app updates and host-user logout, but not reboot. Reboot recovery
-  is worktree plus transcript plus resume (see State and persistence).
+- **Sessions** are herdr workspaces owned by the sandbox user's herdr
+  server. They survive app restarts, app updates and host-user logout, but
+  not reboot. Reboot recovery is worktree plus transcript plus resume (see
+  State and persistence).
 
 ### Launching into the sandbox
 
@@ -113,90 +114,102 @@ This is byte-compatible with how sandvault launches sessions; AgentIDE only
 substitutes the payload. Notable parts: `env -i` gives a clean environment,
 the `GIT_CONFIG_*` variables inject `safe.directory` (shared repositories are
 owned by the other user) and `sandbox-exec` applies sandvault's generated
-profile to everything downstream, including the tmux server.
+profile to everything downstream, including the herdr server.
 
-### tmux
+### herdr
 
-tmux is installed by the Brewfile and introduced by AgentIDE; sandvault does
-not use it itself. There is no daemon and no launchd unit: the tmux server
-starts lazily inside the sandbox the first time a session is created, with a
-payload of:
+herdr is installed by the Brewfile and introduced by AgentIDE; sandvault
+does not use it itself. It is a client-server terminal workspace manager: a
+background server owns real terminal panes grouped into workspaces, detects
+the coding agent running in each pane and exposes everything over a
+schema'd, newline-delimited JSON socket API that the `herdr` CLI wraps.
+There is no daemon and no launchd unit: the server starts lazily inside the
+sandbox the first time a session is created, with a payload of:
 
 ```bash
-export TMUX_TMPDIR=~/.agentide/tmux
-mkdir -p "${TMUX_TMPDIR}" && chmod 700 "${TMUX_TMPDIR}"
-printf 'set -g remain-on-exit on\n...' > "${TMUX_TMPDIR}/agentide.conf"
+export HERDR_SESSION=agentide
+herdr api snapshot && exit 0
 cd ~ && ~/configure
 source ~/.zshenv && source ~/.zprofile && source ~/.zshrc
-exec tmux -f "${TMUX_TMPDIR}/agentide.conf" \
-  new-session -A -d -s "${SESSION_NAME}" "${AGENT_COMMAND}"
+herdr server &> ~/.config/herdr/agentide-server.log &!
+until herdr api snapshot; do sleep 0.1; done
 ```
 
-- `TMUX_TMPDIR` is pinned to a fixed directory in the sandbox user's home,
-  so every invocation finds the same server socket and nothing lives in
-  world-writable `/tmp`. Development builds and test runners (anything
-  but the installed /Applications/AgentIDE.app) use
-  `~/.agentide/tmux-dev` and a `-dev` host shell name prefix instead,
-  and tests use throwaway per-run sockets, so building, testing and
-  development can never list or kill the installed app's sessions.
-  The config is written by that same payload: a
-  file written by the host user would be unreadable across the sudo
-  boundary. Its newlines travel as printf escapes, because `sudo --login`
-  rebuilds the command line and collapses literal newlines.
-- The config sets `remain-on-exit on`, so a finished agent leaves a dead
-  pane whose exit status and scrollback remain inspectable, `mouse on`,
-  so the wheel scrolls tmux's history, and a 50000-line history limit.
-- Session names follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
+The server detaches through zsh's `&!` with its output redirected:
+this launch context has no controlling terminal to hang up from, and
+macOS's nohup refuses to run at all without one ("can't detach from
+console"). When the server never answers, the payload prints that log
+before failing, so a refused start reports its reason rather than a
+bare exit code.
+
+- `HERDR_SESSION` names the herdr session, whose socket and state live
+  under `~/.config/herdr/sessions/<name>/` in the sandbox user's home,
+  owner-only, so nothing lives in world-writable `/tmp` and every
+  invocation finds the same server. Development builds and test runners
+  (anything but the installed /Applications/AgentIDE.app) use the
+  `agentide-dev` session instead, and tests relocate herdr entirely with
+  `XDG_CONFIG_HOME` into throwaway per-run scratch directories, so
+  building, testing and development can never list or kill the installed
+  app's sessions.
+- Each agent conversation is one herdr workspace whose single pane runs a
+  login shell; the agent command is submitted to that shell (`pane run`),
+  with `AGENTIDE_SESSION` and `INITIAL_DIR` set as workspace environment.
+  A finished agent therefore leaves the shell at its prompt with the whole
+  scrollback inspectable, herdr's equivalent of a tmux dead pane, and
+  whether an agent is running comes from herdr's own agent detection
+  confirmed by the pane's foreground process, not from exit codes, which
+  nothing displayed anyway.
+- Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
-  append `-2` to the branch component and tmux's forbidden `.` and `:` are
-  replaced. Names are a human-readable fallback for `tmux ls` over SSH; the
+  append `-2` to the branch component and `.` and `:` are replaced. Labels
+  are a human-readable fallback for the herdr sidebar over SSH; the
   authoritative record is the app's metadata store. Anything not matching
   the full shape is treated as foreign.
+- herdr is pre-1.0 and would normally fail the dependency rule below; it is
+  admitted as an explicit exception because it is a runtime tool behind one
+  adapter, never linked, its socket protocol is versioned and schema'd
+  (`herdr api schema`), and its agent-state model replaces machinery this
+  app otherwise builds itself.
 
 ### Terminals
 
-Both terminal panes attach to tmux as control mode clients
-(`tmux -C attach-session`, the textual protocol in tmux(1)'s CONTROL
-MODE section) rather than drawing a remote screen over a PTY. tmux
-streams pane output as `%output` events which the pane decodes
-(`TmuxControlParser` in Domain, `TmuxControlChannel` in DataAccess) and
-feeds into a local SwiftTerm view; keystrokes, pastes and resizes go
-back as `send-keys -H` and `refresh-client -C` commands. On attach the
-pane seeds its local buffer from `capture-pane -S -`, then nudges the
-client size so full-screen interfaces repaint. Because the screen and
-scrollback are local, selection, copying, the mouse wheel and
-scrollback behave like a native text view while the sessions still
-outlive the app; agent panes additionally reflow multi-line copies for
-prose and Option-drag copies a rectangle with gutter marks trimmed.
-Programs that request the mouse get it, matching every terminal:
-Claude Code scrolls its own internal transcript (which never reaches
-scrollback, so no scrollbar can exist for it; agent panes hide the
-scroll indicator for that reason, and SwiftTerm gives the reserved
-width back to the terminal) and pagers scroll natively, with Shift bypassing to local selection and scrolling;
-programs that leave the mouse alone, Codex and plain shells included,
-select and scroll natively with no modifier.
+Agent panes attach to herdr as terminal controllers (`herdr terminal
+session control <pane> --takeover`, newline-delimited JSON over pipes)
+rather than drawing a remote screen over a PTY. herdr streams rendered
+output as `terminal.frame` records carrying base64 ANSI bytes, opening
+with a full repaint that restores the pane's terminal modes, which the
+pane decodes (`HerdrTerminal` in Domain, `HerdrTerminalChannel` in
+DataAccess) and feeds into a local SwiftTerm view; keystrokes and pastes
+go back as `terminal.input` commands, resizes as `terminal.resize` and
+the wheel as `terminal.scroll`, so scrollback lives in herdr and the
+wheel pages through it whatever is on screen. Because the screen is
+rendered locally, selection, copying and pasting behave like a native
+text view while the sessions still outlive the app; agent panes
+additionally reflow multi-line copies for prose and Option-drag copies a
+rectangle with gutter marks trimmed. Pastes need no special path: the
+opening repaint restores bracketed paste state, so the local terminal
+knows whether the pane's application asked for the markers even when it
+attached mid-session, and wraps a paste itself exactly as a standalone
+terminal would. Scrollback never reaches the local buffer, so no
+scrollbar can exist for it; agent panes hide the scroll indicator for
+that reason, and SwiftTerm gives the reserved width back to the
+terminal.
 
-Two visually unmistakable flavours ride that one client:
+Two visually unmistakable terminal flavours:
 
-- **Pasting into an agent**: a paste goes into a tmux buffer and is pasted
-  from there (`set-buffer`, appending for anything long, then `paste-buffer
-  -d -p`), never typed in as keys. tmux brackets it when the pane's own
-  application asked for bracketed paste, which is knowledge the local
-  terminal does not reliably have: it learns modes from output it has seen,
-  and a pane attached mid-session never saw bracketed paste being enabled.
-  Without the markers an agent read a multi-line paste as several lines of
-  typing, which is how the cursor ended up inside the pasted text. Typing
-  still travels as `send-keys -l`.
 - **Sandbox terminal**: the launch shape with payload
-  `exec tmux -C attach-session -t <name>`. The attaching client runs
-  inside the sandbox too; tmux sockets are owner-only, so no attach
-  path can skip sudo. Closing the view detaches and never kills the
-  session.
+  `exec herdr terminal session control <pane> --takeover`. The attaching
+  client runs inside the sandbox too; herdr sockets are owner-only, so no
+  attach path can skip sudo. Closing the view releases the controller and
+  never kills the session. `--takeover` replaces a controller leaked by an
+  earlier app run, which would otherwise own the pane's input forever;
+  full herdr clients (SSH, Moshi) attach independently of controllers and
+  are never dropped by the app's panes.
 - **Host terminal** (Review): a plain login shell on the pane's own
   PTY as the host user, no sudo, no sandbox, full `gh` credentials, the
-  editor variables pointing at the app's own shim and no tmux at all:
+  editor variables pointing at the app's own shim and no server at all:
   shells live and die with the app, a deliberate trade after
-  tmux-backed shells kept wedging their control clients. The pane a
+  server-backed shells kept wedging their control clients. The pane a
   shell runs in stays mounted whatever else the window shows, as the
   panes section above describes, and the tab bar's Close shell ends
   one instantly. Both
@@ -210,39 +223,35 @@ Two visually unmistakable flavours ride that one client:
   marquee is drawn on the character grid rather than at the pointer,
   since half a character is neither in a selection nor out of it as
   far as the eye can tell; what separates them visually is position, the agent
-  pane on the left and the shell in the utility pane. External attaches
-  to agent sessions (SSH, `script/attach`) still get tmux-native mouse
-  scrolling and OSC 52 copying from the server config. An agent pane
-  attaching detaches any other client of its session (`-d`): clients
-  leaked by an earlier app run would otherwise linger forever, so an
-  SSH viewer is dropped when the app's pane (re)attaches and simply
-  reattaches when wanted. Cmd-K clears the shell pane the way a
-  terminal app's clear does, screen and local scrollback wiped and the
-  prompt redrawn; agent panes ignore it, so an agent's conversation
-  can never be cleared from view by a stray shortcut.
+  pane on the left and the shell in the utility pane. Cmd-K clears the
+  shell pane the way a terminal app's clear does, screen and local
+  scrollback wiped and the prompt redrawn; agent panes ignore it, so an
+  agent's conversation can never be cleared from view by a stray
+  shortcut.
 
 Remote access is SSH to the Mac as the sandbox user from an iOS client,
-which lands on the same tmux server the app drives; `script/attach
-<session>` covers the host user and sessions inside the sandbox. No picker
-ships here: [Moshi](https://getmoshi.app) lists the sessions and attaches
-to several at once by itself, and a picker of ours would be a second
-implementation of something the client already does. It needs only the
-socket directory, which sshd sets for that account (`SetEnv
-TMUX_TMPDIR`), since a login from outside the app inherits none of the
-sandbox's own environment.
+which lands on the same herdr server the app drives; `script/attach`
+covers the host user and sessions inside the sandbox. No picker ships
+here: one `herdr` attach presents every workspace with herdr's own
+navigation, and a picker of ours would be a second implementation of
+something the server's UI already does. It needs only the session name,
+which sshd sets for that account (`SetEnv HERDR_SESSION=agentide`), since
+a login from outside the app inherits none of the sandbox's own
+environment.
 
 Remote Login must be enabled in macOS settings first, for that account
 alone: the sandbox user is hidden, so it never appears in the Sharing
 pane's list and is added to `com.apple.access_ssh` with `dseditgroup`
 instead. An SSH session is
 isolated by user permissions rather than sandbox-exec whichever account it
-targets, but attaching connects it to the sandboxed tmux server, so agent
+targets, but attaching connects it to the sandboxed herdr server, so agent
 processes stay confined either way.
 
 ### Reconciliation and notifications
 
-On every launch the app rebuilds state, in order, from: `tmux ls` (through
-the launch shape, tolerating "no server running"), a `ps` scan for session
+On every launch the app rebuilds state, in order, from: `herdr api
+snapshot` (through the launch shape, tolerating "no server running"), a
+`ps` scan for session
 ids in process arguments, `git worktree list` across tracked repositories,
 transcript directory scans and finally its own metadata store. Unmatched
 sessions surface as foreign rather than being hidden.
@@ -303,8 +312,9 @@ flowchart TD
   database APIs are banned.
 - **AgentIDEData**: protocol ports with adapter implementations: `GitClient`,
   `GitHubClient` (`gh` shell-outs today, native URLSession GraphQL for hot
-  paths later), `SandvaultLauncher`, `TmuxClient`, `TmuxControlChannel`
-  (a live `tmux -C` client on pipes), `TranscriptReader`,
+  paths later), `SandvaultLauncher`, `HerdrClient`, `HerdrTerminalChannel`
+  (a live `herdr terminal session control` client on pipes),
+  `TranscriptReader`,
   `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
   outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
   later), `FoundationModelClient` (the on-device Apple foundation model
@@ -318,8 +328,8 @@ flowchart TD
   and an attributed NSTextView today, STTextView as the review slice
   deepens).
 - **TerminalUI**: shared UI components, not a feature: the SwiftTerm
-  wrapper (a `tmux -C` argv in, a locally rendered pane out, via
-  DataAccess's control mode channel), the AppKit-backed
+  wrapper (a `herdr terminal session control` argv in, a locally rendered
+  pane out, via DataAccess's terminal channel), the AppKit-backed
   tooltips and the syntax highlighting engine. Highlighting parses with
   tree-sitter grammars and falls back to a pure-Swift line tokenizer in
   the Domain for text without a loaded grammar, such as fragmentary diff
@@ -425,7 +435,7 @@ Sendable` and `nonisolated(unsafe)` are banned.
 7. `AgentRunner` builds the agent command, with any per-session extra
    arguments appended verbatim (sandvault's wrappers add the agent's
    permission-skipping flag inside the sandbox), and the session launches
-   through the tmux payload above.
+   through the herdr payload above.
 8. The prompt travels inside the launch command, read from its file as the
    agent starts (`"$(cat …)"` evaluated in the sandbox, the file path
    shell-quoted): pasting it as
@@ -459,13 +469,16 @@ Sendable` and `nonisolated(unsafe)` are banned.
 3. Host-side, `EventSpool` watches the events directory with FSEvents and
    tails each file from its stored offset, emitting `SessionEvent` values
    that drive unread state and notifications (on Stop and
-   PermissionRequest). A worktree is unread when its spool events, its
-   tmux session's activity clock or its transcripts are newer than its
-   per-worktree seen time; viewing it records that time, and a context
-   menu marks it unread again until next viewed.
-4. Agents without hooks, and foreign sessions, fall back to tmux dead-pane
-   detection for completion and a transcript-mtime timeout on a 30 second
-   tick for stalls. `tmux monitor-silence` is a documented later refinement.
+   PermissionRequest). A worktree is unread when its spool events or its
+   transcripts are newer than its per-worktree seen time; viewing it
+   records that time, and a context menu marks it unread again until next
+   viewed. herdr keeps no output timestamp, so raw terminal output that
+   reaches neither a hook nor a transcript no longer counts, a deliberate
+   trade: the spool and transcripts already cover every agent message.
+4. Agents without hooks, and foreign sessions, fall back to herdr's
+   agent-gone detection for completion and a transcript-mtime timeout on a
+   30 second tick for stalls. herdr's richer agent states (idle, working,
+   blocked) are a documented later refinement via its integrations.
 5. If the app is fully quit, events accumulate in the spool and notifications
    arrive on next launch.
 
@@ -525,7 +538,7 @@ long as the thing inside them should live, not for as long as it is visible:
    when its worktree is destroyed or when the app quits. A browser page ends
    the same way, and its address is remembered per worktree, so a page closed
    deliberately or lost to a restart opens again where it was.
-3. Because they accumulate, the session manager lists them beside the tmux
+3. Because they accumulate, the session manager lists them beside the agent
    sessions: each browser page with what it is showing, the CPU and memory of
    the web content process rendering it, and a Close. WebKit does not name
    that process in public API, so it is asked for through the runtime only
@@ -717,8 +730,8 @@ shim rather than a protocol:
    never prompts and never forces, and never cleans up on a merely
    missing pull request (a stale cache or a branch that never had one),
    only on an observed open-to-merged transition.
-2. Deletion records the session's agent-native resume id, kills the tmux
-   session, then runs `git worktree remove`, `git worktree prune` and
+2. Deletion records the session's agent-native resume id, closes the herdr
+   workspace, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes the friendly symlink. Nothing is archived:
    the branch and any uncommitted files are gone.
 3. Canonical transcripts in the sandbox home are never deleted and the
@@ -730,8 +743,8 @@ shim rather than a protocol:
 
 ### Close and reopen a session
 
-Closing a session ends the tmux session and everything in it, escalating
-past the polite kill when that does not take, so the button ends the agent
+Closing a session closes the herdr workspace and everything in it,
+retrying when the polite close does not take, so the button ends the agent
 rather than asking it to stop. The worktree, transcripts and metadata
 (including the resume id) remain, and the deliberate close is recorded so
 the automatic resumes below leave that worktree alone until a session
@@ -741,16 +754,16 @@ Reopening builds the agent's resume command (`claude --resume <id>`, or the
 Codex equivalent) through the normal launch shape in the same canonical cwd,
 restoring the full prior conversation. Resuming fails in ways that look like
 success, though: an agent handed a conversation it has rolled away, or one a
-newer version will not read, exits at once, and `remain-on-exit` keeps the
-dead pane, so the name is taken and the terminal attaches to a corpse.
+newer version will not read, exits at once back to the pane's shell, so the
+label is taken and the terminal attaches to an empty prompt.
 Reopening therefore works through the ways in until one is still running a
 moment later: the recorded conversation, then the newest conversations the
 worktree's own transcripts name, then a fresh session there. Each attempt
-kills whatever holds the session name first, and creation is never
-attach-or-create: `new-session -A` hands back whatever is already there, so
-a start meant to be fresh would go on talking to the old agent process,
+closes whatever holds the workspace label first, and creation never reuses
+an existing workspace: a start meant to be fresh would go on talking to the
+old agent process,
 which after a CLI upgrade is one whose own files have been deleted beneath
-it. tmux is how a session survives the app quitting, crashing or updating;
+it. herdr is how a session survives the app quitting, crashing or updating;
 it is not how an agent survives its own upgrade, so everything the user asks
 for by hand (starting, closing, resuming) replaces the process, while
 reattaching to what is already running is left to the app reopening. Each
@@ -801,7 +814,7 @@ deleted by other tooling still appear.
 
 Everything the app derives from can be rebuilt except one thing: the
 conversations. Worktrees and git objects live in the shared workspace and on
-GitHub, tmux is ephemeral by design, agent credentials can be obtained again
+GitHub, herdr is ephemeral by design, agent credentials can be obtained again
 and configuration comes from the `user/` template. Transcripts live only in
 the sandbox user's home, which is disposable by design and was emptied by
 accident once, taking finished conversations with it.
@@ -824,7 +837,7 @@ already hold the first and the second is not ours to put in anyone's cloud.
 
 | Fact | Source of truth | The app's role |
 |---|---|---|
-| Session liveness, scrollback, exit codes | tmux | observe via the launch shape |
+| Session liveness, scrollback, agent state | herdr | observe via the launch shape |
 | Code, branches, diffs, worktrees | git in the shared workspace | operate host-side, hardened |
 | Conversation history, final message | agent transcripts | read-only tail |
 | Pull request, CI and review state | GitHub | poll, cache in memory |
@@ -901,7 +914,7 @@ official language or project organisation.
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 
 System frameworks (WebKit, UserNotifications and FSEvents) and runtime tools
-(tmux, installed by Homebrew and never linked) sit outside the table. There
+(herdr, installed by Homebrew and never linked) sit outside the table. There
 is no updater among them: releases ship as a Homebrew cask, so `brew
 upgrade` updates the app alongside the tools it already installs, rather
 than the app carrying an update framework of its own or living in the Mac
@@ -921,7 +934,7 @@ Scripts follow the `script/` convention: `bootstrap` (Homebrew dependencies,
 then XcodeGen project generation), `build` (the app via xcodebuild),
 `test` (unit and integration tests via `swift test`), `analyze` (static
 analysis), `style [--fix]` (all linters) and `attach <session>` (attach the
-current terminal to a sandboxed tmux session). Agent-driven builds inside the
+current terminal to the sandboxed herdr session). Agent-driven builds inside the
 sandbox cannot nest macOS sandboxes, so build scripts gate on `SV_SESSION_ID`
 and pass `SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
 `-IDEPackageSupportDisable*Sandbox` xcodebuild flags, letting agents build
@@ -937,10 +950,10 @@ and the feature view models, whose fetch and file-system calls are stored
 closures the tests replace with fakes, so listing, pagination, caching and
 button availability test without GitHub, transcripts or a window.
 Integration tests exercise the real adapters end to end against
-real `git` repositories, a real `tmux` server on a private socket and
+real `git` repositories, a real `herdr` server on a private config home and
 temporary workspaces, because the bugs that reach manual testing live in the
 seams: worktree listing under path canonicalisation, reverse-patch
-application, tmux pane parsing and directory pinning, prompt delivery, and
+application, herdr snapshot parsing and directory pinning, prompt delivery, and
 deletion keeping every conversation attributed to its repository. View rendering is checked with headless
 `ImageRenderer` snapshots. periphery drives its own build so it runs on the
 host and in CI only, not inside the sandbox.
@@ -963,7 +976,7 @@ client already guards every call on the model's availability.
 
 | # | Risk | Mitigation |
 |---|---|---|
-| R1 | tmux is validated under sandbox-exec on this machine: daemonised server, /tmp socket, separate clients, capture, dead panes with exit statuses, sudo-launched bring-up shared with in-sandbox clients and interactive attach and detach via `script/attach`; only long-run stability remains unobserved | watch stability through the core loop slice; fallback ladder is screen then a minimal PTY-holder process; app-owned PTYs are not acceptable because they forfeit Resilience |
+| R1 | herdr is validated under sandbox-exec on this machine: headless server, owner-only sockets, named sessions, workspace and pane control, the terminal control stream with mode-restoring replay, takeover, process-tree kills on close and `XDG_CONFIG_HOME` isolation; it is pre-1.0, so releases may change behaviour | the socket protocol is versioned and schema'd; integration tests run against the real server so drift fails loudly; app-owned PTYs are not acceptable because they forfeit Resilience |
 | R2 | the `xcode-27` runner image is a public preview that may change or lag Xcode 27 betas | the build and test job asserts Xcode 27 and fails loudly rather than skipping; a self-hosted runner remains the fallback |
 | R3 | per-line selection and diff gutters on STTextView are non-trivial | prototype early in the Review slice; interim read-only diff |
 | R4 | agent transcript formats drift across releases | tolerant decoders, per-release fixtures and adapter capability flags |

@@ -113,7 +113,7 @@ struct RootView: View {
         .task {
             await waiting.watch(service: dependencies.service, dashboard: dependencies.dashboard)
         }
-        // Sleep sometimes kills the sandbox tmux server; sessions
+        // Sleep sometimes kills the sandbox herdr server; sessions
         // running at sleep that are gone at wake resume themselves,
         // while surviving or deliberately closed ones are left alone.
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in

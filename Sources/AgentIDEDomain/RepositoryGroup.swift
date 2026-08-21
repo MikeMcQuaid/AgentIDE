@@ -32,7 +32,7 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// The worktree itself.
     public let worktree: Worktree
 
-    /// The tmux session running in it, when one exists.
+    /// The agent session running in it, when one exists.
     public let session: AgentSession?
 
     /// Earlier conversations discovered from transcripts, newest
@@ -64,7 +64,7 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     }
 
     /// The same row with no session running in it, for a close that
-    /// should show on screen before tmux has been asked again.
+    /// should show on screen before herdr has been asked again.
     public func withoutSession() -> Self {
         Self(
             worktree: worktree,

@@ -6,7 +6,7 @@ A native macOS app for running, steering and reviewing sandboxed AI coding
 agents in parallel git worktrees, from problem statement to merged pull
 request. Built with SwiftUI on top of
 [sandvault](https://github.com/webcoyote/sandvault),
-[`tmux`](https://github.com/tmux/tmux/wiki) and the
+[`herdr`](https://herdr.dev) and the
 [`gh`](https://cli.github.com) CLI.
 
 ## 💡 Motivation
@@ -19,8 +19,8 @@ everything else. AgentIDE replaces all four with a single native app designed
 around that workflow rather than four apps adapted to it, with no web-tech
 wrappers. Agents run inside a sandvault sandbox with no GitHub credentials so
 they can run wild without babysitting permission prompts or endangering the
-rest of my machine. Sessions live in `tmux` owned by the sandbox user so nothing
-is lost when the app quits, crashes or updates.
+rest of my machine. Sessions live in a `herdr` server owned by the sandbox user
+so nothing is lost when the app quits, crashes or updates.
 
 ## ✨ Features
 
@@ -34,7 +34,7 @@ before shipping.
   sandbox share one checkout with nothing to keep in sync)
 - **Creates** a worktree and branch from a typed problem statement or an existing
   issue or pull request (so starting work is one prompt, not a git ritual)
-- **Starts** the agent of your choice in `tmux` inside the sandvault sandbox, with
+- **Starts** the agent of your choice in `herdr` inside the sandvault sandbox, with
   Claude Code and Codex CLI supported first and more pluggable later (so
   agents run unattended with no permission prompts and no access to your
   credentials)
@@ -57,10 +57,10 @@ before shipping.
   (so one glance across the sidebar says where everything stands)
 - **Notifies** you when an agent finishes or its output stalls (so you never sit
   polling a terminal)
-- **Renders** terminals locally from a `tmux` control mode client, so selecting,
-  copying, wheel scrolling and scrollback behave like any other text on
-  your Mac while the sessions keep running in `tmux` (so native terminal
-  feel costs no session survival)
+- **Renders** terminals locally from `herdr`'s terminal control stream, so
+  selecting, copying and pasting behave like any other text on your Mac
+  while the sessions keep running in `herdr` (so native terminal feel
+  costs no session survival)
 - **Reflows** multi-line copies from agent terminals: indentation, gutter
   marks and hard line breaks go while paragraphs and lists survive, but a
   block that reads as commands or code keeps every line exactly, and
@@ -68,11 +68,12 @@ before shipping.
   notes and pull request bodies, and a copied script still runs)
 - **Commits** work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
-- **Lets** you SSH into any session from an iOS SSH client, with
-  [Moshi](https://getmoshi.app) the one to reach for: it lists the running
-  agent sessions, attaches to several at once and survives a phone changing
-  network, so nothing is needed on this side beyond Remote Login for the
-  sandbox account (so you can steer or add context away from your Mac)
+- **Lets** you SSH into every session from an iOS SSH client, with
+  [Moshi](https://getmoshi.app) the one to reach for: one `herdr` attach
+  presents every agent workspace with its own navigation, and `mosh`
+  survives a phone changing network, so nothing is needed on this side
+  beyond Remote Login for the sandbox account (so you can steer or add
+  context away from your Mac)
 
 ### 🔍 Review
 
@@ -132,7 +133,7 @@ before shipping.
 
 ### 🛟 Resilience
 
-- **Keeps** agent sessions in a `tmux` server owned by the sandbox user rather
+- **Keeps** agent sessions in a `herdr` server owned by the sandbox user rather
   than the app (so agents survive AgentIDE quitting, crashing or
   updating, expectedly or not; the host shell tab deliberately does not,
   living and dying with the app)
@@ -168,7 +169,8 @@ before shipping.
 - Team, multi-user or hosted features (one developer, one Mac)
 - An agent marketplace or bundled models (bring your own Claude Code, Codex
   CLI or other supported agent)
-- A native iOS app (remote access is SSH into `tmux` from any iOS SSH client)
+- A native iOS app (remote access is SSH into `herdr` from any iOS SSH
+  client)
 
 ## 📋 Requirements
 
@@ -178,7 +180,7 @@ before shipping.
   user and shared workspace)
 - [`gh`](https://cli.github.com) authenticated as you (it stays with your user;
   agents never see it)
-- [`tmux`](https://github.com/tmux/tmux/wiki) and
+- [`herdr`](https://herdr.dev) and
   [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the
   `Brewfile`; `mosh` is only needed to reach sessions from a phone over a
   connection that comes and goes)

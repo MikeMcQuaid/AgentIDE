@@ -2,82 +2,34 @@ import AgentIDEData
 import AgentIDEDomain
 import SwiftTerm
 
-// MARK: - CommandExpectation
+// MARK: - Herdr stream conversation
 
-/// What each pending command's response means; responses arrive
-/// strictly in command order.
-enum CommandExpectation {
-    case acknowledgement
-    case history
-}
-
-// MARK: - Control mode conversation
-
-/// The coordinator's control mode conversation: the initial
-/// seed, live output, retries and the end of the stream, split
-/// from the view lifecycle half for length.
+/// The coordinator's herdr stream conversation: the opening frame,
+/// live frames and the end of the stream, split from the view
+/// lifecycle half for length.
 extension TerminalRepresentable.Coordinator {
-    /// The pane appears at its history in one round trip: size
-    /// the client first so tmux settles the pane's dimensions,
-    /// heal the scrollback depth on servers older than their
-    /// config, then capture everything scrollback should hold.
+    /// Sizes the controller to the view as soon as the stream
+    /// starts, which drives the pane's size; the stream opens with a
+    /// full repaint that also restores the pane's terminal modes, so
+    /// there is nothing to seed and pastes bracket themselves.
     func requestInitialState(of view: PaneTerminalView) {
         let terminal = view.getTerminal()
-        sendCommand(
-            TmuxControl.resizeCommand(columns: terminal.cols, rows: terminal.rows),
-            expecting: .acknowledgement,
-        )
-        sendCommand(TmuxControl.historyLimitCommand, expecting: .acknowledgement)
-        sendCommand(TmuxControl.historyCommand, expecting: .history)
-        armSeedDeadline()
+        channel?.send(HerdrTerminal.resizeCommand(columns: terminal.cols, rows: terminal.rows))
+        armFrameDeadline()
     }
 
-    /// A seed that never answers must not hold the pane blank
-    /// forever; the deadline retries and eventually gives up.
-    func armSeedDeadline() {
-        seedDeadline = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.seedTimeoutSeconds))
-            self?.seedIfStalled()
+    /// A stream that never renders must not hold the pane blank
+    /// silently; the deadline reports enough state to name the
+    /// failing layer. Frames arrive unbidden, so there is nothing to
+    /// retry: a slow sudo or sandbox launch recovers by itself.
+    func armFrameDeadline() {
+        frameDeadline = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.frameTimeoutSeconds))
+            self?.reportIfBlank()
         }
     }
 
-    /// The deadline fired before the history response. A slow
-    /// sudo or sandbox launch answers late rather than never, so
-    /// the capture is asked again before giving up; the final
-    /// report carries enough state to name the failing layer.
-    func seedIfStalled() {
-        guard seeded == false, tornDown == false else {
-            return
-        }
-
-        seedAttempts += 1
-        if seedAttempts < Self.seedAttemptLimit {
-            sendCommand(TmuxControl.historyCommand, expecting: .history)
-            armSeedDeadline()
-            return
-        }
-
-        let ended = channel
-        let state = "responses \(responsesSeen), outputs \(outputsSeen), "
-            + "notifications \(notificationsSeen), pending \(pending.count)"
-        Task { [weak self] in
-            let running = await ended?.isRunning() ?? false
-            let chain = await ended?.launchChainSnapshot() ?? "gone"
-            ErrorLog.shared.report(
-                "Terminal: no history after \(Self.seedAttemptLimit) asks"
-                    + " (client running: \(running), \(state); chain: \(chain));"
-                    + " showing live output only",
-            )
-            self?.seed(lines: [])
-        }
-    }
-
-    func sendCommand(_ line: String, expecting: CommandExpectation) {
-        pending.append(expecting)
-        channel?.send(line)
-    }
-
-    func handle(_ event: TmuxControlEvent, from sender: TmuxControlChannel) {
+    func handle(_ event: HerdrTerminalEvent, from sender: HerdrTerminalChannel) {
         // A discarded client's buffered events must not bleed
         // into the replacement's conversation.
         guard sender === channel else {
@@ -85,78 +37,21 @@ extension TerminalRepresentable.Coordinator {
         }
 
         switch event {
-        case let .output(_, bytes):
-            outputsSeen += 1
-            if seeded {
-                view?.feed(byteArray: bytes[...])
-                blockSelector?.follow()
-            } else {
-                queuedOutput.append(bytes)
-            }
-
-        case let .response(lines, isError):
-            responsesSeen += 1
-            guard pending.isEmpty == false, pending.removeFirst() == .history else {
-                return
-            }
-
-            seed(lines: isError ? [] : lines)
-
-        case let .exited(reason):
-            exitReason = reason
-
-        case .notification:
-            notificationsSeen += 1
-        }
-    }
-
-    /// Feeds the captured history, replays anything queued and
-    /// nudges the pane to repaint so full-screen interfaces
-    /// redraw themselves over the seeded scrollback. A late or
-    /// retried capture answering after the first seed is skipped:
-    /// feeding old history over live output would reorder it.
-    func seed(lines: [String]) {
-        guard seeded == false else {
-            return
-        }
-
-        let text = TmuxControl.seedText(lines: lines)
-        if text.isEmpty == false {
-            view?.feed(text: text)
-        }
-        for bytes in queuedOutput {
+        case let .frame(bytes):
+            framesSeen += 1
             view?.feed(byteArray: bytes[...])
-        }
-        queuedOutput = []
-        seeded = true
-        seedDeadline?.cancel()
-        seedDeadline = nil
-        nudgeRepaint()
-    }
+            blockSelector?.follow()
 
-    /// A one-row shrink and restore: the resulting window change
-    /// makes full-screen interfaces repaint without tmux needing
-    /// a redraw command.
-    func nudgeRepaint() {
-        guard let terminal = view?.getTerminal() else {
-            return
+        case let .closed(reason):
+            exitReason = reason
         }
-
-        sendCommand(
-            TmuxControl.resizeCommand(columns: terminal.cols, rows: max(terminal.rows - 1, 1)),
-            expecting: .acknowledgement,
-        )
-        sendCommand(
-            TmuxControl.resizeCommand(columns: terminal.cols, rows: terminal.rows),
-            expecting: .acknowledgement,
-        )
     }
 
     /// The stream ended: surface why when it was not a clean
-    /// detach, so a failed attach never renders as a silent
+    /// release, so a failed attach never renders as a silent
     /// blank pane, then let the owner react. A discarded
     /// client's end is not news.
-    func finish(for ended: TmuxControlChannel) {
+    func finish(for ended: HerdrTerminalChannel) {
         guard tornDown == false, ended === channel else {
             return
         }
@@ -164,19 +59,40 @@ extension TerminalRepresentable.Coordinator {
         let callback = onProcessTerminated
         onProcessTerminated = nil
         let reason = exitReason
-        let wasSeeded = seeded
+        let sawFrames = framesSeen > 0
         channel = nil
         Task { [weak self] in
             let diagnostics = await ended.collectedErrorText()
             let detail = [reason, diagnostics.isEmpty ? nil : diagnostics]
                 .compactMap(\.self)
                 .joined(separator: "; ")
-            if detail.isEmpty == false || wasSeeded == false {
-                let message = detail.isEmpty ? "the tmux client exited before attaching" : detail
+            if detail.isEmpty == false || sawFrames == false {
+                let message = detail.isEmpty ? "the herdr client exited before attaching" : detail
                 ErrorLog.shared.report("Terminal: " + message)
-                self?.view?.feed(text: "\r\n[tmux client exited: " + message + "]\r\n")
+                self?.view?.feed(text: "\r\n[herdr client exited: " + message + "]\r\n")
             }
             callback?()
+        }
+    }
+
+    // MARK: Private
+
+    /// The deadline fired before any frame. A slow sudo or sandbox
+    /// launch renders late rather than never, so this only reports;
+    /// the report carries enough state to name the failing layer.
+    private func reportIfBlank() {
+        guard framesSeen == 0, tornDown == false else {
+            return
+        }
+
+        let ended = channel
+        Task {
+            let running = await ended?.isRunning() ?? false
+            let chain = await ended?.launchChainSnapshot() ?? "gone"
+            ErrorLog.shared.report(
+                "Terminal: no frames after \(Self.frameTimeoutSeconds)s"
+                    + " (client running: \(running); chain: \(chain))",
+            )
         }
     }
 }

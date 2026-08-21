@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 # Capped parallelism inside the sandbox: full-width builds have
 # triggered resource kills that tore down the whole sandbox user,
-# taking the production tmux server and its agents with it.
+# taking the production herdr server and its agents with it.
 JOBS="$(sysctl -n hw.ncpu)"
 [[ -n "${SV_SESSION_ID:-}" ]] && JOBS=6
 

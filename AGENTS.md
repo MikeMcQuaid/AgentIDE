@@ -23,9 +23,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
-- `script/attach [session]`: attach this terminal to a sandboxed
-  tmux session, or list them when run without arguments (works as
-  the host user or inside the sandbox)
+- `script/attach [workspace]`: attach this terminal to the sandboxed
+  herdr session, or list its workspaces when run without arguments
+  (works as the host user or inside the sandbox)
 
 ## Repository Structure
 
@@ -137,11 +137,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   fixed, `swift build --target AgentIDEDomain`, `--target
   AgentIDEData` and `--target AgentIDEDataTests` still typecheck,
   since none of them reach SwiftTerm.
-- tmux servers and sessions outlive the app and only read config at
-  start, so changes to launch commands, configs or session shapes
-  often need existing tmux sessions or servers restarted (or leaked
-  clients killed) to take effect: when finishing such a change, tell
-  the user exactly what to restart or kill.
+- herdr servers and their workspaces outlive the app, so changes to
+  launch commands, workspace shapes or server behaviour often need
+  the running `agentide` or `agentide-dev` herdr session stopped
+  (`herdr session stop <name>` as the sandbox user, or `herdr server
+  reload-config` for config alone) to take effect: when finishing
+  such a change, tell the user exactly what to restart or stop.
 
 ### Required Before Each Commit
 
@@ -165,7 +166,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 3. Never run `gh` or any host-credentialled command inside the
    sandbox. The host fetches GitHub data and passes it into prompts;
    sandboxed pushes use per-repository deploy keys only.
-4. Derive state from tmux, git and `gh` on demand rather than caching
+4. Derive state from herdr, git and `gh` on demand rather than caching
    it. AgentIDE must be killable at any moment losing nothing, and
    every conversation must stay browsable and resumable after its
    session closes or its worktree is deleted.

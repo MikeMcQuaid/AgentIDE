@@ -43,7 +43,7 @@ public extension SessionService {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
         let sessionName = SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: agent)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
         let slot = WorktreeSlot(
             repository: Repository(name: worktree.repositoryName, path: worktree.repositoryPath),
             branch: worktree.branch,

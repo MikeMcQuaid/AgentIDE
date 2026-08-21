@@ -121,7 +121,7 @@ final class RepositorySessionsModel {
     }
 
     /// Resumes the selected conversation in the worktree it ran in;
-    /// the branch only names the tmux session, so the path's last
+    /// the branch only names the session, so the path's last
     /// component serves.
     func resumeSelectedHere(onResumed: @escaping @MainActor () async -> Void) {
         guard let selected, let path = selectedWorktreePath else {

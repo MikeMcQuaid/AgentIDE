@@ -34,7 +34,7 @@ public struct SessionService: Sendable {
     public init(
         paths: WorkspacePaths,
         git: GitClient,
-        tmux: TmuxClient,
+        herdr: HerdrClient,
         github: GitHubClient,
         transcripts: TranscriptReader,
         spool: EventSpool,
@@ -46,7 +46,7 @@ public struct SessionService: Sendable {
     ) {
         self.paths = paths
         self.git = git
-        self.tmux = tmux
+        self.herdr = herdr
         self.github = github
         self.transcripts = transcripts
         self.spool = spool
@@ -67,7 +67,7 @@ public struct SessionService: Sendable {
     /// The full dashboard state: every repository's worktrees joined
     /// with their sessions, plus foreign sessions.
     public func overview() async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
-        let panes = await (try? tmux.panes()) ?? []
+        let panes = await (try? herdr.panes()) ?? []
         let activity = spool.activity()
         let metadata = store.load()
         var groups = [RepositoryGroup]()
@@ -116,14 +116,7 @@ public struct SessionService: Sendable {
         }
         let foreign = panes
             .filter { SessionName.isAgentIDE($0.sessionName) == false }
-            .map { pane in
-                AgentSession(
-                    name: pane.sessionName,
-                    agent: nil,
-                    status: pane.isDead ? .finished(pane.exitStatus) : .running,
-                    workingDirectory: pane.currentPath,
-                )
-            }
+            .map(Self.foreignSession(of:))
         // The poll is the only thing running while a session is, so
         // it is what keeps the conversation copies current; the
         // schedule inside means this costs a dictionary lookup on
@@ -133,8 +126,8 @@ public struct SessionService: Sendable {
     }
 
     /// Creates a worktree and branch for a prompt and starts the
-    /// agent in tmux with the picked model, effort and the prompt as
-    /// its initial message. Returns the session name.
+    /// agent in herdr with the picked model, effort and the prompt
+    /// as its initial message. Returns the session name.
     public func createSession(
         repository: Repository,
         prompt: String,
@@ -167,7 +160,7 @@ public struct SessionService: Sendable {
 
     let paths: WorkspacePaths
     let git: GitClient
-    let tmux: TmuxClient
+    let herdr: HerdrClient
     let github: GitHubClient
     let transcripts: TranscriptReader
     let spool: EventSpool
@@ -205,7 +198,7 @@ public struct SessionService: Sendable {
     }
 
     /// Launches an agent in a prepared worktree slot: symlink, prompt
-    /// file, tmux session, paste, metadata.
+    /// file, herdr workspace, paste, metadata.
     func start(
         prompt: String,
         agent: AgentKind,
@@ -278,6 +271,17 @@ public struct SessionService: Sendable {
 
     // MARK: Private
 
+    /// A pane AgentIDE did not create, shown rather than hidden.
+    private static func foreignSession(of pane: HerdrPane) -> AgentSession {
+        AgentSession(
+            name: pane.sessionName,
+            agent: nil,
+            status: pane.isFinished ? .finished : .running,
+            workingDirectory: pane.currentPath,
+            paneID: pane.paneID,
+        )
+    }
+
     /// The repository's own checkout as a worktree: its branch is
     /// whatever is actually checked out, so a feature branch in the
     /// main checkout still matches its pull request in the listing.
@@ -294,7 +298,7 @@ public struct SessionService: Sendable {
     private func item(
         worktree: Worktree,
         baseRef: String?,
-        panes: [TmuxPane],
+        panes: [HerdrPane],
         activity: [String: Date],
         metadata: AppMetadata,
     ) async -> WorktreeItem {
@@ -310,22 +314,21 @@ public struct SessionService: Sendable {
             AgentSession(
                 name: pane.sessionName,
                 agent: agentKind(of: pane.sessionName),
-                status: pane.isDead ? .finished(pane.exitStatus) : .running,
+                status: pane.isFinished ? .finished : .running,
                 workingDirectory: pane.currentPath,
+                paneID: pane.paneID,
                 version: metadata.agentVersions[pane.sessionName],
             )
         }
         let past = pastSessions(of: worktree, liveSession: session)
 
-        // Unread is any terminal or agent activity since the worktree
-        // was last viewed: the event spool, the tmux session's own
-        // activity clock and transcript modification all count.
+        // Unread is any agent activity since the worktree was last
+        // viewed: the event spool and transcript modification count;
+        // herdr keeps no output clock, and the spool and transcripts
+        // already cover every agent message.
         var lastEvent = Date.distantPast
         if let session, let spooled = activity[session.name] {
             lastEvent = spooled
-        }
-        if let pane, pane.activityAt > 0 {
-            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(pane.activityAt)))
         }
         if let newest = past.first {
             lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))

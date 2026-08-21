@@ -13,7 +13,7 @@ final class AppDependencies {
         let gitClient = GitClient(runner: runner)
         let githubClient = GitHubClient(runner: runner)
         let metadataStore = MetadataStore(file: paths.metadataFile)
-        let tmux = TmuxClient(
+        let herdr = HerdrClient(
             runner: runner,
             launcher: SandvaultLauncher(hostUser: paths.hostUser),
             isInsideSandbox: WorkspacePaths.isInsideSandbox,
@@ -21,7 +21,7 @@ final class AppDependencies {
         let sessionService = SessionService(
             paths: paths,
             git: gitClient,
-            tmux: tmux,
+            herdr: herdr,
             github: githubClient,
             transcripts: TranscriptReader(),
             spool: EventSpool(directory: paths.eventsDirectory),

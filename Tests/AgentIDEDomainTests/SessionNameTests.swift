@@ -9,7 +9,7 @@ struct SessionNameTests {
     }
 
     @Test
-    func `slug replaces everything tmux forbids and collapses runs`() {
+    func `slug replaces punctuation and collapses runs`() {
         #expect(SessionName.slug("Fix: v1.2/Thing") == "fix-v1-2-thing")
         #expect(SessionName.slug("--a--b--") == "a-b")
         #expect(SessionName.slug("///") == "unnamed")

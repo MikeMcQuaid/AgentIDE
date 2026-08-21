@@ -122,7 +122,7 @@ extension RootView {
     /// Continues the worktree's most recent conversation: the newest
     /// transcript when one lists here, otherwise the recorded closed
     /// session. The state refreshes first, so a stale cached item
-    /// never resumes over a session that is already live (tmux would
+    /// never resumes over a session that is already live (herdr would
     /// try to attach without a terminal). Failures surface in the
     /// error log, so a resume that cannot launch says why.
     func resumeLatest(in item: WorktreeItem) async {
@@ -240,11 +240,11 @@ extension RootView {
                 .accessibilityLabel("Close session")
         }
         .buttonStyle(.plain)
-        .hoverHelp("End the session and its tmux session now; the worktree and conversation survive for resuming")
+        .hoverHelp("End the session and its workspace now; the worktree and conversation survive for resuming")
     }
 
     private func close(_ session: AgentSession, in item: WorktreeItem) async {
-        // The pane goes now, not when tmux has been asked again.
+        // The pane goes now, not when herdr has been asked again.
         dependencies.dashboard.forgetSession(at: item.worktree.path)
         await dependencies.service.closeSession(sessionName: session.name, worktree: item.worktree)
         await dependencies.dashboard.refresh()
@@ -258,7 +258,7 @@ extension RootView {
     /// reflow for pasting into chat and pull request bodies.
     func agentTerminal(for session: AgentSession, isActive: Bool) -> TerminalPaneView {
         TerminalPaneView(
-            command: dependencies.service.attachCommand(sessionName: session.name),
+            command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
             reflowsCopies: true,
             isActive: isActive,
         )

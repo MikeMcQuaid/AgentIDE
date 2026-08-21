@@ -1,12 +1,13 @@
 import AgentIDEDomain
 import Foundation
 
-/// A live `tmux -C` control mode client over pipes: command lines go
-/// in on standard input, parsed protocol events stream out. The
-/// terminal view renders panes locally from these events, which is
-/// what makes selection, copying and scrollback native. Closing the
-/// channel only detaches this client; the tmux session lives on.
-public actor TmuxControlChannel {
+/// A live `herdr terminal session control` client over pipes: JSON
+/// command lines go in on standard input, parsed frame events stream
+/// out. The terminal view renders panes locally from these events,
+/// which is what makes selection, copying and pasting native.
+/// Closing the channel only releases this controller; the herdr
+/// workspace lives on.
+public actor HerdrTerminalChannel {
     // MARK: Lifecycle
 
     /// Creates a channel that will spawn an argv resolved through
@@ -24,7 +25,7 @@ public actor TmuxControlChannel {
     // MARK: Public
 
     /// Spawns the client and streams its events until it exits.
-    public func start() throws -> AsyncStream<TmuxControlEvent> {
+    public func start() throws -> AsyncStream<HerdrTerminalEvent> {
         let client = Process()
         client.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         client.arguments = command
@@ -39,15 +40,15 @@ public actor TmuxControlChannel {
         let reading = output.fileHandleForReading
         return AsyncStream { continuation in
             let pump = Task {
-                var parser = TmuxControlParser()
                 var line = [UInt8]()
                 do {
-                    // Lines split at the byte level: a string-based
-                    // line reader replaced multi-byte characters that
-                    // tmux split across `%output` events with U+FFFD.
+                    // Lines split at the byte level; each is ASCII
+                    // JSON (frame bytes travel as base64), so the
+                    // string round trip is lossless.
                     for try await byte in reading.bytes {
                         if byte == UInt8(ascii: "\n") {
-                            if let event = parser.parse(lineBytes: line[...]) {
+                            let text = String(bytes: line, encoding: .utf8) ?? ""
+                            if let event = HerdrTerminal.parse(line: text) {
                                 continuation.yield(event)
                             }
                             line.removeAll(keepingCapacity: true)
@@ -64,9 +65,9 @@ public actor TmuxControlChannel {
         }
     }
 
-    /// Sends one command line to tmux. Deliberately nonisolated and
-    /// synchronous: calls from one actor reach the pipe in order,
-    /// which keystroke delivery depends on.
+    /// Sends one command line to herdr. Deliberately nonisolated
+    /// and synchronous: calls from one actor reach the pipe in
+    /// order, which keystroke delivery depends on.
     public nonisolated func send(_ line: String) {
         try? input.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
     }
@@ -98,10 +99,10 @@ public actor TmuxControlChannel {
 
             pids += frontier
         }
-        // Every tmux process joins the picture: a client alive with
-        // no events usually means it is waiting on a slow or wedged
-        // server, whose state and age then matter most.
-        pids += Self.outputLines("/usr/bin/pgrep", ["-x", "tmux"]).filter { pids.contains($0) == false }
+        // Every herdr process joins the picture: a client alive
+        // with no events usually means it is waiting on a slow or
+        // wedged server, whose state and age then matter most.
+        pids += Self.outputLines("/usr/bin/pgrep", ["-x", "herdr"]).filter { pids.contains($0) == false }
         return Self.outputLines("/bin/ps", ["-o", "pid=,stat=,etime=,ucomm=", "-p", pids.joined(separator: ",")])
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .joined(separator: " | ")
@@ -115,8 +116,8 @@ public actor TmuxControlChannel {
         process = nil
     }
 
-    /// Everything the client wrote to standard error, where tmux
-    /// puts its diagnostics (unknown session, refused sudo). Only
+    /// Everything the client wrote to standard error, where herdr
+    /// puts its diagnostics (unknown pane, refused sudo). Only
     /// call after the event stream has finished: the read waits for
     /// the pipe to close with the process, so a client that never
     /// spawned answers empty rather than waiting forever.
@@ -134,7 +135,7 @@ public actor TmuxControlChannel {
 
     /// How many generations of children the chain snapshot follows;
     /// the launch chain is sudo, then sandbox-exec, then the shell
-    /// or tmux it becomes.
+    /// or herdr it becomes.
     private static let descendantGenerations = 3
 
     private nonisolated let input: Pipe = .init()

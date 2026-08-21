@@ -28,7 +28,7 @@ public extension SessionService {
         let sessionName = item.session?.name
             ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
         rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         do {
@@ -90,7 +90,7 @@ public extension SessionService {
         let sessionName = item.session?.name
             ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
         rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
         try await git.removeMergedWorktree(
             repository: repository,
             worktreePath: worktree.path,

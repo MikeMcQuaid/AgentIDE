@@ -3,10 +3,10 @@ import Foundation
 
 /// Getting an agent running again in a worktree. Resuming fails in
 /// ways that look like success: the agent starts, refuses the
-/// conversation it was handed and exits, and tmux keeps the dead
-/// pane, so the name is taken and the terminal attaches to a corpse.
-/// Every way in therefore replaces whatever holds the name and is
-/// checked for still being alive a moment later.
+/// conversation it was handed and exits back to its pane's shell,
+/// so the label is taken and the terminal attaches to an empty
+/// prompt. Every way in therefore replaces whatever holds the label
+/// and is checked for still being alive a moment later.
 extension SessionService {
     /// Starts a session under a name, trying each command in turn
     /// until one is still running, and killing whatever holds the
@@ -115,16 +115,16 @@ extension SessionService {
     private static let livenessPolls = 4
     private static let livenessPollMilliseconds = 350
 
-    /// Whether the session is still there with a live pane shortly
-    /// after starting.
+    /// Whether the session is still there with its agent running
+    /// shortly after starting.
     private func isRunning(sessionName: String) async -> Bool {
         for _ in 0 ..< Self.livenessPolls {
             try? await Task.sleep(for: .milliseconds(Self.livenessPollMilliseconds))
-            let panes = await (try? tmux.panes()) ?? []
+            let panes = await (try? herdr.panes()) ?? []
             guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
                 return false
             }
-            guard pane.isDead == false else {
+            guard pane.isFinished == false else {
                 return false
             }
         }

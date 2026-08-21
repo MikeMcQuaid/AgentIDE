@@ -2,11 +2,11 @@ import AgentIDEData
 import SwiftUI
 import TerminalUI
 
-/// Lists everything this app has running: every AgentIDE tmux
-/// session, sandboxed agents and host shells alike, and the browser
-/// pages it renders itself, with where each lives, what it costs and
-/// a way to stop it. The escape hatch when something is running that
-/// should not be.
+/// Lists everything this app has running: every agent session on
+/// the sandboxed herdr server and the browser pages it renders
+/// itself, with where each lives, what it costs and a way to stop
+/// it. The escape hatch when something is running that should not
+/// be.
 public struct SessionManagerSheet: View {
     // MARK: Lifecycle
 
@@ -33,7 +33,7 @@ public struct SessionManagerSheet: View {
                 Text("Sessions").font(.title2)
                 Spacer()
                 Button("Refresh") { Task { await reload() } }
-                    .hoverHelp("List the tmux sessions again")
+                    .hoverHelp("List the sessions again")
                 Button("Done") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
             }
@@ -41,7 +41,7 @@ public struct SessionManagerSheet: View {
                 ContentUnavailableView(
                     "Nothing running",
                     systemImage: "terminal",
-                    description: Text("Agent sessions, host shells and browser pages appear here."),
+                    description: Text("Agent sessions and browser pages appear here."),
                 )
                 .frame(minHeight: Self.listHeight)
             } else {
@@ -60,8 +60,8 @@ public struct SessionManagerSheet: View {
             ForEach(sessions, id: \.name) { session in
                 row(
                     Entry(
-                        icon: session.isHostShell ? "terminal" : "cpu",
-                        label: session.isHostShell ? "Host shell" : "Agent session",
+                        icon: "cpu",
+                        label: "Agent session",
                         title: session.name,
                         directory: session.workingDirectory,
                         usage: usage(of: session),
@@ -156,14 +156,10 @@ public struct SessionManagerSheet: View {
             .disabled(true)
         } else {
             BusyButton("Kill", busy: "Killing") {
-                await service.killTmuxSession(name: session.name, isHostShell: session.isHostShell)
+                await service.killSession(name: session.name)
                 killed.insert(session.name)
             }
-            .hoverHelp(
-                session.isHostShell
-                    ? "Kill this host shell tmux session, escalating to KILL if it hangs on"
-                    : "Kill this agent's tmux session; its conversation stays resumable",
-            )
+            .hoverHelp("Kill this agent's session; its conversation stays resumable")
         }
     }
 

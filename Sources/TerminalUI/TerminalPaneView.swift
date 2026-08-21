@@ -3,18 +3,18 @@ import SwiftUI
 
 // MARK: - TerminalPaneView
 
-/// An embedded terminal. Agent panes attach to a tmux session as a
-/// control mode client: tmux streams pane output as protocol events
-/// and the view renders them locally, so selection, copying, wheel
-/// scrolling and scrollback are all native, and closing the view
-/// only detaches while the session keeps running. The shell pane
-/// runs a plain local shell on the view's own PTY instead: no
-/// server, no client, and the shell dies with the app.
+/// An embedded terminal. Agent panes attach to a herdr pane as a
+/// terminal controller: herdr streams rendered frames and the view
+/// renders them locally, so selection, copying and pasting are all
+/// native, and closing the view only releases the controller while
+/// the session keeps running. The shell pane runs a plain local
+/// shell on the view's own PTY instead: no server, no client, and
+/// the shell dies with the app.
 public struct TerminalPaneView: View {
     // MARK: Lifecycle
 
-    /// Creates a terminal that spawns a `tmux -C` argv and renders
-    /// the attached session. `reflowsCopies` reflows multi-line
+    /// Creates a terminal that spawns a herdr controller argv and
+    /// renders the attached pane. `reflowsCopies` reflows multi-line
     /// copies for pasting into prose tools. `isActive` says whether
     /// the pane is the one on screen: an invisible mounted pane must
     /// give up keyboard focus or it swallows keystrokes and pastes
@@ -79,7 +79,7 @@ public struct TerminalPaneView: View {
 
 // MARK: - TerminalTransport
 
-/// What feeds a terminal pane: a tmux control mode client's argv,
+/// What feeds a terminal pane: a herdr terminal controller's argv,
 /// or a local shell's working directory.
 enum TerminalTransport: Equatable {
     case control(command: [String])
@@ -88,8 +88,8 @@ enum TerminalTransport: Equatable {
 
 // MARK: - TerminalRepresentable
 
-/// Bridges the SwiftTerm view into SwiftUI and owns the control
-/// mode client.
+/// Bridges the SwiftTerm view into SwiftUI and owns the herdr
+/// terminal controller.
 struct TerminalRepresentable: NSViewRepresentable {
     // MARK: Internal
 
