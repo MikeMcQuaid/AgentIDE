@@ -154,9 +154,9 @@ bare exit code.
 - Each agent conversation is one herdr workspace whose single pane runs a
   login shell; the agent command is submitted to that shell (`pane run`),
   with `AGENTIDE_SESSION` and `INITIAL_DIR` set as workspace environment.
-  A finished agent therefore leaves the shell at its prompt with the whole
-  scrollback inspectable, herdr's equivalent of a tmux dead pane, and
-  whether an agent is running comes from herdr's own agent detection
+  A finished agent therefore leaves the shell at its prompt with the
+  whole scrollback inspectable, and whether an agent is running comes
+  from herdr's own agent detection
   confirmed by the pane's foreground process, not from exit codes, which
   nothing displayed anyway.
 - Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs

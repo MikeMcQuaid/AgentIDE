@@ -70,7 +70,7 @@ public enum PasteableText {
     /// on purpose and other lines qualify through their punctuation.
     private static let commandWords: Set<String> = [
         "cd", "git", "ls", "cat", "echo", "export", "sudo", "brew", "npm", "swift", "xcodebuild",
-        "make", "curl", "python", "python3", "ruby", "bundle", "rm", "mkdir", "cp", "mv", "tmux",
+        "make", "curl", "python", "python3", "ruby", "bundle", "rm", "mkdir", "cp", "mv", "herdr",
         "gh", "docker", "ssh", "source", "exec", "printf", "grep", "sed", "awk", "find", "chmod",
     ]
 

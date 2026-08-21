@@ -10,7 +10,7 @@ struct FoundationModelClientTests {
         // Models echo commit bodies that are already dash lists and
         // prefix another dash, and sometimes lowercase the title.
         let doubled = """
-        attach tmux control mode clients
+        attach herdr terminal controllers
 
         - - Fix protocol decoding at the byte level
         -  - Keep hidden panes from swallowing input
@@ -18,7 +18,7 @@ struct FoundationModelClientTests {
           continuation lines and --flags stay untouched
         """
         let parsed = FoundationModelClient.pullRequestDescription(fromModelAnswer: doubled)
-        #expect(parsed?.title == "Attach tmux control mode clients")
+        #expect(parsed?.title == "Attach herdr terminal controllers")
         #expect(parsed?.body == """
         - Fix protocol decoding at the byte level
         - Keep hidden panes from swallowing input

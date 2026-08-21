@@ -77,9 +77,9 @@ public struct HerdrClient: Sendable {
     // MARK: Internal
 
     /// Ensures the server is up, starting it detached when it is
-    /// not: unlike tmux, herdr does not daemonise itself, so birth
-    /// is explicit. The whole check-start-wait runs as one payload
-    /// because each call from outside the sandbox costs a sudo.
+    /// not: herdr does not daemonise itself, so birth is explicit.
+    /// The whole check-start-wait runs as one payload because each
+    /// call from outside the sandbox costs a sudo.
     /// Detaching is zsh's `&!` with redirection alone: this launch
     /// context has no controlling terminal to hang up from, and
     /// macOS's nohup errored over exactly that ("can't detach from
