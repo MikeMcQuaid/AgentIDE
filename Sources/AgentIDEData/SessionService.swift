@@ -208,7 +208,6 @@ public struct SessionService: Sendable {
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
         let promptFile = try writePrompt(prompt, sessionName: sessionName)
-        addFriendlySymlink(repository: slot.repository, branch: slot.branch, worktreePath: slot.path)
 
         // The prompt travels inside the launch command, read from
         // its file as the agent starts: pasting it after launch
@@ -238,35 +237,18 @@ public struct SessionService: Sendable {
         return promptFile
     }
 
-    func addFriendlySymlink(repository: Repository, branch: String, worktreePath: String) {
-        let directory = paths.friendlyWorktreesDirectory + "/" + repository.name
-        let link = directory + "/" + branch.replacing("/", with: "-")
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(atPath: link)
-        try? FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: worktreePath)
-    }
-
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
-        let path = try await worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
         return path
     }
 
-    /// The repository's uuid worktree directory, reused when any
-    /// worktree already lives there and minted otherwise.
-    func worktreeContainer(repository: Repository) async -> String {
-        let existing = await (try? git.worktrees(of: repository)) ?? []
-        let prefix = paths.worktreesDirectory + "/"
-        let uuid = existing
-            .compactMap { worktree -> String? in
-                guard worktree.path.hasPrefix(prefix) else {
-                    return nil
-                }
-
-                return worktree.path.dropFirst(prefix.count).split(separator: "/").first.map(String.init)
-            }
-            .first ?? UUID().uuidString.lowercased()
-        return prefix + uuid
+    /// The repository's worktree directory, a layout the app owns
+    /// now the tooling that grouped worktrees by uuid is retired;
+    /// worktrees in that older layout keep working because every
+    /// listing derives from `git worktree list`.
+    func worktreeContainer(repository: Repository) -> String {
+        paths.worktreesDirectory + "/" + repository.name
     }
 
     // MARK: Private

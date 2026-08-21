@@ -62,7 +62,8 @@ public struct WorkspacePaths: Sendable {
         sharedWorkspace + "/repositories"
     }
 
-    /// Where canonical uuid-grouped worktrees live.
+    /// Where canonical worktrees live, grouped by repository (or
+    /// by uuid, in the layout an older release inherited).
     public var worktreesDirectory: String {
         sharedWorkspace + "/worktrees"
     }
@@ -82,7 +83,8 @@ public struct WorkspacePaths: Sendable {
         agentideDirectory + "/events"
     }
 
-    /// Where human-friendly worktree symlinks live.
+    /// Where earlier releases kept human-friendly worktree
+    /// symlinks; only their cleanup reads this now.
     public var friendlyWorktreesDirectory: String {
         agentideDirectory + "/worktrees"
     }

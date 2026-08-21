@@ -63,7 +63,7 @@ struct PromptCaptureRunner: AgentRunner {
 /// resume.
 struct SessionServiceIntegrationTests {
     @Test
-    func `create session builds worktree, symlink, prompt and running pane`() async throws {
+    func `create session builds worktree, prompt and running pane`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
 
@@ -89,9 +89,10 @@ struct SessionServiceIntegrationTests {
         let arguments = try String(contentsOfFile: worktreePath + "/agent-arguments.txt", encoding: .utf8)
         #expect(arguments == "--model fable --effort max")
 
-        let symlink = world.paths.friendlyWorktreesDirectory + "/repo/do_the_thing"
-        let destination = try FileManager.default.destinationOfSymbolicLink(atPath: symlink)
-        #expect(destination == worktreePath)
+        // The canonical path is the readable one now; no symlink
+        // stands beside it.
+        #expect(worktreePath.hasSuffix("/worktrees/repo/do_the_thing"))
+        #expect(FileManager.default.fileExists(atPath: world.paths.friendlyWorktreesDirectory) == false)
     }
 
     @Test

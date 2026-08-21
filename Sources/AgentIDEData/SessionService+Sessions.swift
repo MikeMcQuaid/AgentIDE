@@ -246,8 +246,6 @@ public extension SessionService {
         let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
-        addFriendlySymlink(repository: repository, branch: branch, worktreePath: worktreePath)
-
         let agentRunner = runner(for: past.agent)
         copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
         try await startFresh(

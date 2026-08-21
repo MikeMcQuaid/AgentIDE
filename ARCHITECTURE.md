@@ -414,29 +414,26 @@ Sendable` and `nonisolated(unsafe)` are banned.
    short underscore-separated name; when the model is unavailable the
    prompt's first words serve in the same style. No prefix.
 3. Host-side `GitClient` fetches, then runs `git worktree add` under
-   `/Users/Shared/sv-<user>/worktrees/<uuid>/<branch>`. This layout is kept
-   byte-compatible with what existing tooling already creates: the
-   repository's existing `<uuid>` directory is discovered via
-   `git worktree list` and reused; a new one is minted only when the
-   repository has none. The uuid map is cached in the metadata store and
-   always re-derivable.
-4. A human-friendly symlink
-   `/Users/Shared/sv-<user>/agentide/worktrees/<repo>/<branch>` points at the
-   canonical path. Sessions always launch from the resolved real path because
-   agent transcripts are keyed by cwd; UUIDs appear nowhere else in
-   user-visible naming.
-5. The prompt is written to
+   `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`, a layout
+   the app owns outright now that the tooling which minted uuid
+   containers there is retired. Worktrees in that older
+   `worktrees/<uuid>/<branch>` layout keep working, since everything
+   derives from `git worktree list` (P1); the friendly symlinks earlier
+   releases kept beside them are no longer created and are removed with
+   their worktrees. Sessions always launch from the real path because
+   agent transcripts are keyed by cwd.
+4. The prompt is written to
    `/Users/Shared/sv-<user>/agentide/prompts/<session>.md`, readable in the
    sandbox through the workspace ACLs.
-6. Deploy keys: none by default; the agent works offline against the local
+5. Deploy keys: none by default; the agent works offline against the local
    clone. A per-repository opt-in provisions a read-only key through
    sandvault's `sv-clone -k` mechanism. Write keys are never provisioned;
    pushing is host-side.
-7. `AgentRunner` builds the agent command, with any per-session extra
+6. `AgentRunner` builds the agent command, with any per-session extra
    arguments appended verbatim (sandvault's wrappers add the agent's
    permission-skipping flag inside the sandbox), and the session launches
    through the herdr payload above.
-8. The prompt travels inside the launch command, read from its file as the
+7. The prompt travels inside the launch command, read from its file as the
    agent starts (`"$(cat …)"` evaluated in the sandbox, the file path
    shell-quoted): pasting it as
    terminal input after launch raced the agent's terminal setup, which
@@ -447,7 +444,7 @@ Sendable` and `nonisolated(unsafe)` are banned.
    The pane's `INITIAL_DIR` is
    pinned to the worktree so the sandbox's zshenv cannot redirect the agent
    elsewhere.
-9. The session is recorded in the metadata store, with the agent-native
+8. The session is recorded in the metadata store, with the agent-native
    resume id captured as soon as the transcript appears.
 
 ### Event pipeline (Watch and steer)
@@ -732,7 +729,8 @@ shim rather than a protocol:
    only on an observed open-to-merged transition.
 2. Deletion records the session's agent-native resume id, closes the herdr
    workspace, then runs `git worktree remove`, `git worktree prune` and
-   `git branch -D` and removes the friendly symlink. Nothing is archived:
+   `git branch -D` and removes any symlink an earlier release left.
+   Nothing is archived:
    the branch and any uncommitted files are gone.
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
@@ -806,9 +804,10 @@ across live and deleted worktrees, newest first, with the selected log
 below and a resume button that continues it in a fresh worktree. The
 session names recorded at launch attribute each orphaned transcript
 directory to its repository, and every transcript directory whose
-encoded name extends one of the repository's `worktrees/<uuid>`
-containers is scanned too, so conversations from worktrees created and
-deleted by other tooling still appear.
+encoded name extends one of the repository's `worktrees/<repository>`
+containers (or an older release's `worktrees/<uuid>` one) is scanned
+too, so conversations from worktrees created and deleted by other
+tooling still appear.
 
 ### Conversations outside the sandbox
 
@@ -843,7 +842,7 @@ already hold the first and the second is not ours to put in anyone's cloud.
 | Pull request, CI and review state | GitHub | poll, cache in memory |
 | Agent process existence | `ps` | scan |
 | Earlier conversations per worktree | agent transcript directories | list and parse read-only |
-| Unread markers, spool offsets, prompt history, per-repository settings, repository-to-uuid map, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
+| Unread markers, spool offsets, prompt history, per-repository settings, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
 
 The metadata store lives at
 `~/Library/Application Support/AgentIDE/agentide.sqlite` (WAL mode, migrated
@@ -982,7 +981,7 @@ client already guards every call on the model's availability.
 | R4 | agent transcript formats drift across releases | tolerant decoders, per-release fixtures and adapter capability flags |
 | R5 | sandvault updates could change paths, profile or sudoers | pin the sandvault version; `SandvaultLauncher` is the single construction point; bootstrap asserts the expected shape |
 | R6 | event spool append atomicity | small single-writer lines; readers tolerate a torn tail |
-| R7 | the worktree uuid layout is a compatibility choice, not ours | keep byte-compatibility while other tooling uses it; the friendly symlinks isolate everything user-facing; own the layout later |
+| R7 | older worktrees live in the uuid layout inherited from retired tooling | everything derives from `git worktree list`, so both layouts work; new worktrees use the owned `worktrees/<repository>/<branch>` shape |
 | R8 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree pointing at the old transcript |
 
 Open questions: the default branch template,
