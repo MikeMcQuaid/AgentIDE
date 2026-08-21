@@ -334,7 +334,6 @@ Third-party imports are confined (P3):
 | GRDB, Subprocess | AgentIDEData |
 | SwiftTerm | TerminalUI |
 | STTextView, SwiftTreeSitter and grammars | ReviewFeature |
-| Sparkle | AgentIDEApp |
 | WebKit | SessionFeature |
 
 ### The AgentRunner seam
@@ -900,10 +899,13 @@ official language or project organisation.
 | tree-sitter-ruby, tree-sitter-bash | grammars | official organisation; pinned to the latest ABI 14 releases the runtime accepts |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
-| Sparkle | app updates | later slice |
 
 System frameworks (WebKit, UserNotifications and FSEvents) and runtime tools
-(tmux, installed by Homebrew and never linked) sit outside the table.
+(tmux, installed by Homebrew and never linked) sit outside the table. There
+is no updater among them: releases ship as a Homebrew cask, so `brew
+upgrade` updates the app alongside the tools it already installs, rather
+than the app carrying an update framework of its own or living in the Mac
+App Store, whose sandbox forbids everything this app does.
 Versions are pinned by `Package.resolved`; the two exceptions are pinned
 exactly.
 

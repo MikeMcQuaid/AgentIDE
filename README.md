@@ -205,6 +205,10 @@ open /Applications/AgentIDE.app
   for quick development runs.
 - **Features** land slice by slice (see [Status](#-status)); the app launches
   to an empty dashboard until the first slices fill it.
+- **Updates** come from Homebrew: releases ship as a cask, so `brew upgrade`
+  moves the app on with the rest of your tools. There is no built-in
+  updater, and no Mac App Store build: its sandbox forbids running agents
+  as another user, which is the whole design.
 
 A shell pane runs your login shell, so anything your shell configuration
 exports wins over what the pane was started with. It sets `AGENTIDE=1` and
@@ -246,7 +250,8 @@ done:
    session discovery (basic, this pull request)
 9. Polish, including checking the Brewfile's tools are installed at
    startup and offering to install any that are missing from a copy
-   vendored in the app bundle
+   vendored in the app bundle, and releasing as a Homebrew cask so
+   `brew upgrade` keeps the app current
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.
