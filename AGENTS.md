@@ -111,7 +111,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   light fields only and enrich one pull request on selection.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
   name, finder mode and focus, browser address); tabs travel by
-  name, never index, so reordering cannot repoint them.
+  name, never index, so reordering cannot repoint them. A repeated
+  request needs a counter beside its value: writing the same string
+  publishes no change, so asking twice for one page did nothing.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks

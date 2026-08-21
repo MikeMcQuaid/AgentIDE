@@ -1,4 +1,5 @@
 import AgentIDEData
+import AgentIDEDomain
 import Foundation
 @testable import ReviewFeature
 import Testing
@@ -156,5 +157,27 @@ struct ReviewModelTests {
             workingDirectory: directory,
             environment: [:],
         )
+    }
+}
+
+// MARK: - HunkCopyTests
+
+/// Pins what a copied hunk holds: the file's own text, since the
+/// displayed text stands a space in for a blank line so its change
+/// colour has something to paint.
+@MainActor
+struct HunkCopyTests {
+    @Test
+    func `a copied hunk keeps blank lines blank`() {
+        let hunk = DiffHunk(
+            oldStart: 1,
+            newStart: 1,
+            lines: [
+                DiffLine(kind: .context, content: "let a = 1"),
+                DiffLine(kind: .addition, content: ""),
+                DiffLine(kind: .addition, content: "let b = 2"),
+            ],
+        )
+        #expect(DiffFileView.copyText(of: hunk) == "let a = 1\n\nlet b = 2")
     }
 }

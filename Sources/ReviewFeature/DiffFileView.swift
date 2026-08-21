@@ -81,6 +81,14 @@ struct DiffFileView: View {
         .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
     }
 
+    /// A hunk's lines as the file holds them: the displayed text
+    /// stands a space in for a blank line so its change colour has
+    /// something to paint, and copying that would put a space where
+    /// the file has nothing at all.
+    static func copyText(of hunk: DiffHunk) -> String {
+        hunk.lines.map(\.content).joined(separator: "\n")
+    }
+
     // MARK: Private
 
     private static let collapsedPadding: CGFloat = 1
@@ -159,7 +167,7 @@ struct DiffFileView: View {
     private func copyHunkAction(_ hunk: DiffHunk) -> some View {
         Button("Copy hunk") {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(String(hunkText(hunk).characters), forType: .string)
+            NSPasteboard.general.setString(Self.copyText(of: hunk), forType: .string)
         }
         .hoverHelp("Copy this hunk's lines without their numbers or change markers")
     }
@@ -267,20 +275,6 @@ struct DiffFileView: View {
 
             content[from ..< upTo].backgroundColor = .yellow.opacity(Self.foundOpacity)
         }
-    }
-
-    /// The hunk's code as one attributed string: syntax colours per
-    /// token and change backgrounds per line, markers excluded so
-    /// copies paste cleanly.
-    private func hunkText(_ hunk: DiffHunk) -> AttributedString {
-        var result = AttributedString()
-        for (index, line) in hunk.lines.enumerated() {
-            result += lineText(line)
-            if index < hunk.lines.count - 1 {
-                result += AttributedString("\n")
-            }
-        }
-        return result
     }
 
     /// One line's text: a whitespace tint covers tabs and the

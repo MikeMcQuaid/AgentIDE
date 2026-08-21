@@ -70,11 +70,17 @@ public struct BrowserView: View {
             }
         }
         // An address asked for from elsewhere goes to the pane on
-        // screen, never to the ones loaded behind it.
-        .onChange(of: requestedAddress) {
-            if isActive, requestedAddress.isEmpty == false {
-                address = requestedAddress
+        // screen, never to the ones loaded behind it. The count is
+        // what changes: the same page asked for twice writes the
+        // same address, and the pane would sit on whatever it had
+        // wandered to since.
+        .onChange(of: requestedCount) {
+            guard isActive, requestedAddress.isEmpty == false else {
+                return
             }
+
+            address = requestedAddress
+            load()
         }
         .onDisappear { BrowserPanes.shared.remove(worktreePath: worktreePath) }
     }
@@ -85,8 +91,10 @@ public struct BrowserView: View {
 
     /// The address bus other panes write to, and every worktree's
     /// own address, stored as path-address lines.
-    @AppStorage("browserAddress")
+    @AppStorage(UtilityTabTarget.addressKey)
     private var requestedAddress = ""
+    @AppStorage(UtilityTabTarget.requestKey)
+    private var requestedCount = 0
     @AppStorage("browserAddresses")
     private var storedAddresses = ""
 

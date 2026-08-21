@@ -148,7 +148,7 @@ struct PullRequestFooterView: View {
     private static let padding: CGFloat = 8
 
     /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTab")
+    @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
     /// Sidebar-style: how far the branch sits behind its base.

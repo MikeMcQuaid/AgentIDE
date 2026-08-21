@@ -18,6 +18,17 @@ public enum UtilityTabTarget {
     /// The embedded browser tab.
     public static let browser = "browser"
 
+    /// The address the browser is being asked for, and the count of
+    /// times one has been asked for. The count is what a pane
+    /// watches: asking twice for the same page writes the same
+    /// string, which publishes no change, so a link clicked after
+    /// the browser had wandered off elsewhere did nothing at all.
+    public static let addressKey = "browserAddress"
+
+    /// The count of address requests, which is what changes when the
+    /// same page is asked for twice.
+    public static let requestKey = "browserRequest"
+
     /// The editor tab.
     public static let editor = "editor"
 
@@ -39,8 +50,10 @@ public enum LinkOpener {
                 NSWorkspace.shared.open(url)
             }
         } else {
-            UserDefaults.standard.set(address, forKey: "browserAddress")
-            UserDefaults.standard.set(UtilityTabTarget.browser, forKey: UtilityTabTarget.key)
+            let defaults = UserDefaults.standard
+            defaults.set(address, forKey: UtilityTabTarget.addressKey)
+            defaults.set(defaults.integer(forKey: UtilityTabTarget.requestKey) + 1, forKey: UtilityTabTarget.requestKey)
+            defaults.set(UtilityTabTarget.browser, forKey: UtilityTabTarget.key)
         }
     }
 }

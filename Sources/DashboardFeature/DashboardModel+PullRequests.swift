@@ -94,7 +94,12 @@ extension DashboardModel {
             // branch probes for a recovery and the rest wait; the
             // repository a refresh was asked for keeps asking.
             let ridesOutOutage = ServiceStatus.shared.isUnavailable && repositoryPath != group.repository.path
-            for item in group.items.dropFirst() {
+            // The repository's own checkout is asked about too when
+            // it is off its default branch: work done there has a
+            // pull request like any other, and skipping the row left
+            // it blank however often the poll came round.
+            let rows = group.items.filter { $0.worktree.path != group.repository.path || isOffDefaultBranch($0) }
+            for item in rows {
                 let key = item.worktree.repositoryPath + "#" + item.worktree.branch
                 if let due = nextPullRequestFetch[key], due > Date() {
                     continue
