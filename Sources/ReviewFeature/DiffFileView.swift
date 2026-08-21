@@ -114,7 +114,7 @@ struct DiffFileView: View {
                 Text("new file")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .hoverHelp("Added or untracked: the whole file is the diff, so it starts collapsed")
+                    .hoverHelp("Added or untracked: the whole file is the diff")
             }
             Spacer()
             DiffStatText(additions: file.additions, deletions: file.deletions)

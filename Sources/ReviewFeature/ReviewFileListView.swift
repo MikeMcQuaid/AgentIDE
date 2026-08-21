@@ -88,7 +88,9 @@ struct ReviewFileListView: View {
     private func isCollapsed(_ file: DiffFile) -> Bool {
         // Generated files always start collapsed, whatever the
         // expand-all state says; only their own caret opens them.
-        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path) || file.isNew)
+        // New files start open like any other: what an agent added
+        // is exactly what a review needs to read.
+        collapseOverrides[file.path] ?? (hideAllByDefault || model.isGenerated(file.path))
     }
 
     private func toggleCollapse(_ file: DiffFile) {
