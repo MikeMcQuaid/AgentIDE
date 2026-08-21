@@ -83,8 +83,9 @@ before shipping.
   conversations inline under their files, resolvable in place (so you review
   what matters the way you would on GitHub)
 - **Rejects** individual lines to amend the commit, edits commit messages and
-  edits files directly in a built-in syntax-highlighted editor (so small fixes
-  need no other app)
+  edits files directly in a built-in syntax-highlighted editor, with a
+  Markdown file rendering inline at the press of its own button (so small
+  fixes and reading what the agent wrote need no other app)
 - **Previews** web pages and rendered Markdown in an embedded browser and opens an
   embedded terminal running as your own user (so you can verify behaviour and
   use `git`, `gh` and other CLI tools without leaving the window)
