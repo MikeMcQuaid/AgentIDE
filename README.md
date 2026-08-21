@@ -227,31 +227,7 @@ fi
 Unstable and changing daily. AgentIDE is being designed exclusively
 for [@MikeMcQuaid](https://github.com/MikeMcQuaid)'s personal
 workflow; nothing here promises to suit anyone else's, interfaces
-and behaviour break without notice and there is no support. If it
-fits your workflow anyway, expect sharp edges.
-
-Readme-driven development: this README described the complete intended
-workflow before any of it existed. Slices land in order, each one usable when
-done:
-
-1. Documentation and guardrails: these documents, linting and CI (done)
-2. Skeleton: XcodeGen project, Swift packages and an empty dashboard app
-   (done)
-3. Core loop: create worktrees, launch and attach to sandboxed agents
-   (basic, this pull request)
-4. Monitoring: notifications, unread tracking and resumable sessions
-   (basic, this pull request)
-5. Review: diffs, per-line rejection and editing (basic and plain text
-   until the editor stack lands, this pull request)
-6. Embedded terminal and browser (basic, this pull request)
-7. GitHub pull request creation, dashboards and one-click fixes
-   (basic, this pull request)
-8. Lifecycle: cleanup on merge, past conversation browsing and foreign
-   session discovery (basic, this pull request)
-9. Polish, including checking the Brewfile's tools are installed at
-   startup and offering to install any that are missing from a copy
-   vendored in the app bundle, and releasing as a Homebrew cask so
-   `brew upgrade` keeps the app current
+and behaviour break without notice and there is no support.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.
