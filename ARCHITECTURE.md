@@ -159,6 +159,14 @@ bare exit code.
   from herdr's own agent detection
   confirmed by the pane's foreground process, not from exit codes, which
   nothing displayed anyway.
+- Server bring-up also installs herdr's official Claude Code and Codex
+  integrations (`herdr integration install`), which report each
+  conversation's native resume reference to the server: after a herdr
+  server restart, herdr itself restores the workspaces and resumes the
+  agents (`resume_agents_on_restore`) before the app's own resume logic
+  has to. The installs rerun on every bring-up because the sandbox home
+  template rsync can strip the hook entries they write; tests never
+  install them, since the hooks would land in the real agent config.
 - Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
   append `-2` to the branch component and `.` and `:` are replaced. Labels
@@ -472,10 +480,13 @@ Sendable` and `nonisolated(unsafe)` are banned.
    viewed. herdr keeps no output timestamp, so raw terminal output that
    reaches neither a hook nor a transcript no longer counts, a deliberate
    trade: the spool and transcripts already cover every agent message.
-4. Agents without hooks, and foreign sessions, fall back to herdr's
-   agent-gone detection for completion and a transcript-mtime timeout on a
-   30 second tick for stalls. herdr's richer agent states (idle, working,
-   blocked) are a documented later refinement via its integrations.
+4. herdr's agent lifecycle (working, idle and blocked, from its screen
+   detection) covers every agent equally, hooks or none: the sidebar
+   flags an agent waiting on input, and notifications fire when an agent
+   finishes a turn, needs input or exits, the finish with a completion
+   chime from the system's named sounds so no audio ships in the
+   repository. Foreign sessions keep the transcript-mtime timeout on a
+   30 second tick for stalls.
 5. If the app is fully quit, events accumulate in the spool and notifications
    arrive on next launch.
 

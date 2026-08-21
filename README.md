@@ -41,8 +41,10 @@ before shipping.
 
 ### 👀 Watch and steer
 
-- **Shows** every agent's state on one dashboard, including sessions started
-  outside AgentIDE (so one window tells you who needs attention)
+- **Shows** every agent's state on one dashboard, working, waiting for
+  input or finished straight from `herdr`'s own agent detection, including
+  sessions started outside AgentIDE (so one window tells you who needs
+  attention)
 - **Groups** worktrees by repository, showing unread terminal and agent activity
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to
@@ -55,8 +57,9 @@ before shipping.
   number, a CI dot, a review that has approved, asked for changes or not
   happened yet, any unresolved conversations, and its commit counts last
   (so one glance across the sidebar says where everything stands)
-- **Notifies** you when an agent finishes or its output stalls (so you never sit
-  polling a terminal)
+- **Notifies** you when an agent finishes its work, needs your input or
+  stalls, the finish with a completion chime from macOS's own sounds (so
+  you never sit polling a terminal and ship no audio files either)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel

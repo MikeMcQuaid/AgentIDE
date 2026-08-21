@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 // MARK: - HerdrPane
@@ -14,6 +15,11 @@ public struct HerdrPane: Sendable {
     /// shell back at its prompt: the shell and its scrollback stay
     /// inspectable, herdr's equivalent of a dead pane.
     public let isFinished: Bool
+
+    /// What the agent is doing, as herdr's lifecycle detection
+    /// reports it; nil when no agent is detected or its state is
+    /// unknown.
+    public let activity: AgentActivity?
 
     /// The pane's current working directory.
     public let currentPath: String
@@ -88,13 +94,24 @@ public struct HerdrClient: Sendable {
     /// start is never a bare exit code.
     func ensureServer() async throws {
         let log = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/agentide-server.log\""
+        // The integration installs report each conversation's native
+        // resume reference to the server, so herdr restores and
+        // resumes agents itself after a server restart. They rerun
+        // on every bring-up because the sandbox home template rsync
+        // can strip the hook entries they write; tests run with a
+        // relocated config home and skip them, since the hooks would
+        // land in the real agent config.
+        let ready = configHome == nil
+            ? "{ herdr integration install claude &>/dev/null; "
+            + "herdr integration install codex &>/dev/null; exit 0 }"
+            : "exit 0"
         let payload = exportPrefix
-            + "herdr api snapshot &>/dev/null && exit 0; "
+            + "herdr api snapshot &>/dev/null && " + ready + "; "
             + (isInsideSandbox ? "" : "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; ")
             + "mkdir -p \"$(dirname " + log + ")\"; "
             + "herdr server &> " + log + " &!; "
-            + "for _ in {1..50}; do herdr api snapshot &>/dev/null && exit 0; sleep 0.1; done; "
+            + "for _ in {1..50}; do herdr api snapshot &>/dev/null && " + ready + "; sleep 0.1; done; "
             + "cat " + log + " >&2; exit 1"
         let argv =
             if isInsideSandbox {

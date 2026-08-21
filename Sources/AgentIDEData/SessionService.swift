@@ -261,6 +261,7 @@ public struct SessionService: Sendable {
             status: pane.isFinished ? .finished : .running,
             workingDirectory: pane.currentPath,
             paneID: pane.paneID,
+            activity: pane.activity,
         )
     }
 
@@ -299,6 +300,7 @@ public struct SessionService: Sendable {
                 status: pane.isFinished ? .finished : .running,
                 workingDirectory: pane.currentPath,
                 paneID: pane.paneID,
+                activity: pane.activity,
                 version: metadata.agentVersions[pane.sessionName],
             )
         }

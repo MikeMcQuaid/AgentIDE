@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 // MARK: - SnapshotEnvelope
@@ -47,6 +48,7 @@ private struct SnapshotPane: Decodable {
         case cwd
         case foregroundCwd = "foreground_cwd"
         case agent
+        case agentStatus = "agent_status"
     }
 
     // swiftlint:enable explicit_enum_raw_value
@@ -56,6 +58,7 @@ private struct SnapshotPane: Decodable {
     let cwd: String?
     let foregroundCwd: String?
     let agent: String?
+    let agentStatus: String?
 }
 
 // MARK: - CreateEnvelope
@@ -127,6 +130,7 @@ private struct SnapshotRow {
     let paneID: String
     let currentPath: String
     let agent: String?
+    let activity: AgentActivity?
 }
 
 // MARK: - StartWait
@@ -164,6 +168,7 @@ public extension HerdrClient {
                 sessionName: row.sessionName,
                 paneID: row.paneID,
                 isFinished: isFinished,
+                activity: row.activity,
                 currentPath: row.currentPath,
             ))
         }
@@ -266,6 +271,7 @@ public extension HerdrClient {
                 paneID: pane.paneID,
                 currentPath: pane.foregroundCwd ?? pane.cwd ?? "",
                 agent: pane.agent,
+                activity: AgentActivity(herdrStatus: pane.agentStatus),
             )
         }
     }
