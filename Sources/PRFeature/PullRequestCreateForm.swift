@@ -46,7 +46,7 @@ struct PullRequestCreateForm: View {
     @State private var isGenerating = false
 
     /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTab")
+    @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
     /// The repository's template with its tick-all shortcut.

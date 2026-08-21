@@ -23,7 +23,7 @@ struct UtilityTabStrip: View {
     private static let selectedOpacity = 0.25
     private static let hoverOpacity = 0.08
 
-    @AppStorage("utilityTab")
+    @AppStorage(UtilityTabTarget.key)
     private var utilityTab = UtilityTab.review.rawValue
 
     @State private var hovered: String?

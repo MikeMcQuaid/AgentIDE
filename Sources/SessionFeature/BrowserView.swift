@@ -91,9 +91,9 @@ public struct BrowserView: View {
 
     /// The address bus other panes write to, and every worktree's
     /// own address, stored as path-address lines.
-    @AppStorage("browserAddress")
+    @AppStorage(UtilityTabTarget.addressKey)
     private var requestedAddress = ""
-    @AppStorage("browserRequest")
+    @AppStorage(UtilityTabTarget.requestKey)
     private var requestedCount = 0
     @AppStorage("browserAddresses")
     private var storedAddresses = ""

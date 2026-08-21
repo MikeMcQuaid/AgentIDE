@@ -56,7 +56,7 @@ struct ReviewFooterView: View {
     private static let resizeHandleHeight: CGFloat = 7
 
     /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage("utilityTab")
+    @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
     /// The footer's height, dragged by the handle above it and
