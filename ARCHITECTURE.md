@@ -738,7 +738,18 @@ dead pane, so the name is taken and the terminal attaches to a corpse.
 Reopening therefore works through the ways in until one is still running a
 moment later: the recorded conversation, then the newest conversations the
 worktree's own transcripts name, then a fresh session there. Each attempt
-kills whatever holds the session name first. Relaunching with the original
+kills whatever holds the session name first, and creation is never
+attach-or-create: `new-session -A` hands back whatever is already there, so
+a start meant to be fresh would go on talking to the old agent process,
+which after a CLI upgrade is one whose own files have been deleted beneath
+it. tmux is how a session survives the app quitting, crashing or updating;
+it is not how an agent survives its own upgrade, so everything the user asks
+for by hand (starting, closing, resuming) replaces the process, while
+reattaching to what is already running is left to the app reopening. Each
+start also asks the CLI its version and records it under the session name,
+and the pane's tab shows that rather than the agent's family alone: a
+session that outlived an upgrade is the one worth spotting, and the number
+it started with is the only place that shows. Relaunching with the original
 prompt is never among them, since it would re-run the whole task against the
 already modified worktree.
 

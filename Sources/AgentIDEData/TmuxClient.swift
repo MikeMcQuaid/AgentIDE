@@ -85,16 +85,21 @@ public struct TmuxClient: Sendable {
         }
     }
 
-    /// Creates a detached session running a command. `remain-on-exit`
-    /// comes from the server config so even an agent that exits
-    /// immediately leaves an inspectable dead pane. The pane's
-    /// `INITIAL_DIR` is pinned because the sandbox's zshenv changes
-    /// directory to it, which would otherwise send agents to the
-    /// server's directory instead of their worktree. The first call
-    /// also births the server inside the sandbox.
+    /// Creates a detached session running a command. Deliberately
+    /// not `-A`: attach-or-create silently hands back whatever
+    /// already holds the name, so a session meant to start a fresh
+    /// agent would go on talking to the old process, which after a
+    /// CLI upgrade is one whose files have been deleted underneath
+    /// it. Callers kill the name first and a clash is an error.
+    /// `remain-on-exit` comes from the server config so even an
+    /// agent that exits immediately leaves an inspectable dead pane.
+    /// The pane's `INITIAL_DIR` is pinned because the sandbox's
+    /// zshenv changes directory to it, which would otherwise send
+    /// agents to the server's directory instead of their worktree.
+    /// The first call also births the server inside the sandbox.
     public func newSession(name: String, directory: String, command: String) async throws {
         try await tmux([
-            "new-session", "-A", "-d",
+            "new-session", "-d",
             "-s", name,
             "-c", directory,
             "-e", "AGENTIDE_SESSION=" + name,

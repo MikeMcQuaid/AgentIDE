@@ -222,8 +222,8 @@ public struct SessionService: Sendable {
         // raced the agent's terminal setup, which flushed pending
         // input and lost the prompt (Codex reliably, Claude Code
         // sometimes).
-        try await tmux.newSession(
-            name: sessionName,
+        try await startFresh(
+            sessionName: sessionName,
             directory: slot.path,
             command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
         )
@@ -312,6 +312,7 @@ public struct SessionService: Sendable {
                 agent: agentKind(of: pane.sessionName),
                 status: pane.isDead ? .finished(pane.exitStatus) : .running,
                 workingDirectory: pane.currentPath,
+                version: metadata.agentVersions[pane.sessionName],
             )
         }
         let past = pastSessions(of: worktree, liveSession: session)

@@ -143,6 +143,10 @@ public struct AppMetadata: Codable, Sendable {
     /// The extra agent arguments each session was started with.
     public var arguments: [String: String] = [:]
 
+    /// The CLI version each session started with, which stays what
+    /// it was when the CLI is upgraded under a running session.
+    public var agentVersions: [String: String] = [:]
+
     /// The session name last launched in each worktree, so a closed
     /// session can be resumed without a live tmux session to name it.
     public var sessionsByWorktree: [String: String] = [:]

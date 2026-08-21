@@ -26,9 +26,13 @@ extension RootView {
             .items ?? []
     }
 
+    /// The version rather than the family alone: an agent whose CLI
+    /// was upgraded while it ran goes on running the old one, and
+    /// the number is the only place that shows.
     func sessionTitle(for session: AgentSession) -> String {
         let state = session.status == .running ? "●" : "○"
-        return state + " " + (session.agent?.displayName ?? "Agent")
+        let agent = session.agent?.displayName ?? "Agent"
+        return state + " " + agent + (session.version.map { " " + $0 } ?? "")
     }
 
     var utilityToggleButton: some View {

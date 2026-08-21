@@ -64,6 +64,44 @@ public extension SessionService {
         await issueKill(name: name, isHostShell: isHostShell)
     }
 
+    /// Starts a session under a name, replacing whatever holds it
+    /// rather than joining in. tmux is how sessions survive the app
+    /// quitting, crashing or updating; it is not how an agent
+    /// survives its own upgrade, since an agent still running from a
+    /// version whose files have been deleted fails in ways that read
+    /// as the app's fault. Anything the user asks for by hand comes
+    /// through here and gets a new process.
+    internal func startFresh(sessionName: String, directory: String, command: String) async throws {
+        await killTmuxSession(name: sessionName, isHostShell: false)
+        try await tmux.newSession(name: sessionName, directory: directory, command: command)
+        await recordAgentVersion(sessionName: sessionName)
+    }
+
+    /// Asks the agent's CLI what version it is and remembers it
+    /// under the session name, so the pane says which version it is
+    /// running rather than which one is installed now: a session
+    /// that outlived an upgrade is the one worth spotting.
+    internal func recordAgentVersion(sessionName: String) async {
+        guard let agent = agentKind(of: sessionName) else {
+            return
+        }
+
+        let argv = launcher.command(
+            payload: agent.rawValue + " --version </dev/null",
+            initialDirectory: launcher.sharedWorkspace,
+            sessionID: UUID().uuidString,
+            sessionName: "agentide-version",
+        )
+        let result = try? await processes.run(argv, workingDirectory: nil, environment: [:])
+        guard let version = runner(for: agent).parseVersion(result?.standardOutput ?? "") else {
+            return
+        }
+
+        var metadata = store.load()
+        metadata.agentVersions[sessionName] = version
+        store.save(metadata)
+    }
+
     /// Marks a worktree viewed: clears its unread state, including a
     /// manual mark.
     func markSeen(worktreePath: String) {
@@ -243,8 +281,8 @@ public extension SessionService {
 
         let agentRunner = runner(for: past.agent)
         copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
-        try await tmux.newSession(
-            name: sessionName,
+        try await startFresh(
+            sessionName: sessionName,
             directory: worktreePath,
             command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
