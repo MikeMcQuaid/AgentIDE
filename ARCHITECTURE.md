@@ -44,7 +44,7 @@ flowchart LR
     agents <--> shared
     app -->|"GraphQL and REST via URLSession,<br/>gh CLI for one-shots"| github
     agents -.->|"no credentials by default;<br/>optional read-only deploy key"| github
-    ios -->|"SSH as host user,<br/>then tmux attach"| tmux
+    ios -->|"SSH as sandbox user,<br/>then tmux attach"| tmux
 ```
 
 Boundary facts the design relies on:
@@ -221,11 +221,20 @@ Two visually unmistakable flavours ride that one client:
   prompt redrawn; agent panes ignore it, so an agent's conversation
   can never be cleared from view by a stray shortcut.
 
-Remote access is SSH to the Mac as the host user from an iOS client, then
-`script/attach <session>` (which also works from inside sandbox sessions).
-A session picker for that shell is a later slice: today the session name
-must be known or listed by hand.
-Remote Login must be enabled in macOS settings first. An SSH session is
+Remote access is SSH to the Mac as the sandbox user from an iOS client,
+which lands on the same tmux server the app drives; `script/attach
+<session>` covers the host user and sessions inside the sandbox. No picker
+ships here: [Moshi](https://getmoshi.app) lists the sessions and attaches
+to several at once by itself, and a picker of ours would be a second
+implementation of something the client already does. It needs only the
+socket directory, which sshd sets for that account (`SetEnv
+TMUX_TMPDIR`), since a login from outside the app inherits none of the
+sandbox's own environment.
+
+Remote Login must be enabled in macOS settings first, for that account
+alone: the sandbox user is hidden, so it never appears in the Sharing
+pane's list and is added to `com.apple.access_ssh` with `dseditgroup`
+instead. An SSH session is
 isolated by user permissions rather than sandbox-exec whichever account it
 targets, but attaching connects it to the sandboxed tmux server, so agent
 processes stay confined either way.
@@ -961,7 +970,6 @@ client already guards every call on the model's availability.
 | R7 | the worktree uuid layout is a compatibility choice, not ours | keep byte-compatibility while other tooling uses it; the friendly symlinks isolate everything user-facing; own the layout later |
 | R8 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree pointing at the old transcript |
 
-Open questions: the iOS SSH account model (host user with a wrapper versus
-SSH directly to the sandbox user), the default branch template,
+Open questions: the default branch template,
 notification preference granularity and how deep stacked pull request
 support goes in v1.

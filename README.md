@@ -68,8 +68,11 @@ before shipping.
   notes and pull request bodies, and a copied script still runs)
 - **Commits** work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
-- **Lets** you SSH into any session from an iOS SSH client (so you can steer or
-  add context away from your Mac)
+- **Lets** you SSH into any session from an iOS SSH client, with
+  [Moshi](https://getmoshi.app) the one to reach for: it lists the running
+  agent sessions, attaches to several at once and survives a phone changing
+  network, so nothing is needed on this side beyond Remote Login for the
+  sandbox account (so you can steer or add context away from your Mac)
 
 ### 🔍 Review
 
@@ -244,10 +247,6 @@ done:
 9. Polish, including checking the Brewfile's tools are installed at
    startup and offering to install any that are missing from a copy
    vendored in the app bundle
-10. A terminal session picker for SSH: one command on the sandbox
-    user's `PATH` that lists the running agent sessions and attaches
-    to the chosen one, so steering from an iOS SSH client needs no
-    remembered session names
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.
