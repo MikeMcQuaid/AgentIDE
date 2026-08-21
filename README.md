@@ -175,8 +175,10 @@ before shipping.
   user and shared workspace)
 - [`gh`](https://cli.github.com) authenticated as you (it stays with your user;
   agents never see it)
-- [`tmux`](https://github.com/tmux/tmux/wiki) (installed by
-  `script/bootstrap` via the `Brewfile`)
+- [`tmux`](https://github.com/tmux/tmux/wiki) and
+  [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the
+  `Brewfile`; `mosh` is only needed to reach sessions from a phone over a
+  connection that comes and goes)
 - **Xcode** 27 or later (only needed to build from source)
 
 ## 🖥️ Usage
