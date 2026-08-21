@@ -184,11 +184,13 @@ struct ReviewFooterView: View {
         if model.scope == .branch || model.scope == .upstream {
             VStack(alignment: .leading, spacing: Self.commitListSpacing) {
                 Text("Commits under review").font(.headline)
-                ScrollView([.vertical, .horizontal]) {
+                ScrollView(.vertical) {
                     // One text block, not a row per commit: dragging
                     // then selects across lines, so hashes and whole
                     // ranges copy. Decorations name where each commit
-                    // sits in the local and remote log.
+                    // sits in the local and remote log. Long subjects
+                    // wrap to the pane, as the editor and the diff do,
+                    // rather than hiding off to the right.
                     // The listing always carries the base commit as
                     // its final row, so one row means no commits of
                     // the branch's own.
@@ -200,7 +202,6 @@ struct ReviewFooterView: View {
                         Text(styledCommits)
                             .font(.caption.monospaced())
                             .textSelection(.enabled)
-                            .fixedSize(horizontal: true, vertical: false)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }

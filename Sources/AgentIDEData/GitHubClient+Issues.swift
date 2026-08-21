@@ -109,7 +109,11 @@ public extension GitHubClient {
             heading: "Work on issue #\(number): \(title)",
             body: body,
             context: context,
-            closing: "Commit your work. Do not push.",
+            // The reference belongs in the commit, not only the pull
+            // request: a commit that closes an issue says so wherever
+            // it is read, and the pull request inherits it anyway.
+            closing: "Commit your work, with \"Fixes #\(number)\" in the commit message."
+                + " Do not push.",
         )
     }
 

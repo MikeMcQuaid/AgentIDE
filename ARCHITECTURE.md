@@ -44,7 +44,7 @@ flowchart LR
     agents <--> shared
     app -->|"GraphQL and REST via URLSession,<br/>gh CLI for one-shots"| github
     agents -.->|"no credentials by default;<br/>optional read-only deploy key"| github
-    ios -->|"SSH as host user,<br/>then tmux attach"| tmux
+    ios -->|"SSH as sandbox user,<br/>then tmux attach"| tmux
 ```
 
 Boundary facts the design relies on:
@@ -221,11 +221,20 @@ Two visually unmistakable flavours ride that one client:
   prompt redrawn; agent panes ignore it, so an agent's conversation
   can never be cleared from view by a stray shortcut.
 
-Remote access is SSH to the Mac as the host user from an iOS client, then
-`script/attach <session>` (which also works from inside sandbox sessions).
-A session picker for that shell is a later slice: today the session name
-must be known or listed by hand.
-Remote Login must be enabled in macOS settings first. An SSH session is
+Remote access is SSH to the Mac as the sandbox user from an iOS client,
+which lands on the same tmux server the app drives; `script/attach
+<session>` covers the host user and sessions inside the sandbox. No picker
+ships here: [Moshi](https://getmoshi.app) lists the sessions and attaches
+to several at once by itself, and a picker of ours would be a second
+implementation of something the client already does. It needs only the
+socket directory, which sshd sets for that account (`SetEnv
+TMUX_TMPDIR`), since a login from outside the app inherits none of the
+sandbox's own environment.
+
+Remote Login must be enabled in macOS settings first, for that account
+alone: the sandbox user is hidden, so it never appears in the Sharing
+pane's list and is added to `com.apple.access_ssh` with `dseditgroup`
+instead. An SSH session is
 isolated by user permissions rather than sandbox-exec whichever account it
 targets, but attaching connects it to the sandboxed tmux server, so agent
 processes stay confined either way.
@@ -325,7 +334,6 @@ Third-party imports are confined (P3):
 | GRDB, Subprocess | AgentIDEData |
 | SwiftTerm | TerminalUI |
 | STTextView, SwiftTreeSitter and grammars | ReviewFeature |
-| Sparkle | AgentIDEApp |
 | WebKit | SessionFeature |
 
 ### The AgentRunner seam
@@ -478,7 +486,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    slice deepens, alongside the move to STTextView), with line numbers
    and visible whitespace in both the diff (tabs and trailing whitespace
    carry a background tint, so copied diff text stays character-exact)
-   and the editor (substitute glyphs).
+   and the editor (substitute glyphs). Diff lines wrap to the pane's
+   width as the editor's do, each line beside its own gutter entry so
+   the numbers keep their places; a hunk's context menu copies its
+   lines whole, since wrapping ends the drag across a single text
+   block. The branch's commit listing wraps for the same reason.
 4. Rejecting selected lines builds a minimal reverse patch with
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and
@@ -734,7 +746,18 @@ dead pane, so the name is taken and the terminal attaches to a corpse.
 Reopening therefore works through the ways in until one is still running a
 moment later: the recorded conversation, then the newest conversations the
 worktree's own transcripts name, then a fresh session there. Each attempt
-kills whatever holds the session name first. Relaunching with the original
+kills whatever holds the session name first, and creation is never
+attach-or-create: `new-session -A` hands back whatever is already there, so
+a start meant to be fresh would go on talking to the old agent process,
+which after a CLI upgrade is one whose own files have been deleted beneath
+it. tmux is how a session survives the app quitting, crashing or updating;
+it is not how an agent survives its own upgrade, so everything the user asks
+for by hand (starting, closing, resuming) replaces the process, while
+reattaching to what is already running is left to the app reopening. Each
+start also asks the CLI its version and records it under the session name,
+and the pane's tab shows that rather than the agent's family alone: a
+session that outlived an upgrade is the one worth spotting, and the number
+it started with is the only place that shows. Relaunching with the original
 prompt is never among them, since it would re-run the whole task against the
 already modified worktree.
 
@@ -747,6 +770,9 @@ Beyond the one live session, every earlier conversation in a worktree is
 discovered by listing its transcript directory, whoever created it, and
 shown as an inactive session tab with a readable log: Markdown rendered,
 code fences highlighted and tool steps showing the actual command run.
+The same list starts a fresh session in that worktree, since a worktree
+with conversations otherwise only offered to continue one; the form it
+opens is the one an empty worktree shows, with the way back beside it.
 An inactive session resumes either in place or into a fresh worktree and
 branch; in the latter case the transcript is first copied into the new
 working directory's transcript directory, because agents look
@@ -873,10 +899,13 @@ official language or project organisation.
 | tree-sitter-ruby, tree-sitter-bash | grammars | official organisation; pinned to the latest ABI 14 releases the runtime accepts |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
-| Sparkle | app updates | later slice |
 
 System frameworks (WebKit, UserNotifications and FSEvents) and runtime tools
-(tmux, installed by Homebrew and never linked) sit outside the table.
+(tmux, installed by Homebrew and never linked) sit outside the table. There
+is no updater among them: releases ship as a Homebrew cask, so `brew
+upgrade` updates the app alongside the tools it already installs, rather
+than the app carrying an update framework of its own or living in the Mac
+App Store, whose sandbox forbids everything this app does.
 Versions are pinned by `Package.resolved`; the two exceptions are pinned
 exactly.
 
@@ -943,7 +972,6 @@ client already guards every call on the model's availability.
 | R7 | the worktree uuid layout is a compatibility choice, not ours | keep byte-compatibility while other tooling uses it; the friendly symlinks isolate everything user-facing; own the layout later |
 | R8 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree pointing at the old transcript |
 
-Open questions: the iOS SSH account model (host user with a wrapper versus
-SSH directly to the sandbox user), the default branch template,
+Open questions: the default branch template,
 notification preference granularity and how deep stacked pull request
 support goes in v1.

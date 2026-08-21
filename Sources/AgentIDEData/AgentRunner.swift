@@ -48,6 +48,22 @@ public protocol AgentRunner: Sendable {
 }
 
 extension AgentRunner {
+    /// The version out of a `--version` answer: the CLIs wrap it in
+    /// their own names and notes ("2.1.238 (Claude Code)",
+    /// "codex-cli 0.149.0"), so the first token that looks like a
+    /// version is taken and anything else is no answer at all.
+    func parseVersion(_ output: String) -> String? {
+        output
+            .split(whereSeparator: \.isWhitespace)
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "()v")) }
+            .first { token in
+                // Two dotted numbers at least, so a bare word in the
+                // CLI's answer is never mistaken for a version.
+                let numbers = token.split(separator: ".").filter { $0.allSatisfy(\.isNumber) }
+                return numbers.count == token.split(separator: ".").count && numbers.count > 1
+            }
+    }
+
     /// Joins a base command, verbatim extra arguments and an
     /// optional initial prompt read from a file at launch time,
     /// inside the sandbox where the shared workspace is readable.

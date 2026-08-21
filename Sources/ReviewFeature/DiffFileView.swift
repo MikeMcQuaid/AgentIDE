@@ -128,30 +128,40 @@ struct DiffFileView: View {
         }
     }
 
-    /// Numbers and markers sit in a tappable gutter while the code
-    /// itself is one selectable text block, so dragging copies
-    /// several lines without picking up `-`/`+` or line numbers.
+    /// Numbers and markers sit in a tappable gutter beside each
+    /// line, which wraps to the pane's width as the editor's does:
+    /// a long line is read rather than scrolled sideways to. Each
+    /// line is its own text, so Copy hunk rather than a drag is
+    /// what takes several lines at once, markers and numbers left
+    /// behind.
     private func hunkView(hunkIndex: Int, hunk: DiffHunk) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("@@ -\(hunk.oldStart) +\(hunk.newStart) @@")
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            HStack(alignment: .top, spacing: Self.gutterSpacing) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
-                        gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
-                    }
-                }
-                .hoverHelp("Click a changed line's number to select it for rejection")
-                ScrollView(.horizontal, showsIndicators: false) {
-                    Text(hunkText(hunk))
+            ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
+                HStack(alignment: .top, spacing: Self.gutterSpacing) {
+                    gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
+                        .hoverHelp("Click a changed line's number to select it for rejection")
+                    Text(lineText(entry.line))
                         .font(CodeStyle.font)
                         .textSelection(.enabled)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
+        .contextMenu { copyHunkAction(hunk) }
+    }
+
+    /// Copying a whole hunk, which wrapping took from dragging: the
+    /// code alone, so it pastes as code.
+    private func copyHunkAction(_ hunk: DiffHunk) -> some View {
+        Button("Copy hunk") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(String(hunkText(hunk).characters), forType: .string)
+        }
+        .hoverHelp("Copy this hunk's lines without their numbers or change markers")
     }
 
     /// One gutter line: numbers and the change marker, tappable on

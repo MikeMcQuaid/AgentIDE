@@ -1,5 +1,6 @@
 brew "actionlint"
 brew "gh"
+brew "mosh"
 brew "periphery"
 brew "ripgrep"
 brew "shellcheck"

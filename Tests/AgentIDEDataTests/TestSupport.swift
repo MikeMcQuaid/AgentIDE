@@ -8,21 +8,20 @@ import Foundation
 /// Shared helpers for integration tests that exercise real git, tmux
 /// and filesystem behaviour in isolated temporary locations.
 enum TestSupport {
+    // MARK: Internal
+
     /// A fresh temporary directory, fully resolved via `realpath` so
     /// its path matches what git and tmux report for it.
     static func temporaryDirectory(_ label: String) throws -> String {
-        let path = "/tmp/agentide-" + label + "-" + UUID().uuidString
-        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
-        return canonical(path)
+        try make(label)
     }
 
-    /// A short-lived, resolved tmux socket directory under `/tmp`; the
-    /// deep temp hierarchy overruns the 104-byte Unix socket path
-    /// limit.
+    /// A resolved tmux socket directory, named as briefly as it can
+    /// be: a Unix socket path cannot exceed 104 bytes, and the
+    /// user's own temporary directory, this root, the name and the
+    /// `tmux-<uid>/default` tmux appends come to 92 of them.
     static func socketDirectory() throws -> String {
-        let path = "/tmp/av-" + UUID().uuidString
-        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
-        return canonical(path)
+        try make("s")
     }
 
     /// The fully resolved path, matching git and tmux output.
@@ -129,6 +128,78 @@ enum TestSupport {
             try? await Task.sleep(for: .milliseconds(100))
         }
         return await condition()
+    }
+
+    // MARK: Private
+
+    /// Every test's scratch under one swept, gitignored directory in
+    /// the checkout, so what a run leaves behind is visible where the
+    /// work is rather than loose in a shared temporary directory: a
+    /// test that crashes cannot tidy up after itself, and strays were
+    /// piling up in `/tmp` a run at a time. A checkout far enough
+    /// down the filesystem to overrun a tmux socket's 104-byte path
+    /// falls back to this user's own temporary directory.
+    private static let root: String = {
+        let candidates = [checkoutRoot + "/" + scratchName, NSTemporaryDirectory() + scratchName]
+        let path = candidates.first { $0.count + socketBudget <= socketLimit } ?? candidates[1]
+        try? FileManager.default.createDirectory(
+            atPath: path,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700],
+        )
+        sweep(path)
+        return path
+    }()
+
+    /// The checkout this file belongs to: `Tests/<target>/` up.
+    private static let checkoutRoot = URL(filePath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .path()
+
+    private static let scratchName = ".test-scratch"
+
+    /// What a socket path needs beyond the root: `/s-XXXXXXXX` and
+    /// the `/tmux-<uid>/default` tmux appends inside it.
+    private static let socketBudget = 30
+
+    /// The Unix socket path limit, which a scratch root has to leave
+    /// room inside.
+    private static let socketLimit = 104
+
+    /// How long a leftover is left alone: long enough that another
+    /// test process still using its scratch is never robbed of it,
+    /// short enough that nothing survives the next run but the run
+    /// before it.
+    private static let staleSeconds: TimeInterval = 600
+
+    /// Enough of a UUID to be unique within a run, short enough to
+    /// keep socket paths inside their limit.
+    private static let idLength = 8
+
+    /// Creates a scratch directory under the swept root, named for
+    /// what it holds. The name is short so socket paths stay inside
+    /// their length limit.
+    private static func make(_ label: String) throws -> String {
+        let path = root + "/" + label + "-" + String(UUID().uuidString.prefix(Self.idLength))
+        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        return canonical(path)
+    }
+
+    /// Removes what earlier runs left behind.
+    private static func sweep(_ path: String) {
+        let manager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-staleSeconds)
+        for name in (try? manager.contentsOfDirectory(atPath: path)) ?? [] {
+            let entry = path + "/" + name
+            let attributes = try? manager.attributesOfItem(atPath: entry)
+            guard let modified = attributes?[.modificationDate] as? Date, modified < cutoff else {
+                continue
+            }
+
+            try? manager.removeItem(atPath: entry)
+        }
     }
 }
 

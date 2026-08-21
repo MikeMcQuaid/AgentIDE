@@ -26,9 +26,13 @@ extension RootView {
             .items ?? []
     }
 
+    /// The version rather than the family alone: an agent whose CLI
+    /// was upgraded while it ran goes on running the old one, and
+    /// the number is the only place that shows.
     func sessionTitle(for session: AgentSession) -> String {
         let state = session.status == .running ? "●" : "○"
-        return state + " " + (session.agent?.displayName ?? "Agent")
+        let agent = session.agent?.displayName ?? "Agent"
+        return state + " " + agent + (session.version.map { " " + $0 } ?? "")
     }
 
     var utilityToggleButton: some View {
@@ -95,13 +99,16 @@ extension RootView {
         )
     }
 
-    /// One worktree's own past conversations.
+    /// One worktree's own past conversations, which can also start
+    /// a fresh session in the same worktree.
     func worktreeConversations(for item: WorktreeItem) -> some View {
         RepositorySessionsView(
             repository: repository(of: item),
             service: dependencies.service,
             worktreePath: item.worktree.path,
-        ) { await sessionStarted() }
+            onNewSession: { startingSession = item.worktree.path },
+            onResumed: { await sessionStarted() },
+        )
     }
 
     func repository(of item: WorktreeItem) -> Repository {
@@ -138,6 +145,7 @@ extension RootView {
     }
 
     func sessionStarted() async {
+        startingSession = nil
         await dependencies.dashboard.refresh()
     }
 

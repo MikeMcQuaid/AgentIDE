@@ -8,16 +8,19 @@ public struct CreateSessionPane: View {
     // MARK: Lifecycle
 
     /// Creates the pane; `canResume` offers `onResume` for the
-    /// worktree's most recent conversation and `onStarted` runs
-    /// after a successful launch.
+    /// worktree's most recent conversation, `onStarted` runs after a
+    /// successful launch and `onShowConversations`, when given, goes
+    /// back to the list this form was reached from.
     @preconcurrency
     public init(
         worktree: Worktree,
         model: DashboardModel,
         canResume: Bool,
+        onShowConversations: (@MainActor () -> Void)? = nil,
         onResume: @escaping @MainActor () async -> Void,
         onStarted: @escaping @MainActor () async -> Void,
     ) {
+        self.onShowConversations = onShowConversations
         self.worktree = worktree
         self.model = model
         self.canResume = canResume
@@ -38,6 +41,11 @@ public struct CreateSessionPane: View {
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
+                if let onShowConversations {
+                    Button("Conversations", action: onShowConversations)
+                        .controlSize(.small)
+                        .hoverHelp("Back to this worktree's past conversations")
+                }
                 if canResume {
                     Button("Resume last session") { resume() }
                         .controlSize(.small)
@@ -66,6 +74,7 @@ public struct CreateSessionPane: View {
     /// Instant feedback while a resume launches.
     @State private var isResuming = false
 
+    private let onShowConversations: (@MainActor () -> Void)?
     private let worktree: Worktree
     private let model: DashboardModel
     private let canResume: Bool

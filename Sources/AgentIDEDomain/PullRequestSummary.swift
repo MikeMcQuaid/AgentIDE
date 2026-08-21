@@ -21,7 +21,6 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         state: String = "OPEN",
         isDraft: Bool = false,
         hasAutomerge: Bool = false,
-        headOID: String = "",
         author: String? = nil,
         body: String? = nil,
         unresolvedComments: Int = 0,
@@ -40,7 +39,6 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.state = state
         self.isDraft = isDraft
         self.hasAutomerge = hasAutomerge
-        self.headOID = headOID
         self.author = author
         self.body = body
         self.unresolvedComments = unresolvedComments
@@ -86,9 +84,6 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// Whether automerge is enabled.
     public let hasAutomerge: Bool
 
-    /// The head commit the states describe.
-    public let headOID: String
-
     /// The author's GitHub login; optional so summaries cached by
     /// earlier releases still decode.
     public let author: String?
@@ -100,8 +95,10 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// Whether it is in a merge queue right now. A repository
     /// having a queue, or a pull request being set to merge
     /// automatically, is not the same thing: only this says the
-    /// queue is what happens next.
-    public let isQueued: Bool
+    /// queue is what happens next. Settable, with the conversation
+    /// count, because both are stamped onto a fetched summary from
+    /// what the app already knows.
+    public var isQueued: Bool
 
     /// When it was merged or closed, nil while open. Branch names
     /// are reused, so a long-finished pull request matching a
@@ -113,7 +110,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// query cannot answer: GitHub only counts them through GraphQL,
     /// so this stays zero until the pull request is looked at and
     /// the count is remembered.
-    public let unresolvedComments: Int
+    public var unresolvedComments: Int
 
     /// The pull request's checks page.
     public var checksPageURL: String {

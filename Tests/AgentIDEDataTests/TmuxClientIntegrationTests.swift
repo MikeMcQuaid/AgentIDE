@@ -63,6 +63,31 @@ struct TmuxClientIntegrationTests {
     }
 
     @Test
+    func `an agent session refuses to join the one already holding its name`() async throws {
+        let (tmux, socket) = try TestSupport.makeTmuxClient()
+        let directory = try TestSupport.temporaryDirectory("fresh")
+        defer { TestSupport.killServerSync(socketDirectory: socket) }
+
+        try await tmux.newSession(name: "agentide--r--fresh--codex", directory: directory, command: "sleep 20")
+        let running = await TestSupport.poll {
+            let panes = await (try? tmux.panes()) ?? []
+            return panes.contains { $0.sessionName == "agentide--r--fresh--codex" && $0.isDead == false }
+        }
+        #expect(running)
+
+        // Attach-or-create would hand back the running agent, which
+        // after a CLI upgrade is one whose files have gone. Starting
+        // fresh means killing the name first, so a clash is a fault.
+        await #expect(throws: (any Error).self) {
+            try await tmux.newSession(
+                name: "agentide--r--fresh--codex",
+                directory: directory,
+                command: "sleep 20",
+            )
+        }
+    }
+
+    @Test
     func `finished panes keep their exit status`() async throws {
         let (tmux, socket) = try TestSupport.makeTmuxClient()
         let directory = try TestSupport.temporaryDirectory("dead")

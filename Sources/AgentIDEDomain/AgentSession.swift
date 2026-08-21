@@ -20,7 +20,9 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         agent: AgentKind?,
         status: SessionStatus,
         workingDirectory: String?,
+        version: String? = nil,
     ) {
+        self.version = version
         self.name = name
         self.agent = agent
         self.status = status
@@ -40,6 +42,11 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
 
     /// The pane's current working directory, when known.
     public let workingDirectory: String?
+
+    /// The agent CLI version this session started with, when it was
+    /// recorded; upgrading the CLI does not change it, which is the
+    /// point of showing it.
+    public let version: String?
 
     /// The stable identity, the tmux session name.
     public var id: String {

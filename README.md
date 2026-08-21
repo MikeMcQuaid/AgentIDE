@@ -68,8 +68,11 @@ before shipping.
   notes and pull request bodies, and a copied script still runs)
 - **Commits** work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
-- **Lets** you SSH into any session from an iOS SSH client (so you can steer or
-  add context away from your Mac)
+- **Lets** you SSH into any session from an iOS SSH client, with
+  [Moshi](https://getmoshi.app) the one to reach for: it lists the running
+  agent sessions, attaches to several at once and survives a phone changing
+  network, so nothing is needed on this side beyond Remote Login for the
+  sandbox account (so you can steer or add context away from your Mac)
 
 ### 🔍 Review
 
@@ -124,8 +127,8 @@ before shipping.
   on GitHub (so finished work disappears without ceremony)
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
-  even after that worktree is deleted (so tidying up never loses a
-  conversation)
+  even after that worktree is deleted, and starts a fresh session in a
+  worktree from the same list (so tidying up never loses a conversation)
 
 ### 🛟 Resilience
 
@@ -175,8 +178,10 @@ before shipping.
   user and shared workspace)
 - [`gh`](https://cli.github.com) authenticated as you (it stays with your user;
   agents never see it)
-- [`tmux`](https://github.com/tmux/tmux/wiki) (installed by
-  `script/bootstrap` via the `Brewfile`)
+- [`tmux`](https://github.com/tmux/tmux/wiki) and
+  [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the
+  `Brewfile`; `mosh` is only needed to reach sessions from a phone over a
+  connection that comes and goes)
 - **Xcode** 27 or later (only needed to build from source)
 
 ## 🖥️ Usage
@@ -200,6 +205,10 @@ open /Applications/AgentIDE.app
   for quick development runs.
 - **Features** land slice by slice (see [Status](#-status)); the app launches
   to an empty dashboard until the first slices fill it.
+- **Updates** come from Homebrew: releases ship as a cask, so `brew upgrade`
+  moves the app on with the rest of your tools. There is no built-in
+  updater, and no Mac App Store build: its sandbox forbids running agents
+  as another user, which is the whole design.
 
 A shell pane runs your login shell, so anything your shell configuration
 exports wins over what the pane was started with. It sets `AGENTIDE=1` and
@@ -218,34 +227,7 @@ fi
 Unstable and changing daily. AgentIDE is being designed exclusively
 for [@MikeMcQuaid](https://github.com/MikeMcQuaid)'s personal
 workflow; nothing here promises to suit anyone else's, interfaces
-and behaviour break without notice and there is no support. If it
-fits your workflow anyway, expect sharp edges.
-
-Readme-driven development: this README described the complete intended
-workflow before any of it existed. Slices land in order, each one usable when
-done:
-
-1. Documentation and guardrails: these documents, linting and CI (done)
-2. Skeleton: XcodeGen project, Swift packages and an empty dashboard app
-   (done)
-3. Core loop: create worktrees, launch and attach to sandboxed agents
-   (basic, this pull request)
-4. Monitoring: notifications, unread tracking and resumable sessions
-   (basic, this pull request)
-5. Review: diffs, per-line rejection and editing (basic and plain text
-   until the editor stack lands, this pull request)
-6. Embedded terminal and browser (basic, this pull request)
-7. GitHub pull request creation, dashboards and one-click fixes
-   (basic, this pull request)
-8. Lifecycle: cleanup on merge, past conversation browsing and foreign
-   session discovery (basic, this pull request)
-9. Polish, including checking the Brewfile's tools are installed at
-   startup and offering to install any that are missing from a copy
-   vendored in the app bundle
-10. A terminal session picker for SSH: one command on the sandbox
-    user's `PATH` that lists the running agent sessions and attaches
-    to the chosen one, so steering from an iOS SSH client needs no
-    remembered session names
+and behaviour break without notice and there is no support.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
 [AGENTS.md](AGENTS.md) if you are working on this repository, human or agent.

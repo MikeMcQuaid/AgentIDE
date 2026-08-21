@@ -109,6 +109,8 @@ struct GitHubClientTests {
         #expect(issue.contains("Steps"))
         #expect(issue.contains("Be careful"))
         #expect(issue.contains("Do not push."))
+        // The commit closes the issue, wherever the commit is read.
+        #expect(issue.contains("\"Fixes #3\" in the commit message"))
 
         let pullRequest = GitHubClient.pullRequestPrompt(number: 4, title: "Fix", body: "", context: "")
         #expect(pullRequest.contains("pull request #4: Fix"))

@@ -14,9 +14,8 @@ extension SessionService {
     func start(sessionName: String, directory: String, trying commands: [String]) async throws {
         var failure: (any Error)?
         for command in commands {
-            await killTmuxSession(name: sessionName, isHostShell: false)
             do {
-                try await tmux.newSession(name: sessionName, directory: directory, command: command)
+                try await startFresh(sessionName: sessionName, directory: directory, command: command)
             } catch {
                 failure = error
                 continue
