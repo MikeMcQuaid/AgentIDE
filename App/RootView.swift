@@ -10,6 +10,12 @@ import SwiftUI
 struct RootView: View {
     // MARK: Internal
 
+    /// The utility header row's height: the tab capsules plus the
+    /// row's padding. The floating toggle centres in this height and
+    /// stripless pages inset their headers by it, clear of the
+    /// titlebar band and that toggle.
+    static let toggleRowHeight: CGFloat = 30
+
     let dependencies: AppDependencies
 
     /// Persisted as the tab's name rather than an index, so
@@ -220,11 +226,6 @@ struct RootView: View {
     /// Slim enough for icon-and-truncated-text rows while staying
     /// wider than the traffic lights band.
     private static let stripSpacing: CGFloat = 4
-
-    /// The utility header row's height: the tab capsules plus the
-    /// row's padding. The floating toggle centres in the same height
-    /// so hiding the pane never moves it.
-    private static let toggleRowHeight: CGFloat = 30
 
     /// The selected conversation's worktree on the repository page,
     /// nil when none exists; the review surfaces follow it. Internal

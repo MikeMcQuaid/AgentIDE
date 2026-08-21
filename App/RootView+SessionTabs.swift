@@ -90,6 +90,10 @@ extension RootView {
     }
 
     /// A repository page's conversations, across all its worktrees.
+    /// These pages render without a session strip, so the top inset
+    /// keeps their header buttons out of the windowed titlebar's
+    /// drag band and from under the floating utility toggle, which
+    /// hid New session and Resume here everywhere but fullscreen.
     func repositoryConversations(for item: WorktreeItem) -> some View {
         RepositorySessionsView(
             repository: repository(of: item),
@@ -97,6 +101,7 @@ extension RootView {
             onWorktreeFocus: { focusConversation(at: $0) },
             onResumed: { await dependencies.dashboard.refresh() },
         )
+        .padding(.top, Self.toggleRowHeight)
     }
 
     /// One worktree's own past conversations, which can also start
@@ -109,6 +114,7 @@ extension RootView {
             onNewSession: { startingSession = item.worktree.path },
             onResumed: { await sessionStarted() },
         )
+        .padding(.top, Self.toggleRowHeight)
     }
 
     func repository(of item: WorktreeItem) -> Repository {

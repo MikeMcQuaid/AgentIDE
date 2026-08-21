@@ -132,8 +132,8 @@ public struct RepositorySessionsView: View {
                     )
             }
         }
-        // Flush with the window's top: the page ignores the toolbar
-        // inset, so only a hairline of breathing room remains.
+        // The embedding pane owns the top inset; only a hairline of
+        // breathing room is added here.
         .padding(.horizontal, Self.padding)
         .padding(.top, Self.headerBottomPadding)
         .padding(.bottom, Self.headerBottomPadding)
