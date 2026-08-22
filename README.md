@@ -39,9 +39,11 @@ before shipping.
   starting work is one prompt, not a git ritual, a slow step is never a
   blank pane and the pane never appears before the agent does)
 - **Starts** the agent of your choice in `herdr` inside the sandvault sandbox, with
-  Claude Code and Codex CLI supported first and more pluggable later (so
-  agents run unattended with no permission prompts and no access to your
-  credentials)
+  Claude Code and Codex CLI supported first and more pluggable later, first
+  clearing Gatekeeper's quarantine from the agent's Homebrew install, which
+  otherwise kills helpers such as Codex's command host when an app rather
+  than Terminal starts them (so agents run unattended with no permission
+  prompts, no access to your credentials and no "shell host exited" riddles)
 
 ### 👀 Watch and steer
 
@@ -189,14 +191,6 @@ before shipping.
   user and shared workspace)
 - [`gh`](https://cli.github.com) authenticated as you (it stays with your user;
   agents never see it)
-- **Gatekeeper** letting AgentIDE run the agents' own helper binaries:
-  a Homebrew cask can leave `com.apple.quarantine` on what it installs
-  (Codex's command host arrived that way), and macOS then silently kills
-  the binary at launch from any app without the Developer Tools privilege,
-  so Codex reports its "shell host" exiting during startup while the same
-  command works in Terminal. Either add AgentIDE under System Settings,
-  Privacy & Security, Developer Tools, or install casks with
-  `HOMEBREW_CASK_OPTS=--no-quarantine`
 - [`herdr`](https://herdr.dev) and
   [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the
   `Brewfile`; `mosh` is only needed to reach sessions from a phone over a

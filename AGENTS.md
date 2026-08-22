@@ -145,9 +145,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `com.apple.quarantine`, `spctl -a -t exec -vv` rejects it and the
   host's `log show` names `syspolicyd` with AgentIDE as the responsible
   app.
-  Terminal works because it holds the Developer Tools privilege; see the
-  README's requirements for the fix. Codex's command host is the known
-  case.
+  Terminal works because it holds the Developer Tools privilege, which
+  has no request API. Codex's command host is the known case, so
+  `Quarantine` clears the attribute from the agent's install before
+  every launch.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

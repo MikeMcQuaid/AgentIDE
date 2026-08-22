@@ -802,6 +802,11 @@ it. herdr is how a session survives the app quitting, crashing or updating;
 it is not how an agent survives its own upgrade, so everything the user asks
 for by hand (starting, closing, resuming) replaces the process, while
 reattaching to what is already running is left to the app reopening. Each
+start first clears `com.apple.quarantine` from every file in the agent's
+Homebrew install (`Quarantine`): casks can leave it on, and macOS then
+kills those files at exec from any app without the Developer Tools
+privilege, which cannot be requested, while Terminal holds it and so hid
+the problem; Codex's command host was the case found. Each
 start also asks the CLI its version and records it under the session name,
 and the pane's strip shows that rather than the agent's family alone, with
 the session name after it, since that is the workspace label herdr shows
