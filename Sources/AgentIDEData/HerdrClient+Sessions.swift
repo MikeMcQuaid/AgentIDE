@@ -215,7 +215,7 @@ public extension HerdrClient {
     /// sandbox.
     func newSession(name: String, directory: String, command: String) async throws {
         try await ensureServer()
-        await progress("Creating the workspace " + name)
+        await progress("Creating the workspace `" + name + "`")
         let created = try await herdr([
             "workspace", "create",
             "--cwd", directory,
@@ -232,8 +232,8 @@ public extension HerdrClient {
             throw CommandError(command: "herdr workspace create " + name, result: created)
         }
 
-        await progress("Workspace created; its pane is " + paneID)
-        await progress("Running: " + command.prefix(StartWait.commandPreview))
+        await progress("Workspace created; its pane is `" + paneID + "`")
+        await progress("Running `" + command.prefix(StartWait.commandPreview) + "`")
         try await herdr(["pane", "run", paneID, "export TMPDIR=\"$(mktemp -d)\"; " + command])
         await progress("Waiting for the shell to hand over to the agent")
         // The command is typed into the pane's just-started shell,

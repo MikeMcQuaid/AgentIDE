@@ -59,7 +59,9 @@ public final class LaunchProgress {
 /// The narration filling a pane while a launch runs: the steps so
 /// far under a title with the launch's elapsed time, redrawn every
 /// second so something on screen always moves. One block, centred
-/// in the pane, every line sharing its left edge.
+/// in the pane, every line sharing its left edge. A step's backtick
+/// spans, its commands, paths and names, render in monospace so the
+/// eye separates what is being done from what it is done to.
 public struct LaunchProgressView: View {
     // MARK: Lifecycle
 
@@ -84,8 +86,8 @@ public struct LaunchProgressView: View {
                         .monospacedDigit()
                 }
                 ForEach(progress.steps) { step in
-                    Text(step.text)
-                        .font(.callout.monospaced())
+                    Text(Self.styled(step.text))
+                        .font(.callout)
                         .lineLimit(Self.stepLines)
                 }
             }
@@ -104,6 +106,13 @@ public struct LaunchProgressView: View {
 
     private let title: String
     private let progress: LaunchProgress
+
+    /// The step with its backtick spans marked as code; a span the
+    /// markdown parser refuses renders as typed.
+    private static func styled(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(text)
+    }
 
     /// How long the launch has run, from its first step.
     private func elapsed(at now: Date) -> String {

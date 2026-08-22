@@ -138,7 +138,7 @@ public struct SessionService: Sendable {
     ) async throws -> String {
         await progress("Naming the branch from the prompt")
         let branch = await availableBranch(repository: repository, prompt: prompt)
-        await progress("Creating the worktree for " + branch)
+        await progress("Creating the worktree for `" + branch + "`")
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
@@ -228,7 +228,7 @@ public struct SessionService: Sendable {
             command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
         )
 
-        await progress("Recording the session " + sessionName)
+        await progress("Recording the session `" + sessionName + "`")
         var metadata = store.load()
         metadata.prompts[sessionName] = prompt
         metadata.arguments[sessionName] = arguments
@@ -249,9 +249,9 @@ public struct SessionService: Sendable {
 
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
         let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
-        await progress("Running: git worktree add " + path + " (after fetching origin)")
+        await progress("Running `git worktree add " + path + "` after fetching origin")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
-        await progress("Worktree ready at " + path)
+        await progress("Worktree ready at `" + path + "`")
         return path
     }
 

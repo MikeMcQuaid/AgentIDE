@@ -140,6 +140,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   fixed, `swift build --target AgentIDEDomain`, `--target
   AgentIDEData` and `--target AgentIDEDataTests` still typecheck,
   since none of them reach SwiftTerm.
+- A binary Gatekeeper refuses dies with `zsh: killed` (rc 137) at
+  exec and nothing in the sandbox explains why; `xattr -l` on it shows
+  `com.apple.quarantine`, `spctl -a -t exec -vv` rejects it and the
+  host's `log show` names `syspolicyd` with AgentIDE as the responsible
+  app.
+  Terminal works because it holds the Developer Tools privilege; see the
+  README's requirements for the fix. Codex's command host is the known
+  case.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
