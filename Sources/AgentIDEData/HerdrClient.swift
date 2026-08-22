@@ -43,11 +43,13 @@ public struct HerdrClient: Sendable {
         launcher: SandvaultLauncher,
         isInsideSandbox: Bool,
         configHome: String? = nil,
+        progress: @escaping LaunchReporter = silentLaunchReporter,
     ) {
         self.runner = runner
         self.launcher = launcher
         self.isInsideSandbox = isInsideSandbox
         self.configHome = configHome
+        self.progress = progress
         sessionName = WorkspacePaths.isProductionBuild ? "agentide" : "agentide-dev"
     }
 
@@ -82,6 +84,9 @@ public struct HerdrClient: Sendable {
 
     // MARK: Internal
 
+    /// Where launches narrate their steps.
+    let progress: LaunchReporter
+
     /// Ensures the server is up, starting it detached when it is
     /// not: herdr does not daemonise itself, so birth is explicit.
     /// The whole check-start-wait runs as one payload because each
@@ -93,6 +98,7 @@ public struct HerdrClient: Sendable {
     /// output lands in a log the failure path prints, so a refused
     /// start is never a bare exit code.
     func ensureServer() async throws {
+        await progress("Checking the herdr server, starting it if needed")
         let log = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/agentide-server.log\""
         let payload = exportPrefix
             + "herdr api snapshot &>/dev/null && exit 0; "

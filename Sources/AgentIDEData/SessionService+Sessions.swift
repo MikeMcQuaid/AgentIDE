@@ -40,11 +40,13 @@ public extension SessionService {
     /// as the app's fault. Anything the user asks for by hand comes
     /// through here and gets a new process.
     internal func startFresh(sessionName: String, directory: String, command: String) async throws {
+        await progress("Closing any previous session")
         await killSession(name: sessionName)
         // The version probe runs before the launch, never beside it:
         // it is a second copy of the same CLI, and Codex stages its
         // execution host under a lock in its own home, which two
         // copies starting at once contend for.
+        await progress("Asking the agent's CLI its version")
         await recordAgentVersion(sessionName: sessionName)
         try await herdr.newSession(name: sessionName, directory: directory, command: command)
     }
@@ -206,6 +208,7 @@ public extension SessionService {
             )
         }
 
+        await progress("Backing up the conversation")
         backUpConversation(of: worktree)
         try await start(
             sessionName: sessionName,
@@ -251,6 +254,7 @@ public extension SessionService {
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
         let agentRunner = runner(for: past.agent)
+        await progress("Copying the transcript into the new worktree")
         copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
         try await startFresh(
             sessionName: sessionName,

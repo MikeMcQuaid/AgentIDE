@@ -23,6 +23,7 @@ public struct RepositorySessionsView: View {
         repository: Repository,
         service: SessionService,
         worktreePath: String? = nil,
+        progress: LaunchProgress? = nil,
         onWorktreeFocus: (@MainActor (String?) -> Void)? = nil,
         onNewSession: (@MainActor () -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
@@ -30,9 +31,15 @@ public struct RepositorySessionsView: View {
         self.onWorktreeFocus = onWorktreeFocus
         self.onNewSession = onNewSession
         self.onResumed = onResumed
+        self.progress = progress
         identity = repository.id + "#" + (worktreePath ?? "")
         makeModel = {
-            RepositorySessionsModel(repository: repository, service: service, worktreePath: worktreePath)
+            RepositorySessionsModel(
+                repository: repository,
+                service: service,
+                worktreePath: worktreePath,
+                progress: progress,
+            )
         }
         _model = State(initialValue: makeModel())
     }
@@ -45,7 +52,9 @@ public struct RepositorySessionsView: View {
     /// message never flashes before conversations arrive.
     public var body: some View {
         VStack(spacing: 0) {
-            if model.isResuming {
+            if model.isResuming, let progress {
+                LaunchProgressView("Resuming the conversation…", progress: progress)
+            } else if model.isResuming {
                 ProgressView("Resuming conversation…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.hasLoaded == false {
@@ -94,6 +103,7 @@ public struct RepositorySessionsView: View {
     @State private var model: RepositorySessionsModel
 
     private let identity: String
+    private let progress: LaunchProgress?
     private let onWorktreeFocus: (@MainActor (String?) -> Void)?
     private let onNewSession: (@MainActor () -> Void)?
     private let onResumed: @MainActor () async -> Void

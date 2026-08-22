@@ -140,6 +140,9 @@ private struct SnapshotRow {
 private enum StartWait {
     static let polls = 10
     static let pollMilliseconds = 300
+
+    /// How much of the command the narrated step shows.
+    static let commandPreview = 120
 }
 
 /// herdr's JSON is snake_case; the coding keys above spell it out,
@@ -192,6 +195,7 @@ public extension HerdrClient {
     /// sandbox.
     func newSession(name: String, directory: String, command: String) async throws {
         try await ensureServer()
+        await progress("Creating the workspace " + name)
         let created = try await herdr([
             "workspace", "create",
             "--cwd", directory,
@@ -208,7 +212,9 @@ public extension HerdrClient {
             throw CommandError(command: "herdr workspace create " + name, result: created)
         }
 
+        await progress("Running: " + command.prefix(StartWait.commandPreview))
         try await herdr(["pane", "run", paneID, "export TMPDIR=\"$(mktemp -d)\"; " + command])
+        await progress("Waiting for the shell to hand over to the agent")
         // The command is typed into the pane's just-started shell,
         // which reads it once its own startup finishes; waiting for
         // the shell to hand its foreground over keeps a session

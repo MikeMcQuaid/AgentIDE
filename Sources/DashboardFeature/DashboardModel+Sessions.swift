@@ -125,6 +125,7 @@ public extension DashboardModel {
         let pending = repository.flatMap { repository in
             placeholder.map { insertPlaceholder(in: repository, branch: $0) }
         }
+        launchProgress.begin("Starting")
         showsNewSession = false
         if let pending {
             selection = pending

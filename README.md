@@ -33,7 +33,10 @@ before shipping.
   them into your home directory and bootstraps them (so your user and the
   sandbox share one checkout with nothing to keep in sync)
 - **Creates** a worktree and branch from a typed problem statement or an existing
-  issue or pull request (so starting work is one prompt, not a git ritual)
+  issue or pull request, narrating each step and the command it is waiting
+  on with a clock that ticks every second, the same when a conversation
+  resumes (so starting work is one prompt, not a git ritual, and a slow
+  step is never a blank pane)
 - **Starts** the agent of your choice in `herdr` inside the sandvault sandbox, with
   Claude Code and Codex CLI supported first and more pluggable later (so
   agents run unattended with no permission prompts and no access to your

@@ -421,9 +421,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
    launch another (a Codex id once reached Claude that way). Submitting
    inserts a greyed placeholder row under a provisional name into the
    repository the instant the click lands and selects it, with the
-   primary pane showing creation progress; the real worktree replaces
-   the row on the refresh that follows, and a failure removes it and
-   returns to the form. An issue's title and body become the prompt. A pull request instead gets a
+   primary pane narrating creation step by step (`LaunchProgress`, a
+   step log the service and the herdr client report into: the branch
+   name, the worktree, the prompt file, the server check, the workspace,
+   the command submitted and what is being waited on), each step stamped
+   with its elapsed time and the current one ticking every second, so a
+   slow step names itself rather than showing a blank pane; resuming
+   narrates the same way, one line per command tried. The real worktree
+   replaces the row on the refresh that follows, and a failure removes it
+   and returns to the form. An issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
 2. The branch name summarises the prompt: the on-device Apple foundation

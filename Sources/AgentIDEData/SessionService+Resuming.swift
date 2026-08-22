@@ -14,12 +14,14 @@ extension SessionService {
     func start(sessionName: String, directory: String, trying commands: [String]) async throws {
         var failure: (any Error)?
         for command in commands {
+            await progress("Trying: " + command.prefix(Self.commandPreview))
             do {
                 try await startFresh(sessionName: sessionName, directory: directory, command: command)
             } catch {
                 failure = error
                 continue
             }
+            await progress("Checking the agent is still running")
             if await isRunning(sessionName: sessionName) {
                 return
             }
@@ -103,6 +105,10 @@ extension SessionService {
     /// enough that little is lost, rarely enough that copying a long
     /// transcript is never in anyone's way.
     private static let backupIntervalSeconds = 3_600.0
+
+    /// How much of a command a narrated step shows; the prompt
+    /// rides inside the command and can be long.
+    private static let commandPreview = 120
 
     /// How many recorded conversations to offer the agent before
     /// giving up on continuing one: the newest few are the ones a

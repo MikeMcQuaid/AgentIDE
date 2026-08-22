@@ -98,6 +98,7 @@ extension RootView {
         RepositorySessionsView(
             repository: repository(of: item),
             service: dependencies.service,
+            progress: dependencies.dashboard.launchProgress,
             onWorktreeFocus: { focusConversation(at: $0) },
             onResumed: { await dependencies.dashboard.refresh() },
         )
@@ -111,6 +112,7 @@ extension RootView {
             repository: repository(of: item),
             service: dependencies.service,
             worktreePath: item.worktree.path,
+            progress: dependencies.dashboard.launchProgress,
             onNewSession: { startingSession = item.worktree.path },
             onResumed: { await sessionStarted() },
         )
@@ -138,6 +140,7 @@ extension RootView {
             return
         }
 
+        dependencies.dashboard.launchProgress.begin("Resuming")
         do {
             if let past = fresh.pastSessions.first {
                 _ = try await dependencies.service.resumePast(past, worktree: fresh.worktree)

@@ -66,7 +66,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   remote data, cloning) show a loading state that fills the pane
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
-  delay over half a second.
+  delay over half a second. A transition made of several steps
+  names each step and what it waits on as it happens, through
+  `LaunchProgress`, and keeps something on screen changing at
+  least once a second.
 - Buttons follow Apple HIG and Liquid Glass, in that order, then
   this app's conventions: at most one primary action per surface,
   rendered prominent and bound to Cmd-Return when the surface takes

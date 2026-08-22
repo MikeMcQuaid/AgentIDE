@@ -43,6 +43,7 @@ public struct SessionService: Sendable {
         processes: any ProcessRunner = FoundationProcessRunner(),
         launcher: SandvaultLauncher? = nil,
         summariser: FoundationModelClient = FoundationModelClient(),
+        progress: @escaping LaunchReporter = silentLaunchReporter,
     ) {
         self.paths = paths
         self.git = git
@@ -55,6 +56,7 @@ public struct SessionService: Sendable {
         self.processes = processes
         self.launcher = launcher ?? SandvaultLauncher(hostUser: paths.hostUser)
         self.summariser = summariser
+        self.progress = progress
     }
 
     // MARK: Public
@@ -134,7 +136,9 @@ public struct SessionService: Sendable {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
+        await progress("Naming the branch from the prompt")
         let branch = await availableBranch(repository: repository, prompt: prompt)
+        await progress("Creating the worktree for " + branch)
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
@@ -168,6 +172,9 @@ public struct SessionService: Sendable {
     let runners: [any AgentRunner]
     let processes: any ProcessRunner
     let launcher: SandvaultLauncher
+
+    /// Where launches narrate their steps.
+    let progress: LaunchReporter
 
     /// Worktrees never viewed count as seen at launch, so a fresh
     /// install does not flag every historic conversation unread.
@@ -207,6 +214,7 @@ public struct SessionService: Sendable {
     ) async throws -> String {
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
+        await progress("Writing the prompt file")
         let promptFile = try writePrompt(prompt, sessionName: sessionName)
 
         // The prompt travels inside the launch command, read from
