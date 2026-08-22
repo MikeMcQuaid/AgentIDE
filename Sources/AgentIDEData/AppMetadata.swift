@@ -81,6 +81,7 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: [PullRequestSummary]].self, forKey: .openPullRequestsCache) ?? [:]
         prompts = try container.decodeIfPresent([String: String].self, forKey: .prompts) ?? [:]
         arguments = try container.decodeIfPresent([String: String].self, forKey: .arguments) ?? [:]
+        agentVersions = try container.decodeIfPresent([String: String].self, forKey: .agentVersions) ?? [:]
         sessionsByWorktree = try container
             .decodeIfPresent([String: String].self, forKey: .sessionsByWorktree) ?? [:]
         resumeIDs = try container.decodeIfPresent([String: String].self, forKey: .resumeIDs) ?? [:]
