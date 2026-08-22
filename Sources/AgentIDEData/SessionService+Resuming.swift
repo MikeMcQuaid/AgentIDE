@@ -116,11 +116,15 @@ extension SessionService {
     private static let livenessPollMilliseconds = 350
 
     /// Whether the session is still there with its agent running
-    /// shortly after starting.
+    /// shortly after starting. Only an answered listing can fail the
+    /// check: a herdr hiccup answers nothing, and declaring a live
+    /// agent dead over one had the retry killing it mid-start.
     private func isRunning(sessionName: String) async -> Bool {
         for _ in 0 ..< Self.livenessPolls {
             try? await Task.sleep(for: .milliseconds(Self.livenessPollMilliseconds))
-            let panes = await (try? herdr.panes()) ?? []
+            guard let panes = try? await herdr.panes() else {
+                continue
+            }
             guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
                 return false
             }

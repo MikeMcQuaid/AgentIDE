@@ -251,13 +251,15 @@ public extension HerdrClient {
     // MARK: Private
 
     /// One row per workspace: its label and its first pane, which is
-    /// the root pane AgentIDE created; nothing here splits panes.
+    /// the root pane AgentIDE created; nothing here splits panes. A
+    /// failed listing throws rather than answering empty: an
+    /// unanswerable server must never read as a server with nothing
+    /// on it, which once let a liveness check declare a just-started
+    /// agent dead and the retry kill it.
     private func snapshotRows() async throws -> [SnapshotRow] {
-        let result = try await herdr(["api", "snapshot"], allowFailure: true)
-        guard result.succeeded,
-              let snapshot = decode(SnapshotEnvelope.self, from: result.standardOutput)?.result?.snapshot
-        else {
-            return []
+        let result = try await herdr(["api", "snapshot"])
+        guard let snapshot = decode(SnapshotEnvelope.self, from: result.standardOutput)?.result?.snapshot else {
+            throw CommandError(command: "herdr api snapshot", result: result)
         }
 
         return snapshot.workspaces.compactMap { workspace in

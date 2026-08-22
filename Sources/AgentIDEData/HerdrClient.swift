@@ -91,27 +91,21 @@ public struct HerdrClient: Sendable {
     /// macOS's nohup errored over exactly that ("can't detach from
     /// console") without ever starting the server. The server's own
     /// output lands in a log the failure path prints, so a refused
-    /// start is never a bare exit code.
+    /// start is never a bare exit code. The server, and so every
+    /// pane, gets a fresh `TMPDIR` the way sandvault's own launcher
+    /// gives each session one: the sudo launch context resolves no
+    /// usable temporary directory of its own, and Codex's workspace
+    /// shell host failed at startup in panes without one.
     func ensureServer() async throws {
         let log = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/agentide-server.log\""
-        // The integration installs report each conversation's native
-        // resume reference to the server, so herdr restores and
-        // resumes agents itself after a server restart. They rerun
-        // on every bring-up because the sandbox home template rsync
-        // can strip the hook entries they write; tests run with a
-        // relocated config home and skip them, since the hooks would
-        // land in the real agent config.
-        let ready = configHome == nil
-            ? "{ herdr integration install claude &>/dev/null; "
-            + "herdr integration install codex &>/dev/null; exit 0 }"
-            : "exit 0"
         let payload = exportPrefix
-            + "herdr api snapshot &>/dev/null && " + ready + "; "
+            + "herdr api snapshot &>/dev/null && exit 0; "
             + (isInsideSandbox ? "" : "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; ")
+            + "export TMPDIR=\"$(mktemp -d)\"; "
             + "mkdir -p \"$(dirname " + log + ")\"; "
             + "herdr server &> " + log + " &!; "
-            + "for _ in {1..50}; do herdr api snapshot &>/dev/null && " + ready + "; sleep 0.1; done; "
+            + "for _ in {1..50}; do herdr api snapshot &>/dev/null && exit 0; sleep 0.1; done; "
             + "cat " + log + " >&2; exit 1"
         let argv =
             if isInsideSandbox {

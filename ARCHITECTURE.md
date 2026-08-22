@@ -131,10 +131,15 @@ export HERDR_SESSION=agentide
 herdr api snapshot && exit 0
 cd ~ && ~/configure
 source ~/.zshenv && source ~/.zprofile && source ~/.zshrc
+export TMPDIR="$(mktemp -d)"
 herdr server &> ~/.config/herdr/agentide-server.log &!
 until herdr api snapshot; do sleep 0.1; done
 ```
 
+The fresh `TMPDIR` is what sandvault's own launcher gives every
+session: the sudo launch context resolves no usable temporary
+directory of its own, and Codex's workspace shell host failed at
+startup in panes without one while Claude Code carried on regardless.
 The server detaches through zsh's `&!` with its output redirected:
 this launch context has no controlling terminal to hang up from, and
 macOS's nohup refuses to run at all without one ("can't detach from
@@ -159,14 +164,12 @@ bare exit code.
   from herdr's own agent detection
   confirmed by the pane's foreground process, not from exit codes, which
   nothing displayed anyway.
-- Server bring-up also installs herdr's official Claude Code and Codex
-  integrations (`herdr integration install`), which report each
-  conversation's native resume reference to the server: after a herdr
-  server restart, herdr itself restores the workspaces and resumes the
-  agents (`resume_agents_on_restore`) before the app's own resume logic
-  has to. The installs rerun on every bring-up because the sandbox home
-  template rsync can strip the hook entries they write; tests never
-  install them, since the hooks would land in the real agent config.
+- herdr's official agent integrations are deliberately not installed:
+  the Codex one flips Codex's own hooks feature on, which broke command
+  execution in fresh Codex sessions here, and the app's transcript-based
+  resume already covers what their native restore would add. Installing
+  them by hand works and survives; the app neither adds nor removes
+  them.
 - Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`. Slugs
   collapse `-` runs so the `--` separator stays unambiguous, collisions
   append `-2` to the branch component and `.` and `:` are replaced. Labels
@@ -201,7 +204,15 @@ attached mid-session, and wraps a paste itself exactly as a standalone
 terminal would. Scrollback never reaches the local buffer, so no
 scrollbar can exist for it; agent panes hide the scroll indicator for
 that reason, and SwiftTerm gives the reserved width back to the
-terminal.
+terminal. A known limitation follows from that: resizing a pane resizes
+the pane's PTY, so the agent redraws its live screen at the new width,
+but herdr does not rewrap lines already in its scrollback, which keep
+the width they were written at. tmux rewrapped its history and the
+previous design seeded it into the local buffer, which SwiftTerm
+reflows itself; the equivalent here would seed the local buffer from
+`pane read --source recent-unwrapped --format ansi` on attach and keep
+wheel scrolling local whenever herdr's scroll metrics say the pane is
+not on the alternate screen.
 
 Two visually unmistakable terminal flavours:
 
