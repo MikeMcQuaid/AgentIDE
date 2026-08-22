@@ -232,6 +232,7 @@ public extension HerdrClient {
             throw CommandError(command: "herdr workspace create " + name, result: created)
         }
 
+        await progress("Workspace created; its pane is " + paneID)
         await progress("Running: " + command.prefix(StartWait.commandPreview))
         try await herdr(["pane", "run", paneID, "export TMPDIR=\"$(mktemp -d)\"; " + command])
         await progress("Waiting for the shell to hand over to the agent")

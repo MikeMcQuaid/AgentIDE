@@ -706,7 +706,13 @@ shim rather than a protocol:
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations, or the failing checks with their
    failed steps' actual log output, to the clipboard for pasting into
-   an agent, and open the page in the Browser tab. A failing check names
+   an agent, and open the page in the Browser tab. Every in-app link,
+   a markdown link in a conversation or pull request body included,
+   takes one route (`LinkOpener.action`, installed as the window's
+   `openURL`): web links go to the Browser tab, or the system browser
+   with the command key, and anything without a web scheme and host is
+   refused with a message, since handing those to the system opener
+   produced an unhelpful "error -50" dialog. A failing check names
    its own job, and that job is what is read (`gh run view --job`),
    since a run of fifty jobs where one failed would otherwise paste the
    other forty-nine; while the run is still going `gh` refuses its logs,
@@ -797,7 +803,9 @@ it is not how an agent survives its own upgrade, so everything the user asks
 for by hand (starting, closing, resuming) replaces the process, while
 reattaching to what is already running is left to the app reopening. Each
 start also asks the CLI its version and records it under the session name,
-and the pane's tab shows that rather than the agent's family alone: a
+and the pane's strip shows that rather than the agent's family alone, with
+the session name after it, since that is the workspace label herdr shows
+and the two can then be matched by eye: a
 session that outlived an upgrade is the one worth spotting, and the number
 it started with is the only place that shows. Relaunching with the original
 prompt is never among them, since it would re-run the whole task against the

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TerminalUI
 
 @main
 struct AgentIDEApp: App {
@@ -32,6 +33,7 @@ struct AgentIDEApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(dependencies: dependencies)
+                .environment(\.openURL, LinkOpener.action)
         }
         // Content over chrome: no title bar, compact toolbar.
         .windowStyle(.hiddenTitleBar)

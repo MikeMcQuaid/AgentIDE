@@ -54,6 +54,9 @@ extension SessionService {
 
             let unrecognisable = pane.foregroundCommand.map { agents.contains($0) == false } ?? false
             if pane.isFinished || pane.activity != nil || unrecognisable {
+                await progress(pane.activity == nil
+                    ? "The pane is running " + (pane.foregroundCommand ?? "nothing") + "; nothing more to wait for"
+                    : "The agent's interface is up")
                 return
             }
 

@@ -228,6 +228,7 @@ public struct SessionService: Sendable {
             command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
         )
 
+        await progress("Recording the session " + sessionName)
         var metadata = store.load()
         metadata.prompts[sessionName] = prompt
         metadata.arguments[sessionName] = arguments
@@ -248,7 +249,9 @@ public struct SessionService: Sendable {
 
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
         let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        await progress("Running: git worktree add " + path + " (after fetching origin)")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
+        await progress("Worktree ready at " + path)
         return path
     }
 

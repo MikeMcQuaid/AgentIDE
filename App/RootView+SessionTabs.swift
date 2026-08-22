@@ -32,7 +32,10 @@ extension RootView {
     func sessionTitle(for session: AgentSession) -> String {
         let state = session.status == .running ? "●" : "○"
         let agent = session.agent?.displayName ?? "Agent"
-        return state + " " + agent + (session.version.map { " " + $0 } ?? "")
+        // The session name closes the line: it is the workspace
+        // label herdr shows, so a pane here and a workspace there
+        // can be matched by eye.
+        return state + " " + agent + (session.version.map { " " + $0 } ?? "") + " · " + session.name
     }
 
     var utilityToggleButton: some View {
@@ -153,9 +156,12 @@ extension RootView {
         await sessionStarted()
     }
 
+    /// The refresh comes first: clearing the marker before it
+    /// showed the worktree's conversations page for the moment until
+    /// the refresh found the live session.
     func sessionStarted() async {
-        startingSession = nil
         await dependencies.dashboard.refresh()
+        startingSession = nil
     }
 
     /// Worktrees with a running session right now.

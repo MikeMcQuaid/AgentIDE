@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 // MARK: - UtilityTabTarget
 
@@ -41,12 +42,33 @@ public enum UtilityTabTarget {
 /// Opens web links: in the embedded Browser tab by default, in the
 /// system browser when the command key is held.
 public enum LinkOpener {
-    /// Routes an address by the command key.
+    // MARK: Public
+
+    /// The action every in-app link takes, installed at the window's
+    /// root: web links route through `open`, so a link in a
+    /// conversation or pull request lands in the embedded browser,
+    /// and anything else is refused with a message. Handing those to
+    /// the system opener produced an unhelpful "error -50" dialog
+    /// for relative and schemeless links.
+    public static let action = OpenURLAction { url in
+        MainActor.assumeIsolated {
+            guard isWeb(url) else {
+                ErrorLog.shared.report("Not a web link, so not opened: " + url.absoluteString)
+                return .discarded
+            }
+
+            open(url.absoluteString)
+            return .handled
+        }
+    }
+
+    /// Routes an address by the command key; only web links reach
+    /// the system browser, for the same reason as `action`.
     @preconcurrency
     @MainActor
     public static func open(_ address: String) {
         if NSEvent.modifierFlags.contains(.command) {
-            if let url = URL(string: address) {
+            if let url = URL(string: address), isWeb(url) {
                 NSWorkspace.shared.open(url)
             }
         } else {
@@ -55,6 +77,14 @@ public enum LinkOpener {
             defaults.set(defaults.integer(forKey: UtilityTabTarget.requestKey) + 1, forKey: UtilityTabTarget.requestKey)
             defaults.set(UtilityTabTarget.browser, forKey: UtilityTabTarget.key)
         }
+    }
+
+    // MARK: Private
+
+    /// Whether a link has a web scheme and a host, the only shape
+    /// either browser can open.
+    private static func isWeb(_ url: URL) -> Bool {
+        ["http", "https"].contains(url.scheme?.lowercased() ?? "") && url.host() != nil
     }
 }
 
