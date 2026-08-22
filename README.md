@@ -58,8 +58,9 @@ before shipping.
   happened yet, any unresolved conversations, and its commit counts last
   (so one glance across the sidebar says where everything stands)
 - **Notifies** you when an agent finishes its work, needs your input or
-  stalls, the finish with a completion chime from macOS's own sounds (so
-  you never sit polling a terminal and ship no audio files either)
+  stalls, the finish with a completion chime picked from the menu bar:
+  macOS's own sounds, any audio file of your own or silence (so you never
+  sit polling a terminal and ship no audio files either)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel

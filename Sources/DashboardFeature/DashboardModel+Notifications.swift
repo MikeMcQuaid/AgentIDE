@@ -1,6 +1,6 @@
 import AgentIDEDomain
-import AppKit
 import Foundation
+import TerminalUI
 import UserNotifications
 
 /// Poll-to-poll change detection posting user notifications. One
@@ -39,10 +39,10 @@ extension DashboardModel {
         )
         UNUserNotificationCenter.current().add(request)
         if chimes {
-            // A named system sound, so no audio file ships in the
-            // repository; NSSound plays whether or not notification
-            // banners are allowed to.
-            NSSound(named: "Glass")?.play()
+            // The user's pick from the menu bar, macOS's own Glass
+            // until they choose; it plays whether or not
+            // notification banners are allowed to.
+            CompletionSound.play(path: CompletionSound.chosenPath)
         }
     }
 }

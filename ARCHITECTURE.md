@@ -484,7 +484,9 @@ Sendable` and `nonisolated(unsafe)` are banned.
    detection) covers every agent equally, hooks or none: the sidebar
    flags an agent waiting on input, and notifications fire when an agent
    finishes a turn, needs input or exits, the finish with a completion
-   chime from the system's named sounds so no audio ships in the
+   chime chosen from a menu bar submenu: the system's sound directories,
+   any audio file the open panel's audio-type filter admits, or silence,
+   the chosen path riding the storage bus so no audio ships in the
    repository. Foreign sessions keep the transcript-mtime timeout on a
    30 second tick for stalls.
 5. If the app is fully quit, events accumulate in the spool and notifications
