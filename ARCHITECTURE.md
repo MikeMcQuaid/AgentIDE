@@ -424,12 +424,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    primary pane narrating creation step by step (`LaunchProgress`, a
    step log the service and the herdr client report into: the branch
    name, the worktree, the prompt file, the server check, the workspace,
-   the command submitted and what is being waited on), each step stamped
-   with its elapsed time and the current one ticking every second, so a
-   slow step names itself rather than showing a blank pane; resuming
-   narrates the same way, one line per command tried. The real worktree
-   replaces the row on the refresh that follows, and a failure removes it
-   and returns to the form. An issue's title and body become the prompt. A pull request instead gets a
+   the command submitted and what is being waited on) under a clock of
+   the launch's elapsed time ticking every second, so a slow step names
+   itself rather than showing a blank pane; resuming narrates the same
+   way, one line per command tried. The narration stays until herdr
+   detects the agent's interface (`awaitReady`, bounded at a minute), so
+   the pane never appears before the agent can take input. The real
+   worktree replaces the row on the refresh that follows, and a failure
+   removes it and returns to the form. An issue's title and body become the prompt. A pull request instead gets a
    detached worktree that `gh pr checkout` (host-side) turns into the pull
    request's own branch, so pushes and pulls track it directly.
 2. The branch name summarises the prompt: the on-device Apple foundation

@@ -21,6 +21,11 @@ public struct HerdrPane: Sendable {
     /// unknown.
     public let activity: AgentActivity?
 
+    /// The program in the pane's foreground while herdr detects no
+    /// agent, so a launch can tell an agent still being recognised
+    /// from a command herdr never will recognise.
+    public let foregroundCommand: String?
+
     /// The pane's current working directory.
     public let currentPath: String
 }

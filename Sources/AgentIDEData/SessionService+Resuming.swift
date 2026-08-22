@@ -23,6 +23,7 @@ extension SessionService {
             }
             await progress("Checking the agent is still running")
             if await isRunning(sessionName: sessionName) {
+                await awaitReady(sessionName: sessionName)
                 return
             }
         }
@@ -34,6 +35,30 @@ extension SessionService {
                 standardError: "The agent exited as soon as it started",
             ),
         )
+    }
+
+    /// Waits until herdr detects the launched agent's interface, so
+    /// the page narrating the launch stays until the agent is there
+    /// to take input, rather than switching to a pane that is still
+    /// booting. A pane running something herdr could never recognise
+    /// as an agent has nothing to wait for, and a detection that
+    /// never comes stops the wait after a minute rather than forever.
+    func awaitReady(sessionName: String) async {
+        await progress("Waiting for the agent's interface to come up")
+        let agents = AgentKind.allCases.map(\.rawValue)
+        for _ in 0 ..< Self.readyPolls {
+            let panes = await (try? herdr.panes()) ?? []
+            guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
+                return
+            }
+
+            let unrecognisable = pane.foregroundCommand.map { agents.contains($0) == false } ?? false
+            if pane.isFinished || pane.activity != nil || unrecognisable {
+                return
+            }
+
+            try? await Task.sleep(for: .seconds(Self.readyPollSeconds))
+        }
     }
 
     /// Copies a worktree's newest conversation somewhere the sandbox
@@ -109,6 +134,11 @@ extension SessionService {
     /// How much of a command a narrated step shows; the prompt
     /// rides inside the command and can be long.
     private static let commandPreview = 120
+
+    /// How long to wait for the agent's interface before giving up
+    /// on detection and showing the pane anyway.
+    private static let readyPolls = 60
+    private static let readyPollSeconds = 1.0
 
     /// How many recorded conversations to offer the agent before
     /// giving up on continuing one: the newest few are the ones a

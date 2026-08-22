@@ -262,6 +262,7 @@ public extension SessionService {
             command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
         remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
+        await awaitReady(sessionName: sessionName)
         return sessionName
     }
 

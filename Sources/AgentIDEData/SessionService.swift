@@ -235,6 +235,7 @@ public struct SessionService: Sendable {
         metadata.sessionsByWorktree[slot.path] = sessionName
         metadata.intentionallyClosed.removeAll { $0 == slot.path }
         store.save(metadata)
+        await awaitReady(sessionName: sessionName)
         return sessionName
     }
 

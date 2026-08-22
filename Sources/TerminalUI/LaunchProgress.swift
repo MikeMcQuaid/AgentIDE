@@ -56,9 +56,10 @@ public final class LaunchProgress {
 
 // MARK: - LaunchProgressView
 
-/// The narration filling a pane while a launch runs: every step with
-/// how long it took, the current one still counting, redrawn every
-/// second so something on screen always moves.
+/// The narration filling a pane while a launch runs: the steps so
+/// far under a title with the launch's elapsed time, redrawn every
+/// second so something on screen always moves. One block, centred
+/// in the pane, every line sharing its left edge.
 public struct LaunchProgressView: View {
     // MARK: Lifecycle
 
@@ -74,39 +75,42 @@ public struct LaunchProgressView: View {
     public var body: some View {
         TimelineView(.periodic(from: .now, by: Self.tickSeconds)) { context in
             VStack(alignment: .leading, spacing: Self.spacing) {
-                ProgressView(title)
+                HStack(spacing: Self.spacing) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(title)
+                    Text(elapsed(at: context.date))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
                 ForEach(progress.steps) { step in
-                    HStack(alignment: .firstTextBaseline, spacing: Self.spacing) {
-                        Text(duration(of: step, now: context.date))
-                            .foregroundStyle(.secondary)
-                            .frame(width: Self.durationWidth, alignment: .trailing)
-                        Text(step.text)
-                            .lineLimit(Self.stepLines)
-                    }
-                    .font(.callout.monospaced())
+                    Text(step.text)
+                        .font(.callout.monospaced())
+                        .lineLimit(Self.stepLines)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: Self.blockWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding()
         }
     }
 
     // MARK: Private
 
-    private typealias Step = LaunchProgress.Step
-
     private static let tickSeconds = 1.0
     private static let spacing: CGFloat = 6
-    private static let durationWidth: CGFloat = 44
+    private static let blockWidth: CGFloat = 560
     private static let stepLines = 3
 
     private let title: String
     private let progress: LaunchProgress
 
-    /// How long a step took, or has taken so far for the last one.
-    private func duration(of step: Step, now: Date) -> String {
-        let end = progress.steps.first { $0.id == step.id + 1 }?.startedAt ?? now
-        let seconds = Int(end.timeIntervalSince(step.startedAt))
-        return (step.id == progress.steps.count - 1 ? "… " : "") + String(seconds) + "s"
+    /// How long the launch has run, from its first step.
+    private func elapsed(at now: Date) -> String {
+        guard let first = progress.steps.first else {
+            return ""
+        }
+
+        return String(Int(now.timeIntervalSince(first.startedAt))) + "s"
     }
 }

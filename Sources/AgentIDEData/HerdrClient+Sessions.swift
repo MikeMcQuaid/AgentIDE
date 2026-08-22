@@ -114,10 +114,29 @@ private struct PaneProcesses: Decodable {
     enum CodingKeys: String, CodingKey {
         case shellPID = "shell_pid"
         case foregroundGroupID = "foreground_process_group_id"
+        case foregroundProcesses = "foreground_processes"
     }
 
     let shellPID: Int?
     let foregroundGroupID: Int?
+    // Absent, not empty, when herdr cannot resolve the foreground.
+    // swiftlint:disable:next discouraged_optional_collection
+    let foregroundProcesses: [ForegroundProcess]?
+}
+
+// MARK: - ForegroundProcess
+
+private struct ForegroundProcess: Decodable {
+    let name: String
+}
+
+// MARK: - Foreground
+
+/// What a pane's foreground holds: its own shell at the prompt, or
+/// the program it is running.
+private struct Foreground {
+    let isShell: Bool
+    let command: String?
 }
 
 // MARK: - SnapshotRow
@@ -163,15 +182,16 @@ public extension HerdrClient {
     func panes() async throws -> [HerdrPane] {
         var panes = [HerdrPane]()
         for row in try await snapshotRows() {
-            var isFinished = false
+            var foreground = Foreground(isShell: false, command: nil)
             if row.agent == nil {
-                isFinished = await shellIsForeground(paneID: row.paneID)
+                foreground = await self.foreground(paneID: row.paneID)
             }
             panes.append(HerdrPane(
                 sessionName: row.sessionName,
                 paneID: row.paneID,
-                isFinished: isFinished,
+                isFinished: foreground.isShell,
                 activity: row.activity,
+                foregroundCommand: foreground.command,
                 currentPath: row.currentPath,
             ))
         }
@@ -222,7 +242,7 @@ public extension HerdrClient {
         // command that exits instantly hands it straight back, so
         // the wait is bounded rather than required.
         for _ in 0 ..< StartWait.polls {
-            guard await shellIsForeground(paneID: paneID) else {
+            guard await foreground(paneID: paneID).isShell else {
                 break
             }
 
@@ -293,21 +313,22 @@ public extension HerdrClient {
 
     // MARK: Private
 
-    /// Whether the pane's shell owns its own foreground, meaning
+    /// What the pane's foreground holds: the shell itself means
     /// whatever ran in it has exited. An unanswerable pane reads as
-    /// still running, so a hiccup can never kill a live session.
-    private func shellIsForeground(paneID: String) async -> Bool {
+    /// still running something, so a hiccup can never kill a live
+    /// session.
+    private func foreground(paneID: String) async -> Foreground {
         let info = try? await herdr(["pane", "process-info", "--pane", paneID], allowFailure: true)
         guard let processes = decode(ProcessInfoEnvelope.self, from: info?.standardOutput ?? "")?
             .result?
             .processInfo
         else {
-            return false
+            return Foreground(isShell: false, command: nil)
         }
-        guard let foreground = processes.foregroundGroupID else {
-            return true
+        guard let group = processes.foregroundGroupID else {
+            return Foreground(isShell: true, command: nil)
         }
 
-        return foreground == processes.shellPID
+        return Foreground(isShell: group == processes.shellPID, command: processes.foregroundProcesses?.first?.name)
     }
 }
