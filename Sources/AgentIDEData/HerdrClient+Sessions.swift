@@ -182,7 +182,14 @@ public extension HerdrClient {
     /// The pane's `INITIAL_DIR` is pinned because the sandbox's
     /// zshenv changes directory to it, which would otherwise send
     /// agents to the server's directory instead of their worktree.
-    /// The first call also births the server inside the sandbox.
+    /// The command runs under a fresh `TMPDIR`, exported in the
+    /// pane's own shell the way sandvault's launcher does for every
+    /// session: a server born through sudo resolves no usable
+    /// temporary directory of its own, and Codex's execution host
+    /// exited during its handshake in panes without one. Per session
+    /// rather than per server, so it applies to a server already
+    /// running. The first call also births the server inside the
+    /// sandbox.
     func newSession(name: String, directory: String, command: String) async throws {
         try await ensureServer()
         let created = try await herdr([
@@ -201,7 +208,7 @@ public extension HerdrClient {
             throw CommandError(command: "herdr workspace create " + name, result: created)
         }
 
-        try await herdr(["pane", "run", paneID, command])
+        try await herdr(["pane", "run", paneID, "export TMPDIR=\"$(mktemp -d)\"; " + command])
         // The command is typed into the pane's just-started shell,
         // which reads it once its own startup finishes; waiting for
         // the shell to hand its foreground over keeps a session

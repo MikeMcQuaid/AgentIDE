@@ -91,18 +91,13 @@ public struct HerdrClient: Sendable {
     /// macOS's nohup errored over exactly that ("can't detach from
     /// console") without ever starting the server. The server's own
     /// output lands in a log the failure path prints, so a refused
-    /// start is never a bare exit code. The server, and so every
-    /// pane, gets a fresh `TMPDIR` the way sandvault's own launcher
-    /// gives each session one: the sudo launch context resolves no
-    /// usable temporary directory of its own, and Codex's workspace
-    /// shell host failed at startup in panes without one.
+    /// start is never a bare exit code.
     func ensureServer() async throws {
         let log = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/agentide-server.log\""
         let payload = exportPrefix
             + "herdr api snapshot &>/dev/null && exit 0; "
             + (isInsideSandbox ? "" : "cd ~ && ~/configure; "
                 + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; ")
-            + "export TMPDIR=\"$(mktemp -d)\"; "
             + "mkdir -p \"$(dirname " + log + ")\"; "
             + "herdr server &> " + log + " &!; "
             + "for _ in {1..50}; do herdr api snapshot &>/dev/null && exit 0; sleep 0.1; done; "

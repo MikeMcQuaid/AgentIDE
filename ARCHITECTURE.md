@@ -131,15 +131,10 @@ export HERDR_SESSION=agentide
 herdr api snapshot && exit 0
 cd ~ && ~/configure
 source ~/.zshenv && source ~/.zprofile && source ~/.zshrc
-export TMPDIR="$(mktemp -d)"
 herdr server &> ~/.config/herdr/agentide-server.log &!
 until herdr api snapshot; do sleep 0.1; done
 ```
 
-The fresh `TMPDIR` is what sandvault's own launcher gives every
-session: the sudo launch context resolves no usable temporary
-directory of its own, and Codex's workspace shell host failed at
-startup in panes without one while Claude Code carried on regardless.
 The server detaches through zsh's `&!` with its output redirected:
 this launch context has no controlling terminal to hang up from, and
 macOS's nohup refuses to run at all without one ("can't detach from
@@ -157,8 +152,12 @@ bare exit code.
   building, testing and development can never list or kill the installed
   app's sessions.
 - Each agent conversation is one herdr workspace whose single pane runs a
-  login shell; the agent command is submitted to that shell (`pane run`),
-  with `AGENTIDE_SESSION` and `INITIAL_DIR` set as workspace environment.
+  login shell; the agent command is submitted to that shell (`pane run`)
+  behind `export TMPDIR="$(mktemp -d)"`, the per-session temporary
+  directory sandvault's own launcher gives every session, because a
+  server born through sudo resolves no usable one of its own and Codex's
+  execution host exited during its handshake in panes without it.
+  `AGENTIDE_SESSION` and `INITIAL_DIR` are set as workspace environment.
   A finished agent therefore leaves the shell at its prompt with the
   whole scrollback inspectable, and whether an agent is running comes
   from herdr's own agent detection
