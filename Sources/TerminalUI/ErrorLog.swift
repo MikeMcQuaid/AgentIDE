@@ -20,6 +20,21 @@ public final class ErrorLog {
 
     // MARK: Public
 
+    /// A button a message offers: somewhere the fix lives.
+    public struct Action: Sendable {
+        // MARK: Lifecycle
+
+        public init(label: String, url: URL) {
+            self.label = label
+            self.url = url
+        }
+
+        // MARK: Public
+
+        public let label: String
+        public let url: URL
+    }
+
     /// One reported message.
     public struct Entry: Identifiable, Sendable {
         /// The entry's position in the log.
@@ -34,6 +49,9 @@ public final class ErrorLog {
         /// Whether the message is a failure; only failures count in
         /// the tab's badge and summon the tab.
         public let isError: Bool
+
+        /// The fix the message offers, when one is a click away.
+        public let action: Action?
     }
 
     /// The one log the whole app reports into.
@@ -50,8 +68,8 @@ public final class ErrorLog {
 
     /// Appends a failure to the log, dropping the oldest entries
     /// beyond the cap so a noisy session never grows without bound.
-    public func report(_ message: String) {
-        append(message, isError: true)
+    public func report(_ message: String, action: Action? = nil) {
+        append(message, isError: true, action: action)
     }
 
     /// Appends a status note: visible in the pane, never badged and
@@ -73,9 +91,9 @@ public final class ErrorLog {
     /// Monotonic, so identities survive the cap dropping entries.
     private var nextID = 0
 
-    private func append(_ message: String, isError: Bool) {
+    private func append(_ message: String, isError: Bool, action: Action? = nil) {
         nextID += 1
-        entries.append(Entry(id: nextID, date: Date(), message: message, isError: isError))
+        entries.append(Entry(id: nextID, date: Date(), message: message, isError: isError, action: action))
         if entries.count > Self.entryCap {
             entries.removeFirst(entries.count - Self.entryCap)
         }

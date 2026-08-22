@@ -147,7 +147,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   app.
   Terminal works because it holds the Developer Tools privilege; see the
   README's requirements for the fix. Codex's command host is the known
-  case.
+  case; `GatekeeperCheck` reports it at launch. The privilege has no
+  request API: it is granted in System Settings or not at all.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

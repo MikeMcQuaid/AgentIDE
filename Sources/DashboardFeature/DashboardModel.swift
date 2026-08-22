@@ -211,6 +211,7 @@ public final class DashboardModel {
         // discovery and the notification prompt take seconds, and
         // the window showed "no worktree selected" while they ran.
         await refresh()
+        await warnAboutGatekeeper()
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
         for agent in AgentKind.allCases {
             if let models = await service.discoverModels(for: agent) {

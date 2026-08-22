@@ -194,8 +194,10 @@ before shipping.
   (Codex's command host arrived that way), and macOS then silently kills
   the binary at launch from any app without the Developer Tools privilege,
   so Codex reports its "shell host" exiting during startup while the same
-  command works in Terminal. Either add AgentIDE under System Settings,
-  Privacy & Security, Developer Tools, or install casks with
+  command works in Terminal. AgentIDE checks at launch and, when an
+  agent's install is quarantined and the privilege is missing, says so in
+  Messages with a button to the pane. Either add AgentIDE under System
+  Settings, Privacy & Security, Developer Tools, or install casks with
   `HOMEBREW_CASK_OPTS=--no-quarantine`
 - [`herdr`](https://herdr.dev) and
   [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the

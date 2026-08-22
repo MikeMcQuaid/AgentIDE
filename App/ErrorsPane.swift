@@ -72,6 +72,12 @@ struct ErrorsPane: View {
                 .font(entry.isError ? .callout.monospaced() : .callout)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            // Straight to the system: the window's link handler only
+            // takes web links, and a fix lives in System Settings.
+            if let action = entry.action {
+                Button(action.label) { NSWorkspace.shared.open(action.url) }
+                    .controlSize(.small)
+            }
         }
     }
 
