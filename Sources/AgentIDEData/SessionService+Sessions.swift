@@ -41,8 +41,12 @@ public extension SessionService {
     /// through here and gets a new process.
     internal func startFresh(sessionName: String, directory: String, command: String) async throws {
         await killSession(name: sessionName)
-        try await herdr.newSession(name: sessionName, directory: directory, command: command)
+        // The version probe runs before the launch, never beside it:
+        // it is a second copy of the same CLI, and Codex stages its
+        // execution host under a lock in its own home, which two
+        // copies starting at once contend for.
         await recordAgentVersion(sessionName: sessionName)
+        try await herdr.newSession(name: sessionName, directory: directory, command: command)
     }
 
     /// Asks the agent's CLI what version it is and remembers it
