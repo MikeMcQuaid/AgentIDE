@@ -16,6 +16,9 @@ struct RootView: View {
     /// titlebar band and that toggle.
     static let toggleRowHeight: CGFloat = 30
 
+    // Slim enough for icon-and-truncated-text rows while staying
+    // wider than the traffic lights band.
+
     let dependencies: AppDependencies
 
     /// Persisted as the tab's name rather than an index, so
@@ -175,6 +178,14 @@ struct RootView: View {
         }
     }
 
+    @ViewBuilder var coveringPage: some View {
+        if dependencies.dashboard.showsNewSession {
+            NewSessionPane(model: dependencies.dashboard)
+        } else if dependencies.dashboard.showsRepositoryFinder {
+            RepositoryFinderPane(model: dependencies.dashboard)
+        }
+    }
+
     /// The file a command is waiting on in a worktree, which its
     /// editor pane shows instead of the finder.
     func waitingEdit(in worktreePath: String) -> ExternalEdit? {
@@ -221,10 +232,6 @@ struct RootView: View {
     }
 
     // MARK: Private
-
-    /// Slim enough for icon-and-truncated-text rows while staying
-    /// wider than the traffic lights band.
-    private static let stripSpacing: CGFloat = 4
 
     /// The selected conversation's worktree on the repository page,
     /// nil when none exists; the review surfaces follow it. Internal
@@ -293,50 +300,46 @@ struct RootView: View {
         runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
     }
 
-    /// The middle pages, never sheets, cover the split rather than
-    /// replacing it: unmounting the split takes its panes with it,
-    /// and a pane can hold a running shell, which only destroying
-    /// its worktree should end.
+    /// The middle pages, never sheets, cover the primary pane
+    /// rather than replacing it: unmounting takes the panes with it,
+    /// and a pane can hold a running agent or shell, which only
+    /// destroying its worktree should end. They cover that pane
+    /// alone, so the utility pane stays where it was: the window
+    /// keeps one shape whatever it is showing.
     private var detail: some View {
         ZStack {
             if let item = dependencies.dashboard.selection {
                 split(for: item)
-                    .opacity(isCovered ? 0 : 1)
-                    .allowsHitTesting(isCovered == false)
-            } else if isCovered == false {
-                unselectedDetail
+            } else {
+                unselectedSplit
             }
-            if dependencies.dashboard.showsNewSession {
-                NewSessionPane(model: dependencies.dashboard)
-            } else if dependencies.dashboard.showsRepositoryFinder {
-                RepositoryFinderPane(model: dependencies.dashboard)
+        }
+    }
+
+    /// The same shape with nothing selected: the page fills the
+    /// primary pane and the utility pane's width is held empty
+    /// beside it, so a repository picker or a new session form sits
+    /// in the column it would occupy with a worktree open rather
+    /// than spreading across the window.
+    private var unselectedSplit: some View {
+        HStack(spacing: 0) {
+            Group {
+                if isCovered {
+                    coveringPage
+                } else {
+                    unselectedDetail
+                }
+            }
+            .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
+            if showsUtility {
+                Color.clear.frame(width: utilityPaneWidth)
             }
         }
     }
 
     private func split(for item: WorktreeItem) -> some View {
         HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                sessionStrip(for: item)
-                primary(for: item)
-            }
-            // With the utility pane hidden its toggle overlays the
-            // session strip's empty right end, in exactly the spot
-            // the pane header shows it, so it never moves on toggle.
-            .overlay(alignment: .topTrailing) {
-                if showsUtility == false {
-                    utilityToggleButton
-                        .frame(height: Self.toggleRowHeight)
-                        .padding(.trailing, Self.stripSpacing)
-                }
-            }
-            .frame(
-                minWidth: PaneLayout.primaryMinimum,
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: .top,
-            )
-            .ignoresSafeArea(.container, edges: .top)
+            primaryColumn(for: item)
             if showsUtility {
                 PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false)
                     .ignoresSafeArea(.container, edges: .top)

@@ -1,12 +1,16 @@
 # AgentIDE
 
-🪪 IDE for Agents
+🪪 IDE for Agents: prompt a worktree, review another, ship a third, repeat
 
 ![The worktree sidebar, an agent's terminal and its pull request side by side](docs/screenshot.png)
 
 A native macOS app for running, steering and reviewing sandboxed AI coding
 agents in parallel git worktrees, from problem statement to merged pull
-request. Built with SwiftUI on top of
+request. The window is built around that loop rather than around a text
+editor: the editor is here for the fixes review turns up, the terminals
+are the agents' own, and everything a task passes through, worktree,
+conversation, diff, pull request and CI, is one window rather than four
+apps you keep in sync by hand. Built with SwiftUI on top of
 [sandvault](https://github.com/webcoyote/sandvault),
 [`herdr`](https://herdr.dev) and the
 [`gh`](https://cli.github.com) CLI.

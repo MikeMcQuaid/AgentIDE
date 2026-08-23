@@ -9,7 +9,9 @@ the README's Features subsections.
 
 AgentIDE is a native SwiftUI macOS app (macOS 27 or later, Swift 6.4,
 AGPL-3.0) that runs, steers and reviews sandboxed AI coding agents in
-parallel git worktrees. It is developed readme-first: this document describes
+parallel git worktrees. Its user supervises rather than types, so the
+window is arranged around the agent loop, not around an editor, and one
+window covers what four apps used to. It is developed readme-first: this document describes
 the target system and slices of it land in the order given in the README's
 Status section.
 
