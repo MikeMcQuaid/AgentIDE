@@ -37,6 +37,7 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   (the generated `.xcodeproj` stays gitignored)
 - `bin/`: commands shipped inside the app bundle (the `agentide`
   editor shim a shell pane puts on its `PATH`)
+- `docs/`: the images `README.md` embeds
 - `script/`: development tasks
 - `Brewfile`: development dependencies
 - `.github/workflows/tests.yml`: CI

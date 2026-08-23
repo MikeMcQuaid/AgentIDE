@@ -2,6 +2,8 @@
 
 🪪 IDE for Agents
 
+![The worktree sidebar, an agent's terminal and its pull request side by side](docs/screenshot.png)
+
 A native macOS app for running, steering and reviewing sandboxed AI coding
 agents in parallel git worktrees, from problem statement to merged pull
 request. Built with SwiftUI on top of
