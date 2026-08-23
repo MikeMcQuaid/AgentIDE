@@ -52,6 +52,23 @@ extension RootView {
         }
     }
 
+    /// What the detail shows with nothing selected: the first
+    /// reading's progress until it lands, then the invitation.
+    @ViewBuilder var unselectedDetail: some View {
+        if dependencies.dashboard.hasLoaded == false {
+            LaunchProgressView(
+                "Reading repositories, worktrees and sessions…",
+                waitingOn: "`git worktree list` for each repository and `herdr api snapshot`",
+            )
+        } else {
+            ContentUnavailableView(
+                "No worktree selected",
+                systemImage: "rectangle.stack",
+                description: Text("Pick a worktree on the left or create a session."),
+            )
+        }
+    }
+
     /// A running shell stays mounted whichever tab, worktree or page
     /// shows, so its terminal survives everything short of destroying
     /// the worktree it runs in. Both layers always fill the pane, so

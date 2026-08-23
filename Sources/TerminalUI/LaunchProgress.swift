@@ -56,12 +56,13 @@ public final class LaunchProgress {
 
 // MARK: - LaunchProgressView
 
-/// The narration filling a pane while a launch runs: the steps so
-/// far under a title with the launch's elapsed time, redrawn every
-/// second so something on screen always moves. One block, centred
-/// in the pane, every line sharing its left edge. A step's backtick
-/// spans, its commands, paths and names, render in monospace so the
-/// eye separates what is being done from what it is done to.
+/// The narration filling a pane while a launch or a load runs: the
+/// steps so far under a title with the elapsed time, redrawn every
+/// second so something on screen always moves, until the finished
+/// UI snaps into place. One block, centred in the pane, every line
+/// sharing its left edge. A step's backtick spans, its commands,
+/// paths and names, render in monospace so the eye separates what
+/// is being done from what it is done to.
 public struct LaunchProgressView: View {
     // MARK: Lifecycle
 
@@ -70,6 +71,16 @@ public struct LaunchProgressView: View {
     public init(_ title: String, progress: LaunchProgress) {
         self.title = title
         self.progress = progress
+        waitingOn = nil
+    }
+
+    /// Creates the view for a load with one thing to wait on, named
+    /// so the pane says what is slow; the clock runs from the view
+    /// appearing.
+    public init(_ title: String, waitingOn: String) {
+        self.title = title
+        progress = nil
+        self.waitingOn = waitingOn
     }
 
     // MARK: Public
@@ -85,7 +96,7 @@ public struct LaunchProgressView: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
-                ForEach(progress.steps) { step in
+                ForEach(steps) { step in
                     Text(Self.styled(step.text))
                         .font(.callout)
                         .lineLimit(Self.stepLines)
@@ -104,8 +115,17 @@ public struct LaunchProgressView: View {
     private static let blockWidth: CGFloat = 560
     private static let stepLines = 3
 
+    @State private var appearedAt: Date = .init()
+
     private let title: String
-    private let progress: LaunchProgress
+    private let progress: LaunchProgress?
+    private let waitingOn: String?
+
+    private var steps: [LaunchProgress.Step] {
+        progress?.steps
+            ?? waitingOn.map { [LaunchProgress.Step(id: 0, text: "Waiting on " + $0, startedAt: appearedAt)] }
+            ?? []
+    }
 
     /// The step with its backtick spans marked as code; a span the
     /// markdown parser refuses renders as typed.
@@ -114,12 +134,9 @@ public struct LaunchProgressView: View {
             ?? AttributedString(text)
     }
 
-    /// How long the launch has run, from its first step.
+    /// How long the wait has run, from its first step.
     private func elapsed(at now: Date) -> String {
-        guard let first = progress.steps.first else {
-            return ""
-        }
-
-        return String(Int(now.timeIntervalSince(first.startedAt))) + "s"
+        let since = progress?.steps.first?.startedAt ?? appearedAt
+        return String(Int(now.timeIntervalSince(since))) + "s"
     }
 }

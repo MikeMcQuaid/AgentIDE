@@ -37,7 +37,13 @@ public struct SessionManagerSheet: View {
                 Button("Done") { onDismiss() }
                     .keyboardShortcut(.cancelAction)
             }
-            if sessions.isEmpty, browsers.all.isEmpty {
+            if hasLoaded == false {
+                LaunchProgressView(
+                    "Listing sessions…",
+                    waitingOn: "`herdr api snapshot` and `ps` for each session's usage",
+                )
+                .frame(minHeight: Self.listHeight)
+            } else if sessions.isEmpty, browsers.all.isEmpty {
                 ContentUnavailableView(
                     "Nothing running",
                     systemImage: "terminal",
@@ -106,6 +112,7 @@ public struct SessionManagerSheet: View {
     private static let locationComponents = 3
 
     @State private var sessions: [SessionOverview] = []
+    @State private var hasLoaded = false
     @State private var killed: Set<String> = []
     @State private var browserUsage: [Int32: (cpuPercent: Double, memoryMegabytes: Int)] = [:]
 
@@ -169,6 +176,7 @@ public struct SessionManagerSheet: View {
         killed = killed.filter { name in sessions.contains { $0.name == name } }
         // A row killed and gone needs no marker; one killed and
         // still listed shows Killed until a refresh proves it away.
+        hasLoaded = true
     }
 
     /// The owning worktree, its repository and container: the

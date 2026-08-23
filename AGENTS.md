@@ -69,7 +69,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   delay over half a second. A transition made of several steps
   names each step and what it waits on as it happens, through
   `LaunchProgress`, and keeps something on screen changing at
-  least once a second.
+  least once a second. The same holds for every pane whose data
+  arrives later than the pane: it shows `LaunchProgressView` naming
+  what it waits on until the first result lands, then snaps to the
+  finished UI. An empty state ("Nothing running", "No changes")
+  appears only once a load has proven it empty, never before.
 - Buttons follow Apple HIG and Liquid Glass, in that order, then
   this app's conventions: at most one primary action per surface,
   rendered prominent and bound to Cmd-Return when the surface takes

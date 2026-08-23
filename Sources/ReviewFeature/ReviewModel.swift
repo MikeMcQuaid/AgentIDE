@@ -64,6 +64,10 @@ final class ReviewModel {
     /// The parsed diff files.
     private(set) var files: [DiffFile] = []
 
+    /// Whether any scope has loaded yet; before that the pane shows
+    /// progress rather than "No changes" it has not proven.
+    private(set) var hasLoaded = false
+
     /// Whether the diff shows uncommitted changes (true) or the last
     /// commit (false); rejection amends only in the latter mode.
     private(set) var showsUncommitted = false
@@ -122,6 +126,7 @@ final class ReviewModel {
         } catch {
             report(error.localizedDescription)
         }
+        hasLoaded = true
     }
 
     /// Whether a path looks generated.
@@ -183,6 +188,7 @@ final class ReviewModel {
         } catch {
             report(error.localizedDescription)
         }
+        hasLoaded = true
     }
 
     /// Fills the commit message from the uncommitted diff using the

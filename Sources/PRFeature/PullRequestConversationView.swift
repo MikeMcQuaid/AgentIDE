@@ -80,8 +80,11 @@ struct PullRequestConversationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
                 if isLoading, events.isEmpty, description.isEmpty {
-                    ProgressView("Loading conversation…")
-                        .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
+                    LaunchProgressView(
+                        "Loading the conversation…",
+                        waitingOn: "GitHub for the description, reviews and comments of #" + String(number),
+                    )
+                    .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
                 } else {
                     content
                 }

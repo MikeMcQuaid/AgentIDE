@@ -125,7 +125,7 @@ public struct PullRequestsView: View {
     private var listView: some View {
         PullRequestListView(
             summaries: model.summaries,
-            isLoading: model.isLoading,
+            isLoading: model.isLoading || model.hasLoaded == false,
             hasMore: model.hasMore,
             stackDepth: { model.stackDepth(for: $0) },
             onSelect: { model.select($0) },

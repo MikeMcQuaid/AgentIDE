@@ -163,6 +163,11 @@ before shipping.
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
+- **Waits** out loud: any pane whose data takes a moment, the first
+  reading of your worktrees, a diff, a pull request list or the session
+  manager, shows what it is waiting on with a clock ticking every second,
+  then snaps to the finished view (so an empty state is only ever shown
+  once it has been proven empty, never while the answer is still coming)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the
   utility pane (so nothing is lost to a status line that scrolled past or

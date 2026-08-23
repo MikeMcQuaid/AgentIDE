@@ -55,11 +55,12 @@ public struct RepositorySessionsView: View {
             if model.isResuming, let progress {
                 LaunchProgressView("Resuming the conversation…", progress: progress)
             } else if model.isResuming {
-                ProgressView("Resuming conversation…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LaunchProgressView("Resuming the conversation…", waitingOn: "the agent's interface to come up")
             } else if model.hasLoaded == false {
-                ProgressView("Loading conversations…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LaunchProgressView(
+                    "Loading conversations…",
+                    waitingOn: "the transcripts of `" + model.repository.name + "`",
+                )
             } else {
                 header
                 Divider()

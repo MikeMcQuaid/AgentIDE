@@ -304,11 +304,7 @@ struct RootView: View {
                     .opacity(isCovered ? 0 : 1)
                     .allowsHitTesting(isCovered == false)
             } else if isCovered == false {
-                ContentUnavailableView(
-                    "No worktree selected",
-                    systemImage: "rectangle.stack",
-                    description: Text("Pick a worktree on the left or create a session."),
-                )
+                unselectedDetail
             }
             if dependencies.dashboard.showsNewSession {
                 NewSessionPane(model: dependencies.dashboard)

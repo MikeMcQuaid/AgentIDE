@@ -194,7 +194,11 @@ struct ReviewFooterView: View {
                     // The listing always carries the base commit as
                     // its final row, so one row means no commits of
                     // the branch's own.
-                    if model.branchCommits.count <= 1 {
+                    if model.hasLoaded == false {
+                        Text("Listing the branch's commits…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if model.branchCommits.count <= 1 {
                         Text("No commits beyond the base branch.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
