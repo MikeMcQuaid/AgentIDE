@@ -781,7 +781,9 @@ shim rather than a protocol:
    so every conversation stays attributed to its repository.
 4. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
-   deleted worktrees alike, and resumes any of them into a fresh worktree.
+   deleted worktrees alike, resumes any of them into a fresh worktree and
+   starts a fresh session on the default branch in the checkout itself,
+   with no new worktree, for a job that does not need one.
 
 ### Close and reopen a session
 

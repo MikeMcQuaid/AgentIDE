@@ -123,9 +123,13 @@ public struct RepositorySessionsView: View {
             // the order the two are read; resuming stays the
             // prominent one, since it is why the list is here.
             if let onNewSession {
-                Button("New session", action: onNewSession)
+                Button(model.worktreePath == nil ? "Start session" : "New session", action: onNewSession)
                     .controlSize(.small)
-                    .hoverHelp("Start a fresh agent session in this worktree instead of continuing one")
+                    .hoverHelp(
+                        model.worktreePath == nil
+                            ? "Start an agent session on the default branch, in this checkout without a new worktree"
+                            : "Start a fresh agent session in this worktree instead of continuing one",
+                    )
             }
             // One resume button: in place when the conversation's
             // worktree still exists, into a fresh worktree only when

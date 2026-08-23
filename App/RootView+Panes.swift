@@ -34,7 +34,7 @@ extension RootView {
                 .dropDestination(for: URL.self) { urls, _ in
                     dropFiles(urls, into: session.name)
                 }
-        } else if item.worktree.path == item.worktree.repositoryPath {
+        } else if item.worktree.path == item.worktree.repositoryPath, startingSession != item.worktree.path {
             repositoryConversations(for: item)
         } else if item.pastSessions.isEmpty == false, startingSession != item.worktree.path {
             worktreeConversations(for: item)
@@ -45,7 +45,8 @@ extension RootView {
                 canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
                 // Only a worktree with conversations to go back to
                 // shows the way back.
-                onShowConversations: item.pastSessions.isEmpty ? nil : { startingSession = nil },
+                onShowConversations: item.pastSessions.isEmpty
+                    && item.worktree.path != item.worktree.repositoryPath ? nil : { startingSession = nil },
                 onResume: { await resumeLatest(in: item) },
                 onStarted: { await sessionStarted(in: item.worktree.path) },
             )

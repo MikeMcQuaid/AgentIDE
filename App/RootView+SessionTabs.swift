@@ -103,6 +103,7 @@ extension RootView {
             service: dependencies.service,
             progress: dependencies.dashboard.launchProgress,
             onWorktreeFocus: { focusConversation(at: $0) },
+            onNewSession: { startingSession = item.worktree.path },
             onResumed: { await dependencies.dashboard.refresh() },
         )
         .padding(.top, Self.toggleRowHeight)

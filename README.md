@@ -146,7 +146,9 @@ before shipping.
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
   even after that worktree is deleted, and starts a fresh session in a
-  worktree from the same list (so tidying up never loses a conversation)
+  worktree from the same list, or one on the default branch in the
+  checkout itself without a new worktree (so tidying up never loses a
+  conversation and a quick job needs no worktree)
 
 ### 🛟 Resilience
 
