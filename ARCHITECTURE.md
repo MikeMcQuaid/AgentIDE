@@ -704,19 +704,17 @@ shim rather than a protocol:
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
 7. Each pull request row offers the last mile as small actions: copy the
-   unresolved review conversations, or the failing checks with their
-   failed steps' actual log output, to the clipboard for pasting into
-   an agent, and open the page in the Browser tab. Every in-app link,
+   unresolved review conversations to the clipboard for pasting into an
+   agent, jump to the one failing check or, when several fail, the
+   checks page (copying failed step logs through `gh run view` proved
+   too unreliable to keep) and open the page in the Browser tab. Every
+   in-app link,
    a markdown link in a conversation or pull request body included,
    takes one route (`LinkOpener.action`, installed as the window's
    `openURL`): web links go to the Browser tab, or the system browser
    with the command key, and anything without a web scheme and host is
    refused with a message, since handing those to the system opener
-   produced an unhelpful "error -50" dialog. A failing check names
-   its own job, and that job is what is read (`gh run view --job`),
-   since a run of fifty jobs where one failed would otherwise paste the
-   other forty-nine; while the run is still going `gh` refuses its logs,
-   so the job's log comes from the API instead. Conversations
+   produced an unhelpful "error -50" dialog. Conversations
    resolve individually through the GraphQL API, on the conversation
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull

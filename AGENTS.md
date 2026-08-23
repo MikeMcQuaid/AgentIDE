@@ -81,7 +81,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   hover help when the icon is unambiguous and short text otherwise.
   Order buttons in the sequence they are expected to be clicked,
   left to right, primary last; put counts in the label and
-  explanations in hover help. Slow or unrepeatable actions go
+  explanations in hover help. A context menu of more than three
+  items groups them with separators, the destructive item last in
+  its own group. Slow or unrepeatable actions go
   through `BusyButton` and lock any inputs they read or write
   while running.
 

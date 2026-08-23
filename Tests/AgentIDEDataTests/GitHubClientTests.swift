@@ -28,20 +28,6 @@ struct GitHubClientTests {
     }
 
     @Test
-    func `job ids come deduplicated from failing check links`() {
-        let lines = [
-            "build\tfail\t1m2s\thttps://github.com/o/r/actions/runs/123/job/456",
-            "test\tfail\t2m\thttps://github.com/o/r/actions/runs/123/job/789",
-            "style\tfail\t3s\thttps://github.com/o/r/actions/runs/987/job/1",
-            "external-ci\tfail\t5s\thttps://ci.example.invalid/build/9",
-        ]
-        // Each failing check names its own job: two failures in one
-        // run are two jobs to read, not one run to paste whole.
-        #expect(GitHubClient.jobIDs(fromCheckLines: lines) == ["456", "789", "1"])
-        #expect(GitHubClient.jobIDs(fromCheckLines: []).isEmpty)
-    }
-
-    @Test
     func `merge flags follow the repository's allowed methods`() {
         // A merge commit wins whenever it is allowed.
         let all = #"{"mergeCommitAllowed":true,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#

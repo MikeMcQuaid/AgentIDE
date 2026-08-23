@@ -47,7 +47,7 @@ extension RootView {
                 // shows the way back.
                 onShowConversations: item.pastSessions.isEmpty ? nil : { startingSession = nil },
                 onResume: { await resumeLatest(in: item) },
-                onStarted: { await sessionStarted() },
+                onStarted: { await sessionStarted(in: item.worktree.path) },
             )
         }
     }

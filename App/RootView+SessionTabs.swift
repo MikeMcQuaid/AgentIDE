@@ -117,7 +117,7 @@ extension RootView {
             worktreePath: item.worktree.path,
             progress: dependencies.dashboard.launchProgress,
             onNewSession: { startingSession = item.worktree.path },
-            onResumed: { await sessionStarted() },
+            onResumed: { await sessionStarted(in: item.worktree.path) },
         )
         .padding(.top, Self.toggleRowHeight)
     }
@@ -157,14 +157,16 @@ extension RootView {
         } catch {
             dependencies.dashboard.report(error.localizedDescription)
         }
-        await sessionStarted()
+        await sessionStarted(in: fresh.worktree.path)
     }
 
-    /// The refresh comes first: clearing the marker before it
+    /// The listing comes first: clearing the marker before it
     /// showed the worktree's conversations page for the moment until
-    /// the refresh found the live session.
-    func sessionStarted() async {
-        await dependencies.dashboard.refresh()
+    /// a reading found the live session.
+    func sessionStarted(in worktreePath: String) async {
+        await dependencies.dashboard.refreshUntil { items in
+            items.contains { $0.worktree.path == worktreePath && $0.session?.status == .running }
+        }
         startingSession = nil
     }
 

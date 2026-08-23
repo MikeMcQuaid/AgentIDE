@@ -15,7 +15,7 @@ struct PullRequestRowView: View {
     let stackDepth: Int
     let showsActions: Bool
     let onCopyComments: @MainActor () async -> Void
-    let onCopyChecks: @MainActor () async -> Void
+    let onOpenChecks: @MainActor () async -> Void
 
     var body: some View {
         HStack {
@@ -33,7 +33,7 @@ struct PullRequestRowView: View {
         // that hide them.
         .contextMenu {
             Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
-            Button("Copy Failing Checks") { Task { await onCopyChecks() } }
+            Button("Open Failing Checks") { Task { await onOpenChecks() } }
             Divider()
             Button("Open in Browser") { LinkOpener.open(summary.url) }
         }

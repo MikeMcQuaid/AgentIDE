@@ -87,7 +87,7 @@ struct PullRequestListView: View {
             stackDepth: stackDepth(summary),
             showsActions: false,
             onCopyComments: noAction,
-            onCopyChecks: noAction,
+            onOpenChecks: noAction,
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect(summary) }
@@ -240,15 +240,13 @@ struct PullRequestFooterView: View {
             await model.copyUnresolvedComments(selected)
         }
         .hoverHelp("Copy every unresolved review conversation to the clipboard")
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "exclamationmark.triangle",
-            accessibilityLabel: "Copy failing checks",
-        ) {
-            await model.copyFailingChecks(selected)
+        Button {
+            model.openFailingChecks(selected)
+        } label: {
+            Image(systemName: "exclamationmark.triangle")
+                .accessibilityLabel("Open failing checks")
         }
-        .hoverHelp("Copy the failing checks and their failed step output to the clipboard")
+        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the system browser")
     }
 }
 

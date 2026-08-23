@@ -208,6 +208,7 @@ public struct DashboardView: View {
     @ViewBuilder
     private func contextActions(for item: WorktreeItem) -> some View {
         refreshAction(for: item.worktree.repositoryPath)
+        Divider()
         Button("Copy branch name") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(item.worktree.branch, forType: .string)
@@ -218,6 +219,7 @@ public struct DashboardView: View {
             NSPasteboard.general.setString(item.worktree.path, forType: .string)
         }
         .hoverHelp("Copy this worktree's full path")
+        Divider()
         Button("Fetch") { Task { await model.fetch(item: item) } }
             .hoverHelp("git fetch all remotes of this repository")
         if item.worktree.path == item.worktree.repositoryPath {
@@ -226,6 +228,7 @@ public struct DashboardView: View {
                     "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
                 )
         }
+        Divider()
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")
         // Cleanup is the merge-time tidy, offered by hand for merges
@@ -242,6 +245,7 @@ public struct DashboardView: View {
                 )
         }
         if item.worktree.path != item.worktree.repositoryPath {
+            Divider()
             Button("Delete worktree", role: .destructive) { pendingForceDelete = (item.worktree.path, nil) }
                 .hoverHelp("Force-deletes the worktree and branch after confirming what would be lost")
         }

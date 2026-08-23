@@ -126,9 +126,10 @@ before shipping.
   creating it and its remote the first time and opening the pull request from
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
-- **Copies** unresolved review comments, or failing CI steps with their
-  actual log output, straight into a prompt, resolves conversations one
-  by one, resolves merge conflicts and enables automerge or merges,
+- **Copies** unresolved review comments straight into a prompt, jumps to
+  the failing check (or the checks page when several fail), resolves
+  conversations one by one, resolves merge conflicts and enables
+  automerge or merges,
   each with one click (so the last mile is not the slowest)
 
 ### 🧹 Tidy up

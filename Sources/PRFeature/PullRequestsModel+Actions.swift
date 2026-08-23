@@ -46,16 +46,12 @@ extension PullRequestsModel {
         ErrorLog.shared.note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
     }
 
-    /// Copies the failing checks, one line each, to the clipboard.
-    func copyFailingChecks(_ summary: PullRequestSummary) async {
-        let text = await fetchFailingChecks(summary.number)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        ErrorLog.shared.note(
-            text.isEmpty
-                ? "No failing checks on #\(summary.number)."
-                : "Copied the failing checks of #\(summary.number).",
-        )
+    /// Jumps to the one failing check, or to the checks page when
+    /// several fail or the row has not been enriched with their
+    /// links yet; copying their logs proved too unreliable to trust.
+    func openFailingChecks(_ summary: PullRequestSummary) {
+        let links = summary.failingCheckLinks
+        LinkOpener.open(links.count == 1 ? links[0] : summary.url + "/checks")
     }
 
     /// Opens a conversation with its cached enriched header painted

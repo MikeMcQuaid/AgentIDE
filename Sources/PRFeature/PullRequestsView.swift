@@ -146,7 +146,7 @@ public struct PullRequestsView: View {
             store: model.store,
             onBack: { model.selected = nil },
             onCopyComments: { await model.copyUnresolvedComments(summary) },
-            onCopyChecks: { await model.copyFailingChecks(summary) },
+            onOpenChecks: { model.openFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },
         )
     }

@@ -70,15 +70,6 @@ extension String {
     }
 }
 
-public extension String {
-    /// The string capped to a length, keeping its end: log excerpts
-    /// explain themselves at the bottom, so trimming the head is
-    /// what keeps the useful part.
-    func prefixWithinLimit(_ limit: Int) -> String {
-        count <= limit ? self : "…\n" + String(suffix(limit))
-    }
-}
-
 // MARK: - ProcessEnvironment
 
 /// The one environment every spawned process starts from.
