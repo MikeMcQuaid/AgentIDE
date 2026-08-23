@@ -3,7 +3,7 @@ import Foundation
 
 /// How long a closed workspace gets to go before the close is
 /// asked again.
-private let killGraceSeconds = 2.0
+private let killGraceSeconds = 0.5
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {

@@ -140,8 +140,8 @@ extension SessionService {
 
     /// How long to wait for the agent's interface before giving up
     /// on detection and showing the pane anyway.
-    private static let readyPolls = 60
-    private static let readyPollSeconds = 1.0
+    private static let readyPolls = 120
+    private static let readyPollSeconds = 0.5
 
     /// How many recorded conversations to offer the agent before
     /// giving up on continuing one: the newest few are the ones a
