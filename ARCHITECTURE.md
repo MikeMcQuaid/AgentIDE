@@ -714,7 +714,12 @@ shim rather than a protocol:
    `openURL`): web links go to the Browser tab, or the system browser
    with the command key, and anything without a web scheme and host is
    refused with a message, since handing those to the system opener
-   produced an unhelpful "error -50" dialog. Conversations
+   produced an unhelpful "error -50" dialog. The terminal takes the
+   same care: SwiftTerm resolves a click on any detected token, a bare
+   file path included, to a link and asks the delegate to open it, so
+   the delegate opens web links only (`LinkOpener.openWeb`) and leaves
+   a path to be selected and copied rather than handing it to Finder
+   for the same dialog mid-selection. Conversations
    resolve individually through the GraphQL API, on the conversation
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
