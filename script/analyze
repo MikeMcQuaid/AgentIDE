@@ -48,6 +48,11 @@ if ! build; then
     exit 1
   fi
 fi
+# Both passes always run, and the script fails at the end if either
+# did: SwiftLint's analyzer trips over the beta's macro plugin server
+# often enough that aborting on it kept periphery from ever running
+# here, so CI found dead code this gate had silently skipped.
+failed=0
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # The sandbox's SourceKit misreads one import as unused; the
   # baseline swallows exactly that known false positive so real
@@ -57,9 +62,9 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   baseline=".build/swiftlint-analyze-baseline.json"
   sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
     .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
-  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline"
+  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline" || failed=1
 else
-  swiftlint analyze --compiler-log-path "$log" --strict
+  swiftlint analyze --compiler-log-path "$log" --strict || failed=1
 fi
 
 # The project is scanned through the app scheme because periphery's
@@ -82,11 +87,13 @@ elif [[ -n "${SV_SESSION_ID:-}" ]]; then
     --skip-build \
     --index-store-path .DerivedData/Index.noindex/DataStore \
     --strict \
-    --disable-update-check
+    --disable-update-check || failed=1
 else
   periphery scan \
     --project AgentIDE.xcodeproj \
     --schemes AgentIDEApp \
     --strict \
-    --disable-update-check
+    --disable-update-check || failed=1
 fi
+
+exit "$failed"

@@ -10,16 +10,16 @@ import Foundation
 /// way from AgentIDE's panes alone. The privilege cannot be requested,
 /// so the attribute is cleared from the agent's own install before
 /// each launch, the `xattr -d` a user would otherwise run by hand.
-public enum Quarantine {
-    // MARK: Public
+enum Quarantine {
+    // MARK: Internal
 
     /// Where Homebrew links agent commands.
-    public static let homebrewBinaries = ["/opt/homebrew/bin", "/usr/local/bin"]
+    static let homebrewBinaries = ["/opt/homebrew/bin", "/usr/local/bin"]
 
     /// Clears the attribute from every file beside the agent's real
     /// binary, a cask's `bin` holding the helpers the agent launches,
     /// and returns the files it cleared.
-    public static func clear(for agent: AgentKind, binaryDirectories: [String] = homebrewBinaries) -> [String] {
+    static func clear(for agent: AgentKind, binaryDirectories: [String] = homebrewBinaries) -> [String] {
         for directory in binaryDirectories {
             let link = directory + "/" + agent.rawValue
             guard FileManager.default.fileExists(atPath: link) else {

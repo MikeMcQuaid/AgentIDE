@@ -10,14 +10,12 @@ struct RepositoryMenu: ViewModifier {
     let group: RepositoryGroup
     let model: DashboardModel
 
-    @Binding var pending: Repository?
-
     func body(content: Content) -> some View {
         content
             .contextMenu {
                 Button("Refresh") { Task { await model.refreshRepository(path: group.repository.path) } }
                     .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
-                Button("Delete repository", role: .destructive) { pending = group.repository }
+                Button("Delete repository", role: .destructive) { isConfirming = true }
                     .disabled(group.deletionBlocker != nil)
                     .hoverHelp(
                         group.deletionBlocker.map { "Cannot delete: " + $0 }
@@ -26,14 +24,15 @@ struct RepositoryMenu: ViewModifier {
             }
             .confirmationDialog(
                 "Delete the checkout of " + group.repository.name + "?",
-                isPresented: isPresented,
+                isPresented: $isConfirming,
                 titleVisibility: .visible,
             ) {
                 Button("Delete repository", role: .destructive) {
-                    pending = nil
                     Task { await model.deleteRepository(group.repository) }
                 }
-                Button("Cancel", role: .cancel) { pending = nil }
+                Button("Cancel", role: .cancel) {
+                    // Dismissing is all cancelling does.
+                }
             } message: {
                 Text("The checkout at " + group.repository.path + " and its home directory symlink are removed. "
                     + "It has no worktrees, no running agent, nothing uncommitted and is level with origin.")
@@ -42,14 +41,8 @@ struct RepositoryMenu: ViewModifier {
 
     // MARK: Private
 
-    private var isPresented: Binding<Bool> {
-        Binding(
-            get: { pending?.path == group.repository.path },
-            set: { shown in
-                if shown == false, pending?.path == group.repository.path {
-                    pending = nil
-                }
-            },
-        )
-    }
+    /// Whether this repository's delete is waiting on its
+    /// confirmation; owned here because nothing outside the menu
+    /// reads it.
+    @State private var isConfirming = false
 }

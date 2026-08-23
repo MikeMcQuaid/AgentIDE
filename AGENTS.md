@@ -169,7 +169,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Run `script/analyze` again before opening or updating a pull
   request; unused imports and dead code otherwise surface in CI
   first (sandboxed runs reuse the analyze build's index store, so
-  periphery's dead-code pass now runs everywhere)
+  periphery's dead-code pass now runs everywhere). Both passes
+  always run and the script fails at the end if either did: the
+  beta's macro plugin server trips SwiftLint's analyzer often
+  enough that aborting on it hid the dead-code pass entirely
 - Reread changed documentation for UK English, working links and
   72-column wrapping of this file
 - Confirm `README.md` and `ARCHITECTURE.md` still describe behaviour
