@@ -1,5 +1,3 @@
-import Foundation
-
 public extension RepositoryGroup {
     /// Why the repository's checkout cannot be deleted from disk,
     /// nil when it can: deleting is only offered once nothing would
