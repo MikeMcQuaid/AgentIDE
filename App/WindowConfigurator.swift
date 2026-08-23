@@ -1,5 +1,8 @@
 import AppKit
 import SwiftUI
+import TerminalUI
+
+// MARK: - WindowConfigurator
 
 /// Configures the hosting window directly: a transparent, titleless
 /// titlebar over full-size content, with the standard window buttons
@@ -54,6 +57,7 @@ struct WindowConfigurator: NSViewRepresentable {
                 window.standardWindowButton(kind)?.isHidden = false
             }
             restoreFrame(of: window)
+            rememberDisplay()
         }
 
         // MARK: Private
@@ -66,6 +70,28 @@ struct WindowConfigurator: NSViewRepresentable {
         private static let settleSeconds = 0.6
 
         private var observers: [any NSObjectProtocol] = []
+
+        /// The last reported mismatch, so a window that stays wrong
+        /// says so once rather than on every move.
+        private var lastMismatch: String?
+
+        /// The display the window was last seen on, so a screen
+        /// change can tell one that has gone from one that merely
+        /// changed resolution or place.
+        private var lastDisplayID: CGDirectDisplayID?
+
+        /// Whether the display the window was last seen on has gone.
+        /// Screen parameters change for resolution, scaling and
+        /// arrangement too, and a fullscreen space is live through
+        /// all of those: only a display that is really absent earns
+        /// the frame being set by hand.
+        private var displayGone: Bool {
+            guard let last = lastDisplayID else {
+                return false
+            }
+
+            return NSScreen.screens.contains { $0.displayID == last } == false
+        }
 
         /// Displays come and go. Unplugging the one a fullscreen
         /// window is on leaves the window black on a space with no
@@ -88,29 +114,59 @@ struct WindowConfigurator: NSViewRepresentable {
             ]
             for (name, object) in names {
                 observers.append(centre.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.moved() }
+                    MainActor.assumeIsolated { self?.moved(displayGone: self?.displayGone ?? false) }
                 })
             }
+            // A fullscreen space sent to another display posts no
+            // screen-parameter change and does not always announce
+            // the screen change, so the window's own move is the one
+            // signal it always gives. Only fullscreen acts on it:
+            // fitting a dragged window would stop it being pulled
+            // past a screen edge on purpose.
+            observers.append(centre.addObserver(
+                forName: NSWindow.didMoveNotification,
+                object: window,
+                queue: .main,
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.movedIfFullScreen() }
+            })
+        }
+
+        private func movedIfFullScreen() {
+            guard window?.styleMask.contains(.fullScreen) == true else {
+                return
+            }
+
+            moved(displayGone: false)
         }
 
         /// The window changed screen or fullscreen state. Fitting
         /// runs twice: entering and leaving fullscreen are animated,
         /// so the frame that needs fitting is not there yet when the
         /// notification arrives.
-        private func moved() {
-            fit()
+        private func moved(displayGone: Bool) {
+            fit(displayGone: displayGone)
+            rememberDisplay()
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
-                self?.fit()
+                self?.fit(displayGone: displayGone)
+                self?.rememberDisplay()
+                self?.reportUnfittedFullScreen()
             }
         }
 
-        private func fit() {
+        private func rememberDisplay() {
+            if let current = window?.screen?.displayID {
+                lastDisplayID = current
+            }
+        }
+
+        private func fit(displayGone: Bool) {
             guard let window else {
                 return
             }
 
             if window.styleMask.contains(.fullScreen) {
-                fitFullScreen(of: window)
+                fitFullScreen(of: window, hasLostDisplay: displayGone)
             } else {
                 fitToScreen()
             }
@@ -125,18 +181,50 @@ struct WindowConfigurator: NSViewRepresentable {
         /// on when that display goes. macOS moves the space to a
         /// screen that exists, but the content stays drawn to the
         /// old, larger frame: what shows is the black behind it.
-        private func fitFullScreen(of window: NSWindow) {
+        /// Only the display the window was on going away is fitted
+        /// by hand: AppKit owns the frame of a window in a
+        /// fullscreen space, and setting it while a space merely
+        /// moved between two live displays left both screens black
+        /// until the app was killed, which a resolution, scaling or
+        /// arrangement change must not be able to reproduce. Every
+        /// other change lays the content out again for the size
+        /// AppKit gave it, and nothing more.
+        private func fitFullScreen(of window: NSWindow, hasLostDisplay: Bool) {
             guard let screen = window.screen else {
                 // No screen at all to fit: leaving fullscreen puts
                 // the window back on one that exists.
                 window.toggleFullScreen(nil)
                 return
             }
-            guard window.frame != screen.frame else {
+            guard hasLostDisplay, window.frame != screen.frame else {
+                window.contentView?.needsLayout = true
+                window.contentView?.layoutSubtreeIfNeeded()
                 return
             }
 
             window.setFrame(screen.frame, display: true, animate: false)
+        }
+
+        /// Says once, in Messages, when a settled fullscreen window
+        /// still does not match the screen it is on: the frame AppKit
+        /// left behind is the fact needed to fix a window that has to
+        /// be toggled out of fullscreen by hand, and it cannot be
+        /// read from outside the app.
+        private func reportUnfittedFullScreen() {
+            guard let window, window.styleMask.contains(.fullScreen), let screen = window.screen,
+                  window.frame != screen.frame
+            else {
+                return
+            }
+
+            let mismatch = "Fullscreen window is " + NSStringFromRect(window.frame)
+                + " on a screen of " + NSStringFromRect(screen.frame)
+            guard mismatch != lastMismatch else {
+                return
+            }
+
+            lastMismatch = mismatch
+            ErrorLog.shared.note(mismatch)
         }
 
         /// Brings the frame back inside the screen it is on, keeping
@@ -176,5 +264,16 @@ struct WindowConfigurator: NSViewRepresentable {
 
     func updateNSView(_ view: ConfiguringView, context _: Context) {
         view.configureWindow()
+    }
+}
+
+// MARK: - NSScreen display identity
+
+private extension NSScreen {
+    /// The display this screen renders on, which outlives the
+    /// `NSScreen` object a reconfiguration replaces.
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? Int)
+            .map(CGDirectDisplayID.init)
     }
 }

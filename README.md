@@ -164,8 +164,9 @@ before shipping.
   disposable: its transcripts are the one thing git and GitHub do not hold)
 - **Fits** itself to whatever display it is on: unplugging the monitor a
   fullscreen window is on drops it back onto the screen that is left, at a
-  size that screen can show, with the panes narrowed to match (so a window
-  is never stranded larger than the display under it)
+  size that screen can show, with the panes narrowed to match, and a
+  fullscreen window sent to another monitor lays itself out again for it
+  (so a window is never stranded larger than the display under it)
 - **Keeps** every running shell alive while you move around the app and
   keeps a worktree listed until it is really gone, rebases and failed
   listings included (so only closing a shell or destroying its worktree

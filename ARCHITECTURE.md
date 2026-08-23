@@ -583,7 +583,22 @@ long as the thing inside them should live, not for as long as it is visible:
    covers fullscreen too: the frame is set to the screen the window is now
    on, and a redraw asked for, on entering and leaving fullscreen, on
    changing screen and on any change to the displays themselves, each
-   fitted twice since those transitions animate. A window left with no
+   fitted twice since those transitions animate. Only the display the
+   window was on going away sets a fullscreen frame by hand, though:
+   AppKit owns the frame of a window in a fullscreen space, and setting it
+   while a space merely moved between two live displays left both screens
+   black until the app was killed. Screen parameters change for
+   resolution, scaling and arrangement too, and a fullscreen space is live
+   through all of those, so the display the window was last seen on is
+   remembered by its `CGDirectDisplayID` and the manual path is taken only
+   when that display is absent from `NSScreen.screens`. Such a move posts no screen-parameter change and does not
+   always announce the screen change, so the window's own move is watched
+   as well, in fullscreen only (fitting a dragged window would stop it
+   being pulled past a screen edge on purpose), and all it does is lay
+   the content out again for the size AppKit gave it. A settled
+   fullscreen window whose frame still does not match its screen says so
+   once in the messages pane, since that frame is the one fact a window
+   needing fullscreen toggled by hand can offer. A window left with no
    screen at all leaves fullscreen, and then
    fits its frame back inside whichever screen it lands on, and the panes
    fit the width it ends up with: the utility pane narrows first, then the
