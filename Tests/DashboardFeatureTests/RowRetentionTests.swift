@@ -32,6 +32,20 @@ struct RowRetentionTests {
     }
 
     @Test
+    func `keeps a creation placeholder, which has no directory yet`() throws {
+        let root = try makeDirectory()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repositoryPath = try makeDirectory(in: root, named: "repo")
+        let placeholder = repositoryPath + DashboardModel.placeholderMarker + "fix_the_crash"
+
+        let previous = [group(repositoryPath: repositoryPath, paths: [repositoryPath, placeholder])]
+        let next = [group(repositoryPath: repositoryPath, paths: [repositoryPath])]
+
+        let merged = DashboardModel.retainingLostRows(of: previous, in: next)
+        #expect(merged.flatMap(\.items).map(\.worktree.path) == [repositoryPath, placeholder])
+    }
+
+    @Test
     func `keeps a repository the listing lost and drops a removed one`() throws {
         let root = try makeDirectory()
         defer { try? FileManager.default.removeItem(atPath: root) }

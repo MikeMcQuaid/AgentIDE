@@ -137,6 +137,10 @@ extension RootView {
     /// try to attach without a terminal). Failures surface in the
     /// error log, so a resume that cannot launch says why.
     func resumeLatest(in item: WorktreeItem) async {
+        resumingWorktree = item.worktree.path
+        defer {
+            resumingWorktree = nil
+        }
         await dependencies.dashboard.refresh()
         let fresh = dependencies.dashboard.groups.flatMap(\.items).first { $0.id == item.id } ?? item
         guard fresh.session == nil else {

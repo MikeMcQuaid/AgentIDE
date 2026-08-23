@@ -28,11 +28,13 @@ struct RootView: View {
     @AppStorage("showsUtilityPane")
     var showsUtilityPane = true
 
-    /// Whether the launch's one automatic resume is running, so the
-    /// pane it fills can say so; internal because the extension
-    /// files cannot see the view's own state.
-    var isResuming: Bool {
-        isAutoResuming
+    /// The worktree whose conversation is being resumed, so its pane
+    /// shows the resume's progress rather than a terminal bound to
+    /// the pane the resume is replacing; internal and settable
+    /// because the extension files cannot see the view's own state.
+    var resumingWorktree: String? {
+        get { resumingIn }
+        nonmutating set { resumingIn = newValue }
     }
 
     /// Whether the utility pane is both wanted and able to fit: a
@@ -168,11 +170,8 @@ struct RootView: View {
 
             // The pane fills with progress before the resume starts,
             // so the conversation list never flashes first.
-            isAutoResuming = true
-            Task {
-                await resumeLatest(in: item)
-                isAutoResuming = false
-            }
+            resumingWorktree = item.worktree.path
+            Task { await resumeLatest(in: item) }
         }
     }
 
@@ -240,7 +239,7 @@ struct RootView: View {
 
     /// Fills the primary pane with progress while the launch resume
     /// runs, instead of flashing the conversation list first.
-    @State private var isAutoResuming = false
+    @State private var resumingIn: String?
 
     /// The worktrees with running sessions when the machine slept,
     /// so wake can resume exactly the ones sleep killed.

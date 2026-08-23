@@ -193,7 +193,10 @@ public final class DashboardModel {
         groups = listed
         foreign = overview.foreign
         if let selected = selection {
+            // A creation placeholder is never in a listing; it stays
+            // selected until the creation replaces it.
             selection = listed.flatMap(\.items).first { $0.id == selected.id }
+                ?? (selected.isPlaceholder ? selected : nil)
         } else if hasRestoredSelection == false {
             let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
             selection = listed.flatMap(\.items).first { $0.worktree.path == stored }

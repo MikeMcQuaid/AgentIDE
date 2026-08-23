@@ -20,7 +20,10 @@ extension RootView {
                 "Creating the worktree and starting the agent…",
                 progress: dependencies.dashboard.launchProgress,
             )
-        } else if isResuming, item.session == nil {
+        } else if resumingWorktree == item.worktree.path {
+            // Before the terminal: a finished session's pane is what
+            // the resume kills, and a terminal left attached to it
+            // reported the pane gone.
             LaunchProgressView("Resuming the conversation…", progress: dependencies.dashboard.launchProgress)
         } else if let session = item.session {
             agentTerminal(for: session, isActive: isCovered == false)
