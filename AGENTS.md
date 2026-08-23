@@ -156,6 +156,16 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   has no request API. Codex's command host is the known case, so
   `Quarantine` clears the attribute from the agent's install before
   every launch.
+- A fullscreen space sent to another display leaves the display it
+  came from black until a space switch repaints it. This is macOS's
+  vacated space, not a pane of ours: the app owns exactly one window
+  (one `WindowGroup`, no panels, no `collectionBehavior` changes),
+  and `WindowConfigurator` says so in the messages pane when a
+  settled fullscreen window's frame does not match its screen, so a
+  silent Messages tab means the window is correctly framed on its
+  new display and is drawing nothing on the old one. Setting the
+  frame of a window in a fullscreen space to chase this blacks out
+  both displays until the app is killed; do not try it.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
