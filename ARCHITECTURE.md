@@ -9,7 +9,9 @@ the README's Features subsections.
 
 AgentIDE is a native SwiftUI macOS app (macOS 27 or later, Swift 6.4,
 AGPL-3.0) that runs, steers and reviews sandboxed AI coding agents in
-parallel git worktrees. It is developed readme-first: this document describes
+parallel git worktrees. Its user supervises rather than types, so the
+window is arranged around the agent loop, not around an editor, and one
+window covers what four apps used to. It is developed readme-first: this document describes
 the target system and slices of it land in the order given in the README's
 Status section.
 
@@ -425,7 +427,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    step log the service and the herdr client report into: the branch
    name, the worktree, the prompt file, the server check, the workspace,
    the command submitted and what is being waited on) under a clock of
-   the launch's elapsed time ticking every second, so a slow step names
+   the launch's elapsed time ticking every second and a dot a second on
+   the newest step, so a step that reports nothing while it waits still
+   shows the app working, the whole block pinned near the top of the pane
+   so it grows downwards rather than shifting every line each time a step
+   arrives; the version probe runs beside the naming and the worktree,
+   since it costs a sandbox launch of its own and only has to be finished
+   before the agent starts, and a kill that closed nothing skips the
+   listing that would confirm it. So a slow step names
    itself rather than showing a blank pane; resuming narrates the same
    way, one line per command tried. The narration stays until herdr
    detects the agent's interface (`awaitReady`, bounded at a minute), so

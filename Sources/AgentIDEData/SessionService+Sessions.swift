@@ -23,8 +23,13 @@ public extension SessionService {
     /// processes and the sudoers rules stay narrow, so herdr is the
     /// only lever.
     func killSession(name: String) async {
-        try? await herdr.killSession(name: name)
-        guard await sessionExists(name: name) else {
+        // A name nothing holds is the common case on a fresh start,
+        // and confirming it costs a listing of every pane, so only a
+        // kill that answered "nothing was there" skips the check. A
+        // kill that closed something, or failed part way and cannot
+        // say, is checked and retried.
+        let closed = await (try? herdr.killSession(name: name))
+        guard closed != 0, await sessionExists(name: name) else {
             return
         }
 
@@ -39,18 +44,29 @@ public extension SessionService {
     /// version whose files have been deleted fails in ways that read
     /// as the app's fault. Anything the user asks for by hand comes
     /// through here and gets a new process.
-    internal func startFresh(sessionName: String, directory: String, command: String) async throws {
+    internal func startFresh(
+        sessionName: String,
+        directory: String,
+        command: String,
+        probed version: String? = nil,
+    ) async throws {
         await progress("Closing any previous session")
         await killSession(name: sessionName)
         if let agent = agentKind(of: sessionName) {
             await clearQuarantine(for: agent)
         }
-        // The version probe runs before the launch, never beside it:
-        // it is a second copy of the same CLI, and Codex stages its
-        // execution host under a lock in its own home, which two
-        // copies starting at once contend for.
+        // The version probe finishes before the launch, never runs
+        // beside it: it is a second copy of the same CLI, and Codex
+        // stages its execution host under a lock in its own home,
+        // which two copies starting at once contend for. Creation
+        // hands one already running alongside the worktree, which is
+        // where the seconds it costs are free.
         await progress("Asking the agent's CLI its version")
-        await recordAgentVersion(sessionName: sessionName)
+        if let version {
+            record(version: version, sessionName: sessionName)
+        } else {
+            await recordAgentVersion(sessionName: sessionName)
+        }
         try await herdr.newSession(name: sessionName, directory: directory, command: command)
     }
 
@@ -63,6 +79,12 @@ public extension SessionService {
             return
         }
 
+        await record(version: probeVersion(of: agent), sessionName: sessionName)
+    }
+
+    /// Asks a CLI its version, which costs a sandbox launch of its
+    /// own; callers with anything else to do run it beside that.
+    internal func probeVersion(of agent: AgentKind) async -> String? {
         let argv = launcher.command(
             payload: agent.rawValue + " --version </dev/null",
             initialDirectory: launcher.sharedWorkspace,
@@ -70,7 +92,14 @@ public extension SessionService {
             sessionName: "agentide-version",
         )
         let result = try? await processes.run(argv, workingDirectory: nil, environment: [:])
-        guard let version = runner(for: agent).parseVersion(result?.standardOutput ?? "") else {
+        return runner(for: agent).parseVersion(result?.standardOutput ?? "")
+    }
+
+    /// Remembers a probed version under the session name, so the
+    /// pane says which version it is running rather than which one
+    /// is installed now.
+    internal func record(version: String?, sessionName: String) {
+        guard let version else {
             return
         }
 

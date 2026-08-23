@@ -70,7 +70,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   delay over half a second. A transition made of several steps
   names each step and what it waits on as it happens, through
   `LaunchProgress`, and keeps something on screen changing at
-  least once a second. The same holds for every pane whose data
+  least once a second, the block pinned near the top of the pane so
+  it grows downwards. Work that need not be serial is not: anything
+  the launch does not depend on yet runs beside it. The same holds
+  for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming
   what it waits on until the first result lands, then snaps to the
   finished UI. An empty state ("Nothing running", "No changes")

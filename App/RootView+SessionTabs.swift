@@ -248,7 +248,7 @@ extension RootView {
 
     // MARK: Private
 
-    private static let stripSpacing: CGFloat = 4
+    static let stripSpacing: CGFloat = 4
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
 

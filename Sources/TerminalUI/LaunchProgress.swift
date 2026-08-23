@@ -97,14 +97,17 @@ public struct LaunchProgressView: View {
                         .monospacedDigit()
                 }
                 ForEach(steps) { step in
-                    Text(Self.styled(step.text))
+                    Text(Self.styled(step.text + waitingDots(on: step, at: context.date)))
                         .font(.callout)
                         .lineLimit(Self.stepLines)
                 }
             }
             .frame(maxWidth: Self.blockWidth, alignment: .leading)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Pinned near the top so the log grows downwards: centred,
+            // it shifted every line each time a step arrived.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding()
+            .padding(.top, Self.topInset)
         }
     }
 
@@ -114,6 +117,8 @@ public struct LaunchProgressView: View {
     private static let spacing: CGFloat = 6
     private static let blockWidth: CGFloat = 560
     private static let stepLines = 3
+    private static let topInset: CGFloat = 40
+    private static let dotCycle = 3
 
     @State private var appearedAt: Date = .init()
 
@@ -132,6 +137,18 @@ public struct LaunchProgressView: View {
     private static func styled(_ text: String) -> AttributedString {
         (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(text)
+    }
+
+    /// A dot a second on the newest step, up to three: a step that
+    /// waits without reporting anything still has to show the app is
+    /// working rather than stopped.
+    private func waitingDots(on step: LaunchProgress.Step, at now: Date) -> String {
+        guard step.id == steps.last?.id else {
+            return ""
+        }
+
+        let ticks = Int(max(0, now.timeIntervalSince(step.startedAt)) / Self.tickSeconds)
+        return String(repeating: ".", count: 1 + ticks % Self.dotCycle)
     }
 
     /// How long the wait has run, from its first step.

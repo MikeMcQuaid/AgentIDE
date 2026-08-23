@@ -53,6 +53,36 @@ extension RootView {
         }
     }
 
+    /// The primary column: the session strip over whichever pane
+    /// the worktree calls for. A covering page hides it rather than
+    /// unmounting it, so the agent's terminal keeps its herdr client
+    /// and its scrollback, and the utility toggle parks at its top
+    /// right while the utility pane is hidden, in exactly the spot
+    /// that pane's header shows it, so it never moves on toggle.
+    func primaryColumn(for item: WorktreeItem) -> some View {
+        VStack(spacing: 0) {
+            sessionStrip(for: item)
+            primary(for: item)
+        }
+        .opacity(isCovered ? 0 : 1)
+        .allowsHitTesting(isCovered == false)
+        .overlay { coveringPage }
+        .overlay(alignment: .topTrailing) {
+            if showsUtility == false {
+                utilityToggleButton
+                    .frame(height: Self.toggleRowHeight)
+                    .padding(.trailing, Self.stripSpacing)
+            }
+        }
+        .frame(
+            minWidth: PaneLayout.primaryMinimum,
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: .top,
+        )
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
     /// What the detail shows with nothing selected: the first
     /// reading's progress until it lands, then the invitation.
     @ViewBuilder var unselectedDetail: some View {

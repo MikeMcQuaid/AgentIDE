@@ -43,13 +43,22 @@ public extension SessionService {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
         let sessionName = SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: agent)
+        // Cleared first and probed beside the kill, as creation does.
+        await clearQuarantine(for: agent)
+        async let probed = probeVersion(of: agent)
         await killSession(name: sessionName)
         let slot = WorktreeSlot(
             repository: Repository(name: worktree.repositoryName, path: worktree.repositoryPath),
             branch: worktree.branch,
             path: worktree.path,
         )
-        return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
+        return try await start(
+            prompt: prompt,
+            agent: agent,
+            options: options,
+            slot: slot,
+            probed: probed,
+        )
     }
 
     /// The models and efforts an agent's pickers offer when discovery
@@ -94,6 +103,8 @@ public extension SessionService {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
+        await clearQuarantine(for: agent)
+        async let probed = probeVersion(of: agent)
         let issue = try await github.issue(repositoryPath: repository.path, number: number)
         let prompt = GitHubClient.issuePrompt(
             number: number,
@@ -104,7 +115,13 @@ public extension SessionService {
         let branch = await availableBranch(repository: repository, prompt: "issue-\(number)-" + issue.title)
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
-        return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
+        return try await start(
+            prompt: prompt,
+            agent: agent,
+            options: options,
+            slot: slot,
+            probed: probed,
+        )
     }
 
     /// Creates a session on a pull request's own branch: the worktree
@@ -117,6 +134,8 @@ public extension SessionService {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
+        await clearQuarantine(for: agent)
+        async let probed = probeVersion(of: agent)
         let detail = try await github.pullRequestDetail(repositoryPath: repository.path, number: number)
         let prompt = GitHubClient.pullRequestPrompt(
             number: number,
@@ -128,7 +147,13 @@ public extension SessionService {
         try await github.checkoutPullRequest(worktreePath: worktreePath, number: number)
         let branch = detail.headBranch.isEmpty ? "pr-\(number)" : detail.headBranch
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
-        return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
+        return try await start(
+            prompt: prompt,
+            agent: agent,
+            options: options,
+            slot: slot,
+            probed: probed,
+        )
     }
 
     /// How much of the prompt seeds the fallback branch name.
@@ -152,11 +177,6 @@ public extension SessionService {
             attempt += 1
         }
         return "\(base)-\(attempt)"
-    }
-
-    /// Fetches and prunes the repository's remotes.
-    func fetch(repository: Repository) async throws {
-        try await git.fetch(repositoryPath: repository.path)
     }
 
     /// Fetches origin and hard-resets the main checkout to its
@@ -373,12 +393,4 @@ public extension SessionService {
     }
 
     // MARK: Internal
-
-    /// Adds a detached worktree, letting `gh pr checkout` create the
-    /// branch afterwards.
-    func createDetachedWorktreePath(repository: Repository, name: String) async throws -> String {
-        let path = worktreeContainer(repository: repository) + "/" + name
-        try await git.addDetachedWorktree(repository: repository, at: path)
-        return path
-    }
 }

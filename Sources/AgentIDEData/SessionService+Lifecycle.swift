@@ -87,6 +87,29 @@ public extension SessionService {
         }
     }
 
+    /// Adds the worktree a new session works in, under the
+    /// repository's own directory.
+    func createWorktreePath(repository: Repository, branch: String) async throws -> String {
+        let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        await progress("Running `git worktree add " + path + "`")
+        try await git.createWorktree(repository: repository, branch: branch, at: path)
+        await progress("Worktree ready at `" + path + "`")
+        return path
+    }
+
+    /// Adds a detached worktree, letting `gh pr checkout` create the
+    /// branch afterwards.
+    func createDetachedWorktreePath(repository: Repository, name: String) async throws -> String {
+        let path = worktreeContainer(repository: repository) + "/" + name
+        try await git.addDetachedWorktree(repository: repository, at: path)
+        return path
+    }
+
+    /// Fetches and prunes the repository's remotes.
+    func fetch(repository: Repository) async throws {
+        try await git.fetch(repositoryPath: repository.path)
+    }
+
     /// Removes the symlink an earlier release kept beside a
     /// uuid-layout worktree; the canonical path is what git knows,
     /// so this is cosmetic cleanup of the old layout.
