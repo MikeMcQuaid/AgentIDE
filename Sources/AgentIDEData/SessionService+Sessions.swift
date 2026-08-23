@@ -24,10 +24,12 @@ public extension SessionService {
     /// only lever.
     func killSession(name: String) async {
         // A name nothing holds is the common case on a fresh start,
-        // and confirming it costs a listing of every pane: only a
-        // kill that closed something is worth checking on.
-        let closed = await (try? herdr.killSession(name: name)) ?? 0
-        guard closed > 0, await sessionExists(name: name) else {
+        // and confirming it costs a listing of every pane, so only a
+        // kill that answered "nothing was there" skips the check. A
+        // kill that closed something, or failed part way and cannot
+        // say, is checked and retried.
+        let closed = await (try? herdr.killSession(name: name))
+        guard closed != 0, await sessionExists(name: name) else {
             return
         }
 
@@ -46,7 +48,7 @@ public extension SessionService {
         sessionName: String,
         directory: String,
         command: String,
-        probing version: Task<String?, Never>? = nil,
+        probed version: String? = nil,
     ) async throws {
         await progress("Closing any previous session")
         await killSession(name: sessionName)
@@ -61,7 +63,7 @@ public extension SessionService {
         // where the seconds it costs are free.
         await progress("Asking the agent's CLI its version")
         if let version {
-            await record(version: version.value, sessionName: sessionName)
+            record(version: version, sessionName: sessionName)
         } else {
             await recordAgentVersion(sessionName: sessionName)
         }

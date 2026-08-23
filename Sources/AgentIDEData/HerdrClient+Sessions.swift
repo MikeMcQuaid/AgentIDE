@@ -260,10 +260,24 @@ public extension HerdrClient {
     @discardableResult
     func killSession(name: String) async throws -> Int {
         var closed = 0
+        var failure: (any Error)?
         for row in try await snapshotRows() where row.sessionName == name {
-            try await herdr(["workspace", "close", row.workspaceID])
-            closed += 1
+            // Every match is tried: stopping at the first refusal
+            // would leave the rest of a duplicated label running,
+            // and the refusal is thrown once they have all been
+            // attempted, so a caller still knows the pass was
+            // incomplete.
+            do {
+                try await herdr(["workspace", "close", row.workspaceID])
+                closed += 1
+            } catch {
+                failure = failure ?? error
+            }
         }
+        if let failure {
+            throw failure
+        }
+
         return closed
     }
 
