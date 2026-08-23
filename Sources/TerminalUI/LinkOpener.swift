@@ -79,6 +79,22 @@ public enum LinkOpener {
         }
     }
 
+    /// Opens a link only when it is a web link, ignoring anything
+    /// else so a bare file path a terminal detected under the cursor
+    /// never reaches the system opener, which handed it to Finder for
+    /// a "-50" dialog. Returns whether it opened.
+    @discardableResult
+    @preconcurrency
+    @MainActor
+    public static func openWeb(_ address: String) -> Bool {
+        guard let url = URL(string: address), isWeb(url) else {
+            return false
+        }
+
+        open(address)
+        return true
+    }
+
     // MARK: Private
 
     /// Whether a link has a web scheme and a host, the only shape

@@ -27,8 +27,11 @@ public extension DashboardModel {
 
             var items = fresh.items
             let paths = Set(items.map(\.worktree.path))
+            // A creation placeholder has no directory yet and stays
+            // until the creation removes it.
             let lost = old.items.enumerated().filter { row in
-                paths.contains(row.element.worktree.path) == false && stillExists(row.element.worktree.path)
+                paths.contains(row.element.worktree.path) == false
+                    && (row.element.isPlaceholder || stillExists(row.element.worktree.path))
             }
             for (index, item) in lost {
                 // Back where it was, so a row the reading lost does

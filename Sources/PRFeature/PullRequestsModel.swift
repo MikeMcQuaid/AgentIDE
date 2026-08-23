@@ -46,9 +46,6 @@ final class PullRequestsModel {
             }
             return answer.threads
         }
-        fetchFailingChecks = { number in
-            await github.failingChecks(repositoryPath: repository.path, number: number)
-        }
         performCreate = { worktree, title, body in
             try await service.createPullRequest(worktree: worktree, title: title, body: body)
         }
@@ -175,7 +172,6 @@ final class PullRequestsModel {
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
-    var fetchFailingChecks: (Int) async -> String
     var performCreate: (Worktree, String, String) async throws -> String
     var fetchTemplate: (String) -> String?
     var fetchCommitMessages: (Worktree) async -> [String]

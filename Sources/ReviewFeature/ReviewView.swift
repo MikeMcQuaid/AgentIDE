@@ -197,7 +197,9 @@ public struct ReviewView: View {
     }
 
     @ViewBuilder private var diffList: some View {
-        if model.files.isEmpty {
+        if model.hasLoaded == false {
+            LaunchProgressView("Loading the diff…", waitingOn: "`git diff` in `" + worktreePath + "`")
+        } else if model.files.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {

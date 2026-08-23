@@ -48,6 +48,45 @@ public extension SessionService {
         removeFriendlySymlink(worktree: worktree)
     }
 
+    /// Deletes a repository's checkout from disk, refusing while the
+    /// dashboard's rule (`RepositoryGroup.deletionBlocker`) would:
+    /// the rule is re-read here from a fresh reading so a stale
+    /// sidebar can never delete work. The checkout goes as the host
+    /// user first and as the sandbox user when its files are owned
+    /// there, then the repository's empty worktree container and any
+    /// symlink in the home directory that pointed at the checkout.
+    /// Conversations stay readable: transcripts live in the sandbox
+    /// home and the recorded session mapping survives.
+    func deleteRepository(_ repository: Repository) async throws {
+        let group = await overview().groups.first { $0.repository.path == repository.path }
+        let blocker: String? =
+            if let group {
+                group.deletionBlocker
+            } else {
+                "the repository is no longer listed"
+            }
+        if let blocker {
+            throw CommandError(
+                command: "delete " + repository.path,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "Not deleted: " + blocker),
+            )
+        }
+
+        do {
+            try FileManager.default.removeItem(atPath: repository.path)
+        } catch {
+            try await removeAsSandboxUser(path: repository.path)
+        }
+        try? FileManager.default.removeItem(atPath: worktreeContainer(repository: repository))
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        for entry in (try? FileManager.default.contentsOfDirectory(atPath: home.path)) ?? [] {
+            let link = home.appending(path: entry).path
+            if (try? FileManager.default.destinationOfSymbolicLink(atPath: link)) == repository.path {
+                try? FileManager.default.removeItem(atPath: link)
+            }
+        }
+    }
+
     /// Removes the symlink an earlier release kept beside a
     /// uuid-layout worktree; the canonical path is what git knows,
     /// so this is cosmetic cleanup of the old layout.

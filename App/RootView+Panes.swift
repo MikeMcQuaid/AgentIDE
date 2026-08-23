@@ -20,7 +20,10 @@ extension RootView {
                 "Creating the worktree and starting the agent…",
                 progress: dependencies.dashboard.launchProgress,
             )
-        } else if isResuming, item.session == nil {
+        } else if resumingWorktree == item.worktree.path {
+            // Before the terminal: a finished session's pane is what
+            // the resume kills, and a terminal left attached to it
+            // reported the pane gone.
             LaunchProgressView("Resuming the conversation…", progress: dependencies.dashboard.launchProgress)
         } else if let session = item.session {
             agentTerminal(for: session, isActive: isCovered == false)
@@ -31,7 +34,7 @@ extension RootView {
                 .dropDestination(for: URL.self) { urls, _ in
                     dropFiles(urls, into: session.name)
                 }
-        } else if item.worktree.path == item.worktree.repositoryPath {
+        } else if item.worktree.path == item.worktree.repositoryPath, startingSession != item.worktree.path {
             repositoryConversations(for: item)
         } else if item.pastSessions.isEmpty == false, startingSession != item.worktree.path {
             worktreeConversations(for: item)
@@ -42,9 +45,27 @@ extension RootView {
                 canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
                 // Only a worktree with conversations to go back to
                 // shows the way back.
-                onShowConversations: item.pastSessions.isEmpty ? nil : { startingSession = nil },
+                onShowConversations: item.pastSessions.isEmpty
+                    && item.worktree.path != item.worktree.repositoryPath ? nil : { startingSession = nil },
                 onResume: { await resumeLatest(in: item) },
-                onStarted: { await sessionStarted() },
+                onStarted: { await sessionStarted(in: item.worktree.path) },
+            )
+        }
+    }
+
+    /// What the detail shows with nothing selected: the first
+    /// reading's progress until it lands, then the invitation.
+    @ViewBuilder var unselectedDetail: some View {
+        if dependencies.dashboard.hasLoaded == false {
+            LaunchProgressView(
+                "Reading repositories, worktrees and sessions…",
+                waitingOn: "`git worktree list` for each repository and `herdr api snapshot`",
+            )
+        } else {
+            ContentUnavailableView(
+                "No worktree selected",
+                systemImage: "rectangle.stack",
+                description: Text("Pick a worktree on the left or create a session."),
             )
         }
     }

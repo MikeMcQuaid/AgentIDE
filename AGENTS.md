@@ -37,6 +37,7 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   (the generated `.xcodeproj` stays gitignored)
 - `bin/`: commands shipped inside the app bundle (the `agentide`
   editor shim a shell pane puts on its `PATH`)
+- `docs/`: the images `README.md` embeds
 - `script/`: development tasks
 - `Brewfile`: development dependencies
 - `.github/workflows/tests.yml`: CI
@@ -69,7 +70,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   delay over half a second. A transition made of several steps
   names each step and what it waits on as it happens, through
   `LaunchProgress`, and keeps something on screen changing at
-  least once a second.
+  least once a second. The same holds for every pane whose data
+  arrives later than the pane: it shows `LaunchProgressView` naming
+  what it waits on until the first result lands, then snaps to the
+  finished UI. An empty state ("Nothing running", "No changes")
+  appears only once a load has proven it empty, never before.
 - Buttons follow Apple HIG and Liquid Glass, in that order, then
   this app's conventions: at most one primary action per surface,
   rendered prominent and bound to Cmd-Return when the surface takes
@@ -77,7 +82,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   hover help when the icon is unambiguous and short text otherwise.
   Order buttons in the sequence they are expected to be clicked,
   left to right, primary last; put counts in the label and
-  explanations in hover help. Slow or unrepeatable actions go
+  explanations in hover help. A context menu of more than three
+  items groups them with separators, the destructive item last in
+  its own group. Slow or unrepeatable actions go
   through `BusyButton` and lock any inputs they read or write
   while running.
 
@@ -145,9 +152,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `com.apple.quarantine`, `spctl -a -t exec -vv` rejects it and the
   host's `log show` names `syspolicyd` with AgentIDE as the responsible
   app.
-  Terminal works because it holds the Developer Tools privilege; see the
-  README's requirements for the fix. Codex's command host is the known
-  case.
+  Terminal works because it holds the Developer Tools privilege, which
+  has no request API. Codex's command host is the known case, so
+  `Quarantine` clears the attribute from the agent's install before
+  every launch.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
@@ -162,7 +170,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Run `script/analyze` again before opening or updating a pull
   request; unused imports and dead code otherwise surface in CI
   first (sandboxed runs reuse the analyze build's index store, so
-  periphery's dead-code pass now runs everywhere)
+  periphery's dead-code pass now runs everywhere). Both passes
+  always run and the script fails at the end if either did: the
+  beta's macro plugin server trips SwiftLint's analyzer often
+  enough that aborting on it hid the dead-code pass entirely
 - Reread changed documentation for UK English, working links and
   72-column wrapping of this file
 - Confirm `README.md` and `ARCHITECTURE.md` still describe behaviour

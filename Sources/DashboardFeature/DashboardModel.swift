@@ -68,6 +68,10 @@ public final class DashboardModel {
     /// Whether the session manager sheet is shown.
     public var showsSessionManager = false
 
+    /// Whether the first reading of the system has landed; until then
+    /// the window shows progress, not an empty selection.
+    public private(set) var hasLoaded = false
+
     /// The repository the sheet preselects, set by the toolbar's new
     /// session button.
     public var newSessionRepository: Repository?
@@ -193,12 +197,16 @@ public final class DashboardModel {
         groups = listed
         foreign = overview.foreign
         if let selected = selection {
+            // A creation placeholder is never in a listing; it stays
+            // selected until the creation replaces it.
             selection = listed.flatMap(\.items).first { $0.id == selected.id }
+                ?? (selected.isPlaceholder ? selected : nil)
         } else if hasRestoredSelection == false {
             let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
             selection = listed.flatMap(\.items).first { $0.worktree.path == stored }
         }
         hasRestoredSelection = true
+        hasLoaded = true
         cacheSidebar(listed)
         await refreshStalePullRequests(forcing: repositoryPath)
     }

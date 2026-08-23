@@ -18,7 +18,6 @@ extension PullRequestsModelTests {
         model.fetchSummary = { _ in nil }
         model.fetchHasMergeQueue = { false }
         model.fetchThreads = { _ in [] }
-        model.fetchFailingChecks = { _ in "" }
         model.performCreate = { _, _, _ in "" }
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _ in [] }

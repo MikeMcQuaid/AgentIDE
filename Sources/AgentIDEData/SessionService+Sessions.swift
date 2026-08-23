@@ -3,7 +3,7 @@ import Foundation
 
 /// How long a closed workspace gets to go before the close is
 /// asked again.
-private let killGraceSeconds = 2.0
+private let killGraceSeconds = 0.5
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
@@ -42,6 +42,9 @@ public extension SessionService {
     internal func startFresh(sessionName: String, directory: String, command: String) async throws {
         await progress("Closing any previous session")
         await killSession(name: sessionName)
+        if let agent = agentKind(of: sessionName) {
+            await clearQuarantine(for: agent)
+        }
         // The version probe runs before the launch, never beside it:
         // it is a second copy of the same CLI, and Codex stages its
         // execution host under a lock in its own home, which two

@@ -704,19 +704,22 @@ shim rather than a protocol:
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree.
 7. Each pull request row offers the last mile as small actions: copy the
-   unresolved review conversations, or the failing checks with their
-   failed steps' actual log output, to the clipboard for pasting into
-   an agent, and open the page in the Browser tab. Every in-app link,
+   unresolved review conversations to the clipboard for pasting into an
+   agent, jump to the one failing check or, when several fail, the
+   checks page (copying failed step logs through `gh run view` proved
+   too unreliable to keep) and open the page in the Browser tab. Every
+   in-app link,
    a markdown link in a conversation or pull request body included,
    takes one route (`LinkOpener.action`, installed as the window's
    `openURL`): web links go to the Browser tab, or the system browser
    with the command key, and anything without a web scheme and host is
    refused with a message, since handing those to the system opener
-   produced an unhelpful "error -50" dialog. A failing check names
-   its own job, and that job is what is read (`gh run view --job`),
-   since a run of fifty jobs where one failed would otherwise paste the
-   other forty-nine; while the run is still going `gh` refuses its logs,
-   so the job's log comes from the API instead. Conversations
+   produced an unhelpful "error -50" dialog. The terminal takes the
+   same care: SwiftTerm resolves a click on any detected token, a bare
+   file path included, to a link and asks the delegate to open it, so
+   the delegate opens web links only (`LinkOpener.openWeb`) and leaves
+   a path to be selected and copied rather than handing it to Finder
+   for the same dialog mid-selection. Conversations
    resolve individually through the GraphQL API, on the conversation
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
@@ -768,13 +771,24 @@ shim rather than a protocol:
    workspace, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes any symlink an earlier release left.
    Nothing is archived:
-   the branch and any uncommitted files are gone.
+   the branch and any uncommitted files are gone. A whole repository
+   goes the same way from its sidebar header, but only when nothing
+   could be lost: `RepositoryGroup.deletionBlocker` names the first of
+   a remaining worktree, a running agent, uncommitted or untracked
+   files and a checkout ahead of or behind origin's default branch, the
+   menu item is disabled with that reason while one holds, and the
+   service re-reads the rule from a fresh overview before removing the
+   checkout (as the sandbox user when its files are owned there), the
+   repository's empty worktree container and the home directory
+   symlink that pointed at it.
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
 4. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
-   deleted worktrees alike, and resumes any of them into a fresh worktree.
+   deleted worktrees alike, resumes any of them into a fresh worktree and
+   starts a fresh session on the default branch in the checkout itself,
+   with no new worktree, for a job that does not need one.
 
 ### Close and reopen a session
 
@@ -802,6 +816,11 @@ it. herdr is how a session survives the app quitting, crashing or updating;
 it is not how an agent survives its own upgrade, so everything the user asks
 for by hand (starting, closing, resuming) replaces the process, while
 reattaching to what is already running is left to the app reopening. Each
+start first clears `com.apple.quarantine` from every file in the agent's
+Homebrew install (`Quarantine`): casks can leave it on, and macOS then
+kills those files at exec from any app without the Developer Tools
+privilege, which cannot be requested, while Terminal holds it and so hid
+the problem; Codex's command host was the case found. Each
 start also asks the CLI its version and records it under the session name,
 and the pane's strip shows that rather than the agent's family alone, with
 the session name after it, since that is the workspace label herdr shows

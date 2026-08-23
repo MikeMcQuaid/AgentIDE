@@ -18,7 +18,7 @@ struct PullRequestConversationPane: View {
     let store: MetadataStore
     let onBack: () -> Void
     let onCopyComments: @MainActor () async -> Void
-    let onCopyChecks: @MainActor () async -> Void
+    let onOpenChecks: @MainActor () async -> Void
     let onResolvedChanged: @MainActor () async -> Void
 
     var body: some View {
@@ -33,7 +33,7 @@ struct PullRequestConversationPane: View {
                     stackDepth: stackDepth,
                     showsActions: true,
                     onCopyComments: onCopyComments,
-                    onCopyChecks: onCopyChecks,
+                    onOpenChecks: onOpenChecks,
                 )
             }
             .padding(.horizontal, Self.padding)
@@ -80,8 +80,11 @@ struct PullRequestConversationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
                 if isLoading, events.isEmpty, description.isEmpty {
-                    ProgressView("Loading conversation…")
-                        .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
+                    LaunchProgressView(
+                        "Loading the conversation…",
+                        waitingOn: "GitHub for the description, reviews and comments of #" + String(number),
+                    )
+                    .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
                 } else {
                     content
                 }

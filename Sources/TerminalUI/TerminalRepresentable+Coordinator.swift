@@ -186,6 +186,15 @@ extension TerminalRepresentable {
             // Directories are not surfaced.
         }
 
+        /// Only web links open. SwiftTerm resolves a click on any
+        /// detected token, a bare file path included, to a link and
+        /// asks to open it; its default handed the path to the system
+        /// opener, which is Finder answering "-50" mid-selection. A
+        /// path is left to be selected and copied, never opened.
+        func requestOpenLink(source _: TerminalView, link: String, params _: [String: String]) {
+            LinkOpener.openWeb(link)
+        }
+
         func scrolled(source _: TerminalView, position _: Double) {
             // Scrolling is local to the view.
         }

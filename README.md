@@ -2,6 +2,8 @@
 
 🪪 IDE for Agents
 
+![The worktree sidebar, an agent's terminal and its pull request side by side](docs/screenshot.png)
+
 A native macOS app for running, steering and reviewing sandboxed AI coding
 agents in parallel git worktrees, from problem statement to merged pull
 request. Built with SwiftUI on top of
@@ -39,9 +41,11 @@ before shipping.
   starting work is one prompt, not a git ritual, a slow step is never a
   blank pane and the pane never appears before the agent does)
 - **Starts** the agent of your choice in `herdr` inside the sandvault sandbox, with
-  Claude Code and Codex CLI supported first and more pluggable later (so
-  agents run unattended with no permission prompts and no access to your
-  credentials)
+  Claude Code and Codex CLI supported first and more pluggable later, first
+  clearing Gatekeeper's quarantine from the agent's Homebrew install, which
+  otherwise kills helpers such as Codex's command host when an app rather
+  than Terminal starts them (so agents run unattended with no permission
+  prompts, no access to your credentials and no "shell host exited" riddles)
 
 ### 👀 Watch and steer
 
@@ -124,9 +128,10 @@ before shipping.
   creating it and its remote the first time and opening the pull request from
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
-- **Copies** unresolved review comments, or failing CI steps with their
-  actual log output, straight into a prompt, resolves conversations one
-  by one, resolves merge conflicts and enables automerge or merges,
+- **Copies** unresolved review comments straight into a prompt, jumps to
+  the failing check (or the checks page when several fail), resolves
+  conversations one by one, resolves merge conflicts and enables
+  automerge or merges,
   each with one click (so the last mile is not the slowest)
 
 ### 🧹 Tidy up
@@ -135,10 +140,17 @@ before shipping.
   whether you merged in the app, picked Clean up after merge from the
   worktree's menu or the next refresh simply notices the merge happened
   on GitHub (so finished work disappears without ceremony)
+- **Deletes** a repository's checkout from its sidebar menu, offered only
+  while it has no worktrees, no running agent, nothing uncommitted or
+  untracked and is level with origin's default branch, with the menu
+  saying which of those holds it back otherwise (so a repository you are
+  done with leaves as easily as a worktree, and never with work in it)
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
   even after that worktree is deleted, and starts a fresh session in a
-  worktree from the same list (so tidying up never loses a conversation)
+  worktree from the same list, or one on the default branch in the
+  checkout itself without a new worktree (so tidying up never loses a
+  conversation and a quick job needs no worktree)
 
 ### 🛟 Resilience
 
@@ -161,6 +173,11 @@ before shipping.
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
+- **Waits** out loud: any pane whose data takes a moment, the first
+  reading of your worktrees, a diff, a pull request list or the session
+  manager, shows what it is waiting on with a clock ticking every second,
+  then snaps to the finished view (so an empty state is only ever shown
+  once it has been proven empty, never while the answer is still coming)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the
   utility pane (so nothing is lost to a status line that scrolled past or
@@ -189,14 +206,6 @@ before shipping.
   user and shared workspace)
 - [`gh`](https://cli.github.com) authenticated as you (it stays with your user;
   agents never see it)
-- **Gatekeeper** letting AgentIDE run the agents' own helper binaries:
-  a Homebrew cask can leave `com.apple.quarantine` on what it installs
-  (Codex's command host arrived that way), and macOS then silently kills
-  the binary at launch from any app without the Developer Tools privilege,
-  so Codex reports its "shell host" exiting during startup while the same
-  command works in Terminal. Either add AgentIDE under System Settings,
-  Privacy & Security, Developer Tools, or install casks with
-  `HOMEBREW_CASK_OPTS=--no-quarantine`
 - [`herdr`](https://herdr.dev) and
   [`mosh`](https://mosh.org) (installed by `script/bootstrap` via the
   `Brewfile`; `mosh` is only needed to reach sessions from a phone over a

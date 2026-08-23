@@ -138,9 +138,12 @@ public extension DashboardModel {
         do {
             screenError = nil
             let sessionName = try await work()
-            await refresh()
+            await refreshUntil { items in items.contains { $0.session?.name == sessionName } }
             if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
+                launchProgress.report("Listed; opening the pane of `" + sessionName + "`")
                 selection = created
+            } else {
+                launchProgress.report("`" + sessionName + "` never appeared in a listing; select it by hand")
             }
         } catch {
             // Back to the form with the failure inline: it cannot
@@ -151,6 +154,34 @@ public extension DashboardModel {
             ErrorLog.shared.report(error.localizedDescription)
         }
     }
+
+    /// Re-reads the system until the listing satisfies a condition,
+    /// narrating the wait: a reading takes seconds (git in every
+    /// worktree, the herdr snapshot) and one the poll's own reading
+    /// supersedes is discarded, so the first reading after a launch
+    /// did not always list the new session, and nothing switched to
+    /// it. Bounded, so a session that truly never lists cannot hold
+    /// the page forever.
+    func refreshUntil(_ isListed: ([WorktreeItem]) -> Bool) async {
+        launchProgress.report("Reading every worktree and session again to list it")
+        for attempt in 0 ..< Self.listingAttempts {
+            await refresh()
+            if isListed(groups.flatMap(\.items)) {
+                return
+            }
+            if attempt == 0 {
+                launchProgress.report("Not listed yet; reading again every half second")
+            }
+            // A cancelled sleep ends the wait: swallowing the
+            // cancellation would spin the readings back to back.
+            guard await (try? Task.sleep(for: .milliseconds(Self.listingRetryMilliseconds))) != nil else {
+                return
+            }
+        }
+    }
+
+    private static let listingAttempts = 20
+    private static let listingRetryMilliseconds = 500
 
     /// A provisional branch-style name from the prompt's first words,
     /// in the same underscore style the real name will have.
