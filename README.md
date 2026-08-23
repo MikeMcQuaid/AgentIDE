@@ -137,6 +137,11 @@ before shipping.
   whether you merged in the app, picked Clean up after merge from the
   worktree's menu or the next refresh simply notices the merge happened
   on GitHub (so finished work disappears without ceremony)
+- **Deletes** a repository's checkout from its sidebar menu, offered only
+  while it has no worktrees, no running agent, nothing uncommitted or
+  untracked and is level with origin's default branch, with the menu
+  saying which of those holds it back otherwise (so a repository you are
+  done with leaves as easily as a worktree, and never with work in it)
 - **Keeps** every conversation a repository has ever run browsable and
   resumable from the repository's own page, whichever worktree it used and
   even after that worktree is deleted, and starts a fresh session in a

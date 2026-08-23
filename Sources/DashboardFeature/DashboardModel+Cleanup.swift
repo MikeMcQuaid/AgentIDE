@@ -6,6 +6,24 @@ import TerminalUI
 /// one merge-safe path behind the Merge button, the context menu and
 /// the poll's own merge detection.
 public extension DashboardModel {
+    /// Deletes a repository's checkout from disk; the sidebar only
+    /// offers it while `deletionBlocker` is nil and the service
+    /// checks again. The path joins `deletingPaths` so the header
+    /// greys out the moment the click lands.
+    func deleteRepository(_ repository: Repository) async {
+        deletingPaths.insert(repository.path)
+        defer { deletingPaths.remove(repository.path) }
+        if selection?.worktree.repositoryPath == repository.path {
+            selection = nil
+        }
+        do {
+            try await service.deleteRepository(repository)
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
     /// Tidies a worktree whose pull request has merged, merge-safely:
     /// a real worktree is removed only when it is clean and its branch
     /// is fully on the base branch (git's `-d` rule), otherwise the

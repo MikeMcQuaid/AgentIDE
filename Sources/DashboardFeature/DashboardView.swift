@@ -77,6 +77,7 @@ public struct DashboardView: View {
     /// merge-safe path refused about it (nil for a plain Delete
     /// worktree, which always confirms since it always forces).
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
+    @State private var pendingRepositoryDelete: Repository?
 
     private let model: DashboardModel
 
@@ -125,7 +126,7 @@ public struct DashboardView: View {
             .buttonStyle(.plain)
             .hoverHelp("Start a new agent session in this repository")
         }
-        .contextMenu { refreshAction(for: group.repository.path) }
+        .modifier(RepositoryMenu(group: group, model: model, pending: $pendingRepositoryDelete))
     }
 
     private func headerLabel(for group: RepositoryGroup) -> some View {

@@ -768,7 +768,16 @@ shim rather than a protocol:
    workspace, then runs `git worktree remove`, `git worktree prune` and
    `git branch -D` and removes any symlink an earlier release left.
    Nothing is archived:
-   the branch and any uncommitted files are gone.
+   the branch and any uncommitted files are gone. A whole repository
+   goes the same way from its sidebar header, but only when nothing
+   could be lost: `RepositoryGroup.deletionBlocker` names the first of
+   a remaining worktree, a running agent, uncommitted or untracked
+   files and a checkout ahead of or behind origin's default branch, the
+   menu item is disabled with that reason while one holds, and the
+   service re-reads the rule from a fresh overview before removing the
+   checkout (as the sandbox user when its files are owned there), the
+   repository's empty worktree container and the home directory
+   symlink that pointed at it.
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
