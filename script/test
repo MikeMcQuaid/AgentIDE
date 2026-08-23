@@ -9,7 +9,7 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFT_BUILD_USE_SANDBOX=0
   # Capped parallelism: full-width builds inside the sandbox have
   # triggered resource kills that tore down the whole sandbox user,
-  # taking the production tmux server and its agents with it.
+  # taking the production herdr server and its agents with it.
   exec nice swift test --disable-sandbox --jobs 6
 fi
 

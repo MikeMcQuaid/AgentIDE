@@ -6,9 +6,9 @@ import Foundation
 /// from the repository's sessions browser afterwards.
 public extension SessionService {
     /// Kills any session, records its resume id, then removes the
-    /// worktree, its branch and its friendly symlink. The recorded
-    /// session mapping survives, which is how the conversation stays
-    /// attributed to the repository.
+    /// worktree, its branch and any symlink an earlier release left
+    /// beside it. The recorded session mapping survives, which is
+    /// how the conversation stays attributed to the repository.
     func deleteWorktree(item: WorktreeItem) async throws {
         // The conversation is being thrown away deliberately, so its
         // copy goes too rather than lingering in iCloud.
@@ -28,7 +28,7 @@ public extension SessionService {
         let sessionName = item.session?.name
             ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
         rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         do {
@@ -48,8 +48,9 @@ public extension SessionService {
         removeFriendlySymlink(worktree: worktree)
     }
 
-    /// Removes a worktree's human-friendly symlink; the canonical
-    /// path is what git knows, so this is cosmetic cleanup.
+    /// Removes the symlink an earlier release kept beside a
+    /// uuid-layout worktree; the canonical path is what git knows,
+    /// so this is cosmetic cleanup of the old layout.
     internal func removeFriendlySymlink(worktree: Worktree) {
         let link = paths.friendlyWorktreesDirectory + "/" + worktree.repositoryName
             + "/" + worktree.branch.replacing("/", with: "-")
@@ -90,7 +91,7 @@ public extension SessionService {
         let sessionName = item.session?.name
             ?? SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: .claudeCode)
         rememberResumeID(sessionName: sessionName, worktreePath: worktree.path)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
         try await git.removeMergedWorktree(
             repository: repository,
             worktreePath: worktree.path,
@@ -152,18 +153,19 @@ public extension SessionService {
 
     // MARK: Internal
 
-    /// The `worktrees/<uuid>` directories the paths live under: every
-    /// worktree of a repository shares its uuid container, so the
+    /// The `worktrees/<repository>` directories the paths live
+    /// under (an older release's `worktrees/<uuid>` ones included):
+    /// a repository's worktrees share their container, so the
     /// containers attribute conversations to the repository.
     internal func worktreeContainers(of worktreePaths: [String]) -> [String] {
         let prefix = paths.worktreesDirectory + "/"
         var containers = [String]()
         for path in worktreePaths where path.hasPrefix(prefix) {
-            guard let uuid = path.dropFirst(prefix.count).split(separator: "/").first else {
+            guard let group = path.dropFirst(prefix.count).split(separator: "/").first else {
                 continue
             }
 
-            let container = prefix + uuid
+            let container = prefix + group
             if containers.contains(container) == false {
                 containers.append(container)
             }

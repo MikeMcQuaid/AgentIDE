@@ -81,6 +81,7 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: [PullRequestSummary]].self, forKey: .openPullRequestsCache) ?? [:]
         prompts = try container.decodeIfPresent([String: String].self, forKey: .prompts) ?? [:]
         arguments = try container.decodeIfPresent([String: String].self, forKey: .arguments) ?? [:]
+        agentVersions = try container.decodeIfPresent([String: String].self, forKey: .agentVersions) ?? [:]
         sessionsByWorktree = try container
             .decodeIfPresent([String: String].self, forKey: .sessionsByWorktree) ?? [:]
         resumeIDs = try container.decodeIfPresent([String: String].self, forKey: .resumeIDs) ?? [:]
@@ -148,7 +149,7 @@ public struct AppMetadata: Codable, Sendable {
     public var agentVersions: [String: String] = [:]
 
     /// The session name last launched in each worktree, so a closed
-    /// session can be resumed without a live tmux session to name it.
+    /// session can be resumed without a live workspace to name it.
     public var sessionsByWorktree: [String: String] = [:]
 
     /// The agent-native resume id last observed per session.

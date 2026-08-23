@@ -5,7 +5,7 @@ import SwiftTerm
 // MARK: - PaneTerminalView
 
 /// The SwiftTerm view with the pane's own copy behaviour. Agent
-/// panes feed it from a tmux control mode client and never start a
+/// panes feed it from a herdr terminal stream and never start a
 /// process; the shell pane starts a plain local shell on its PTY.
 final class PaneTerminalView: LocalProcessTerminalView {
     // MARK: Lifecycle
@@ -20,13 +20,10 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
 
-    /// Takes a paste whole, before the local terminal turns it into
-    /// keystrokes; true means it was delivered, false leaves it to
-    /// the terminal's own handling. An agent pane pastes through
-    /// tmux, which knows whether the pane's application wants
-    /// bracketed paste; a shell pane is its own terminal and
-    /// already knows.
-    var onPaste: ((String) -> Bool)?
+    /// Routes the wheel to herdr for agent panes: scrollback lives
+    /// in the server, which repaints the viewport scrolled, so the
+    /// local buffer (only ever the rendered screen) never scrolls.
+    var onScroll: ((_ upwards: Bool, _ lines: Int) -> Void)?
 
     /// Keeps a selection while output arrives. SwiftTerm drops the
     /// selection on every line feed whenever mouse reporting is on,
@@ -39,16 +36,6 @@ final class PaneTerminalView: LocalProcessTerminalView {
     override func linefeed(source: Terminal) {
         guard selectionActive else {
             super.linefeed(source: source)
-            return
-        }
-    }
-
-    /// Pastes the clipboard, offering it to the owner first.
-    override func paste(_ sender: Any) {
-        guard let text = NSPasteboard.general.string(forType: .string),
-              onPaste?(text) == true
-        else {
-            super.paste(sender)
             return
         }
     }
@@ -81,8 +68,38 @@ final class PaneTerminalView: LocalProcessTerminalView {
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
     }
 
+    /// Routes one wheel event to herdr when this pane owns the
+    /// wheel and the pointer is over it; nil means it was consumed.
+    /// Fed by the coordinator's event monitor, since SwiftTerm's
+    /// wheel handling is not overridable outside its module. The
+    /// delta translates into whole terminal lines: precise trackpad
+    /// deltas accumulate against the cell height, while classic
+    /// wheel notches already arrive in line units.
+    func routeWheel(_ event: NSEvent) -> NSEvent? {
+        guard let onScroll, event.window === window,
+              bounds.contains(convert(event.locationInWindow, from: nil))
+        else {
+            return event
+        }
+
+        let rows = CGFloat(getTerminal().rows)
+        let cellHeight = rows > 0 ? bounds.height / rows : 0
+        var lines = 0
+        if event.hasPreciseScrollingDeltas, cellHeight > 0 {
+            wheelRemainder += event.scrollingDeltaY
+            lines = Int(wheelRemainder / cellHeight)
+            wheelRemainder -= CGFloat(lines) * cellHeight
+        } else {
+            lines = Int(event.scrollingDeltaY.rounded())
+        }
+        if lines != 0 {
+            onScroll(lines > 0, abs(lines))
+        }
+        return nil
+    }
+
     /// Hides the scroll indicator. An agent pane's scrollback lives
-    /// in tmux, which owns the scrolling, so the knob never moves
+    /// in herdr, which owns the scrolling, so the knob never moves
     /// and only takes up room; SwiftTerm gives the reserved width
     /// back to the terminal once it is hidden.
     func hideScroller() {
@@ -90,6 +107,11 @@ final class PaneTerminalView: LocalProcessTerminalView {
             scroller.isHidden = true
         }
     }
+
+    // MARK: Private
+
+    /// The wheel's fractional line carry between events.
+    private var wheelRemainder: CGFloat = 0
 }
 
 // MARK: - BlockSelector

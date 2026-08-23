@@ -32,7 +32,10 @@ extension RootView {
     func sessionTitle(for session: AgentSession) -> String {
         let state = session.status == .running ? "●" : "○"
         let agent = session.agent?.displayName ?? "Agent"
-        return state + " " + agent + (session.version.map { " " + $0 } ?? "")
+        // The session name closes the line: it is the workspace
+        // label herdr shows, so a pane here and a workspace there
+        // can be matched by eye.
+        return state + " " + agent + (session.version.map { " " + $0 } ?? "") + " · " + session.name
     }
 
     var utilityToggleButton: some View {
@@ -90,13 +93,19 @@ extension RootView {
     }
 
     /// A repository page's conversations, across all its worktrees.
+    /// These pages render without a session strip, so the top inset
+    /// keeps their header buttons out of the windowed titlebar's
+    /// drag band and from under the floating utility toggle, which
+    /// hid New session and Resume here everywhere but fullscreen.
     func repositoryConversations(for item: WorktreeItem) -> some View {
         RepositorySessionsView(
             repository: repository(of: item),
             service: dependencies.service,
+            progress: dependencies.dashboard.launchProgress,
             onWorktreeFocus: { focusConversation(at: $0) },
             onResumed: { await dependencies.dashboard.refresh() },
         )
+        .padding(.top, Self.toggleRowHeight)
     }
 
     /// One worktree's own past conversations, which can also start
@@ -106,9 +115,11 @@ extension RootView {
             repository: repository(of: item),
             service: dependencies.service,
             worktreePath: item.worktree.path,
+            progress: dependencies.dashboard.launchProgress,
             onNewSession: { startingSession = item.worktree.path },
             onResumed: { await sessionStarted() },
         )
+        .padding(.top, Self.toggleRowHeight)
     }
 
     func repository(of item: WorktreeItem) -> Repository {
@@ -122,7 +133,7 @@ extension RootView {
     /// Continues the worktree's most recent conversation: the newest
     /// transcript when one lists here, otherwise the recorded closed
     /// session. The state refreshes first, so a stale cached item
-    /// never resumes over a session that is already live (tmux would
+    /// never resumes over a session that is already live (herdr would
     /// try to attach without a terminal). Failures surface in the
     /// error log, so a resume that cannot launch says why.
     func resumeLatest(in item: WorktreeItem) async {
@@ -132,6 +143,7 @@ extension RootView {
             return
         }
 
+        dependencies.dashboard.launchProgress.begin("Resuming")
         do {
             if let past = fresh.pastSessions.first {
                 _ = try await dependencies.service.resumePast(past, worktree: fresh.worktree)
@@ -144,9 +156,12 @@ extension RootView {
         await sessionStarted()
     }
 
+    /// The refresh comes first: clearing the marker before it
+    /// showed the worktree's conversations page for the moment until
+    /// the refresh found the live session.
     func sessionStarted() async {
-        startingSession = nil
         await dependencies.dashboard.refresh()
+        startingSession = nil
     }
 
     /// Worktrees with a running session right now.
@@ -240,11 +255,11 @@ extension RootView {
                 .accessibilityLabel("Close session")
         }
         .buttonStyle(.plain)
-        .hoverHelp("End the session and its tmux session now; the worktree and conversation survive for resuming")
+        .hoverHelp("End the session and its workspace now; the worktree and conversation survive for resuming")
     }
 
     private func close(_ session: AgentSession, in item: WorktreeItem) async {
-        // The pane goes now, not when tmux has been asked again.
+        // The pane goes now, not when herdr has been asked again.
         dependencies.dashboard.forgetSession(at: item.worktree.path)
         await dependencies.service.closeSession(sessionName: session.name, worktree: item.worktree)
         await dependencies.dashboard.refresh()
@@ -258,7 +273,7 @@ extension RootView {
     /// reflow for pasting into chat and pull request bodies.
     func agentTerminal(for session: AgentSession, isActive: Bool) -> TerminalPaneView {
         TerminalPaneView(
-            command: dependencies.service.attachCommand(sessionName: session.name),
+            command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
             reflowsCopies: true,
             isActive: isActive,
         )

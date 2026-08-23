@@ -1,80 +1,54 @@
 import AgentIDEDomain
 import Foundation
 
-/// How long a TERMed pane gets to exit before KILL.
+/// How long a closed workspace gets to go before the close is
+/// asked again.
 private let killGraceSeconds = 2.0
 
 /// Watching, closing and resuming individual sessions.
 public extension SessionService {
-    /// Host shells share the host tmux server across flavours, so
-    /// dev builds and tests get their own name prefix and can never
-    /// list or kill production shells.
-    internal static let hostShellPrefix = WorkspacePaths.isProductionBuild
-        ? "agentide-shell--"
-        : "agentide-shell-dev--"
-
-    /// The host's tmux binary; Homebrew's location is not on a GUI
-    /// app's default PATH.
-    internal static var hostTmuxPath: String {
-        ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "tmux"
-    }
-
     /// The displayable conversation log of a past session.
     func transcriptEntries(for past: TranscriptSession) -> [TranscriptEntry] {
         transcripts.entries(in: URL(fileURLWithPath: past.path))
     }
 
-    /// The argv that attaches a terminal to a session.
-    func attachCommand(sessionName: String) -> [String] {
-        tmux.attachCommand(sessionName: sessionName)
+    /// The argv that attaches a terminal to a session's pane.
+    func attachCommand(paneID: String) -> [String] {
+        herdr.attachCommand(paneID: paneID)
     }
 
-    /// Kills one session on whichever server owns it, escalating
-    /// when the polite kill fails: TERM the pane's process, wait,
-    /// then KILL it. Sandbox panes only get tmux-level retries: the
-    /// host cannot signal another user's processes and the sudoers
-    /// rules stay narrow.
-    func killTmuxSession(name: String, isHostShell: Bool) async {
-        let pids = await panePIDs(sessionName: name, isHostShell: isHostShell)
-        await issueKill(name: name, isHostShell: isHostShell)
-        guard await sessionExists(name: name, isHostShell: isHostShell) else {
+    /// Kills one session's workspace, which kills the process tree
+    /// inside it, and asks again after a grace period when the
+    /// close does not take: the host cannot signal another user's
+    /// processes and the sudoers rules stay narrow, so herdr is the
+    /// only lever.
+    func killSession(name: String) async {
+        try? await herdr.killSession(name: name)
+        guard await sessionExists(name: name) else {
             return
         }
 
-        if isHostShell {
-            _ = try? await processes.run(
-                ["kill", "-TERM"] + pids.map(String.init),
-                workingDirectory: nil,
-                environment: [:],
-            )
-        }
         try? await Task.sleep(for: .seconds(killGraceSeconds))
-        guard await sessionExists(name: name, isHostShell: isHostShell) else {
-            return
-        }
-
-        if isHostShell {
-            _ = try? await processes.run(
-                ["kill", "-9"] + pids.map(String.init),
-                workingDirectory: nil,
-                environment: [:],
-            )
-        }
-        await issueKill(name: name, isHostShell: isHostShell)
+        try? await herdr.killSession(name: name)
     }
 
     /// Starts a session under a name, replacing whatever holds it
-    /// rather than joining in. tmux is how sessions survive the app
+    /// rather than joining in. herdr is how sessions survive the app
     /// quitting, crashing or updating; it is not how an agent
     /// survives its own upgrade, since an agent still running from a
     /// version whose files have been deleted fails in ways that read
     /// as the app's fault. Anything the user asks for by hand comes
     /// through here and gets a new process.
     internal func startFresh(sessionName: String, directory: String, command: String) async throws {
-        await killTmuxSession(name: sessionName, isHostShell: false)
-        try await tmux.newSession(name: sessionName, directory: directory, command: command)
+        await progress("Closing any previous session")
+        await killSession(name: sessionName)
+        // The version probe runs before the launch, never beside it:
+        // it is a second copy of the same CLI, and Codex stages its
+        // execution host under a lock in its own home, which two
+        // copies starting at once contend for.
+        await progress("Asking the agent's CLI its version")
         await recordAgentVersion(sessionName: sessionName)
+        try await herdr.newSession(name: sessionName, directory: directory, command: command)
     }
 
     /// Asks the agent's CLI what version it is and remembers it
@@ -138,10 +112,11 @@ public extension SessionService {
         try await git.commitAll(worktreePath: worktreePath, message: "Commit outstanding agent work")
     }
 
-    /// Ends the tmux session and everything in it, escalating when
-    /// the polite kill does not take; worktree, transcript and
-    /// metadata survive so it stays resumable. The deliberate close
-    /// is recorded so automatic resumes leave this worktree alone.
+    /// Ends the session's workspace and everything in it, asking
+    /// again when the polite close does not take; worktree,
+    /// transcript and metadata survive so it stays resumable. The
+    /// deliberate close is recorded so automatic resumes leave this
+    /// worktree alone.
     func closeSession(sessionName: String, worktree: Worktree) async {
         // The conversation is copied before the session goes, since
         // a close is one of the two moments it is worth keeping.
@@ -153,7 +128,7 @@ public extension SessionService {
             metadata.intentionallyClosed.append(worktreePath)
         }
         store.save(metadata)
-        await killTmuxSession(name: sessionName, isHostShell: false)
+        await killSession(name: sessionName)
     }
 
     /// Whether the worktree's last session ended by explicit close,
@@ -211,14 +186,14 @@ public extension SessionService {
 
     /// Types text into a session's terminal, as pasted input.
     func typeText(_ text: String, sessionName: String) async throws {
-        try await tmux.typeText(text, sessionName: sessionName)
+        try await herdr.typeText(text, sessionName: sessionName)
     }
 
     /// Resumes the session last recorded in a worktree, whether or
-    /// not a live tmux session still names it, and whether or not
+    /// not a live workspace still carries it, and whether or not
     /// the one that does is still alive: a refused conversation
-    /// leaves a dead pane holding the name, so every way in is tried
-    /// until one is still running.
+    /// leaves an empty shell holding the label, so every way in is
+    /// tried until one is still running.
     func resumeWorktree(_ worktree: Worktree) async throws {
         guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
             throw CommandError(
@@ -233,6 +208,7 @@ public extension SessionService {
             )
         }
 
+        await progress("Backing up the conversation")
         backUpConversation(of: worktree)
         try await start(
             sessionName: sessionName,
@@ -277,9 +253,8 @@ public extension SessionService {
         let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
-        addFriendlySymlink(repository: repository, branch: branch, worktreePath: worktreePath)
-
         let agentRunner = runner(for: past.agent)
+        await progress("Copying the transcript into the new worktree")
         copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
         try await startFresh(
             sessionName: sessionName,
@@ -287,6 +262,7 @@ public extension SessionService {
             command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
         )
         remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
+        await awaitReady(sessionName: sessionName)
         return sessionName
     }
 

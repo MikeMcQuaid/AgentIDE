@@ -23,9 +23,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
-- `script/attach [session]`: attach this terminal to a sandboxed
-  tmux session, or list them when run without arguments (works as
-  the host user or inside the sandbox)
+- `script/attach [workspace]`: attach this terminal to the sandboxed
+  herdr session, or list its workspaces when run without arguments
+  (works as the host user or inside the sandbox)
 
 ## Repository Structure
 
@@ -66,7 +66,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   remote data, cloning) show a loading state that fills the pane
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
-  delay over half a second.
+  delay over half a second. A transition made of several steps
+  names each step and what it waits on as it happens, through
+  `LaunchProgress`, and keeps something on screen changing at
+  least once a second.
 - Buttons follow Apple HIG and Liquid Glass, in that order, then
   this app's conventions: at most one primary action per surface,
   rendered prominent and bound to Cmd-Return when the surface takes
@@ -137,11 +140,20 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   fixed, `swift build --target AgentIDEDomain`, `--target
   AgentIDEData` and `--target AgentIDEDataTests` still typecheck,
   since none of them reach SwiftTerm.
-- tmux servers and sessions outlive the app and only read config at
-  start, so changes to launch commands, configs or session shapes
-  often need existing tmux sessions or servers restarted (or leaked
-  clients killed) to take effect: when finishing such a change, tell
-  the user exactly what to restart or kill.
+- A binary Gatekeeper refuses dies with `zsh: killed` (rc 137) at
+  exec and nothing in the sandbox explains why; `xattr -l` on it shows
+  `com.apple.quarantine`, `spctl -a -t exec -vv` rejects it and the
+  host's `log show` names `syspolicyd` with AgentIDE as the responsible
+  app.
+  Terminal works because it holds the Developer Tools privilege; see the
+  README's requirements for the fix. Codex's command host is the known
+  case.
+- herdr servers and their workspaces outlive the app, so changes to
+  launch commands, workspace shapes or server behaviour often need
+  the running `agentide` or `agentide-dev` herdr session stopped
+  (`herdr session stop <name>` as the sandbox user, or `herdr server
+  reload-config` for config alone) to take effect: when finishing
+  such a change, tell the user exactly what to restart or stop.
 
 ### Required Before Each Commit
 
@@ -165,7 +177,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 3. Never run `gh` or any host-credentialled command inside the
    sandbox. The host fetches GitHub data and passes it into prompts;
    sandboxed pushes use per-repository deploy keys only.
-4. Derive state from tmux, git and `gh` on demand rather than caching
+4. Derive state from herdr, git and `gh` on demand rather than caching
    it. AgentIDE must be killable at any moment losing nothing, and
    every conversation must stay browsable and resumable after its
    session closes or its worktree is deleted.

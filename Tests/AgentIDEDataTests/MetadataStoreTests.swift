@@ -20,6 +20,7 @@ struct MetadataStoreTests {
         metadata.arguments["session"] = "--model fable"
         metadata.resumeIDs["session"] = "abc"
         metadata.sessionsByWorktree["/w"] = "session"
+        metadata.agentVersions["session"] = "2.1.239"
         store.save(metadata)
 
         let loaded = store.load()
@@ -28,6 +29,10 @@ struct MetadataStoreTests {
         #expect(loaded.resumeIDs["session"] == "abc")
         #expect(loaded.sessionsByWorktree["/w"] == "session")
         #expect(loaded.lastSeen["session"] == seen)
+        // The tolerant decoder once skipped this field, so every
+        // reload silently dropped the recorded versions and the
+        // session strip never showed one.
+        #expect(loaded.agentVersions["session"] == "2.1.239")
     }
 
     @Test

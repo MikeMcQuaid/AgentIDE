@@ -6,10 +6,10 @@ import TerminalUI
 /// that closes the form, refreshes and selects the new worktree.
 public extension DashboardModel {
     /// Forgets a worktree's session without waiting to be told: a
-    /// dead pane is still a session, so closing one only cleared the
-    /// pane once the next reading of tmux landed, and a kill tmux
-    /// was slow to finish left the agent pane on screen as though
-    /// the button had done nothing.
+    /// finished pane is still a session, so closing one only cleared
+    /// the pane once the next reading of herdr landed, and a kill
+    /// herdr was slow to finish left the agent pane on screen as
+    /// though the button had done nothing.
     func forgetSession(at worktreePath: String) {
         for groupIndex in groups.indices {
             let items = groups[groupIndex].items
@@ -125,6 +125,7 @@ public extension DashboardModel {
         let pending = repository.flatMap { repository in
             placeholder.map { insertPlaceholder(in: repository, branch: $0) }
         }
+        launchProgress.begin("Starting")
         showsNewSession = false
         if let pending {
             selection = pending

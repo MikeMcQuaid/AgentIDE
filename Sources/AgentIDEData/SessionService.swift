@@ -34,7 +34,7 @@ public struct SessionService: Sendable {
     public init(
         paths: WorkspacePaths,
         git: GitClient,
-        tmux: TmuxClient,
+        herdr: HerdrClient,
         github: GitHubClient,
         transcripts: TranscriptReader,
         spool: EventSpool,
@@ -43,10 +43,11 @@ public struct SessionService: Sendable {
         processes: any ProcessRunner = FoundationProcessRunner(),
         launcher: SandvaultLauncher? = nil,
         summariser: FoundationModelClient = FoundationModelClient(),
+        progress: @escaping LaunchReporter = silentLaunchReporter,
     ) {
         self.paths = paths
         self.git = git
-        self.tmux = tmux
+        self.herdr = herdr
         self.github = github
         self.transcripts = transcripts
         self.spool = spool
@@ -55,6 +56,7 @@ public struct SessionService: Sendable {
         self.processes = processes
         self.launcher = launcher ?? SandvaultLauncher(hostUser: paths.hostUser)
         self.summariser = summariser
+        self.progress = progress
     }
 
     // MARK: Public
@@ -67,7 +69,7 @@ public struct SessionService: Sendable {
     /// The full dashboard state: every repository's worktrees joined
     /// with their sessions, plus foreign sessions.
     public func overview() async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
-        let panes = await (try? tmux.panes()) ?? []
+        let panes = await (try? herdr.panes()) ?? []
         let activity = spool.activity()
         let metadata = store.load()
         var groups = [RepositoryGroup]()
@@ -116,14 +118,7 @@ public struct SessionService: Sendable {
         }
         let foreign = panes
             .filter { SessionName.isAgentIDE($0.sessionName) == false }
-            .map { pane in
-                AgentSession(
-                    name: pane.sessionName,
-                    agent: nil,
-                    status: pane.isDead ? .finished(pane.exitStatus) : .running,
-                    workingDirectory: pane.currentPath,
-                )
-            }
+            .map(Self.foreignSession(of:))
         // The poll is the only thing running while a session is, so
         // it is what keeps the conversation copies current; the
         // schedule inside means this costs a dictionary lookup on
@@ -133,15 +128,17 @@ public struct SessionService: Sendable {
     }
 
     /// Creates a worktree and branch for a prompt and starts the
-    /// agent in tmux with the picked model, effort and the prompt as
-    /// its initial message. Returns the session name.
+    /// agent in herdr with the picked model, effort and the prompt
+    /// as its initial message. Returns the session name.
     public func createSession(
         repository: Repository,
         prompt: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
+        await progress("Naming the branch from the prompt")
         let branch = await availableBranch(repository: repository, prompt: prompt)
+        await progress("Creating the worktree for `" + branch + "`")
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
@@ -167,7 +164,7 @@ public struct SessionService: Sendable {
 
     let paths: WorkspacePaths
     let git: GitClient
-    let tmux: TmuxClient
+    let herdr: HerdrClient
     let github: GitHubClient
     let transcripts: TranscriptReader
     let spool: EventSpool
@@ -175,6 +172,9 @@ public struct SessionService: Sendable {
     let runners: [any AgentRunner]
     let processes: any ProcessRunner
     let launcher: SandvaultLauncher
+
+    /// Where launches narrate their steps.
+    let progress: LaunchReporter
 
     /// Worktrees never viewed count as seen at launch, so a fresh
     /// install does not flag every historic conversation unread.
@@ -205,7 +205,7 @@ public struct SessionService: Sendable {
     }
 
     /// Launches an agent in a prepared worktree slot: symlink, prompt
-    /// file, tmux session, paste, metadata.
+    /// file, herdr workspace, paste, metadata.
     func start(
         prompt: String,
         agent: AgentKind,
@@ -214,8 +214,8 @@ public struct SessionService: Sendable {
     ) async throws -> String {
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
+        await progress("Writing the prompt file")
         let promptFile = try writePrompt(prompt, sessionName: sessionName)
-        addFriendlySymlink(repository: slot.repository, branch: slot.branch, worktreePath: slot.path)
 
         // The prompt travels inside the launch command, read from
         // its file as the agent starts: pasting it after launch
@@ -228,6 +228,7 @@ public struct SessionService: Sendable {
             command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
         )
 
+        await progress("Recording the session `" + sessionName + "`")
         var metadata = store.load()
         metadata.prompts[sessionName] = prompt
         metadata.arguments[sessionName] = arguments
@@ -235,6 +236,7 @@ public struct SessionService: Sendable {
         metadata.sessionsByWorktree[slot.path] = sessionName
         metadata.intentionallyClosed.removeAll { $0 == slot.path }
         store.save(metadata)
+        await awaitReady(sessionName: sessionName)
         return sessionName
     }
 
@@ -245,38 +247,35 @@ public struct SessionService: Sendable {
         return promptFile
     }
 
-    func addFriendlySymlink(repository: Repository, branch: String, worktreePath: String) {
-        let directory = paths.friendlyWorktreesDirectory + "/" + repository.name
-        let link = directory + "/" + branch.replacing("/", with: "-")
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(atPath: link)
-        try? FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: worktreePath)
-    }
-
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
-        let path = try await worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
+        await progress("Running `git worktree add " + path + "` after fetching origin")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
+        await progress("Worktree ready at `" + path + "`")
         return path
     }
 
-    /// The repository's uuid worktree directory, reused when any
-    /// worktree already lives there and minted otherwise.
-    func worktreeContainer(repository: Repository) async -> String {
-        let existing = await (try? git.worktrees(of: repository)) ?? []
-        let prefix = paths.worktreesDirectory + "/"
-        let uuid = existing
-            .compactMap { worktree -> String? in
-                guard worktree.path.hasPrefix(prefix) else {
-                    return nil
-                }
-
-                return worktree.path.dropFirst(prefix.count).split(separator: "/").first.map(String.init)
-            }
-            .first ?? UUID().uuidString.lowercased()
-        return prefix + uuid
+    /// The repository's worktree directory, a layout the app owns
+    /// now the tooling that grouped worktrees by uuid is retired;
+    /// worktrees in that older layout keep working because every
+    /// listing derives from `git worktree list`.
+    func worktreeContainer(repository: Repository) -> String {
+        paths.worktreesDirectory + "/" + repository.name
     }
 
     // MARK: Private
+
+    /// A pane AgentIDE did not create, shown rather than hidden.
+    private static func foreignSession(of pane: HerdrPane) -> AgentSession {
+        AgentSession(
+            name: pane.sessionName,
+            agent: nil,
+            status: pane.isFinished ? .finished : .running,
+            workingDirectory: pane.currentPath,
+            paneID: pane.paneID,
+            activity: pane.activity,
+        )
+    }
 
     /// The repository's own checkout as a worktree: its branch is
     /// whatever is actually checked out, so a feature branch in the
@@ -294,7 +293,7 @@ public struct SessionService: Sendable {
     private func item(
         worktree: Worktree,
         baseRef: String?,
-        panes: [TmuxPane],
+        panes: [HerdrPane],
         activity: [String: Date],
         metadata: AppMetadata,
     ) async -> WorktreeItem {
@@ -310,22 +309,22 @@ public struct SessionService: Sendable {
             AgentSession(
                 name: pane.sessionName,
                 agent: agentKind(of: pane.sessionName),
-                status: pane.isDead ? .finished(pane.exitStatus) : .running,
+                status: pane.isFinished ? .finished : .running,
                 workingDirectory: pane.currentPath,
+                paneID: pane.paneID,
+                activity: pane.activity,
                 version: metadata.agentVersions[pane.sessionName],
             )
         }
         let past = pastSessions(of: worktree, liveSession: session)
 
-        // Unread is any terminal or agent activity since the worktree
-        // was last viewed: the event spool, the tmux session's own
-        // activity clock and transcript modification all count.
+        // Unread is any agent activity since the worktree was last
+        // viewed: the event spool and transcript modification count;
+        // herdr keeps no output clock, and the spool and transcripts
+        // already cover every agent message.
         var lastEvent = Date.distantPast
         if let session, let spooled = activity[session.name] {
             lastEvent = spooled
-        }
-        if let pane, pane.activityAt > 0 {
-            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(pane.activityAt)))
         }
         if let newest = past.first {
             lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))

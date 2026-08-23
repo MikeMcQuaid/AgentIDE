@@ -6,11 +6,10 @@ import SwiftUI
 // MARK: - TerminalRepresentable.Coordinator
 
 extension TerminalRepresentable {
-    /// Runs the pane's transport. For agent panes that is the
-    /// control mode conversation: seeding local scrollback from the
-    /// pane's history, feeding live output into the view and
-    /// forwarding keystrokes, pastes and resizes back to tmux. For
-    /// the shell pane it just watches the local process.
+    /// Runs the pane's transport. For agent panes that is the herdr
+    /// terminal stream: feeding rendered frames into the view and
+    /// forwarding keystrokes, pastes, resizes and the wheel back to
+    /// herdr. For the shell pane it just watches the local process.
     final class Coordinator: NSObject, TerminalViewDelegate, LocalProcessTerminalViewDelegate {
         // MARK: Lifecycle
 
@@ -24,13 +23,10 @@ extension TerminalRepresentable {
 
         // MARK: Internal
 
-        /// How long the pane waits for its history before showing
-        /// live output anyway.
-        static let seedTimeoutSeconds = 3
-
-        /// How many capture asks run before the pane gives up on
-        /// its history and reports.
-        static let seedAttemptLimit = 3
+        /// How long the pane waits for its first frame before
+        /// reporting the launch chain; frames keep being accepted
+        /// afterwards, so a slow attach recovers by itself.
+        static let frameTimeoutSeconds = 5
 
         /// The last applied appearance; re-applying identical colours
         /// on every SwiftUI update forces needless full redraws.
@@ -40,28 +36,16 @@ extension TerminalRepresentable {
         var tornDown = false
         var exitReason: String?
         weak var view: PaneTerminalView?
-        var channel: TmuxControlChannel?
-        /// The attach command itself answers with one empty block
-        /// before anything this client sends, so the queue starts
-        /// with that response accounted for.
-        var pending: [CommandExpectation] = [.acknowledgement]
-
-        /// Output arriving before the history seed, replayed after
-        /// it so nothing renders out of order.
-        var queuedOutput: [[UInt8]] = []
-        var seeded = false
-        var seedDeadline: Task<Void, Never>?
-        var seedAttempts = 0
-        var responsesSeen = 0
-        var outputsSeen = 0
-        var notificationsSeen = 0
+        var channel: HerdrTerminalChannel?
+        var framesSeen = 0
+        var frameDeadline: Task<Void, Never>?
 
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
 
-        /// Installs the Option-drag rectangular selection: its
-        /// events arrive through a monitor because SwiftTerm's
-        /// mouse handling is not overridable.
+        /// Installs the Option-drag rectangular selection and the
+        /// wheel routing: both arrive through a monitor because
+        /// SwiftTerm's mouse handling is not overridable.
         func installBlockSelection(on view: PaneTerminalView) {
             guard blockMonitor == nil else {
                 return
@@ -74,26 +58,29 @@ extension TerminalRepresentable {
             let selector = BlockSelector(view: view)
             blockSelector = selector
             blockMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp],
+                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel],
             ) { [weak view] event in
                 guard let view, event.window === view.window else {
                     return event
+                }
+                guard event.type != .scrollWheel else {
+                    return view.routeWheel(event)
                 }
 
                 return selector.handle(event)
             }
         }
 
-        /// Detaches the client and removes the event monitor with
-        /// the view; the tmux session itself keeps running.
+        /// Releases the controller and removes the event monitor
+        /// with the view; the herdr workspace itself keeps running.
         func tearDown() {
             if let blockMonitor {
                 NSEvent.removeMonitor(blockMonitor)
             }
             blockMonitor = nil
             tornDown = true
-            seedDeadline?.cancel()
-            seedDeadline = nil
+            frameDeadline?.cancel()
+            frameDeadline = nil
             pump?.cancel()
             onProcessTerminated = nil
             if let channel {
@@ -105,7 +92,7 @@ extension TerminalRepresentable {
         }
 
         /// Attaches on the first nonzero layout, exactly once per
-        /// transport, so the tmux client or shell sizes to the pane
+        /// transport, so the herdr client or shell sizes to the pane
         /// rather than a placeholder frame. SwiftUI can reuse the
         /// view for a different command; the old client is
         /// discarded and the new one attaches.
@@ -166,7 +153,7 @@ extension TerminalRepresentable {
                 return
             }
 
-            sendCommand(TmuxControl.resizeCommand(columns: newCols, rows: newRows), expecting: .acknowledgement)
+            channel?.send(HerdrTerminal.resizeCommand(columns: newCols, rows: newRows))
         }
 
         /// Bytes for the pane. A bracketed paste arrives as three
@@ -237,7 +224,7 @@ extension TerminalRepresentable {
         private var pump: Task<Void, Never>?
 
         /// Ships everything gathered since the last turn as one
-        /// `send-keys`, in order.
+        /// input command, in order.
         private func flushOutgoing() {
             flushScheduled = false
             let bytes = outgoing
@@ -246,11 +233,7 @@ extension TerminalRepresentable {
                 return
             }
 
-            // A paste becomes several commands: literal text in
-            // chunks tmux will not drop, control bytes exactly.
-            for command in TmuxControl.sendCommands(bytes: bytes) {
-                sendCommand(command, expecting: .acknowledgement)
-            }
+            channel?.send(HerdrTerminal.inputCommand(bytes: bytes))
         }
 
         /// Drops the running client and resets the conversation
@@ -258,8 +241,8 @@ extension TerminalRepresentable {
         /// the terminal clears via a full reset so the old session's
         /// screen never shows over the new one.
         private func discardClient(of view: PaneTerminalView) {
-            seedDeadline?.cancel()
-            seedDeadline = nil
+            frameDeadline?.cancel()
+            frameDeadline = nil
             pump?.cancel()
             pump = nil
             if let channel {
@@ -268,13 +251,7 @@ extension TerminalRepresentable {
                 }
             }
             channel = nil
-            pending = [.acknowledgement]
-            queuedOutput = []
-            seeded = false
-            seedAttempts = 0
-            responsesSeen = 0
-            outputsSeen = 0
-            notificationsSeen = 0
+            framesSeen = 0
             exitReason = nil
             started = false
             view.feed(text: "\u{1B}c")
@@ -284,8 +261,11 @@ extension TerminalRepresentable {
             self.view = view
             switch transport {
             case let .control(command):
-                view.onPaste = { [weak self] text in
-                    self?.paste(text) ?? false
+                // The wheel goes to herdr, which owns the scrollback
+                // and repaints the viewport scrolled; the local
+                // buffer only ever holds the rendered screen.
+                view.onScroll = { [weak self] upwards, lines in
+                    self?.channel?.send(HerdrTerminal.scrollCommand(upwards: upwards, lines: lines))
                 }
                 startControl(command, in: view)
 
@@ -306,23 +286,8 @@ extension TerminalRepresentable {
             }
         }
 
-        /// Pastes through tmux's own buffer, which brackets the text
-        /// when the pane's application asked for it. Only a control
-        /// pane takes this path: a local shell is its own terminal
-        /// and pastes into itself.
-        private func paste(_ text: String) -> Bool {
-            guard channel != nil else {
-                return false
-            }
-
-            for command in TmuxControl.pasteCommands(text: text) {
-                sendCommand(command, expecting: .acknowledgement)
-            }
-            return true
-        }
-
         private func startControl(_ command: [String], in view: PaneTerminalView) {
-            let attached = TmuxControlChannel(command: command)
+            let attached = HerdrTerminalChannel(command: command)
             channel = attached
             pump = Task { [weak self] in
                 guard let stream = try? await attached.start() else {

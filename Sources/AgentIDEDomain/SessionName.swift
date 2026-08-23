@@ -1,4 +1,5 @@
-/// Builds and recognises the tmux session names AgentIDE owns, shaped
+/// Builds and recognises the session names AgentIDE owns, used as
+/// herdr workspace labels and shaped
 /// `agentide--<repository>--<branch>--<agent>`.
 public enum SessionName {
     // MARK: Public
@@ -26,7 +27,7 @@ public enum SessionName {
             .map(String.init)
     }
 
-    /// Whether a tmux session name was created by AgentIDE; anything
+    /// Whether a workspace label was created by AgentIDE; anything
     /// else on the server is treated as foreign. The whole documented
     /// shape is validated, not just the prefix.
     public static func isAgentIDE(_ sessionName: String) -> Bool {
@@ -43,9 +44,10 @@ public enum SessionName {
     }
 
     /// Lowercases a value and replaces every character outside `a-z`,
-    /// `0-9` and `-`, including the `.` and `:` tmux forbids in names,
-    /// then collapses and trims `-` runs so a slug never contains the
-    /// `--` separator. Values with nothing usable become `unnamed`.
+    /// `0-9` and `-`, then collapses and trims `-` runs so a slug
+    /// never contains the `--` separator and stays compatible with
+    /// names recorded by earlier releases. Values with nothing usable
+    /// become `unnamed`.
     public static func slug(_ value: String) -> String {
         let replaced = value.lowercased()
             .map { character in

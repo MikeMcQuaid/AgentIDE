@@ -3,10 +3,10 @@ import Foundation
 
 /// Getting an agent running again in a worktree. Resuming fails in
 /// ways that look like success: the agent starts, refuses the
-/// conversation it was handed and exits, and tmux keeps the dead
-/// pane, so the name is taken and the terminal attaches to a corpse.
-/// Every way in therefore replaces whatever holds the name and is
-/// checked for still being alive a moment later.
+/// conversation it was handed and exits back to its pane's shell,
+/// so the label is taken and the terminal attaches to an empty
+/// prompt. Every way in therefore replaces whatever holds the label
+/// and is checked for still being alive a moment later.
 extension SessionService {
     /// Starts a session under a name, trying each command in turn
     /// until one is still running, and killing whatever holds the
@@ -14,13 +14,16 @@ extension SessionService {
     func start(sessionName: String, directory: String, trying commands: [String]) async throws {
         var failure: (any Error)?
         for command in commands {
+            await progress("Trying `" + command.prefix(Self.commandPreview) + "`")
             do {
                 try await startFresh(sessionName: sessionName, directory: directory, command: command)
             } catch {
                 failure = error
                 continue
             }
+            await progress("Checking the agent is still running")
             if await isRunning(sessionName: sessionName) {
+                await awaitReady(sessionName: sessionName)
                 return
             }
         }
@@ -32,6 +35,33 @@ extension SessionService {
                 standardError: "The agent exited as soon as it started",
             ),
         )
+    }
+
+    /// Waits until herdr detects the launched agent's interface, so
+    /// the page narrating the launch stays until the agent is there
+    /// to take input, rather than switching to a pane that is still
+    /// booting. A pane running something herdr could never recognise
+    /// as an agent has nothing to wait for, and a detection that
+    /// never comes stops the wait after a minute rather than forever.
+    func awaitReady(sessionName: String) async {
+        await progress("Waiting for the agent's interface to come up")
+        let agents = AgentKind.allCases.map(\.rawValue)
+        for _ in 0 ..< Self.readyPolls {
+            let panes = await (try? herdr.panes()) ?? []
+            guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
+                return
+            }
+
+            let unrecognisable = pane.foregroundCommand.map { agents.contains($0) == false } ?? false
+            if pane.isFinished || pane.activity != nil || unrecognisable {
+                await progress(pane.activity == nil
+                    ? "The pane is running `" + (pane.foregroundCommand ?? "nothing") + "`; nothing more to wait for"
+                    : "The agent's interface is up")
+                return
+            }
+
+            try? await Task.sleep(for: .seconds(Self.readyPollSeconds))
+        }
     }
 
     /// Copies a worktree's newest conversation somewhere the sandbox
@@ -104,6 +134,15 @@ extension SessionService {
     /// transcript is never in anyone's way.
     private static let backupIntervalSeconds = 3_600.0
 
+    /// How much of a command a narrated step shows; the prompt
+    /// rides inside the command and can be long.
+    private static let commandPreview = 120
+
+    /// How long to wait for the agent's interface before giving up
+    /// on detection and showing the pane anyway.
+    private static let readyPolls = 60
+    private static let readyPollSeconds = 1.0
+
     /// How many recorded conversations to offer the agent before
     /// giving up on continuing one: the newest few are the ones a
     /// resume plausibly means.
@@ -115,16 +154,20 @@ extension SessionService {
     private static let livenessPolls = 4
     private static let livenessPollMilliseconds = 350
 
-    /// Whether the session is still there with a live pane shortly
-    /// after starting.
+    /// Whether the session is still there with its agent running
+    /// shortly after starting. Only an answered listing can fail the
+    /// check: a herdr hiccup answers nothing, and declaring a live
+    /// agent dead over one had the retry killing it mid-start.
     private func isRunning(sessionName: String) async -> Bool {
         for _ in 0 ..< Self.livenessPolls {
             try? await Task.sleep(for: .milliseconds(Self.livenessPollMilliseconds))
-            let panes = await (try? tmux.panes()) ?? []
+            guard let panes = try? await herdr.panes() else {
+                continue
+            }
             guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
                 return false
             }
-            guard pane.isDead == false else {
+            guard pane.isFinished == false else {
                 return false
             }
         }

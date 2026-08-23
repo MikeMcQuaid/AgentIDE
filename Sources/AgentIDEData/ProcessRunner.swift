@@ -84,17 +84,22 @@ public extension String {
 /// The one environment every spawned process starts from.
 enum ProcessEnvironment {
     /// The inherited environment with the tool prefixes on PATH and
-    /// any surrounding tmux scrubbed: an inherited TMUX variable
-    /// makes every child tmux command target the surrounding server
-    /// regardless of TMUX_TMPDIR; a test teardown's kill-server once
-    /// killed the production server and every agent on it that way.
+    /// any surrounding herdr scrubbed: an inherited HERDR_SESSION or
+    /// HERDR_SOCKET_PATH (a dev build or test running inside a herdr
+    /// pane) makes every child herdr command target the surrounding
+    /// server; a surrounding-server teardown once killed a
+    /// production multiplexer and every agent on it that way.
     /// Servers are only ever selected explicitly.
     static func scrubbed(merging extra: [String: String] = [:]) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
-        environment["TMUX"] = nil
-        environment["TMUX_PANE"] = nil
+        for variable in [
+            "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_ENV",
+            "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID",
+        ] {
+            environment[variable] = nil
+        }
         environment.merge(extra) { _, new in new }
         return environment
     }

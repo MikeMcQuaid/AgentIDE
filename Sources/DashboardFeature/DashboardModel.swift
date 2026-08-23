@@ -17,10 +17,16 @@ public final class DashboardModel {
 
     /// Creates the model, seeding the sidebar from the last run's
     /// snapshot so launch paints instantly.
-    public init(service: SessionService, store: MetadataStore, github: GitHubClient) {
+    public init(
+        service: SessionService,
+        store: MetadataStore,
+        github: GitHubClient,
+        launchProgress: LaunchProgress = LaunchProgress(),
+    ) {
         self.service = service
         self.store = store
         self.github = github
+        self.launchProgress = launchProgress
         groups = store.load().cachedSidebar.map { cached in
             let repository = Repository(name: cached.name, path: cached.path, fullName: cached.fullName)
             let items = cached.worktrees.map { worktree in
@@ -55,7 +61,11 @@ public final class DashboardModel {
     /// Sessions not created by AgentIDE.
     public private(set) var foreign: [AgentSession] = []
 
-    /// Whether the tmux session manager sheet is shown.
+    /// The step log the current launch narrates into, shown by the
+    /// pane covering the split while a session is created or resumed.
+    public let launchProgress: LaunchProgress
+
+    /// Whether the session manager sheet is shown.
     public var showsSessionManager = false
 
     /// The repository the sheet preselects, set by the toolbar's new

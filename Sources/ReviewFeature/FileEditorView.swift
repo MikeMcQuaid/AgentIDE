@@ -62,12 +62,20 @@ struct FileEditorView: View {
             header
                 .padding(Self.padding)
             Divider()
-            HighlightingTextEditor(
-                text: $content,
-                language: language,
-                jumpToLine: jumpToLine,
-                changedLines: markedLines,
-            )
+            if rendersMarkdown, isMarkdown {
+                ScrollView {
+                    MarkdownText(content)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Self.padding)
+                }
+            } else {
+                HighlightingTextEditor(
+                    text: $content,
+                    language: language,
+                    jumpToLine: jumpToLine,
+                    changedLines: markedLines,
+                )
+            }
         }
         .onAppear { load() }
         // Editing again invalidates the save report, but real error
@@ -89,6 +97,7 @@ struct FileEditorView: View {
     @State private var saved = ""
     @State private var markedLines: Set<Int> = []
     @State private var status: String?
+    @State private var rendersMarkdown = false
 
     @Environment(\.dismiss)
     private var dismiss
@@ -113,6 +122,12 @@ struct FileEditorView: View {
         content != saved
     }
 
+    /// Whether the file is Markdown, the one kind the render button
+    /// appears for.
+    private var isMarkdown: Bool {
+        title.lowercased().hasSuffix(".md") || title.lowercased().hasSuffix(".markdown")
+    }
+
     /// The file's name beside what can be done to it. The primary
     /// action exists only while a command waits, since that is the
     /// only time closing the editor decides anything.
@@ -125,6 +140,9 @@ struct FileEditorView: View {
             Spacer()
             if let status {
                 Text(status).font(.callout).foregroundStyle(.secondary)
+            }
+            if isMarkdown {
+                markdownToggle
             }
             Button("Save", systemImage: "square.and.arrow.down") { save() }
                 .labelStyle(.iconOnly)
@@ -140,6 +158,21 @@ struct FileEditorView: View {
             }
             waitingActions
         }
+    }
+
+    /// The Markdown-only toggle between source and rendered views;
+    /// the render is read-only, so Save keeps meaning the source.
+    private var markdownToggle: some View {
+        Button("Render Markdown", systemImage: rendersMarkdown ? "doc.plaintext" : "doc.richtext") {
+            rendersMarkdown.toggle()
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .hoverHelp(
+            rendersMarkdown
+                ? "Show the Markdown source for editing"
+                : "Render the Markdown in place",
+        )
     }
 
     /// What a file some command is waiting on offers instead of a

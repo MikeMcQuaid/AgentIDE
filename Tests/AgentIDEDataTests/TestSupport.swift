@@ -5,26 +5,26 @@ import Foundation
 
 // MARK: - TestSupport
 
-/// Shared helpers for integration tests that exercise real git, tmux
-/// and filesystem behaviour in isolated temporary locations.
+/// Shared helpers for integration tests that exercise real git,
+/// herdr and filesystem behaviour in isolated temporary locations.
 enum TestSupport {
     // MARK: Internal
 
     /// A fresh temporary directory, fully resolved via `realpath` so
-    /// its path matches what git and tmux report for it.
+    /// its path matches what git and herdr report for it.
     static func temporaryDirectory(_ label: String) throws -> String {
         try make(label)
     }
 
-    /// A resolved tmux socket directory, named as briefly as it can
-    /// be: a Unix socket path cannot exceed 104 bytes, and the
-    /// user's own temporary directory, this root, the name and the
-    /// `tmux-<uid>/default` tmux appends come to 92 of them.
-    static func socketDirectory() throws -> String {
-        try make("s")
+    /// A resolved herdr config home, named as briefly as it can be:
+    /// a Unix socket path cannot exceed 104 bytes, and this root,
+    /// the name and the `herdr/herdr-client.sock` herdr appends stay
+    /// inside that.
+    static func configHome() throws -> String {
+        try make("h")
     }
 
-    /// The fully resolved path, matching git and tmux output.
+    /// The fully resolved path, matching git and herdr output.
     static func canonical(_ path: String) -> String {
         guard let resolved = realpath(path, nil) else {
             return path
@@ -69,31 +69,26 @@ enum TestSupport {
         try await runGit(["commit", "-q", "-m", "Initial commit"], in: path)
     }
 
-    /// A tmux client on its own private socket, so tests never touch
-    /// the real server; the socket directory comes back for
-    /// `killServerSync` in teardown.
-    static func makeTmuxClient() throws -> (client: TmuxClient, socketDirectory: String) {
-        let socket = try socketDirectory()
-        let client = TmuxClient(
+    /// A herdr client on its own private config home, so tests never
+    /// touch the real server; the home comes back for
+    /// `stopServerSync` in teardown.
+    static func makeHerdrClient() throws -> (client: HerdrClient, configHome: String) {
+        let home = try configHome()
+        let client = HerdrClient(
             runner: FoundationProcessRunner(),
             launcher: SandvaultLauncher(hostUser: "test"),
             isInsideSandbox: true,
-            socketDirectory: socket,
+            configHome: home,
         )
-        return (client, socket)
+        return (client, home)
     }
 
-    /// Kills a test server and removes its socket directory,
+    /// Stops a test server and removes its config home,
     /// synchronously: a fire-and-forget Task raced process exit and
     /// leaked servers.
-    static func killServerSync(socketDirectory: String) {
-        runSync(["tmux", "kill-server"], environment: ["TMUX_TMPDIR": socketDirectory])
-        try? FileManager.default.removeItem(atPath: socketDirectory)
-    }
-
-    /// Kills a test server addressed by socket file, synchronously.
-    static func killServerSync(socketFile: String) {
-        runSync(["tmux", "-S", socketFile, "kill-server"], environment: [:])
+    static func stopServerSync(configHome: String) {
+        runSync(["herdr", "server", "stop"], environment: ["XDG_CONFIG_HOME": configHome])
+        try? FileManager.default.removeItem(atPath: configHome)
     }
 
     /// Runs a command to completion, discarding output; teardown
@@ -103,11 +98,11 @@ enum TestSupport {
         process.executableURL = URL(filePath: "/usr/bin/env")
         process.arguments = argv
         var merged = ProcessInfo.processInfo.environment
-        // An inherited TMUX variable (tests running inside a tmux
-        // pane) would make tmux ignore TMUX_TMPDIR and aim these
-        // teardown kills at the surrounding production server.
-        merged["TMUX"] = nil
-        merged["TMUX_PANE"] = nil
+        // Inherited herdr variables (tests running inside a herdr
+        // pane) would aim these teardown stops at the surrounding
+        // production server.
+        merged["HERDR_SESSION"] = nil
+        merged["HERDR_SOCKET_PATH"] = nil
         for (key, value) in environment {
             merged[key] = value
         }
@@ -137,7 +132,7 @@ enum TestSupport {
     /// work is rather than loose in a shared temporary directory: a
     /// test that crashes cannot tidy up after itself, and strays were
     /// piling up in `/tmp` a run at a time. A checkout far enough
-    /// down the filesystem to overrun a tmux socket's 104-byte path
+    /// down the filesystem to overrun a herdr socket's 104-byte path
     /// falls back to this user's own temporary directory.
     private static let root: String = {
         let candidates = [checkoutRoot + "/" + scratchName, NSTemporaryDirectory() + scratchName]
@@ -160,9 +155,9 @@ enum TestSupport {
 
     private static let scratchName = ".test-scratch"
 
-    /// What a socket path needs beyond the root: `/s-XXXXXXXX` and
-    /// the `/tmux-<uid>/default` tmux appends inside it.
-    private static let socketBudget = 30
+    /// What a socket path needs beyond the root: `/h-XXXXXXXX` and
+    /// the `/herdr/herdr-client.sock` herdr appends inside it.
+    private static let socketBudget = 36
 
     /// The Unix socket path limit, which a scratch root has to leave
     /// room inside.
@@ -205,14 +200,14 @@ enum TestSupport {
 
 // MARK: - World
 
-/// One temporary world: workspace, repository, tmux and service.
+/// One temporary world: workspace, repository, herdr and service.
 struct World {
     let root: String
     let paths: WorkspacePaths
     let repository: Repository
     let service: SessionService
-    let tmux: TmuxClient
-    let socketDirectory: String
+    let herdr: HerdrClient
+    let configHome: String
 
     static func make() async throws -> Self {
         let base = try TestSupport.temporaryDirectory("world")
@@ -225,17 +220,17 @@ struct World {
         let repoPath = workspace.repositoriesDirectory + "/repo"
         try await TestSupport.makeRepository(at: repoPath)
         let runner = FoundationProcessRunner()
-        let socket = try TestSupport.socketDirectory()
-        let tmuxClient = TmuxClient(
+        let home = try TestSupport.configHome()
+        let herdrClient = HerdrClient(
             runner: runner,
             launcher: SandvaultLauncher(hostUser: "test"),
             isInsideSandbox: true,
-            socketDirectory: socket,
+            configHome: home,
         )
         let sessionService = SessionService(
             paths: workspace,
             git: GitClient(runner: runner),
-            tmux: tmuxClient,
+            herdr: herdrClient,
             github: GitHubClient(runner: runner),
             transcripts: TranscriptReader(),
             spool: EventSpool(directory: workspace.eventsDirectory),
@@ -251,14 +246,14 @@ struct World {
             paths: workspace,
             repository: Repository(name: "repo", path: repoPath),
             service: sessionService,
-            tmux: tmuxClient,
-            socketDirectory: socket,
+            herdr: herdrClient,
+            configHome: home,
         )
     }
 
     /// Synchronous, so the server dies before the test process can.
     func tearDown() {
-        TestSupport.killServerSync(socketDirectory: socketDirectory)
+        TestSupport.stopServerSync(configHome: configHome)
         try? FileManager.default.removeItem(atPath: root)
     }
 }

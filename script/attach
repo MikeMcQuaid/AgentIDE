@@ -1,18 +1,12 @@
 #!/bin/bash
-# Attach this terminal to a sandboxed tmux session by name, or list
-# the sessions when run without arguments (works as the host user or
-# inside the sandbox).
+# Attach this terminal to the sandboxed herdr session, focusing the
+# named workspace when one is given, or list the workspaces when run
+# without arguments (works as the host user or inside the sandbox).
 set -euo pipefail
 
 if [[ $# -gt 1 ]]; then
-  echo "Usage: ${0} [session]" >&2
+  echo "Usage: ${0} [workspace]" >&2
   exit 1
-fi
-
-if [[ $# -eq 0 ]]; then
-  TMUX_ARGS=(ls)
-else
-  TMUX_ARGS=(attach-session -t "$1")
 fi
 
 no_sessions() {
@@ -20,17 +14,29 @@ no_sessions() {
   exit 0
 }
 
+# Focuses the workspace whose label matches $1, then attaches; run
+# inside the sandbox where the herdr socket lives. The id is dug out
+# of the JSON listing with text tools because the sandbox guarantees
+# no JSON processor.
+ATTACH='
+if [[ -n "${1:-}" ]]; then
+  id="$(herdr workspace list 2>/dev/null \
+    | tr "{" "\n" \
+    | grep -F "\"label\":\"${1}\"" \
+    | grep -o "\"workspace_id\":\"[^\"]*\"" \
+    | head -1 | cut -d "\"" -f4)"
+  [[ -n "${id}" ]] && herdr workspace focus "${id}" &>/dev/null
+fi
+exec herdr'
+
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # Matches TmuxClient: the socket lives in the sandbox user's home,
-  # not in /tmp.
-  export TMUX_TMPDIR="${HOME}/.agentide/tmux"
-  # Resolved through PATH: Intel Macs keep Homebrew in
-  # /usr/local/bin rather than /opt/homebrew/bin.
-  if [[ "${TMUX_ARGS[0]}" == "ls" ]]; then
-    tmux ls 2>/dev/null || no_sessions
+  # Matches HerdrClient: the installed app's named session.
+  export HERDR_SESSION=agentide
+  if [[ $# -eq 0 ]]; then
+    herdr workspace list 2>/dev/null || no_sessions
     exit 0
   fi
-  exec tmux "${TMUX_ARGS[@]}"
+  exec /bin/zsh -c "${ATTACH}" herdr "$1"
 fi
 
 RUN_IN_SANDBOX=(
@@ -39,18 +45,17 @@ RUN_IN_SANDBOX=(
   USER="sandvault-${USER}"
   SHELL=/bin/zsh
   TERM="${TERM:-xterm-256color}"
-  # The same locale the launcher pins, so tmux draws the same box
+  # The same locale the launcher pins, so herdr draws the same box
   # characters here as in the app's terminals.
   LANG=en_US.UTF-8
   PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-  TMUX_TMPDIR="/Users/sandvault-${USER}/.agentide/tmux"
+  HERDR_SESSION=agentide
   /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb"
-  /bin/zsh -c 'exec tmux "$@"' tmux
 )
 
-if [[ "${TMUX_ARGS[0]}" == "ls" ]]; then
-  "${RUN_IN_SANDBOX[@]}" ls 2>/dev/null || no_sessions
+if [[ $# -eq 0 ]]; then
+  "${RUN_IN_SANDBOX[@]}" /bin/zsh -c 'exec herdr workspace list' 2>/dev/null || no_sessions
   exit 0
 fi
 
-exec "${RUN_IN_SANDBOX[@]}" "${TMUX_ARGS[@]}"
+exec "${RUN_IN_SANDBOX[@]}" /bin/zsh -c "${ATTACH}" herdr "$1"

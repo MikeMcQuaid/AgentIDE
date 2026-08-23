@@ -15,7 +15,7 @@ struct SandvaultLauncherTests {
     @Test
     func `builds the documented launch shape`() {
         let command = launcher.command(
-            payload: "exec tmux ls",
+            payload: "exec herdr workspace list",
             initialDirectory: "/Users/Shared/sv-tester",
             sessionID: "6E1A0A66-16F5-4EF5-B346-8E561E4D3E71",
             sessionName: "agentide--agentide--app-skeleton--claude",
@@ -25,13 +25,13 @@ struct SandvaultLauncherTests {
         #expect(command.contains("GIT_CONFIG_VALUE_0=/Users/Shared/sv-tester/*"))
         #expect(command.contains("AGENTIDE_SESSION=agentide--agentide--app-skeleton--claude"))
         #expect(command.contains("/usr/bin/sandbox-exec"))
-        #expect(Array(command.suffix(3)) == ["/bin/zsh", "-c", "exec tmux ls"])
+        #expect(Array(command.suffix(3)) == ["/bin/zsh", "-c", "exec herdr workspace list"])
     }
 
     @Test
-    func `injected PATH includes Homebrew, where tmux and agents live`() {
+    func `injected PATH includes Homebrew, where herdr and agents live`() {
         let command = launcher.command(
-            payload: "exec tmux ls",
+            payload: "exec herdr workspace list",
             initialDirectory: "/Users/Shared/sv-tester",
             sessionID: "6E1A0A66-16F5-4EF5-B346-8E561E4D3E71",
             sessionName: "agentide--agentide--app-skeleton--claude",

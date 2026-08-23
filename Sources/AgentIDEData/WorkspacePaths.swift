@@ -22,14 +22,12 @@ public struct WorkspacePaths: Sendable {
 
     // MARK: Public
 
-    /// Whether this process runs inside a sandvault session.
     /// Whether this process is the installed app rather than a dev
     /// build or a test runner; the check names the app bundle
     /// because a test runner's `Bundle.main` is Xcode's own harness,
     /// which also lives under /Applications. Dev and test flavours
-    /// get their own tmux socket directory and shell name prefix, so
-    /// building and testing can never list or kill production
-    /// sessions.
+    /// get their own herdr session, so building and testing can
+    /// never list or kill production sessions.
     public static let isProductionBuild = Bundle.main.bundlePath.hasPrefix("/Applications/AgentIDE.app")
 
     public static var isInsideSandbox: Bool {
@@ -64,7 +62,8 @@ public struct WorkspacePaths: Sendable {
         sharedWorkspace + "/repositories"
     }
 
-    /// Where canonical uuid-grouped worktrees live.
+    /// Where canonical worktrees live, grouped by repository (or
+    /// by uuid, in the layout an older release inherited).
     public var worktreesDirectory: String {
         sharedWorkspace + "/worktrees"
     }
@@ -84,7 +83,8 @@ public struct WorkspacePaths: Sendable {
         agentideDirectory + "/events"
     }
 
-    /// Where human-friendly worktree symlinks live.
+    /// Where earlier releases kept human-friendly worktree
+    /// symlinks; only their cleanup reads this now.
     public var friendlyWorktreesDirectory: String {
         agentideDirectory + "/worktrees"
     }

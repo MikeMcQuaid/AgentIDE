@@ -43,7 +43,7 @@ public extension SessionService {
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
         let sessionName = SessionName.make(repository: worktree.repositoryName, branch: worktree.branch, agent: agent)
-        try? await tmux.killSession(name: sessionName)
+        await killSession(name: sessionName)
         let slot = WorktreeSlot(
             repository: Repository(name: worktree.repositoryName, path: worktree.repositoryPath),
             branch: worktree.branch,
@@ -377,7 +377,7 @@ public extension SessionService {
     /// Adds a detached worktree, letting `gh pr checkout` create the
     /// branch afterwards.
     func createDetachedWorktreePath(repository: Repository, name: String) async throws -> String {
-        let path = try await worktreeContainer(repository: repository) + "/" + name
+        let path = worktreeContainer(repository: repository) + "/" + name
         try await git.addDetachedWorktree(repository: repository, at: path)
         return path
     }

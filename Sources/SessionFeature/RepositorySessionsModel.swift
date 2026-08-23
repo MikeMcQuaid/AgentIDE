@@ -16,10 +16,16 @@ final class RepositorySessionsModel {
 
     /// Creates the model for one repository; `worktreePath` scopes
     /// the list to one worktree.
-    init(repository: Repository, service: SessionService, worktreePath: String?) {
+    init(
+        repository: Repository,
+        service: SessionService,
+        worktreePath: String?,
+        progress: LaunchProgress? = nil,
+    ) {
         self.repository = repository
         self.service = service
         self.worktreePath = worktreePath
+        self.progress = progress
         listSessions = { await service.repositorySessions(for: repository) }
         fileExists = { FileManager.default.fileExists(atPath: $0) }
     }
@@ -32,6 +38,10 @@ final class RepositorySessionsModel {
 
     let repository: Repository
     let service: SessionService
+
+    /// The step log a resume narrates into, when the embedding pane
+    /// shows one.
+    let progress: LaunchProgress?
     let worktreePath: String?
 
     private(set) var sessions: [(session: TranscriptSession, worktreePath: String)] = []
@@ -109,6 +119,7 @@ final class RepositorySessionsModel {
         }
 
         isResuming = true
+        progress?.begin("Resuming into a fresh worktree")
         Task {
             do {
                 _ = try await service.resumeInNewWorktree(selected, repository: repository)
@@ -121,7 +132,7 @@ final class RepositorySessionsModel {
     }
 
     /// Resumes the selected conversation in the worktree it ran in;
-    /// the branch only names the tmux session, so the path's last
+    /// the branch only names the session, so the path's last
     /// component serves.
     func resumeSelectedHere(onResumed: @escaping @MainActor () async -> Void) {
         guard let selected, let path = selectedWorktreePath else {
@@ -129,6 +140,7 @@ final class RepositorySessionsModel {
         }
 
         isResuming = true
+        progress?.begin("Resuming here")
         Task {
             do {
                 _ = try await service.resumePast(selected, worktree: resumeWorktree(at: path))

@@ -28,14 +28,16 @@ struct PromptCaptureRunner: AgentRunner {
         ["true"]
     }
 
+    /// `command cat` sidesteps whatever the interactive shell the
+    /// pane runs has aliased `cat` to.
     func launchCommand(extraArguments: String, promptFile: String?) -> String {
         let quoted = "'" + extraArguments.replacing("'", with: "'\\''") + "'"
-        let prompt = promptFile.map { "cat '" + $0 + "' > agent-prompt.txt; " } ?? ""
-        return "printf '%s' " + quoted + " > agent-arguments.txt; " + prompt + "cat > /dev/null"
+        let prompt = promptFile.map { "command cat '" + $0 + "' > agent-prompt.txt; " } ?? ""
+        return "printf '%s' " + quoted + " > agent-arguments.txt; " + prompt + "command cat > /dev/null"
     }
 
     func resumeCommand(resumeID: String, extraArguments _: String) -> String {
-        "printf '%s' '" + resumeID + "' > agent-resumed.txt; cat > /dev/null"
+        "printf '%s' '" + resumeID + "' > agent-resumed.txt; command cat > /dev/null"
     }
 
     func transcriptDirectory(workingDirectory: String, sandboxHome: String) -> String? {
@@ -56,12 +58,12 @@ struct PromptCaptureRunner: AgentRunner {
 
 // MARK: - SessionServiceIntegrationTests
 
-/// Drives the whole core loop against real git, a private tmux
+/// Drives the whole core loop against real git, a private herdr
 /// server and a temporary workspace: create, observe, delete and
 /// resume.
 struct SessionServiceIntegrationTests {
     @Test
-    func `create session builds worktree, symlink, prompt and running pane`() async throws {
+    func `create session builds worktree, prompt and running pane`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
 
@@ -87,9 +89,10 @@ struct SessionServiceIntegrationTests {
         let arguments = try String(contentsOfFile: worktreePath + "/agent-arguments.txt", encoding: .utf8)
         #expect(arguments == "--model fable --effort max")
 
-        let symlink = world.paths.friendlyWorktreesDirectory + "/repo/do_the_thing"
-        let destination = try FileManager.default.destinationOfSymbolicLink(atPath: symlink)
-        #expect(destination == worktreePath)
+        // The canonical path is the readable one now; no symlink
+        // stands beside it.
+        #expect(worktreePath.hasSuffix("/worktrees/repo/do_the_thing"))
+        #expect(FileManager.default.fileExists(atPath: world.paths.friendlyWorktreesDirectory) == false)
     }
 
     @Test

@@ -95,11 +95,11 @@ struct RepositorySessionsModelTests {
         let service = SessionService(
             paths: paths,
             git: GitClient(runner: runner),
-            tmux: TmuxClient(
+            herdr: HerdrClient(
                 runner: runner,
                 launcher: SandvaultLauncher(hostUser: "test"),
                 isInsideSandbox: true,
-                socketDirectory: base + "/socket",
+                configHome: base + "/herdr",
             ),
             github: GitHubClient(runner: runner),
             transcripts: TranscriptReader(),

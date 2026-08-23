@@ -3,7 +3,7 @@ import Foundation
 // MARK: - MetadataStore
 
 /// Loads and saves the metadata file. Everything else re-derives from
-/// tmux, git, transcripts and GitHub, so losing this file loses only
+/// herdr, git, transcripts and GitHub, so losing this file loses only
 /// unread state, prompts and orphaned worktree attribution.
 public struct MetadataStore: Sendable {
     // MARK: Lifecycle

@@ -2,6 +2,7 @@ import AgentIDEDomain
 import DashboardFeature
 import SessionFeature
 import SwiftUI
+import TerminalUI
 
 // MARK: - Shell layers
 
@@ -15,11 +16,12 @@ extension RootView {
     func primary(for item: WorktreeItem) -> some View {
         if item.isPlaceholder {
             // The row exists before the worktree does.
-            ProgressView("Creating worktree and starting the agent…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LaunchProgressView(
+                "Creating the worktree and starting the agent…",
+                progress: dependencies.dashboard.launchProgress,
+            )
         } else if isResuming, item.session == nil {
-            ProgressView("Resuming conversation…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LaunchProgressView("Resuming the conversation…", progress: dependencies.dashboard.launchProgress)
         } else if let session = item.session {
             agentTerminal(for: session, isActive: isCovered == false)
                 .id(session.name)
