@@ -136,12 +136,17 @@ public struct SessionService: Sendable {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async throws -> String {
-        await progress("Naming the branch from the prompt")
+        // The version probe costs a sandbox launch of its own, so it
+        // runs beside the naming and the worktree rather than in
+        // front of the agent, and is waited on only when the launch
+        // is ready for it.
+        let version = Task { await probeVersion(of: agent) }
+        await progress("Naming the branch from the prompt, and asking the CLI its version beside it")
         let branch = await availableBranch(repository: repository, prompt: prompt)
         await progress("Creating the worktree for `" + branch + "`")
         let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
-        return try await start(prompt: prompt, agent: agent, options: options, slot: slot)
+        return try await start(prompt: prompt, agent: agent, options: options, slot: slot, probing: version)
     }
 
     // MARK: Internal
@@ -211,6 +216,7 @@ public struct SessionService: Sendable {
         agent: AgentKind,
         options: AgentLaunchOptions,
         slot: WorktreeSlot,
+        probing version: Task<String?, Never>? = nil,
     ) async throws -> String {
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
@@ -226,6 +232,7 @@ public struct SessionService: Sendable {
             sessionName: sessionName,
             directory: slot.path,
             command: runner(for: agent).launchCommand(extraArguments: arguments, promptFile: promptFile),
+            probing: version,
         )
 
         await progress("Recording the session `" + sessionName + "`")
@@ -249,7 +256,7 @@ public struct SessionService: Sendable {
 
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
         let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
-        await progress("Running `git worktree add " + path + "` after fetching origin")
+        await progress("Running `git worktree add " + path + "`")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
         await progress("Worktree ready at `" + path + "`")
         return path

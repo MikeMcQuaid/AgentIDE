@@ -253,12 +253,18 @@ public extension HerdrClient {
     }
 
     /// Closes every workspace holding a label, killing the process
-    /// trees inside; absent labels are not an error, so kills stay
-    /// idempotent.
-    func killSession(name: String) async throws {
+    /// trees inside, and answers how many it closed; absent labels
+    /// are not an error, so kills stay idempotent, and a caller can
+    /// tell "nothing was there" from "something was killed" without
+    /// listing the server again.
+    @discardableResult
+    func killSession(name: String) async throws -> Int {
+        var closed = 0
         for row in try await snapshotRows() where row.sessionName == name {
             try await herdr(["workspace", "close", row.workspaceID])
+            closed += 1
         }
+        return closed
     }
 
     /// Types literal text into a session's terminal.
