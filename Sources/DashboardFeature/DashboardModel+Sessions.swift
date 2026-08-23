@@ -172,7 +172,11 @@ public extension DashboardModel {
             if attempt == 0 {
                 launchProgress.report("Not listed yet; reading again every half second")
             }
-            try? await Task.sleep(for: .milliseconds(Self.listingRetryMilliseconds))
+            // A cancelled sleep ends the wait: swallowing the
+            // cancellation would spin the readings back to back.
+            guard await (try? Task.sleep(for: .milliseconds(Self.listingRetryMilliseconds))) != nil else {
+                return
+            }
         }
     }
 

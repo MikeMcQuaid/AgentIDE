@@ -246,8 +246,9 @@ public extension HerdrClient {
             guard await foreground(paneID: paneID).isShell else {
                 break
             }
-
-            try? await Task.sleep(for: .milliseconds(StartWait.pollMilliseconds))
+            guard await (try? Task.sleep(for: .milliseconds(StartWait.pollMilliseconds))) != nil else {
+                break
+            }
         }
     }
 

@@ -60,7 +60,11 @@ extension SessionService {
                 return
             }
 
-            try? await Task.sleep(for: .seconds(Self.readyPollSeconds))
+            // A cancelled sleep ends the wait rather than spinning
+            // the listings back to back.
+            guard await (try? Task.sleep(for: .seconds(Self.readyPollSeconds))) != nil else {
+                return
+            }
         }
     }
 
@@ -160,7 +164,12 @@ extension SessionService {
     /// agent dead over one had the retry killing it mid-start.
     private func isRunning(sessionName: String) async -> Bool {
         for _ in 0 ..< Self.livenessPolls {
-            try? await Task.sleep(for: .milliseconds(Self.livenessPollMilliseconds))
+            // Cancellation leaves the answer as it stands: a live
+            // agent must never read as dead, since the caller's
+            // retry would kill it.
+            guard await (try? Task.sleep(for: .milliseconds(Self.livenessPollMilliseconds))) != nil else {
+                return true
+            }
             guard let panes = try? await herdr.panes() else {
                 continue
             }
