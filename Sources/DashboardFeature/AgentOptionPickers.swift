@@ -32,12 +32,18 @@ struct AgentOptionPickers: View {
             }
             .hoverHelp("The agent CLI to run")
             Picker("Model", selection: $model) {
+                // The unpicked state is a row of its own: a
+                // selection matching no row leaves the picker blank,
+                // which reads as a bug rather than as a choice
+                // waiting to be made.
+                Text("Choose…").tag("")
                 ForEach(choices(agent).models, id: \.self) { name in
                     Text(Self.display(name)).tag(name)
                 }
             }
             .hoverHelp("The model the agent uses; pick one to start")
             Picker("Effort", selection: $effort) {
+                Text("Choose…").tag("")
                 ForEach(choices(agent).efforts, id: \.self) { name in
                     Text(Self.display(name)).tag(name)
                 }

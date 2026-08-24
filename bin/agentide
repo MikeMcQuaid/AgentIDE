@@ -222,10 +222,18 @@ reexec_in_sandbox() {
 }
 
 agentide_new() {
-  # Already the sandbox user when its home is this account's own.
+  # Already the sandbox user when its home is this account's own,
+  # and a dry run never reaches the server, so it stays where it is:
+  # tests run as neither user and have no sandbox to enter.
   case "${HOME}" in
     /Users/sandvault-*) ;;
-    *) reexec_in_sandbox ;;
+    *)
+      if [ -z "${AGENTIDE_DRY_RUN:-}" ]; then
+        [ -f "/var/sandvault/sandbox-sandvault-${USER}.sb" ] ||
+          fail "no sandvault sandbox for ${USER}; sessions run as its user" 69
+        reexec_in_sandbox
+      fi
+      ;;
   esac
 
   # The app's session, unless something else is asked for; the
