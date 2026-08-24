@@ -138,6 +138,7 @@ public extension DashboardModel {
         do {
             screenError = nil
             let sessionName = try await work()
+            rememberLaunch(sessionName: sessionName)
             await refreshUntil { items in items.contains { $0.session?.name == sessionName } }
             if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
                 launchProgress.report("Listed; opening the pane of `" + sessionName + "`")

@@ -91,6 +91,12 @@ before shipping.
   survives a phone changing network, so nothing is needed on this side
   beyond Remote Login for the sandbox account (so you can steer or add
   context away from your Mac)
+- **Starts** work from a terminal or that phone: `agentide new` takes no
+  arguments and asks for repository, agent, effort, model and prompt in
+  turn, each offering what was last chosen in either place, so four taps
+  of Enter and a sentence make the worktree, start the agent and attach to
+  it, under the same names the app uses (so a thought on the bus becomes a
+  branch without a keyboard, and it is waiting in the sidebar later)
 
 ### 🔍 Review
 
@@ -116,9 +122,13 @@ before shipping.
   dashes long (so code and commit messages survive being typed)
 - **Edits** whatever that terminal's commands open, a `git rebase -i` todo list
   or a commit message, in the same editor with their own highlighting, because
-  an `agentide` command on its `PATH` blocks until you save and close and
-  `EDITOR`, `VISUAL` and `GIT_EDITOR` there name it (so interactive rebasing
-  needs no terminal editor, and cancelling aborts the rebase as `:cq` would)
+  an `agentide` command on its `PATH` blocks until you save and close when
+  asked to with `--wait`, which is how `EDITOR`, `VISUAL` and `GIT_EDITOR`
+  there name it; without that it hands the file over and returns, and given a
+  directory instead it switches the window to the worktree or checkout
+  holding it (so interactive
+  rebasing needs no terminal editor, cancelling aborts the rebase as `:cq`
+  would, and `agentide .` is how you get from a terminal back to the window)
 
 ### 🚢 Ship
 
@@ -254,6 +264,14 @@ if [ -n "${AGENTIDE}" ]; then
   export EDITOR="$(command -v agentide) --wait"
   export VISUAL="${EDITOR}"
 fi
+```
+
+The same command starts sessions from a phone. Nothing installs it, so
+alias it wherever you SSH in, in the sandbox user's shell configuration:
+
+```bash
+alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
+export HERDR_SESSION=agentide
 ```
 
 ## 🚧 Status

@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import Foundation
 
 /// The files commands outside the app are waiting to have edited.
 public extension SessionService {
@@ -6,6 +7,36 @@ public extension SessionService {
     /// here, and for `agentide` to work as a command in it.
     func shellEnvironment() -> [String: String] {
         EditorShim(paths: paths).environment
+    }
+
+    /// Publishes what a session was last started with, so
+    /// `agentide new` offers the same repositories, agents, models
+    /// and efforts with the last ones already chosen. Written as
+    /// `key=value` lines because the sandbox has no JSON tool and
+    /// the command reading them is a shell script, and merged with
+    /// what is there: the file is one memory shared with that
+    /// command, which writes its own choices into it.
+    func publishSessionChoices(_ values: [(key: String, value: String)]) {
+        let file = paths.agentideDirectory + "/session-defaults"
+        var merged = [String]()
+        var replaced = Set(values.map(\.key))
+        for line in (try? String(contentsOfFile: file, encoding: .utf8))?.split(separator: "\n") ?? [] {
+            let key = String(line.prefix { $0 != "=" })
+            if replaced.contains(key) == false {
+                merged.append(String(line))
+            }
+        }
+        replaced = []
+        merged += values.map { $0.key + "=" + $0.value }
+        try? FileManager.default.createDirectory(
+            atPath: paths.agentideDirectory,
+            withIntermediateDirectories: true,
+        )
+        try? (merged.sorted().joined(separator: "\n") + "\n").write(
+            toFile: file,
+            atomically: true,
+            encoding: .utf8,
+        )
     }
 
     /// Every file a command is waiting on, in the order they were
@@ -38,6 +69,12 @@ public extension SessionService {
     @concurrent
     func claimEdit(_ edit: ExternalEdit) async {
         ExternalEditSpool(directory: paths.editsDirectory).claim(edit)
+    }
+
+    /// Drops a request nothing waits on, once it has been acted on.
+    @concurrent
+    func discardEdit(_ edit: ExternalEdit) async {
+        ExternalEditSpool(directory: paths.editsDirectory).discard(edit)
     }
 
     /// Releases the waiting command: a saved file lets it carry on,

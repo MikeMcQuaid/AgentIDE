@@ -3,8 +3,9 @@ import SwiftUI
 import TerminalUI
 
 /// The agent, model and effort dropdowns shared by every session
-/// creation surface. An empty model or effort keeps the agent's
-/// default.
+/// creation surface. Neither model nor effort has a default: until
+/// one has been picked the picker stands empty and the form refuses
+/// to start, and afterwards the last pick is what comes back.
 struct AgentOptionPickers: View {
     // MARK: Internal
 
@@ -31,19 +32,23 @@ struct AgentOptionPickers: View {
             }
             .hoverHelp("The agent CLI to run")
             Picker("Model", selection: $model) {
-                Text("Default").tag("")
+                // The unpicked state is a row of its own: a
+                // selection matching no row leaves the picker blank,
+                // which reads as a bug rather than as a choice
+                // waiting to be made.
+                Text("Choose…").tag("")
                 ForEach(choices(agent).models, id: \.self) { name in
                     Text(Self.display(name)).tag(name)
                 }
             }
-            .hoverHelp("The model the agent uses; Default leaves it to the agent")
+            .hoverHelp("The model the agent uses; pick one to start")
             Picker("Effort", selection: $effort) {
-                Text("Default").tag("")
+                Text("Choose…").tag("")
                 ForEach(choices(agent).efforts, id: \.self) { name in
                     Text(Self.display(name)).tag(name)
                 }
             }
-            .hoverHelp("How much reasoning the agent spends; Default leaves it to the agent")
+            .hoverHelp("How much reasoning the agent spends; pick one to start")
         }
         .labelsHidden()
         // On appearance as well as on change: the agent, model and
@@ -72,7 +77,8 @@ struct AgentOptionPickers: View {
     }
 
     /// A model or effort picked for one agent may not exist on
-    /// another; fall back to the default rather than sending it.
+    /// another; it is unpicked rather than sent, so the agent that
+    /// is chosen now gets a choice of its own.
     private func resetUnavailableChoices() {
         let available = choices(agent)
         if available.models.contains(model) == false {

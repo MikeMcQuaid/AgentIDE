@@ -7,11 +7,18 @@ public struct ExternalEdit: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a request.
-    public init(id: String, path: String, workingDirectory: String, processIdentifier: Int32) {
+    public init(
+        id: String,
+        path: String,
+        workingDirectory: String,
+        processIdentifier: Int32,
+        kind: Kind = .edit,
+    ) {
         self.id = id
         self.path = path
         self.workingDirectory = workingDirectory
         self.processIdentifier = processIdentifier
+        self.kind = kind
     }
 
     /// Decodes one spooled request, whose file name is its id; nil
@@ -26,10 +33,33 @@ public struct ExternalEdit: Identifiable, Hashable, Sendable {
             path: payload.path,
             workingDirectory: payload.workingDirectory,
             processIdentifier: payload.processIdentifier,
+            kind: payload.kind.flatMap(Kind.init(rawValue:)) ?? .edit,
         )
     }
 
     // MARK: Public
+
+    // The formatter strips raw values equal to their case name and
+    // the linter asks for them, so the rule is off here, as it is
+    // around coding keys.
+    // swiftlint:disable explicit_enum_raw_value
+
+    /// What the command asked the app for.
+    public enum Kind: String, Sendable {
+        /// Edit this file and hold the command until it is done.
+        case edit
+
+        /// Show this file; the command has already gone.
+        case open
+
+        /// Select this worktree or repository.
+        case select
+    }
+
+    // swiftlint:enable explicit_enum_raw_value
+
+    /// What was asked for.
+    public let kind: Kind
 
     /// The request's identity, which is its spool file's name.
     public let id: String
@@ -47,6 +77,12 @@ public struct ExternalEdit: Identifiable, Hashable, Sendable {
     /// be swept: the shim always waits, so its process being alive
     /// is exactly the request still mattering.
     public let processIdentifier: Int32
+
+    /// Whether the command is still there waiting for an answer;
+    /// only then does its process being alive mean anything.
+    public var waitsForAnswer: Bool {
+        kind == .edit
+    }
 
     /// The file's name, for the editor's header.
     public var name: String {
@@ -66,5 +102,7 @@ public struct ExternalEdit: Identifiable, Hashable, Sendable {
         let path: String
         let workingDirectory: String
         let processIdentifier: Int32
+        /// Absent in requests from an older shim, which all waited.
+        let kind: String?
     }
 }
