@@ -122,9 +122,13 @@ before shipping.
   dashes long (so code and commit messages survive being typed)
 - **Edits** whatever that terminal's commands open, a `git rebase -i` todo list
   or a commit message, in the same editor with their own highlighting, because
-  an `agentide` command on its `PATH` blocks until you save and close and
-  `EDITOR`, `VISUAL` and `GIT_EDITOR` there name it (so interactive rebasing
-  needs no terminal editor, and cancelling aborts the rebase as `:cq` would)
+  an `agentide` command on its `PATH` blocks until you save and close when
+  asked to with `--wait`, which is how `EDITOR`, `VISUAL` and `GIT_EDITOR`
+  there name it; without that it hands the file over and returns, and given a
+  directory instead it switches the window to the worktree or checkout
+  holding it (so interactive
+  rebasing needs no terminal editor, cancelling aborts the rebase as `:cq`
+  would, and `agentide .` is how you get from a terminal back to the window)
 
 ### 🚢 Ship
 

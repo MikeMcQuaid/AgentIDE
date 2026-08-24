@@ -36,7 +36,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
   (the generated `.xcodeproj` stays gitignored)
 - `bin/`: the `agentide` command shipped inside the app bundle: the
-  editor shim a shell pane puts on its `PATH`, and `agentide new`,
+  editor shim a shell pane puts on its `PATH` (waiting only with
+  `--wait`, and taking a directory anywhere inside a worktree or
+  checkout to switch the window to it),
+  and `agentide new`,
   which asks its way to a session over SSH the way the app does,
   defaulting to what the window last chose (published by the app as
   `agentide/session-defaults`). Nothing installs it: an SSH login

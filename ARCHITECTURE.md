@@ -164,7 +164,15 @@ bare exit code.
   defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the
   labelled workspace and attaches, which is how a phone over SSH starts
   work. Nothing is installed for it: the command is aliased from the app
-  bundle, which the sandbox can read. It
+  bundle, which the sandbox can read. The same command speaks to a running
+  app through the edit spool, whose requests now say what they are: an
+  `edit` holds the command until the file is saved (what `EDITOR` needs and
+  the only kind judged by whether its process still lives), an `open` hands
+  a file over and returns, and a `select` names a checkout or worktree for
+  the window to switch to. A directory is walked up until it is one of
+  those rows, a name under `repositories` or two under `worktrees`, so
+  `agentide .` anywhere inside a tree selects the worktree holding it, and
+  a path with no row above it is refused rather than guessed at. It
   computes the branch, label and paths by the rules below rather than
   reading anything the app owns, so the app needs telling nothing: every
   session it shows is derived from herdr and git. What it cannot do is

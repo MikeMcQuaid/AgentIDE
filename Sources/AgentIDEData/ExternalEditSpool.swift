@@ -27,9 +27,15 @@ struct ExternalEditSpool {
             let id = String(name.dropLast(Self.requestSuffix.count))
             let path = directory + "/" + name
             guard let data = manager.contents(atPath: path),
-                  let edit = ExternalEdit(id: id, json: data),
-                  kill(edit.processIdentifier, 0) == 0 || errno == EPERM
+                  let edit = ExternalEdit(id: id, json: data)
             else {
+                remove(id: id)
+                continue
+            }
+
+            // A command that did not wait is gone by now on purpose,
+            // so only a waiting one is judged by its process.
+            if edit.waitsForAnswer, kill(edit.processIdentifier, 0) != 0, errno != EPERM {
                 remove(id: id)
                 continue
             }
@@ -56,6 +62,12 @@ struct ExternalEditSpool {
     /// whose shim has gone is swept rather than answered.
     func finish(_ edit: ExternalEdit, saved: Bool) {
         write(saved ? "0" : "1", to: path(id: edit.id, suffix: Self.doneSuffix))
+    }
+
+    /// Drops a request nothing is waiting on, once it has been
+    /// acted on: there is no shim left to read an answer.
+    func discard(_ edit: ExternalEdit) {
+        remove(id: edit.id)
     }
 
     // MARK: Private

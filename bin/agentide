@@ -52,6 +52,39 @@ fail() {
   exit "${2:-64}"
 }
 
+# Everything this command does, printed by --help and by anything it
+# cannot make sense of.
+usage() {
+  cat >&2 <<USAGE
+$(bold 'agentide') — AgentIDE from the command line
+
+$(bold 'agentide') [-w|--wait] <file>...
+    Show a file in the app's editor. Waits until the file is saved
+    and closed only with --wait, which is what EDITOR, VISUAL and
+    GIT_EDITOR want; without it the command returns at once.
+
+$(bold 'agentide') <directory>
+    Select that worktree or repository in the app. Only a checkout
+    under \$SHARED_WORKSPACE/repositories or a worktree under
+    \$SHARED_WORKSPACE/worktrees is accepted.
+
+$(bold 'agentide new')
+    Start a session: asks for the repository, agent, effort, model
+    and prompt, each already set to what the app last used, then
+    makes the worktree, launches the agent and attaches to it.
+
+$(bold 'agentide') --help
+    This.
+
+Environment:
+    SHARED_WORKSPACE   the sandvault workspace (default: /Users/Shared/sv-\$USER)
+    AGENTIDE_EDITS     the request spool the app reads
+    HERDR_SESSION      the herdr session sessions are created in
+    NO_COLOR           plain output; AGENTIDE_COLOR forces colour
+USAGE
+  exit "${1:-64}"
+}
+
 # Where the app publishes what the window last had chosen, so the
 # phone offers the same repositories, agents, models and efforts,
 # with the same ones already selected.
@@ -247,26 +280,29 @@ spool="${AGENTIDE_EDITS:-${HOME}/.agentide/edits}"
 claim_tries=50
 poll_seconds=0.2
 
+wait_for_answer=no
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    # Waiting is the only behaviour, but editors are configured
-    # with the flag either way, so both spellings are accepted.
-    -w | --wait) shift ;;
+    # Only an editor waits: EDITOR, VISUAL and GIT_EDITOR are set
+    # with the flag, and anything else wants its shell back.
+    -w | --wait)
+      wait_for_answer=yes
+      shift
+      ;;
+    -h | --help) usage 0 ;;
     --)
       shift
       break
       ;;
     -*)
-      fail "unknown option: $1"
+      warn "unknown option: $1"
+      usage
       ;;
     *) break ;;
   esac
 done
 
-if [ "$#" -eq 0 ]; then
-  printf 'usage: %s [-w|--wait] file...\n' "$(bold agentide)" >&2
-  exit 64
-fi
+[ "$#" -gt 0 ] || usage
 
 mkdir -p "${spool}"
 
@@ -279,14 +315,56 @@ for file in "$@"; do
     /*) path="${file}" ;;
     *) path="${cwd}/${file}" ;;
   esac
+  kind=open
+  [ "${wait_for_answer}" = no ] || kind=edit
+  request_cwd="${cwd}"
+  if [ -d "${path}" ]; then
+    # A directory is a place to go to, and only a checkout or a
+    # worktree of the shared workspace is one the app can show.
+    shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
+    # Both sides physical, since a temporary directory or a home on
+    # a symlink would otherwise never match its own workspace.
+    shared="$(cd "${shared}" 2>/dev/null && pwd -P || printf '%s' "${shared}")"
+    path="$(cd "${path}" && pwd -P)"
+    # A checkout is one name under `repositories`, a worktree two
+    # under `worktrees`, and those are the rows the app can select.
+    # Anywhere inside one counts as it: `agentide .` deep in a tree
+    # is how you get back to the window, so the path walks up until
+    # it is a row or has left the workspace.
+    row=""
+    candidate="${path}"
+    while [ "${candidate}" != "/" ]; do
+      case "${candidate}" in
+        "${shared}/"*) rest="${candidate#"${shared}/"}" ;;
+        *) break ;;
+      esac
+      case "${rest}" in
+        repositories/*/* | worktrees/*/*/*) ;;
+        repositories/* | worktrees/*/*)
+          row="${candidate}"
+          break
+          ;;
+        *) break ;;
+      esac
+      candidate="$(dirname "${candidate}")"
+    done
+    [ -n "${row}" ] || fail "not inside a repository or worktree of ${shared}: ${path}" 66
+    path="${row}"
+    kind=select
+    request_cwd="${path}"
+  fi
   id="$(/usr/bin/uuidgen)"
   request="${spool}/${id}.request"
   trap 'rm -f "${request}" "${spool}/${id}.open" "${spool}/${id}.done"; exit 130' HUP INT TERM
-  printf '{"path":"%s","workingDirectory":"%s","processIdentifier":%s}\n' \
+  printf '{"path":"%s","workingDirectory":"%s","processIdentifier":%s,"kind":"%s"}\n' \
     "$(printf '%s' "${path}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
-    "$(printf '%s' "${cwd}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
-    "$$" >"${request}.partial"
+    "$(printf '%s' "${request_cwd}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" \
+    "$$" "${kind}" >"${request}.partial"
   mv "${request}.partial" "${request}"
+
+  # Only an editor waits for the app; everything else has said what
+  # it wanted and is done.
+  [ "${kind}" = edit ] || continue
 
   # The app claims a request as soon as it shows the file, so an
   # unclaimed one means it is not running.

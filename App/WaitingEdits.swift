@@ -35,11 +35,17 @@ final class WaitingEdits {
     /// nothing is waiting, so a rebase returns to its own shell.
     func watch(service: SessionService, dashboard: DashboardModel) async {
         for await edits in service.pendingEdits() {
-            all = edits
-            if edits.isEmpty {
+            // Only a waiting request holds a pane; the others are
+            // acted on and dropped as they arrive.
+            all = edits.filter(\.waitsForAnswer)
+            if all.isEmpty {
                 restorePreviousPane()
             }
-            guard let edit = edits.first, edit.id != shown else {
+            for edit in edits where edit.waitsForAnswer == false {
+                act(on: edit, dashboard: dashboard)
+                await service.discardEdit(edit)
+            }
+            guard let edit = all.first, edit.id != shown else {
                 continue
             }
 
@@ -69,6 +75,36 @@ final class WaitingEdits {
     /// interrupts once, and the tab to go back to afterwards.
     private var shown: String?
     private var previousTab: String?
+
+    /// A request nothing waits on: a directory selects its worktree
+    /// or repository, a file selects the worktree holding it and
+    /// shows it in the editor. Anything outside every worktree says
+    /// so in the messages pane rather than silently doing nothing.
+    private func act(on edit: ExternalEdit, dashboard: DashboardModel) {
+        let items = dashboard.groups.flatMap(\.items)
+        let holder = items.first { item in
+            edit.path == item.worktree.path || edit.path.hasPrefix(item.worktree.path + "/")
+        }
+        guard let item = holder ?? items.first(where: { edit.belongs(toWorktree: $0.worktree.path) }) else {
+            ErrorLog.shared.report("Not a worktree AgentIDE knows: " + edit.path)
+            return
+        }
+
+        dashboard.select(item)
+        guard edit.kind == .open else {
+            return
+        }
+        guard edit.path.hasPrefix(item.worktree.path + "/") else {
+            ErrorLog.shared.report("Outside the worktree, so not opened: " + edit.path)
+            return
+        }
+
+        FileOpener.open(
+            relativePath: String(edit.path.dropFirst(item.worktree.path.count + 1)),
+            line: nil,
+            worktreePath: item.worktree.path,
+        )
+    }
 
     private func takeOverPane(for edit: ExternalEdit, dashboard: DashboardModel) {
         let items = dashboard.groups.flatMap(\.items)

@@ -59,6 +59,12 @@ public extension SessionService {
         ExternalEditSpool(directory: paths.editsDirectory).claim(edit)
     }
 
+    /// Drops a request nothing waits on, once it has been acted on.
+    @concurrent
+    func discardEdit(_ edit: ExternalEdit) async {
+        ExternalEditSpool(directory: paths.editsDirectory).discard(edit)
+    }
+
     /// Releases the waiting command: a saved file lets it carry on,
     /// a cancelled one fails it.
     @concurrent

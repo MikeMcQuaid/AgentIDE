@@ -70,6 +70,73 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `without waiting a file is asked for and the command returns at once`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-open")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+        let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let file = root + "/notes.md"
+        try "notes\n".write(toFile: file, atomically: true, encoding: .utf8)
+
+        let process = try run(shim, arguments: ["notes.md"], in: root)
+        try await exit(of: process)
+        #expect(process.terminationStatus == 0)
+
+        // The request outlives the command that made it, since
+        // nothing is waiting to be answered.
+        let edit = try #require(spool.pending().first)
+        #expect(edit.kind == .open)
+        #expect(edit.path == file)
+        #expect(edit.waitsForAnswer == false)
+    }
+
+    @Test
+    func `anywhere inside a worktree selects it, and outside the workspace is refused`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-select")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+        let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let shared = paths(root: root).sharedWorkspace
+        let worktree = shared + "/worktrees/brew/fix_it"
+        // Deep inside the worktree: the row is what gets selected.
+        let inside = worktree + "/Sources/Deep"
+        // Under the workspace, but no row above it.
+        let outside = shared + "/worktrees"
+        for directory in [inside, outside] {
+            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        }
+
+        let selecting = try run(shim, arguments: [inside], in: root, sharedWorkspace: shared)
+        try await exit(of: selecting)
+        #expect(selecting.terminationStatus == 0)
+        let edit = try #require(spool.pending().first)
+        #expect(edit.kind == .select)
+        #expect(edit.path == worktree)
+
+        let refused = try run(shim, arguments: [outside], in: root, sharedWorkspace: shared)
+        try await exit(of: refused)
+        #expect(refused.terminationStatus == 66)
+        #expect(spool.pending().count == 1)
+    }
+
+    @Test
+    func `help is offered, and printed for anything it cannot make sense of`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-help")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+
+        let helping = try run(shim, arguments: ["--help"], in: root)
+        try await exit(of: helping)
+        #expect(helping.terminationStatus == 0)
+
+        for arguments in [["--nonsense"], []] {
+            let refused = try run(shim, arguments: arguments, in: root)
+            try await exit(of: refused)
+            #expect(refused.terminationStatus == 64)
+        }
+    }
+
+    @Test
     func `a shell pane is told where the shim is and that it is one`() throws {
         let root = try TestSupport.temporaryDirectory("shim-env")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -119,12 +186,22 @@ struct EditorShimIntegrationTests {
         )
     }
 
-    private func run(_ shim: EditorShim, arguments: [String], in directory: String) throws -> Process {
+    private func run(
+        _ shim: EditorShim,
+        arguments: [String],
+        in directory: String,
+        sharedWorkspace: String? = nil,
+    ) throws -> Process {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shim.path)
         process.arguments = arguments
         process.currentDirectoryURL = URL(fileURLWithPath: directory)
-        process.environment = ProcessInfo.processInfo.environment.merging(shim.environment) { _, new in new }
+        var environment = shim.environment
+        // The command judges a directory against this workspace, and
+        // the tests own one of their own; without it the checkout's
+        // real workspace would judge the scratch directories.
+        environment["SHARED_WORKSPACE"] = sharedWorkspace ?? (directory + "/nowhere")
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         try process.run()
         return process
     }
