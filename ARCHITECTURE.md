@@ -158,7 +158,11 @@ bare exit code.
   repository, agent, effort, model and prompt, each defaulting to what
   the window last had chosen (the app publishes those, and the discovered
   model and effort lists, as `agentide/session-defaults` in the shared
-  workspace, `key=value` lines because the sandbox has no JSON tool). An
+  workspace, `key=value` lines because the sandbox has no JSON tool). The
+  model and effort are published under the agent they were chosen for,
+  since the form keeps one pair and Codex's model means nothing to Claude,
+  and an agent the window kept none for offers `default`, which asks for
+  no flag rather than showing an empty bracket. An
   answer that is neither a number nor a name is asked again rather than
   taken, in Homebrew's own idiom of blue arrows, bold labels and green
   defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the

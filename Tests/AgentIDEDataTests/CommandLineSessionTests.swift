@@ -48,6 +48,17 @@ struct CommandLineSessionTests {
         #expect(plan["command"]?.contains("-c model_reasoning_effort=minimal") == true)
     }
 
+    @Test
+    func `an agent the window kept no model for launches without one`() async throws {
+        let shared = try Self.makeWorkspace()
+
+        // Codex, then Enter through its effort and model, neither of
+        // which the window kept: the launch passes no flags at all.
+        let plan = try await Self.plan(answering: "\n2\n\n\ntidy the docs\n", in: shared)
+
+        #expect(plan["command"]?.hasPrefix("codex \"") == true)
+    }
+
     // MARK: Private
 
     /// The command in the checkout, which is the copy the app bundles
@@ -74,13 +85,15 @@ struct CommandLineSessionTests {
         try """
         repository=brew
         agent=claude
-        model=opus-5
-        effort=high
         repositories=AgentIDE brew
         claude-models=opus-5 sonnet-5
         claude-efforts=low medium high xhigh max
+        claude-model=opus-5
+        claude-effort=high
         codex-models=gpt-5.6-sol
         codex-efforts=minimal low medium high xhigh
+        codex-model=
+        codex-effort=
 
         """.write(toFile: shared + "/agentide/session-defaults", atomically: true, encoding: .utf8)
         return shared

@@ -101,6 +101,18 @@ default_for() {
   sed -n "s/^$1=//p" "$2" | head -1
 }
 
+# What the app kept for this agent, or the word standing for the
+# agent choosing for itself: the window keeps no model or effort
+# while it is letting the CLI decide, and a question showing nothing
+# says less than one showing what will happen.
+own_choice="default"
+
+kept() {
+  value="$(default_for "$1" "$2")"
+  [ -n "${value}" ] || value="${own_choice}"
+  printf '%s' "${value}"
+}
+
 # Asks a question with a numbered list, where Enter takes the
 # default, a number takes that item and a name takes itself. Kept to
 # two lines, since the reader is on a phone, and asked again when the
@@ -233,9 +245,11 @@ agentide_new() {
   efforts="$(default_for "${agent}-efforts" "${defaults}")"
   models="$(default_for "${agent}-models" "${defaults}")"
   # shellcheck disable=SC2086
-  effort="$(ask_choice Effort "$(default_for effort "${defaults}")" ${efforts})"
+  effort="$(ask_choice Effort "$(kept "${agent}-effort" "${defaults}")" ${efforts})"
   # shellcheck disable=SC2086
-  model="$(ask_choice Model "$(default_for model "${defaults}")" ${models})"
+  model="$(ask_choice Model "$(kept "${agent}-model" "${defaults}")" ${models})"
+  [ "${effort}" != "${own_choice}" ] || effort=""
+  [ "${model}" != "${own_choice}" ] || model=""
 
   prompt="$(ask_text Prompt)"
 
