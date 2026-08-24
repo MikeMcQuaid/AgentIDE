@@ -2,36 +2,37 @@ import AgentIDEDomain
 import Foundation
 
 extension DashboardModel {
-    /// Hands the window's own choices to the shared workspace, where
-    /// `agentide new` reads them: a session started from a phone
-    /// then offers exactly what the New Session form offers, already
-    /// set to what it was last set to.
-    func publishSessionDefaults() {
-        let defaults = UserDefaults.standard
-        // The form keeps one model and effort, for the agent it is
-        // set to, so they are published under that agent's name:
-        // Codex's model offered for a Claude session would be a
-        // model Claude has never heard of.
-        let chosen = defaults.string(forKey: "agentKind") ?? AgentKind.claudeCode.rawValue
+    /// Hands `agentide new` what only the app can know: which
+    /// repositories exist and what each agent offers. What was last
+    /// chosen is not published here, since the command chooses too
+    /// and its choice must survive the next poll.
+    func publishSessionChoices() {
         var values: [(key: String, value: String)] = [
-            ("repository", selection?.worktree.repositoryName ?? repositories.first?.name ?? ""),
-            ("agent", chosen),
             ("repositories", repositories.map(\.name).joined(separator: " ")),
         ]
         for agent in AgentKind.allCases {
             let choices = launchChoices(for: agent)
-            let isChosen = agent.rawValue == chosen
             values.append((agent.rawValue + "-models", choices.models.joined(separator: " ")))
             values.append((agent.rawValue + "-efforts", choices.efforts.joined(separator: " ")))
-            values.append((
-                agent.rawValue + "-model",
-                isChosen ? defaults.string(forKey: "agentModel") ?? "" : "",
-            ))
-            values.append((
-                agent.rawValue + "-effort",
-                isChosen ? defaults.string(forKey: "agentEffort") ?? "" : "",
-            ))
         }
-        service.publishSessionDefaults(values)
+        service.publishSessionChoices(values)
+    }
+
+    /// Remembers what a session was just started with, so the next
+    /// one, here or from a phone, comes back to it. The model and
+    /// effort are kept under their agent's name: the form keeps one
+    /// pair, and Codex's model means nothing to Claude.
+    func rememberLaunch(sessionName: String) {
+        let defaults = UserDefaults.standard
+        guard let agent = AgentKind.allCases.first(where: { sessionName.hasSuffix("--" + $0.rawValue) }) else {
+            return
+        }
+
+        service.publishSessionChoices([
+            ("repository", SessionName.repositorySlug(of: sessionName) ?? ""),
+            ("agent", agent.rawValue),
+            (agent.rawValue + "-model", defaults.string(forKey: "agentModel") ?? ""),
+            (agent.rawValue + "-effort", defaults.string(forKey: "agentEffort") ?? ""),
+        ])
     }
 }

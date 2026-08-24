@@ -9,19 +9,31 @@ public extension SessionService {
         EditorShim(paths: paths).environment
     }
 
-    /// Publishes what the window last had chosen, so `agentide new`
-    /// on a phone offers the same repositories, agents, models and
-    /// efforts with the same ones already selected. Written as
+    /// Publishes what a session was last started with, so
+    /// `agentide new` offers the same repositories, agents, models
+    /// and efforts with the last ones already chosen. Written as
     /// `key=value` lines because the sandbox has no JSON tool and
-    /// the command reading them is a shell script.
-    func publishSessionDefaults(_ values: [(key: String, value: String)]) {
-        let text = values.map { $0.key + "=" + $0.value }.joined(separator: "\n") + "\n"
+    /// the command reading them is a shell script, and merged with
+    /// what is there: the file is one memory shared with that
+    /// command, which writes its own choices into it.
+    func publishSessionChoices(_ values: [(key: String, value: String)]) {
+        let file = paths.agentideDirectory + "/session-defaults"
+        var merged = [String]()
+        var replaced = Set(values.map(\.key))
+        for line in (try? String(contentsOfFile: file, encoding: .utf8))?.split(separator: "\n") ?? [] {
+            let key = String(line.prefix { $0 != "=" })
+            if replaced.contains(key) == false {
+                merged.append(String(line))
+            }
+        }
+        replaced = []
+        merged += values.map { $0.key + "=" + $0.value }
         try? FileManager.default.createDirectory(
             atPath: paths.agentideDirectory,
             withIntermediateDirectories: true,
         )
-        try? text.write(
-            toFile: paths.agentideDirectory + "/session-defaults",
+        try? (merged.sorted().joined(separator: "\n") + "\n").write(
+            toFile: file,
             atomically: true,
             encoding: .utf8,
         )

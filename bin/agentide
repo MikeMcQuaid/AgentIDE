@@ -70,19 +70,10 @@ $(bold 'agentide') <directory>
 
 $(bold 'agentide new')
     Start a session: asks for the repository, agent, effort, model
-    and prompt, each already set to what the app last used, then
-    makes the worktree, launches the agent and attaches to it. Run
-    as yourself it runs itself as the sandbox user, which owns the
+    and prompt, each offering what was last chosen, then makes the
+    worktree, launches the agent and attaches to it. Run as
+    yourself it runs itself as the sandbox user, which owns the
     herdr server the sessions live in.
-
-$(bold 'agentide') --help
-    This.
-
-Environment:
-    SHARED_WORKSPACE   the sandvault workspace (default: /Users/Shared/sv-\$USER)
-    AGENTIDE_EDITS     the request spool the app reads
-    HERDR_SESSION      the herdr session to use (default: agentide)
-    NO_COLOR           plain output; AGENTIDE_COLOR forces colour
 USAGE
   exit "${1:-64}"
 }
@@ -101,16 +92,22 @@ default_for() {
   sed -n "s/^$1=//p" "$2" | head -1
 }
 
-# What the app kept for this agent, or the word standing for the
-# agent choosing for itself: the window keeps no model or effort
-# while it is letting the CLI decide, and a question showing nothing
-# says less than one showing what will happen.
-own_choice="default"
-
-kept() {
-  value="$(default_for "$1" "$2")"
-  [ -n "${value}" ] || value="${own_choice}"
-  printf '%s' "${value}"
+# Writes choices back into the defaults file, keeping every other
+# line: the file is one memory shared with the app, which merges the
+# same way, so a session started here is what both offer next.
+remember() {
+  file="$1"
+  shift
+  kept="$(cat "${file}" 2>/dev/null || true)"
+  for pair in "$@"; do
+    kept="$(printf '%s\n' "${kept}" | sed "/^${pair%%=*}=/d")"
+  done
+  mkdir -p "$(dirname "${file}")"
+  {
+    printf '%s\n' "${kept}" | sed '/^$/d'
+    printf '%s\n' "$@"
+  } | sort >"${file}.partial"
+  mv "${file}.partial" "${file}"
 }
 
 # Asks a question with a numbered list, where Enter takes the
@@ -130,15 +127,25 @@ ask_choice() {
   done
   while true; do
     [ -z "${line}" ] || printf '%s\n' "${line%  }" >&2
-    printf '%s [%s]: ' "$(bold "${label}")" "$(tint 32 "${default}")" >&2
+    if [ -n "${default}" ]; then
+      printf '%s [%s]: ' "$(bold "${label}")" "$(tint 32 "${default}")" >&2
+    else
+      # Nothing has been chosen before, so nothing is chosen for
+      # them: the question waits until it is answered.
+      printf '%s: ' "$(bold "${label}")" >&2
+    fi
     if ! IFS= read -r answer; then
       printf '\n' >&2
       fail "nothing to read" 65
     fi
-    # Enter takes the default, whatever it is, including nothing.
+    # Enter takes what was chosen last time, when there was one.
     if [ -z "${answer}" ]; then
-      printf '%s' "${default}"
-      return 0
+      if [ -n "${default}" ]; then
+        printf '%s' "${default}"
+        return 0
+      fi
+      warn "pick one"
+      continue
     fi
     # A list the app has not published yet cannot judge an answer.
     if [ "$#" -eq 0 ]; then
@@ -245,11 +252,9 @@ agentide_new() {
   efforts="$(default_for "${agent}-efforts" "${defaults}")"
   models="$(default_for "${agent}-models" "${defaults}")"
   # shellcheck disable=SC2086
-  effort="$(ask_choice Effort "$(kept "${agent}-effort" "${defaults}")" ${efforts})"
+  effort="$(ask_choice Effort "$(default_for "${agent}-effort" "${defaults}")" ${efforts})"
   # shellcheck disable=SC2086
-  model="$(ask_choice Model "$(kept "${agent}-model" "${defaults}")" ${models})"
-  [ "${effort}" != "${own_choice}" ] || effort=""
-  [ "${model}" != "${own_choice}" ] || model=""
+  model="$(ask_choice Model "$(default_for "${agent}-model" "${defaults}")" ${models})"
 
   prompt="$(ask_text Prompt)"
 
@@ -289,6 +294,8 @@ agentide_new() {
   command="${command} \"\$(cat '${prompt_file}')\""
 
   if [ -n "${AGENTIDE_DRY_RUN:-}" ]; then
+    remember "${defaults}" "repository=${repository}" "agent=${agent}" \
+      "${agent}-model=${model}" "${agent}-effort=${effort}"
     printf 'branch=%s\nlabel=%s\nworktree=%s\nprompt=%s\ncommand=%s\n' \
       "${branch}" "${label}" "${worktree}" "${prompt_file}" "${command}"
     return 0

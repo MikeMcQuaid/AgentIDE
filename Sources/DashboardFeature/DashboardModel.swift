@@ -225,7 +225,7 @@ public final class DashboardModel {
                 discoveredModels[agent] = models
             }
         }
-        publishSessionDefaults()
+        publishSessionChoices()
         while Task.isCancelled == false {
             await refresh()
             try? await Task.sleep(for: .seconds(Self.pollInterval))

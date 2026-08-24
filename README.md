@@ -91,11 +91,11 @@ before shipping.
   survives a phone changing network, so nothing is needed on this side
   beyond Remote Login for the sandbox account (so you can steer or add
   context away from your Mac)
-- **Starts** work from a terminal or that phone: `agentide new` takes no arguments
-  and asks for repository, agent, effort, model and prompt in turn, each
-  already set to what the window last had chosen, so four taps of Enter
-  and a sentence make the worktree, start the agent and attach to it,
-  under the same names the app uses (so a thought on the bus becomes a
+- **Starts** work from a terminal or that phone: `agentide new` takes no
+  arguments and asks for repository, agent, effort, model and prompt in
+  turn, each offering what was last chosen in either place, so four taps
+  of Enter and a sentence make the worktree, start the agent and attach to
+  it, under the same names the app uses (so a thought on the bus becomes a
   branch without a keyboard, and it is waiting in the sidebar later)
 
 ### 🔍 Review

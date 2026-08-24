@@ -156,13 +156,16 @@ bare exit code.
 - A session can also be started from outside the app entirely:
   `agentide new`, the same command as the editor shim, asks for the
   repository, agent, effort, model and prompt, each defaulting to what
-  the window last had chosen (the app publishes those, and the discovered
-  model and effort lists, as `agentide/session-defaults` in the shared
-  workspace, `key=value` lines because the sandbox has no JSON tool). The
-  model and effort are published under the agent they were chosen for,
-  since the form keeps one pair and Codex's model means nothing to Claude,
-  and an agent the window kept none for offers `default`, which asks for
-  no flag rather than showing an empty bracket. An
+  was last chosen anywhere. Neither surface has a default model or effort:
+  until one has been picked the form refuses to start and the question
+  refuses to move on, and afterwards the last pick is what both come back
+  to. That memory is `agentide/session-defaults` in the shared workspace,
+  `key=value` lines because the sandbox has no JSON tool, written by
+  whichever surface starts a session and merged rather than replaced by
+  both, with the app publishing what only it can know (the repositories,
+  and each agent's discovered models and efforts) on every poll. The model
+  and effort are kept under their agent's name, since the form keeps one
+  pair and Codex's model means nothing to Claude. An
   answer that is neither a number nor a name is asked again rather than
   taken, in Homebrew's own idiom of blue arrows, bold labels and green
   defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the

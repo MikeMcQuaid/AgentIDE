@@ -117,7 +117,7 @@ struct AgentSessionForm: View {
     }
 
     private var submitDisabled: Bool {
-        guard repository != nil else {
+        guard repository != nil, agentModel.isEmpty == false, agentEffort.isEmpty == false else {
             return true
         }
 
