@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import Foundation
 
 /// The files commands outside the app are waiting to have edited.
 public extension SessionService {
@@ -6,6 +7,24 @@ public extension SessionService {
     /// here, and for `agentide` to work as a command in it.
     func shellEnvironment() -> [String: String] {
         EditorShim(paths: paths).environment
+    }
+
+    /// Publishes what the window last had chosen, so `agentide new`
+    /// on a phone offers the same repositories, agents, models and
+    /// efforts with the same ones already selected. Written as
+    /// `key=value` lines because the sandbox has no JSON tool and
+    /// the command reading them is a shell script.
+    func publishSessionDefaults(_ values: [(key: String, value: String)]) {
+        let text = values.map { $0.key + "=" + $0.value }.joined(separator: "\n") + "\n"
+        try? FileManager.default.createDirectory(
+            atPath: paths.agentideDirectory,
+            withIntermediateDirectories: true,
+        )
+        try? text.write(
+            toFile: paths.agentideDirectory + "/session-defaults",
+            atomically: true,
+            encoding: .utf8,
+        )
     }
 
     /// Every file a command is waiting on, in the order they were

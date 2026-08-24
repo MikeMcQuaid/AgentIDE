@@ -91,6 +91,12 @@ before shipping.
   survives a phone changing network, so nothing is needed on this side
   beyond Remote Login for the sandbox account (so you can steer or add
   context away from your Mac)
+- **Starts** work from that phone too: `agentide new` takes no arguments
+  and asks for repository, agent, effort, model and prompt in turn, each
+  already set to what the window last had chosen, so four taps of Enter
+  and a sentence make the worktree, start the agent and attach to it,
+  under the same names the app uses (so a thought on the bus becomes a
+  branch without a keyboard, and it is waiting in the sidebar later)
 
 ### 🔍 Review
 
@@ -254,6 +260,14 @@ if [ -n "${AGENTIDE}" ]; then
   export EDITOR="$(command -v agentide) --wait"
   export VISUAL="${EDITOR}"
 fi
+```
+
+The same command starts sessions from a phone. Nothing installs it, so
+alias it wherever you SSH in, in the sandbox user's shell configuration:
+
+```bash
+alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
+export HERDR_SESSION=agentide
 ```
 
 ## 🚧 Status

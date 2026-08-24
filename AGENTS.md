@@ -35,8 +35,16 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
   (the generated `.xcodeproj` stays gitignored)
-- `bin/`: commands shipped inside the app bundle (the `agentide`
-  editor shim a shell pane puts on its `PATH`)
+- `bin/`: the `agentide` command shipped inside the app bundle: the
+  editor shim a shell pane puts on its `PATH`, and `agentide new`,
+  which asks its way to a session over SSH the way the app does,
+  defaulting to what the window last chose (published by the app as
+  `agentide/session-defaults`). Nothing installs it: an SSH login
+  aliases the bundled path. It speaks the way Homebrew's own scripts
+  do, a blue `==>` before each step, bold labels, green defaults and
+  bold `Warning:`/`Error:` labels, colour only on a terminal that has
+  not set `NO_COLOR`. `CommandLineSessionTests` pins its names to
+  `SessionName`
 - `docs/`: the images `README.md` embeds
 - `script/`: development tasks
 - `Brewfile`: development dependencies

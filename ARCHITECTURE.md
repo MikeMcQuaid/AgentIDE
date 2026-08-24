@@ -153,6 +153,23 @@ bare exit code.
   `XDG_CONFIG_HOME` into throwaway per-run scratch directories, so
   building, testing and development can never list or kill the installed
   app's sessions.
+- A session can also be started from outside the app entirely:
+  `agentide new`, the same command as the editor shim, asks for the
+  repository, agent, effort, model and prompt, each defaulting to what
+  the window last had chosen (the app publishes those, and the discovered
+  model and effort lists, as `agentide/session-defaults` in the shared
+  workspace, `key=value` lines because the sandbox has no JSON tool). An
+  answer that is neither a number nor a name is asked again rather than
+  taken, in Homebrew's own idiom of blue arrows, bold labels and green
+  defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the
+  labelled workspace and attaches, which is how a phone over SSH starts
+  work. Nothing is installed for it: the command is aliased from the app
+  bundle, which the sandbox can read. It
+  computes the branch, label and paths by the rules below rather than
+  reading anything the app owns, so the app needs telling nothing: every
+  session it shows is derived from herdr and git. What it cannot do is
+  host-only: no on-device branch naming, no GitHub, and no recorded
+  prompt or CLI version until that session is next started from the Mac.
 - Each agent conversation is one herdr workspace whose single pane runs a
   login shell; the agent command is submitted to that shell (`pane run`)
   behind `export TMPDIR="$(mktemp -d)"`, the per-session temporary

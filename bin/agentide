@@ -1,10 +1,241 @@
 #!/bin/sh
-# AgentIDE's editor shim, shipped inside the app bundle and put on a
-# shell pane's PATH. It hands a file to the app's own editor and
-# waits there until the file is saved and closed, so it can serve as
-# EDITOR, VISUAL or GIT_EDITOR. A cancelled edit exits non-zero,
-# which is how git is told to abort.
+# AgentIDE's command, shipped inside the app bundle and copied into
+# the shared workspace so the sandbox user has it over SSH too.
+#
+# Without a subcommand it is the editor shim: a shell pane finds it
+# on its PATH, so `git rebase -i` and `git commit` there edit their
+# files in the app's own editor and wait until they are saved and
+# closed. A cancelled edit exits non-zero, which is how git is told
+# to abort.
+#
+# `agentide new` starts a session the way the app does, for a phone
+# over SSH. It takes no arguments: it asks for the repository, agent,
+# effort, model and prompt in turn, each offering what the window
+# last had chosen, so Enter four times and a sentence is a session.
+# It then makes the worktree, writes the prompt file, creates the
+# herdr workspace under the label the app recognises, launches the
+# agent and attaches to it. The app needs telling nothing, since it
+# derives every session from herdr and git.
 set -eu
+
+# Colour on the same terms Homebrew uses: a terminal that has not
+# asked for plain output, or an explicit request. Everything the
+# command says goes to stderr, so that is the stream judged.
+colour_enabled() {
+  [ -n "${AGENTIDE_COLOR:-}" ] && return 0
+  [ -t 2 ] && [ -z "${NO_COLOR:-}" ]
+}
+
+tint() {
+  if colour_enabled; then
+    printf '\033[%sm%s\033[0m' "$1" "$2"
+  else
+    printf '%s' "$2"
+  fi
+}
+
+bold() {
+  tint 1 "$1"
+}
+
+# A step, as `==> Doing something`: blue arrow, bold text.
+headline() {
+  printf '%s %s\n' "$(tint 34 '==>')" "$(bold "$1")" >&2
+}
+
+warn() {
+  printf '%s %s\n' "$(tint '1;33' 'Warning:')" "$1" >&2
+}
+
+fail() {
+  printf '%s %s\n' "$(tint '1;31' 'Error:')" "$1" >&2
+  exit "${2:-64}"
+}
+
+# Where the app publishes what the window last had chosen, so the
+# phone offers the same repositories, agents, models and efforts,
+# with the same ones already selected.
+defaults_file() {
+  printf '%s' "${1}/agentide/session-defaults"
+}
+
+# One key's value out of that file, empty when it or the file is
+# missing.
+default_for() {
+  [ -f "$2" ] || return 0
+  sed -n "s/^$1=//p" "$2" | head -1
+}
+
+# Asks a question with a numbered list, where Enter takes the
+# default, a number takes that item and a name takes itself. Kept to
+# two lines, since the reader is on a phone, and asked again when the
+# answer is neither, so a mistyped number never starts the wrong
+# agent.
+ask_choice() {
+  label="$1"
+  default="$2"
+  shift 2
+  index=0
+  line=""
+  for option in "$@"; do
+    index=$((index + 1))
+    line="${line}$(tint '1;34' "${index}") ${option}  "
+  done
+  while true; do
+    [ -z "${line}" ] || printf '%s\n' "${line%  }" >&2
+    printf '%s [%s]: ' "$(bold "${label}")" "$(tint 32 "${default}")" >&2
+    if ! IFS= read -r answer; then
+      printf '\n' >&2
+      fail "nothing to read" 65
+    fi
+    # Enter takes the default, whatever it is, including nothing.
+    if [ -z "${answer}" ]; then
+      printf '%s' "${default}"
+      return 0
+    fi
+    # A list the app has not published yet cannot judge an answer.
+    if [ "$#" -eq 0 ]; then
+      printf '%s' "${answer}"
+      return 0
+    fi
+    index=0
+    for option in "$@"; do
+      index=$((index + 1))
+      if [ "${answer}" = "${index}" ] || [ "${answer}" = "${option}" ]; then
+        printf '%s' "${option}"
+        return 0
+      fi
+    done
+    warn "not one of those"
+
+  done
+}
+
+# Asks for a line of text, again while it is empty.
+ask_text() {
+  while true; do
+    printf '%s: ' "$(bold "$1")" >&2
+    if ! IFS= read -r answer; then
+      printf '\n' >&2
+      fail "nothing to read" 65
+    fi
+    if [ -n "${answer}" ]; then
+      printf '%s' "${answer}"
+      return 0
+    fi
+  done
+}
+
+# The app's own slug: lowercase, anything else a dash, runs collapsed
+# and the ends trimmed, never empty.
+slug() {
+  out="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
+    sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
+  [ -n "${out}" ] || out="unnamed"
+  printf '%s' "${out}"
+}
+
+# What the app calls a branch it names from a prompt: the same slug
+# over the prompt's first words, with underscores between them.
+branch_from_prompt() {
+  printf '%s' "$(slug "$(printf '%s' "$1" | cut -c1-40)")" | tr '-' '_'
+}
+
+agentide_new() {
+  # The sandbox user's launcher exports this; a plain SSH login does
+  # not, so the host user's name is read off this account's own.
+  shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
+  defaults="$(defaults_file "${shared}")"
+
+  repositories="$(default_for repositories "${defaults}")"
+  if [ -z "${repositories}" ] && [ -d "${shared}/repositories" ]; then
+    repositories="$(ls "${shared}/repositories" 2>/dev/null | tr '\n' ' ')"
+  fi
+
+  # shellcheck disable=SC2086
+  repository="$(ask_choice Repository "$(default_for repository "${defaults}")" ${repositories})"
+  [ -n "${repository}" ] || fail "no repository to choose from in ${shared}/repositories" 66
+
+  agent="$(ask_choice Agent "$(default_for agent "${defaults}")" claude codex)"
+  [ -n "${agent}" ] || agent=claude
+
+  efforts="$(default_for "${agent}-efforts" "${defaults}")"
+  models="$(default_for "${agent}-models" "${defaults}")"
+  # shellcheck disable=SC2086
+  effort="$(ask_choice Effort "$(default_for effort "${defaults}")" ${efforts})"
+  # shellcheck disable=SC2086
+  model="$(ask_choice Model "$(default_for model "${defaults}")" ${models})"
+
+  prompt="$(ask_text Prompt)"
+
+  repository_path="${shared}/repositories/${repository}"
+  branch="$(branch_from_prompt "${prompt}")"
+
+  # Branch names are unique, as the app makes them: an existing one
+  # counts up rather than failing or joining someone else's work.
+  if [ -d "${repository_path}/.git" ] || [ -f "${repository_path}/.git" ]; then
+    attempt=2
+    while git -C "${repository_path}" rev-parse --verify --quiet \
+      "refs/heads/${branch}" >/dev/null 2>&1; do
+      branch="$(printf '%s' "${branch}" | sed 's/_[0-9]*$//')_${attempt}"
+      attempt=$((attempt + 1))
+    done
+  elif [ -z "${AGENTIDE_DRY_RUN:-}" ]; then
+    fail "no repository at ${repository_path}" 66
+  fi
+
+  label="agentide--$(slug "${repository}")--$(slug "${branch}")--${agent}"
+  worktree="${shared}/worktrees/${repository}/$(printf '%s' "${branch}" | tr '/' '-')"
+  prompt_file="${shared}/agentide/prompts/${label}.md"
+
+  # The launch flags the app would pass for the chosen model and
+  # effort; Codex spells its effort as a config override.
+  arguments=""
+  [ -z "${model}" ] || arguments="--model ${model}"
+  if [ -n "${effort}" ]; then
+    case "${agent}" in
+      codex) arguments="${arguments} -c model_reasoning_effort=${effort}" ;;
+      *) arguments="${arguments} --effort ${effort}" ;;
+    esac
+  fi
+  arguments="$(printf '%s' "${arguments}" | sed -e 's/^ *//' -e 's/ *$//')"
+  command="${agent}"
+  [ -z "${arguments}" ] || command="${command} ${arguments}"
+  command="${command} \"\$(cat '${prompt_file}')\""
+
+  if [ -n "${AGENTIDE_DRY_RUN:-}" ]; then
+    printf 'branch=%s\nlabel=%s\nworktree=%s\nprompt=%s\ncommand=%s\n' \
+      "${branch}" "${label}" "${worktree}" "${prompt_file}" "${command}"
+    return 0
+  fi
+
+  # The app's session, made the app's way: worktree, prompt file,
+  # then a labelled herdr workspace whose shell runs the agent under
+  # a temporary directory of its own, which Codex's execution host
+  # needs to survive its handshake.
+  headline "Creating ${worktree}"
+  mkdir -p "$(dirname "${worktree}")" "$(dirname "${prompt_file}")"
+  git -C "${repository_path}" worktree add -b "${branch}" "${worktree}" HEAD >&2
+  printf '%s\n' "${prompt}" >"${prompt_file}"
+
+  headline "Starting ${agent} in ${label}"
+  created="$(herdr workspace create --cwd "${worktree}" --label "${label}" \
+    --env "AGENTIDE_SESSION=${label}" --env "INITIAL_DIR=${worktree}" --no-focus)"
+  pane="$(printf '%s' "${created}" |
+    grep -o '"pane_id":"[^"]*"' | head -1 | cut -d '"' -f4)"
+  [ -n "${pane}" ] || fail "herdr did not name a pane for ${label}" 70
+  herdr pane run "${pane}" "export TMPDIR=\"\$(mktemp -d)\"; ${command}"
+
+  workspace="$(printf '%s' "${created}" |
+    grep -o '"workspace_id":"[^"]*"' | head -1 | cut -d '"' -f4)"
+  [ -z "${workspace}" ] || herdr workspace focus "${workspace}" >/dev/null 2>&1 || true
+  exec herdr
+}
+
+if [ "${1:-}" = "new" ]; then
+  agentide_new
+  exit 0
+fi
 
 # The app names its own spool, so a development build never answers
 # the installed app's shells; anything else means the installed one.
@@ -26,15 +257,14 @@ while [ "$#" -gt 0 ]; do
       break
       ;;
     -*)
-      printf 'agentide: unknown option: %s\n' "$1" >&2
-      exit 64
+      fail "unknown option: $1"
       ;;
     *) break ;;
   esac
 done
 
 if [ "$#" -eq 0 ]; then
-  printf 'usage: agentide [-w|--wait] file...\n' >&2
+  printf 'usage: %s [-w|--wait] file...\n' "$(bold agentide)" >&2
   exit 64
 fi
 
@@ -64,8 +294,7 @@ for file in "$@"; do
   while [ ! -e "${spool}/${id}.open" ] && [ ! -e "${spool}/${id}.done" ]; do
     if [ "${tries}" -ge "${claim_tries}" ]; then
       rm -f "${request}"
-      printf 'agentide: AgentIDE did not answer; is it running?\n' >&2
-      exit 69
+      fail "AgentIDE did not answer; is it running?" 69
     fi
     tries=$((tries + 1))
     sleep "${poll_seconds}"
