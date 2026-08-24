@@ -163,8 +163,14 @@ bare exit code.
   taken, in Homebrew's own idiom of blue arrows, bold labels and green
   defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the
   labelled workspace and attaches, which is how a phone over SSH starts
-  work. Nothing is installed for it: the command is aliased from the app
-  bundle, which the sandbox can read. The same command speaks to a running
+  work. Run as the host user it runs itself as the sandbox user through
+  the same sudo, `env -i` and `sandbox-exec` shape the app uses, since only
+  that user can reach the server's socket, and it defaults the session to
+  `agentide` so a terminal on the Mac needs no setup at all. A workspace
+  that cannot be made takes its half-built worktree, branch and prompt file
+  with it, so the same prompt can simply be asked again. Nothing is
+  installed for it: the command is aliased from the app bundle, which the
+  sandbox can read. The same command speaks to a running
   app through the edit spool, whose requests now say what they are: an
   `edit` holds the command until the file is saved (what `EDITOR` needs and
   the only kind judged by whether its process still lives), an `open` hands

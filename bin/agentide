@@ -71,7 +71,9 @@ $(bold 'agentide') <directory>
 $(bold 'agentide new')
     Start a session: asks for the repository, agent, effort, model
     and prompt, each already set to what the app last used, then
-    makes the worktree, launches the agent and attaches to it.
+    makes the worktree, launches the agent and attaches to it. Run
+    as yourself it runs itself as the sandbox user, which owns the
+    herdr server the sessions live in.
 
 $(bold 'agentide') --help
     This.
@@ -79,7 +81,7 @@ $(bold 'agentide') --help
 Environment:
     SHARED_WORKSPACE   the sandvault workspace (default: /Users/Shared/sv-\$USER)
     AGENTIDE_EDITS     the request spool the app reads
-    HERDR_SESSION      the herdr session sessions are created in
+    HERDR_SESSION      the herdr session to use (default: agentide)
     NO_COLOR           plain output; AGENTIDE_COLOR forces colour
 USAGE
   exit "${1:-64}"
@@ -174,7 +176,43 @@ branch_from_prompt() {
   printf '%s' "$(slug "$(printf '%s' "$1" | cut -c1-40)")" | tr '-' '_'
 }
 
+# The sessions live in a herdr server the sandbox user owns, and
+# only that user can reach its socket. Run as the host user, the
+# command therefore runs itself as the sandbox user, through the
+# same sudo, env and sandbox-exec shape the app uses, so a terminal
+# on the Mac needs no setup of its own.
+reexec_in_sandbox() {
+  host="${USER}"
+  exec sudo --login --set-home --user="sandvault-${host}" \
+    /usr/bin/env -i \
+    "HOME=/Users/sandvault-${host}" \
+    "USER=sandvault-${host}" \
+    SHELL=/bin/zsh \
+    "TERM=${TERM:-xterm-256color}" \
+    COLORTERM=truecolor \
+    LANG=en_US.UTF-8 \
+    "SHARED_WORKSPACE=/Users/Shared/sv-${host}" \
+    "HERDR_SESSION=${HERDR_SESSION:-agentide}" \
+    "AGENTIDE_COLOR=${AGENTIDE_COLOR:-1}" \
+    PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=safe.directory \
+    "GIT_CONFIG_VALUE_0=/Users/Shared/sv-${host}/*" \
+    /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${host}.sb" \
+    /bin/zsh -c "exec ${0} new"
+}
+
 agentide_new() {
+  # Already the sandbox user when its home is this account's own.
+  case "${HOME}" in
+    /Users/sandvault-*) ;;
+    *) reexec_in_sandbox ;;
+  esac
+
+  # The app's session, unless something else is asked for; the
+  # server it names is the one the app starts and attaches to.
+  export HERDR_SESSION="${HERDR_SESSION:-agentide}"
+
   # The sandbox user's launcher exports this; a plain SSH login does
   # not, so the host user's name is read off this account's own.
   shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
