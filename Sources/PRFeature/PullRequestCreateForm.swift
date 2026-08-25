@@ -73,7 +73,7 @@ struct PullRequestCreateForm: View {
                     .buttonStyle(.glass)
                     .controlSize(.small)
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
-                    .hoverHelp("Tick every unticked checkbox in the template")
+                    .hoverHelp("Tick every unticked checkbox, and disclose the agent where the template asks")
             }
             TextEditor(text: $model.prTemplate)
                 .font(.body.monospaced())

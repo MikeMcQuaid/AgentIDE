@@ -52,11 +52,15 @@ extension PullRequestsModel {
     }
 
     /// Ticks every unticked markdown checkbox in the template, the
-    /// one thing every template review does by hand.
+    /// one thing every template review does by hand. A ticked AI
+    /// box claims a disclosure below it, so one is written: ticking
+    /// that box and leaving the section empty would be the one lie
+    /// this button could tell.
     func tickTemplateBoxes() {
         prTemplate = prTemplate
             .replacing("- [ ]", with: "- [x]")
             .replacing("* [ ]", with: "* [x]")
+        discloseInTemplate()
     }
 
     /// Saves the drafted title, body and template for this branch as

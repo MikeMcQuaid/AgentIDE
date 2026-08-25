@@ -27,6 +27,17 @@ extension PullRequestsModel {
         prBody = prBody.isEmpty ? disclosure : prBody + "\n\n" + disclosure
     }
 
+    /// Writes the disclosure into the template's own AI section,
+    /// and nowhere else: a template without one has nothing to say
+    /// about it, and the body is not the place to volunteer it.
+    func discloseInTemplate() {
+        guard let disclosure, let ticked = Self.disclosing(in: prTemplate, sentence: disclosure) else {
+            return
+        }
+
+        prTemplate = ticked
+    }
+
     /// The sentence itself: the harness, the model and effort it was
     /// started with, and what was done with the result. Read from
     /// the session's own arguments, the only record of them, and

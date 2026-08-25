@@ -30,6 +30,18 @@ struct PullRequestDisclosureTests {
     }
 
     @Test
+    func `ticking every box discloses the agent where the template asks`() {
+        // Ticking the AI box without saying what wrote the branch
+        // is the one lie the button could tell, so it says it.
+        let ticked = PullRequestsModel.disclosing(
+            in: Self.homebrewTemplate.replacing("- [ ]", with: "- [x]"),
+            sentence: "Claude Code with opus-5 at Extra High effort, with local review and testing.",
+        )
+        #expect(ticked?.contains("- [x] I did not use AI/LLM") == true)
+        #expect(ticked?.contains("with local review and testing.") == true)
+    }
+
+    @Test
     func `what a session was started with reads as the pickers write it`() {
         let claude = "--model opus-5 --effort xhigh"
         #expect(PullRequestsModel.model(inArguments: claude) == "opus-5")

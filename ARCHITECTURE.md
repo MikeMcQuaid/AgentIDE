@@ -781,7 +781,9 @@ shim rather than a protocol:
    started with, worded as the pickers word them, followed by local review
    and testing, into the template's own AI section, ticking that section's
    box and replacing any sentence it wrote before, and into the body when
-   the template has no such section.
+   the template has no such section. Ticking every box writes it too,
+   into the template only: a ticked AI box with nothing under it is the
+   one lie that button could tell.
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
    agent, jump to the one failing check or, when several fail, the
