@@ -75,11 +75,18 @@ public extension SessionService {
     /// request belongs to the repository it is opened against rather
     /// than the one holding the branch.
     func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
-        try await github.createPullRequest(
+        // A stacked branch opens against the branch below it: that
+        // one flag is the whole of what makes GitHub show a stack,
+        // and `gh pr create` needs nothing else for it.
+        let stack = await stack(for: worktree)
+        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+        let parent = stack.parent(of: branch)
+        return try await github.createPullRequest(
             worktreePath: worktree.path,
             title: title,
             body: body,
-            head: pushDestination(worktree: worktree).head(branch: worktree.branch),
+            head: pushDestination(worktree: worktree).head(branch: branch),
+            base: parent == stack.base ? nil : parent,
         )
     }
 

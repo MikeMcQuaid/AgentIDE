@@ -178,7 +178,7 @@ public struct DashboardView: View {
             WorktreeRowView(
                 item: item,
                 pullRequest: model.pullRequest(for: item),
-                stackDepth: model.stackDepth(for: item),
+                standing: model.stackStanding(for: item),
             )
             // Deleting takes a moment; the row fades the instant the
             // click lands so the click visibly took.

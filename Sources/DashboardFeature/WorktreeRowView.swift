@@ -9,7 +9,9 @@ struct WorktreeRowView: View {
 
     let item: WorktreeItem
     let pullRequest: PullRequestSummary?
-    let stackDepth: Int
+    /// Where this branch sits in its stack, how tall the stack is,
+    /// and what it is built on.
+    let standing: StackStanding
 
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
@@ -52,6 +54,16 @@ struct WorktreeRowView: View {
         }
 
         return parts.joined(separator: " ")
+    }
+
+    /// What the stack marker says on hover: where this branch is,
+    /// what it is built on, and how much rides on it.
+    private var stackHelp: String {
+        let above = standing.above
+        let riding = above == 1 ? "1 pull request builds on it" : "\(above) pull requests build on it"
+        return "Stacked: number \(standing.position) of \(standing.height)"
+            + (standing.base.map { ", based on " + $0 } ?? "")
+            + (above > 0 ? ", and " + riding : "")
     }
 
     private var countsExplanation: String {
@@ -208,10 +220,11 @@ struct WorktreeRowView: View {
                     Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
                         .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
                 }
-                if stackDepth > 1 {
+                if standing.isStacked {
                     Octicon("octicon-stack", colour: .secondary)
-                        .hoverHelp("Stacked: \(stackDepth) pull requests based on each other")
-                    Text(String(stackDepth))
+                        .hoverHelp(stackHelp)
+                    Text(String(standing.position) + "/" + String(standing.height))
+                        .hoverHelp(stackHelp)
                 }
             }
         }

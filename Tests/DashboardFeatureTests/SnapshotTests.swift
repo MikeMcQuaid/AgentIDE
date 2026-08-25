@@ -41,9 +41,13 @@ struct SnapshotTests {
             checks: "SUCCESS",
         )
         let width: CGFloat = 320
-        let view = WorktreeRowView(item: item, pullRequest: pullRequest, stackDepth: 1)
-            .frame(width: width)
-            .padding()
+        let view = WorktreeRowView(
+            item: item,
+            pullRequest: pullRequest,
+            standing: StackStanding(position: 1, height: 1),
+        )
+        .frame(width: width)
+        .padding()
 
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2

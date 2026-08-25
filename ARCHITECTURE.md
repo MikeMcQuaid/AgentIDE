@@ -782,7 +782,12 @@ shim rather than a protocol:
    parent is skipped rather than rewritten, since renaming commits for
    nothing is its own damage. Both stack actions sit where a lone
    branch's Rebase and Push sit, in the footer's left, and dim when they
-   would do nothing: nothing out of place, or nothing the remote lacks. A failure resets what moved, returns to the
+   would do nothing: nothing out of place, or nothing the remote lacks. A
+   stacked branch's pull request opens against the branch below it, which
+   is one `--base` flag and the whole of what makes GitHub show a stack;
+   no extension is involved. The sidebar says where a row stands in its
+   stack (`2/3`) from the pull request chain it already caches, naming
+   what it is built on and how much rides on it. A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes
    bottom up so a base is on the remote before the branch pointing at it.
 7. The listing and the footer act on the branch actually checked out in the

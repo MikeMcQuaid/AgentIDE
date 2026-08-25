@@ -155,6 +155,34 @@ extension DashboardModel {
         return depth
     }
 
+    /// Where a worktree's branch sits in its stack and how tall that
+    /// stack is, so a row can say `2/3` rather than a bare count:
+    /// what is under a branch and what rides on it are different
+    /// questions, and both matter when deciding what to do next.
+    public func stackStanding(for item: WorktreeItem) -> StackStanding {
+        let prefix = item.worktree.repositoryPath + "#"
+        var byHead = [String: PullRequestSummary]()
+        var byBase = [String: PullRequestSummary]()
+        let cached = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
+        for summary in cached where summary.state == "OPEN" {
+            byHead[summary.headBranch] = summary
+            byBase[summary.baseBranch] = summary
+        }
+        guard let own = byHead[item.worktree.branch] else {
+            return StackStanding(position: 1, height: 1)
+        }
+
+        let position = stackDepth(for: item)
+        var height = position
+        var current = own
+        var seen = Set([current.headBranch])
+        while let next = byBase[current.headBranch], seen.insert(next.headBranch).inserted {
+            height += 1
+            current = next
+        }
+        return StackStanding(position: position, height: height, base: own.baseBranch)
+    }
+
     // MARK: Private
 
     private static let selectedInterval: TimeInterval = 30

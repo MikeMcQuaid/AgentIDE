@@ -122,6 +122,7 @@ public struct GitHubClient: Sendable {
         title: String,
         body: String,
         head: String? = nil,
+        base: String? = nil,
     ) async throws -> String {
         let bodyFile = FileManager.default
             .temporaryDirectory
@@ -134,6 +135,7 @@ public struct GitHubClient: Sendable {
         // opened against, not the one holding the branch.
         let arguments = ["pr", "create", "--title", title, "--body-file", bodyFile]
             + (head.map { ["--head", $0] } ?? [])
+            + (base.map { ["--base", $0] } ?? [])
         return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
