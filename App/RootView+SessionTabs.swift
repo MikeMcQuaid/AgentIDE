@@ -357,7 +357,10 @@ extension RootView {
         // costs a git or GitHub read to come back, and flipping
         // between them showed a loading state every time.
         let shown = utilityTab == .editor && item.worktree.isHostDirectory ? UtilityTab.review : utilityTab
-        return ZStack {
+        // Top-aligned, as each of these was before they shared a
+        // stack: a pane with nothing in it belongs at the top of the
+        // pane, not floating in the middle of it.
+        return ZStack(alignment: .top) {
             ReviewView(
                 worktree: target.worktree,
                 git: dependencies.git,
