@@ -115,6 +115,7 @@ final class PullRequestsModel {
             await service.isTipSigned(worktreePath: path)
         }
         currentBranch = branch
+        wireStack(service: service)
         // Painted before anything is asked for, so a tab switched
         // away from and back to opens on the rows it had.
         paintCachedListing()
@@ -194,6 +195,10 @@ final class PullRequestsModel {
     /// The repository's default branch, which has no pull request
     /// of its own to look for.
     let defaultBranch: String?
+
+    /// Everything about the stack this branch belongs to: what it
+    /// is, and the work it can be asked to do.
+    var stacking: StackWork = .init()
 
     var fetchTemplate: (String) async -> String?
     var fetchCommitMessages: (Worktree) async -> [String]
@@ -318,6 +323,7 @@ final class PullRequestsModel {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
         if let worktree = branchItem?.worktree {
+            await loadStack()
             isTipSigned = await checkTipSigned(worktree.path)
             rebaseNeed = await fetchRebaseNeed(worktree)
             let template = await fetchTemplate(worktree.path)

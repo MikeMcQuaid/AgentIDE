@@ -40,6 +40,21 @@ public extension GitClient {
         ).standardOutput
     }
 
+    /// One branch's own changes against another, which is what a
+    /// stack's entry shows: three dots, so what the parent already
+    /// carries never appears in the child's diff.
+    func stackDiff(
+        worktreePath: String,
+        parent: String,
+        branch: String,
+        ignoringWhitespace: Bool = false,
+    ) async throws -> String {
+        try await git(
+            ["diff"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + [parent + "..." + branch],
+            in: worktreePath,
+        ).standardOutput
+    }
+
     /// Every commit on the branch against its merge base with a base
     /// ref, the whole-branch review.
     func branchDiff(

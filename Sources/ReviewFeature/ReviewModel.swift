@@ -61,6 +61,11 @@ final class ReviewModel {
     /// only apply to the last commit.
     var scope: Scope = .lastCommit
 
+    /// Whether what is shown belongs to a branch this worktree does
+    /// not hold: its diff can be read, but rejecting lines or
+    /// amending would have to write to a branch that is not here.
+    private(set) var isReadOnly = false
+
     /// The parsed diff files.
     private(set) var files: [DiffFile] = []
 
@@ -100,6 +105,16 @@ final class ReviewModel {
     /// on every reload.
     private(set) var hasUpstream = false
 
+    /// A stack entry this pane is showing instead of the worktree's
+    /// own diff: the branch and what it is built on. Nil is the
+    /// ordinary case, where the pane shows the branch that is
+    /// checked out and can be written to.
+    var stackTarget: (parent: String, branch: String)? {
+        didSet {
+            isReadOnly = stackTarget != nil
+        }
+    }
+
     /// The find bar's query; the hunks holding a match and which of
     /// them is showing are derived from it.
     var findQuery = "" {
@@ -137,6 +152,12 @@ final class ReviewModel {
     /// Loads the scope's diff.
     func reload() async {
         selections = [:]
+        if let stackTarget {
+            await loadStackEntry(parent: stackTarget.parent, branch: stackTarget.branch)
+            hasLoaded = true
+            return
+        }
+
         let currentBranch = await git.currentBranch(worktreePath: worktreePath)
         hasUpstream =
             if let currentBranch {
@@ -297,6 +318,25 @@ final class ReviewModel {
 
     /// The branch scope's commits and merge-base diff; commits load
     /// first so they list even when the diff fails to parse.
+    /// One stack entry's own changes, read-only: the commits it
+    /// adds to the branch below it.
+    private func loadStackEntry(parent: String, branch: String) async {
+        branchCommits = []
+        showsUncommitted = false
+        do {
+            files = try await DiffParser.parse(git.stackDiff(
+                worktreePath: worktreePath,
+                parent: parent,
+                branch: branch,
+                ignoringWhitespace: hidesWhitespace,
+            ))
+            commitMessage = ""
+            originalMessage = ""
+        } catch {
+            report(error.localizedDescription)
+        }
+    }
+
     private func loadBranch() async throws {
         branchCommits = []
         guard let baseRef = await baseRefProvider() else {

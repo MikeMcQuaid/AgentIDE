@@ -63,6 +63,18 @@ public extension DashboardModel {
         }
     }
 
+    /// Cuts a branch on top of a worktree's own, in that worktree:
+    /// how a stack grows without a second checkout.
+    func stackBranch(named name: String, on item: WorktreeItem) async {
+        do {
+            try await service.stackBranch(named: name, on: item.worktree)
+            ErrorLog.shared.note("Stacked \(name) on \(item.worktree.branch).")
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
     /// Stops listing one; nothing on disk is touched.
     func forgetHostDirectory(_ item: WorktreeItem) async {
         if selection?.id == item.id {

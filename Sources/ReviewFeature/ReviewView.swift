@@ -14,6 +14,7 @@ public struct ReviewView: View {
     /// feeds the inline pull request conversations.
     public init(worktree: Worktree, git: GitClient, github: GitHubClient, service: SessionService) {
         worktreePath = worktree.path
+        self.worktree = worktree
         self.service = service
         let fetchThreads: () async -> [ReviewThread] = {
             let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
@@ -62,6 +63,14 @@ public struct ReviewView: View {
         VStack(spacing: 0) {
             toolbar
             Divider()
+            // Only a stack shows it, so a branch standing on its own
+            // reviews exactly as it always did.
+            if stack.isStacked {
+                BranchStackStrip(stack: stack, selected: selectedBranch) { branch in
+                    show(branch)
+                }
+                Divider()
+            }
             if showsFind {
                 ReviewFindBar(model: model, focusRequest: findRequest) { closeFind() }
                 Divider()
@@ -70,7 +79,7 @@ public struct ReviewView: View {
             ReviewFooterView(
                 model: model,
                 onCommit: { await commitOutstanding() },
-                canCommit: model.showsUncommitted && model.files.isEmpty == false,
+                canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
             )
         }
         // The model is rebuilt whenever the worktree changes: state
@@ -78,6 +87,8 @@ public struct ReviewView: View {
         // worktree's model would otherwise review every one.
         .task(id: worktreePath) {
             model = makeModel()
+            stack = await service.stack(for: worktree)
+            selectedBranch = stack.checkedOut
             await model.reload()
         }
         // Cmd-F reaches the pane through the storage bus: a diff is
@@ -101,6 +112,12 @@ public struct ReviewView: View {
     private static let disabledOpacity = 0.4
 
     @State private var model: ReviewModel
+
+    /// The stack the worktree's branch belongs to, and which entry
+    /// of it this pane is showing. A stack of one is every branch
+    /// that stands on its own, and shows no strip at all.
+    @State private var stack: BranchStack = .init(base: nil, branches: [], checkedOut: "")
+    @State private var selectedBranch = ""
     @State private var collapsedAll = false
 
     /// The menu bar's commit signal.
@@ -121,6 +138,7 @@ public struct ReviewView: View {
     private var findPreviousRequest = 0
 
     private let worktreePath: String
+    private let worktree: Worktree
     private let service: SessionService
     private let makeModel: () -> ReviewModel
 
@@ -214,7 +232,8 @@ public struct ReviewView: View {
                 Button("Reject Selected Lines") { Task { await model.rejectSelected() } }
                     .disabled(
                         model.selections.values.allSatisfy(\.isEmpty)
-                            || model.scope == .branch || model.scope == .upstream,
+                            || model.scope == .branch || model.scope == .upstream
+                            || model.isReadOnly,
                     )
             }
         }
@@ -258,6 +277,18 @@ public struct ReviewView: View {
         // The colour fill alone is invisible to VoiceOver.
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .hoverHelp(help)
+    }
+
+    /// Retargets the pane at a stack entry: the checked-out branch
+    /// reviews as usual, and any other shows its own diff, read
+    /// only, since rejecting a line would have to write to a branch
+    /// this worktree does not hold.
+    private func show(_ branch: String) {
+        selectedBranch = branch
+        model.stackTarget = branch == stack.checkedOut
+            ? nil
+            : stack.parent(of: branch).map { (parent: $0, branch: branch) }
+        Task { await model.reload() }
     }
 
     /// The collapsible file list; the uncommitted scope embeds the

@@ -83,6 +83,91 @@ public extension GitClient {
         try await git(["pull", "--ff-only", "origin", branch], in: worktreePath)
     }
 
+    /// Cuts a branch at the worktree's tip and checks it out, which
+    /// is how a stack grows without a second worktree.
+    func createBranch(named name: String, worktreePath: String) async throws {
+        try await git(["checkout", "-b", name], in: worktreePath)
+    }
+
+    /// Every local branch in the repository, in no order of merit.
+    func branches(worktreePath: String) async -> [String] {
+        let result = try? await git(
+            ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
+    }
+
+    /// Whether one ref is in another's history, which is what makes
+    /// a branch part of a stack rather than a branch of its own.
+    func isAncestor(_ ancestor: String, of descendant: String, worktreePath: String) async -> Bool {
+        let result = try? await git(
+            ["merge-base", "--is-ancestor", ancestor, descendant],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return result?.succeeded ?? false
+    }
+
+    /// How many commits a ref carries beyond another, which orders a
+    /// stack without asking anything else about it.
+    func commitCount(from base: String, to ref: String, worktreePath: String) async -> Int {
+        let result = try? await git(
+            ["rev-list", "--count", base + ".." + ref],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return Int((result?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
+    /// Where two refs last shared history, which is what says
+    /// whether they belong to one stack: a fork point beyond the
+    /// default branch means one was cut from the other.
+    func mergeBase(_ first: String, _ second: String, worktreePath: String) async -> String? {
+        let result = try? await git(["merge-base", first, second], in: worktreePath, allowFailure: true)
+        let sha = (result?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return sha.isEmpty ? nil : sha
+    }
+
+    /// A ref's commit, recorded before a stack moves so each branch
+    /// is replayed from exactly where it forked.
+    func tip(of ref: String, worktreePath: String) async -> String? {
+        let result = try? await git(["rev-parse", ref], in: worktreePath, allowFailure: true)
+        let sha = (result?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return sha.isEmpty ? nil : sha
+    }
+
+    /// Checks a branch out in the worktree; the caller has already
+    /// refused a dirty one or a running agent.
+    func checkout(branch: String, worktreePath: String) async throws {
+        try await git(["checkout", branch], in: worktreePath)
+    }
+
+    /// Moves a branch from one base to another, replaying only its
+    /// own commits and signing each: `--onto` with the base the
+    /// branch actually forked from is what keeps a stack from
+    /// gaining its parent's commits twice. Failure aborts, leaving
+    /// the branch exactly as it was.
+    func rebaseSigned(branch: String, onto newBase: String, from oldBase: String, worktreePath: String) async throws {
+        do {
+            try await git(
+                ["rebase", "--gpg-sign", "--onto", newBase, oldBase, branch],
+                in: worktreePath,
+            )
+        } catch {
+            try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
+            throw error
+        }
+    }
+
+    /// Puts a branch back exactly where it was, for a restack that
+    /// could not finish.
+    func reset(branch: String, to commit: String, worktreePath: String) async throws {
+        try await git(["checkout", branch], in: worktreePath)
+        try await git(["reset", "--hard", commit], in: worktreePath)
+    }
+
     /// Whether origin already carries the branch, after a fetch.
     func remoteBranchExists(worktreePath: String, branch: String) async -> Bool {
         await refExists(worktreePath: worktreePath, ref: "refs/remotes/origin/" + branch)

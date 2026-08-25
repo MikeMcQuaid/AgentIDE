@@ -768,7 +768,22 @@ shim rather than a protocol:
    until the continuations are joined back on. A repository without a
    template shows no template field, and with one the generate button
    also completes the template from the commits.
-6. The listing and the footer act on the branch actually checked out in the
+6. Stacked branches live in one worktree, and the stack is derived rather
+   than recorded: the branches sharing a fork point beyond the default
+   branch, ordered by where each forks and how far it has come. Ancestry
+   alone will not do, since a branch that gained a commit after its child
+   forked is no longer that child's ancestor, which is exactly when a
+   stack needs putting back in order. Reading a stack needs no checkout
+   (`git diff parent...branch`), so the strip retargets the panes and
+   leaves the worktree where it is, and an entry that is not checked out
+   reviews read-only. Restacking records every tip first, then rebases
+   bottom up with `--onto <parent> <the parent's recorded tip>` so only a
+   branch's own commits replay, signing each; a branch already on its
+   parent is skipped rather than rewritten, since renaming commits for
+   nothing is its own damage. A failure resets what moved, returns to the
+   branch it started on and reports which branch conflicted. Pushing goes
+   bottom up so a base is on the remote before the branch pointing at it.
+7. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
    branches inside a worktree. Every scope asks GitHub for ten pull
    requests and no more, and the default branch is not asked about at all:
@@ -784,7 +799,7 @@ shim rather than a protocol:
    the template has no such section. Ticking every box writes it too,
    into the template only: a ticked AI box with nothing under it is the
    one lie that button could tell.
-7. Each pull request row offers the last mile as small actions: copy the
+8. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
    agent, jump to the one failing check or, when several fail, the
    checks page (copying failed step logs through `gh run view` proved

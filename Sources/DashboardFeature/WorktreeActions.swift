@@ -19,6 +19,10 @@ struct WorktreeActions: View {
 
     @Binding var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
+    /// The worktree whose branch a new one is being stacked on;
+    /// the sidebar owns the prompt, since a menu cannot hold one.
+    @Binding var pendingStack: WorktreeItem?
+
     var body: some View {
         Button("Refresh") { Task { await model.refreshRepository(path: item.worktree.repositoryPath) } }
             .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
@@ -42,6 +46,8 @@ struct WorktreeActions: View {
                     "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
                 )
         }
+        Button("Stack a branch on this one…") { pendingStack = item }
+            .hoverHelp("Cut a branch on top of this one in the same worktree, which is how a stack grows")
         Divider()
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")

@@ -145,6 +145,13 @@ before shipping.
 
 ### 🚢 Ship
 
+- **Stacks** branches in one worktree: a menu item cuts a branch on top
+  of the one you are on, the review and pull request tabs show the stack
+  as `main ← lower ← upper` with each entry's own diff a click away, and
+  two buttons put the whole stack back in order and push it bottom up,
+  signing every commit they replay and leaving alone any branch already
+  where it belongs (so a stack is one checkout, one session and no
+  bookkeeping, and a branch on its own looks exactly as it always did)
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own

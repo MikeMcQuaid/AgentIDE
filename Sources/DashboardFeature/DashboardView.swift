@@ -78,6 +78,11 @@ public struct DashboardView: View {
     /// worktree, which always confirms since it always forces).
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
+    /// The worktree a branch is being stacked on, and what to call
+    /// it: a menu cannot ask, so the sidebar asks for it.
+    @State private var pendingStack: WorktreeItem?
+    @State private var stackBranchName = ""
+
     private let model: DashboardModel
 
     @ViewBuilder private var foreignSection: some View {
@@ -192,6 +197,7 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
+        .modifier(StackBranchPrompt(item: item, model: model, name: $stackBranchName, pending: $pendingStack))
         .confirmationDialog(
             forceDeleteTitle(for: item),
             isPresented: forceDeleteBinding(for: item),
@@ -217,6 +223,7 @@ public struct DashboardView: View {
                 model: model,
                 onCleanUp: { await cleanUpOrOffer(item) },
                 pendingForceDelete: $pendingForceDelete,
+                pendingStack: $pendingStack,
             )
         }
     }
