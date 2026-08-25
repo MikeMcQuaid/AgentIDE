@@ -255,6 +255,9 @@ extension RootView {
     // MARK: Private
 
     static let stripSpacing: CGFloat = 4
+
+    /// What keeps an agent's output off the pane's edges.
+    static let terminalInset: CGFloat = 6
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
 
@@ -284,12 +287,15 @@ extension RootView {
 extension RootView {
     /// The agent terminal: copies are prose, so multi-line copies
     /// reflow for pasting into chat and pull request bodies.
-    func agentTerminal(for session: AgentSession, isActive: Bool) -> TerminalPaneView {
+    func agentTerminal(for session: AgentSession, isActive: Bool) -> some View {
         TerminalPaneView(
             command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
             reflowsCopies: true,
             isActive: isActive,
         )
+        // A hair of room either side: the agent's own frames draw to
+        // their last column, which sat against the pane's edges.
+        .padding(.horizontal, Self.terminalInset)
     }
 
     /// The host shell terminal, a plain local shell on the pane's

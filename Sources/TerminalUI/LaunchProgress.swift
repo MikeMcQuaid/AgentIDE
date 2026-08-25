@@ -92,8 +92,10 @@ public struct LaunchProgressView: View {
         TimelineView(.periodic(from: appearedAt, by: Self.frameSeconds)) { context in
             let elapsed = max(0, context.date.timeIntervalSince(appearedAt))
             VStack(alignment: .leading, spacing: Self.lineSpacing) {
-                Text(Self.typed(Self.bannerText, secondsIn: elapsed))
-                    .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
+                if showsBanner {
+                    Text(Self.typed(Self.bannerText, secondsIn: elapsed))
+                        .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
+                }
                 header(at: elapsed)
                 ForEach(steps) { step in
                     line(step, at: context.date)
@@ -120,7 +122,7 @@ public struct LaunchProgressView: View {
 
     /// The type-on rate: characters a second, and how often the
     /// view redraws to show them.
-    private static let charactersPerSecond = 10.0
+    private static let charactersPerSecond = 20.0
     private static let framesPerSecond = 20.0
     private static let frameSeconds = 1.0 / framesPerSecond
 
@@ -135,7 +137,13 @@ public struct LaunchProgressView: View {
     private static let padding: CGFloat = 20
     /// What the machine says before it says anything else, and
     /// what a finished line ends with, as a boot log's do.
-    private static let bannerText = "AGENTIDE · SANDBOXED AGENTS · READY"
+    /// The bundle's own version, so a screenshot of a wait says
+    /// which build took it; unversioned only when nothing built it.
+    private static let bannerText: String = {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        return "AGENTIDE " + (version ?? "dev") + " · SANDBOXED AGENTS · READY"
+    }()
+
     private static let doneMarker = " ... OK"
     private static let glowOpacity = 0.55
     private static let glowRadius: CGFloat = 2.5
@@ -154,7 +162,15 @@ public struct LaunchProgressView: View {
     /// and the clock dimmer than what they introduce.
     private static let ink: Color = .white
 
+    /// Whether this view is the first, and so the one to say it.
+    private static var bannerClaimed = false
+
     @State private var appearedAt: Date = .init()
+
+    /// The machine announces itself once a run: the first wait the
+    /// app shows carries the banner, and every wait after it is
+    /// just the work.
+    @State private var showsBanner: Bool = Self.claimBanner()
 
     private let title: String
     private let progress: LaunchProgress?
@@ -188,7 +204,7 @@ public struct LaunchProgressView: View {
         return HStack(spacing: 0) {
             Text(verbatim: "> ")
                 .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
-            Text(Self.styled(Self.typed(text, secondsIn: since)))
+            Text(Self.styled(isDone ? text : Self.typed(text, secondsIn: since)))
                 .foregroundStyle(Self.ink)
                 .lineLimit(Self.stepLines)
             cursor(at: since, shown: step.id == steps.last?.id)
@@ -206,6 +222,15 @@ public struct LaunchProgressView: View {
                 .foregroundStyle(Self.ink)
                 .opacity(blinking ? 1 : 0)
         }
+    }
+
+    private static func claimBanner() -> Bool {
+        guard bannerClaimed == false else {
+            return false
+        }
+
+        bannerClaimed = true
+        return true
     }
 
     /// As much of a line as has been typed by now.

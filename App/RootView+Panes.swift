@@ -88,6 +88,22 @@ extension RootView {
         .ignoresSafeArea(.container, edges: .top)
     }
 
+    /// Narrows the sidebar to the least its rows need and splits
+    /// what is left evenly between the panes that do the work, which
+    /// is the layout worth going back to when dragging has left them
+    /// lopsided.
+    func evenPanes(in windowWidth: CGFloat) {
+        sidebarWidth = PaneLayout.sidebarRange.lowerBound
+        guard showsUtility, windowWidth > 0 else {
+            return
+        }
+
+        let free = windowWidth - sidebarWidth
+        let half = free / Self.evenShare
+        utilityPaneWidth = min(max(half, PaneLayout.utilityRange.lowerBound), PaneLayout.utilityRange.upperBound)
+        fitPanes(to: windowWidth)
+    }
+
     /// What the detail shows with nothing selected: the first
     /// reading's progress until it lands, then the invitation.
     @ViewBuilder var unselectedDetail: some View {
@@ -201,6 +217,13 @@ extension RootView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
+
+// MARK: - Even panes
+
+extension RootView {
+    /// Two panes doing the work, so half the free width each.
+    static let evenShare: CGFloat = 2
 }
 
 // MARK: - StartShellButton

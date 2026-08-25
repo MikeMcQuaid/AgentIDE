@@ -141,8 +141,11 @@ public struct DashboardView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            if group.items.count > 1 {
-                Text("(" + String(group.items.count - 1) + ")")
+            // The main checkout is not a worktree, and neither is a
+            // directory of your own.
+            let worktrees = group.items.count { $0.worktree.isHostDirectory == false } - 1
+            if worktrees > 0 {
+                Text("(" + String(worktrees) + ")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .hoverHelp("Worktrees beyond the default branch")

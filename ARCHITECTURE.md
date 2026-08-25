@@ -470,11 +470,12 @@ Sendable` and `nonisolated(unsafe)` are banned.
    the whole block pinned near the top of the pane so it grows downwards
    rather than shifting every line each time a step arrives. It is drawn
    as a terminal writing itself out: monospaced white on a dark panel
-   under faint scanlines, a banner, a `>` prompt, each line typed at ten
-   characters a second from the moment it was reported, finished lines
-   ending `... OK`, a block cursor blinking once a line is done and a
-   frame's dimming as each arrives, which is what every waiting pane in
-   the app looks like; the version probe runs beside the naming and the worktree,
+   under faint scanlines, a `>` prompt, each line typed at twenty
+   characters a second from the moment it was reported and completed the
+   instant the next one starts, finished lines ending `... OK`, a block
+   cursor blinking once a line is done and a frame's dimming as each
+   arrives, which is what every waiting pane in the app looks like; the
+   version banner belongs to the app's first wait alone; the version probe runs beside the naming and the worktree,
    since it costs a sandbox launch of its own and only has to be finished
    before the agent starts, and a kill that closed nothing skips the
    listing that would confirm it. So a slow step names

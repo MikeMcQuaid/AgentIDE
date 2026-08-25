@@ -83,13 +83,14 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   `LaunchProgress`, and keeps something on screen changing at
   least once a second, the block pinned near the top of the pane so
   it grows downwards. It is drawn as a terminal writing itself
-  out: monospaced white on a dark panel under faint scanlines, a
-  banner, each line typed at ten characters a second behind a `>`
-  prompt, finished lines ending `... OK`, a block cursor blinking
-  once a line is done and a frame's dimming as each arrives, so a
-  wait is worth watching. Work that need not be serial is not: anything
-  the launch does not depend on yet runs beside it. The same holds
-  for every pane whose data
+  out: monospaced white on a dark panel under faint scanlines,
+  each line typed at twenty characters a second behind a `>`
+  prompt, a line finishing the moment the next one starts,
+  finished lines ending `... OK`, a block cursor blinking once a
+  line is done and a frame's dimming as each arrives. The
+  version banner belongs to the app's first wait alone. Work that
+  need not be serial is not: anything the launch does not depend
+  on yet runs beside it. The same holds for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming
   what it waits on until the first result lands, then snaps to the
   finished UI. An empty state ("Nothing running", "No changes")

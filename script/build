@@ -20,8 +20,8 @@ ARGS=(
   -jobs "${JOBS}"
 )
 
-# The About panel's build number counts the default branch's
-# commits, so numbers are comparable across feature branches.
+# The version counts the default branch's commits, so numbers are
+# comparable across feature branches: the app is 0.1.<count>.
 BUILD_NUMBER="$(
   git rev-list --count origin/main 2>/dev/null ||
     git rev-list --count main 2>/dev/null ||
