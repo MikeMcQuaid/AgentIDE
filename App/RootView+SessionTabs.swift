@@ -123,6 +123,15 @@ extension RootView {
         .padding(.top, Self.toggleRowHeight)
     }
 
+    /// The repository's default branch, which has no pull request
+    /// of its own to go looking for.
+    func defaultBranch(of item: WorktreeItem) -> String? {
+        dependencies.dashboard
+            .groups
+            .first { $0.repository.path == item.worktree.repositoryPath }?
+            .defaultBranch
+    }
+
     func repository(of item: WorktreeItem) -> Repository {
         Repository(
             name: item.worktree.repositoryName,
@@ -357,6 +366,7 @@ extension RootView {
                 service: dependencies.service,
                 store: dependencies.store,
                 branch: target.worktree.branch,
+                defaultBranch: defaultBranch(of: item),
                 isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )
 

@@ -110,6 +110,11 @@ public extension SessionService {
         try await git.fetch(repositoryPath: repository.path)
     }
 
+    /// A tracked file's committed content; see `GitClient`.
+    func trackedFile(worktreePath: String, path: String) async -> String? {
+        await git.trackedFile(worktreePath: worktreePath, path: path)
+    }
+
     /// Removes the symlink an earlier release kept beside a
     /// uuid-layout worktree; the canonical path is what git knows,
     /// so this is cosmetic cleanup of the old layout.

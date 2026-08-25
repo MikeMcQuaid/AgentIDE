@@ -19,6 +19,7 @@ public struct PullRequestsView: View {
         service: SessionService,
         store: MetadataStore,
         branch: String? = nil,
+        defaultBranch: String? = nil,
         isMainCheckout: Bool = false,
     ) {
         self.items = items
@@ -28,6 +29,7 @@ public struct PullRequestsView: View {
             PullRequestsModel(
                 repository: repository,
                 branch: branch,
+                defaultBranch: defaultBranch,
                 items: items,
                 github: github,
                 service: service,

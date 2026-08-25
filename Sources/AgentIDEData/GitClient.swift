@@ -191,6 +191,19 @@ public struct GitClient: Sendable {
         return result?.succeeded ?? false
     }
 
+    /// A tracked file's committed content, for files a working
+    /// copy does not hold: the Homebrew taps are sparse checkouts
+    /// carrying only their formulae, so what git knows is the only
+    /// way to read their pull request template.
+    public func trackedFile(worktreePath: String, path: String) async -> String? {
+        let result = try? await git(["show", "HEAD:" + path], in: worktreePath, allowFailure: true)
+        guard let result, result.succeeded else {
+            return nil
+        }
+
+        return result.standardOutput.isEmpty ? nil : result.standardOutput
+    }
+
     /// Whether the worktree has uncommitted changes.
     public func isDirty(worktreePath: String) async -> Bool {
         let output = try? await git(["status", "--porcelain"], in: worktreePath).standardOutput

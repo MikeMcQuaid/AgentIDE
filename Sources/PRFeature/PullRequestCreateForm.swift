@@ -55,6 +55,18 @@ struct PullRequestCreateForm: View {
             HStack {
                 Text("Template").font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                if model.hasAIDisclosure {
+                    Button("Disclose AI", systemImage: "sparkles.rectangle.stack") {
+                        model.insertAIDisclosure()
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .disabled(isGenerating)
+                    .hoverHelp(
+                        "Name the harness and model that wrote this branch, and that you reviewed and "
+                            + "tested it, in the template's AI section",
+                    )
+                }
                 Button("Tick every box", systemImage: "checklist") { model.tickTemplateBoxes() }
                     .buttonStyle(.glass)
                     .controlSize(.small)

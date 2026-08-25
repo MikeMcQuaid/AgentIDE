@@ -143,6 +143,11 @@ before shipping.
   creating it and its remote the first time and opening the pull request from
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
+- **Discloses** the agent that wrote a branch in one click: the harness
+  with the model and effort it ran at, worded as the pickers word them,
+  followed by local review and testing, ticked into the template's own AI
+  section where there is one (so an honest disclosure is not a thing you
+  retype)
 - **Copies** unresolved review comments straight into a prompt, jumps to
   the failing check (or the checks page when several fail), resolves
   conversations one by one, resolves merge conflicts and enables

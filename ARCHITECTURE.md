@@ -764,7 +764,18 @@ shim rather than a protocol:
    also completes the template from the commits.
 6. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
-   branches inside a worktree.
+   branches inside a worktree. Every scope asks GitHub for ten pull
+   requests and no more, and the default branch is not asked about at all:
+   a repository with thousands open (the Homebrew taps) spent seconds on
+   every reload to answer questions the branch itself already answers. The
+   template is read from the working copy and, failing that, from git: the
+   taps are sparse checkouts that track a template without materialising
+   it, which is why their form had no template box. The AI disclosure
+   button writes the harness with the model and effort the session was
+   started with, worded as the pickers word them, followed by local review
+   and testing, into the template's own AI section, ticking that section's
+   box and replacing any sentence it wrote before, and into the body when
+   the template has no such section.
 7. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
    agent, jump to the one failing check or, when several fail, the

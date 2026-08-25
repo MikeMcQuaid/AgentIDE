@@ -38,14 +38,14 @@ struct AgentOptionPickers: View {
                 // waiting to be made.
                 Text("Choose…").tag("")
                 ForEach(choices(agent).models, id: \.self) { name in
-                    Text(Self.display(name)).tag(name)
+                    Text(AgentOptionName.display(name)).tag(name)
                 }
             }
             .hoverHelp("The model the agent uses; pick one to start")
             Picker("Effort", selection: $effort) {
                 Text("Choose…").tag("")
                 ForEach(choices(agent).efforts, id: \.self) { name in
-                    Text(Self.display(name)).tag(name)
+                    Text(AgentOptionName.display(name)).tag(name)
                 }
             }
             .hoverHelp("How much reasoning the agent spends; pick one to start")
@@ -63,18 +63,6 @@ struct AgentOptionPickers: View {
 
     private static let spacing: CGFloat = 6
     private static let agentIconSize: CGFloat = 8
-
-    /// Human-readable picker names: xhigh reads Extra High, gpt ids
-    /// read GPT n and simple names capitalise.
-    private static func display(_ name: String) -> String {
-        if name == "xhigh" {
-            return "Extra High"
-        }
-        if name.hasPrefix("gpt-") {
-            return "GPT " + name.dropFirst("gpt-".count)
-        }
-        return name.allSatisfy(\.isLowercase) ? name.capitalized : name
-    }
 
     /// A model or effort picked for one agent may not exist on
     /// another; it is unpicked rather than sent, so the agent that

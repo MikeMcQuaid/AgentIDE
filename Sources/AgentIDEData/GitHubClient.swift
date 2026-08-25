@@ -23,24 +23,29 @@ public struct GitHubClient: Sendable {
         case open
     }
 
-    /// The `gh pr list` page size, public so it can default the
-    /// public listing's limit. The branch scope filters server-side
-    /// so one page is plenty, and the pull request tab raises the
-    /// limit as later pages are visited.
-    public static let listLimit = 25
+    /// How many pull requests any one listing asks for. Kept small
+    /// deliberately: a repository with thousands open (homebrew-core,
+    /// homebrew-cask) made every scope's query slow enough to feel
+    /// broken, and the tab is for what is in front of you, not an
+    /// archive.
+    public static let listLimit = 10
+
+    /// Where a pull request template lives, in the order GitHub
+    /// itself looks.
+    public static let templatePaths = [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/pull_request_template.md",
+        "PULL_REQUEST_TEMPLATE.md",
+        "docs/PULL_REQUEST_TEMPLATE.md",
+    ]
 
     /// The repository's pull request template file content, nil
     /// without one.
     public static func pullRequestTemplate(in worktreePath: String) -> String? {
-        [
-            ".github/PULL_REQUEST_TEMPLATE.md",
-            ".github/pull_request_template.md",
-            "PULL_REQUEST_TEMPLATE.md",
-            "docs/PULL_REQUEST_TEMPLATE.md",
-        ]
-        .map { worktreePath + "/" + $0 }
-        .first { FileManager.default.fileExists(atPath: $0) }
-        .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        templatePaths
+            .map { worktreePath + "/" + $0 }
+            .first { FileManager.default.fileExists(atPath: $0) }
+            .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
     }
 
     /// The repository's pull requests for a scope, with dashboard
@@ -170,6 +175,11 @@ public struct GitHubClient: Sendable {
     }
 
     // MARK: Internal
+
+    /// A remembered answer, including the answer that there is none.
+    struct Cached {
+        let value: String?
+    }
 
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.

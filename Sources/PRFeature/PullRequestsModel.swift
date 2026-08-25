@@ -20,6 +20,7 @@ final class PullRequestsModel {
     init(
         repository: Repository,
         branch: String?,
+        defaultBranch: String?,
         items: [WorktreeItem],
         github: GitHubClient,
         service: SessionService,
@@ -27,6 +28,7 @@ final class PullRequestsModel {
     ) {
         self.repository = repository
         self.branch = branch
+        self.defaultBranch = defaultBranch
         self.items = items
         self.github = github
         self.store = store
@@ -49,8 +51,21 @@ final class PullRequestsModel {
         performCreate = { worktree, title, body in
             try await service.createPullRequest(worktree: worktree, title: title, body: body)
         }
+        // On disk first, so an edited template is the one offered,
+        // then out of git: a sparse checkout carries the tracked
+        // template without materialising it, which is how the
+        // Homebrew taps look.
         fetchTemplate = { path in
-            GitHubClient.pullRequestTemplate(in: path)
+            if let onDisk = GitHubClient.pullRequestTemplate(in: path) {
+                return onDisk
+            }
+
+            for candidate in GitHubClient.templatePaths {
+                if let tracked = await service.trackedFile(worktreePath: path, path: candidate) {
+                    return tracked
+                }
+            }
+            return nil
         }
         fetchCommitMessages = { worktree in
             await service.commitMessages(worktree: worktree)
@@ -119,7 +134,7 @@ final class PullRequestsModel {
 
     /// The branch actually checked out in the worktree, refreshed on
     /// reload; agents sometimes switch branches inside a worktree.
-    private(set) var currentBranch: String?
+    var currentBranch: String?
 
     /// True after an in-app push succeeds, dimming Push until the
     /// next item refresh proves new commits. Written only by the
@@ -173,7 +188,11 @@ final class PullRequestsModel {
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
     var performCreate: (Worktree, String, String) async throws -> String
-    var fetchTemplate: (String) -> String?
+    /// The repository's default branch, which has no pull request
+    /// of its own to look for.
+    let defaultBranch: String?
+
+    var fetchTemplate: (String) async -> String?
     var fetchCommitMessages: (Worktree) async -> [String]
     var generateDescription: ([String]) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
@@ -184,6 +203,12 @@ final class PullRequestsModel {
     var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (String) async -> Bool
+
+    /// The visible page. Every scope asks GitHub for one small
+    /// listing and no more, so paging walks what is already here
+    /// rather than fetching further into a repository with thousands
+    /// of open pull requests.
+    var page = 0
 
     /// The pull request creation form's fields; the template loads
     /// from the repository on reload when the form shows.
@@ -205,24 +230,6 @@ final class PullRequestsModel {
     var items: [WorktreeItem] {
         didSet {
             isPushed = false
-        }
-    }
-
-    /// The visible page; visiting the lookahead page refetches with
-    /// a higher limit. The guards keep `reload`'s own `page = 0`
-    /// reset and a fresh model (both counts zero) from spawning a
-    /// second concurrent reload.
-    var page = 0 {
-        didSet {
-            guard page != oldValue,
-                  fetchedLimit > 0,
-                  summaries.count == fetchedLimit,
-                  (page + 1) * PullRequestListView.pageSize >= summaries.count
-            else {
-                return
-            }
-
-            Task { await reload(extending: true) }
         }
     }
 
@@ -282,6 +289,19 @@ final class PullRequestsModel {
         repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
     }
 
+    /// The worktree listing, or nothing at all on the default
+    /// branch: asking GitHub for a pull request whose head is
+    /// `main` searches a repository's whole history of them to say
+    /// what the branch itself already says, which on a large tap
+    /// takes seconds every time the tab opens.
+    func listing(limit: Int) async throws -> [PullRequestSummary] {
+        guard scope != .worktree || listedBranch != defaultBranch else {
+            return []
+        }
+
+        return try await fetchList(scope.listScope(branch: listedBranch), limit)
+    }
+
     /// Where a branch's draft is stored, nil without a branch.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
@@ -291,13 +311,13 @@ final class PullRequestsModel {
     /// kept selection is re-selected once the fetch answers, and a
     /// single result opens its conversation directly. Extending
     /// keeps the current page and raises the fetch limit.
-    func reload(keepingSelection: Bool = false, extending: Bool = false) async {
+    func reload(keepingSelection: Bool = false) async {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
         if let worktree = branchItem?.worktree {
             isTipSigned = await checkTipSigned(worktree.path)
             rebaseNeed = await fetchRebaseNeed(worktree)
-            let template = fetchTemplate(worktree.path)
+            let template = await fetchTemplate(worktree.path)
             hasTemplate = template != nil
             loadDraft()
             originalTemplate = template ?? ""
@@ -309,11 +329,9 @@ final class PullRequestsModel {
                 currentBranch = live
             }
         }
-        if extending == false {
-            page = 0
-            selected = nil
-            paintCachedListing()
-        }
+        page = 0
+        selected = nil
+        paintCachedListing()
         defer {
             isLoading = false
             hasLoaded = true
@@ -323,8 +341,8 @@ final class PullRequestsModel {
         // scope's key.
         let requested = cacheKey
         do {
-            let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
-            let fetched = try await fetchList(scope.listScope(branch: listedBranch), limit)
+            let limit = GitHubClient.listLimit
+            let fetched = try await listing(limit: limit)
             guard Task.isCancelled == false, requested == cacheKey else {
                 return
             }
@@ -334,12 +352,10 @@ final class PullRequestsModel {
             var metadata = store.load()
             metadata.pullRequestListsCache[requested] = CachedPullRequestList(summaries: fetched)
             store.save(metadata)
-            if extending == false {
-                let chosen = fetched.first { $0.number == previous }
-                    ?? (fetched.count == 1 ? fetched.first : nil)
-                if let chosen {
-                    select(chosen)
-                }
+            let chosen = fetched.first { $0.number == previous }
+                ?? (fetched.count == 1 ? fetched.first : nil)
+            if let chosen {
+                select(chosen)
             }
             ServiceStatus.shared.recordSuccess()
         } catch {
@@ -366,7 +382,6 @@ final class PullRequestsModel {
 
     // MARK: Private
 
-    /// Fetches stay one page ahead of the visible one, so the pager
-    /// knows whether a next page exists.
-    private static let pageLookahead = 2
+    // Fetches stay one page ahead of the visible one, so the pager
+    // knows whether a next page exists.
 }

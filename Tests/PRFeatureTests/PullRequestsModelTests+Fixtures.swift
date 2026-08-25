@@ -71,6 +71,7 @@ extension PullRequestsModelTests {
         return PullRequestsModel(
             repository: Repository(name: "repo", path: "/repo"),
             branch: "feature",
+            defaultBranch: "main",
             items: items,
             github: GitHubClient(runner: runner),
             service: service,
