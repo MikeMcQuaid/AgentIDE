@@ -31,6 +31,22 @@ public extension SessionService {
         store.save(metadata)
     }
 
+    /// Publishes the listed directories where the `agentide`
+    /// command can read them, so `agentide .` in one of them
+    /// selects it the way it selects a worktree. One path per line:
+    /// a path can hold anything a `key=value` line cannot.
+    func publishHostDirectories(_ paths: [String]) {
+        try? FileManager.default.createDirectory(
+            atPath: self.paths.agentideDirectory,
+            withIntermediateDirectories: true,
+        )
+        try? (paths.sorted().joined(separator: "\n") + "\n").write(
+            toFile: self.paths.agentideDirectory + "/host-directories",
+            atomically: true,
+            encoding: .utf8,
+        )
+    }
+
     // MARK: Internal
 
     /// Refuses a path outside the shared workspace. Every launch

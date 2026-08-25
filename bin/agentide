@@ -400,22 +400,46 @@ for file in "$@"; do
     # it is a row or has left the workspace.
     row=""
     candidate="${path}"
+    listed_file="${shared}/agentide/host-directories"
     while [ "${candidate}" != "/" ]; do
+      # A directory of your own, as the app lists them: a row like
+      # any other, so `agentide .` anywhere inside one selects it.
+      if [ -f "${listed_file}" ]; then
+        while IFS= read -r listed; do
+          [ -n "${listed}" ] || continue
+          physical="$(cd "${listed}" 2>/dev/null && pwd -P || printf '%s' "${listed}")"
+          if [ "${candidate}" = "${listed}" ] || [ "${candidate}" = "${physical}" ]; then
+            row="${candidate}"
+            break
+          fi
+        done <"${listed_file}"
+      fi
+      [ -z "${row}" ] || break
       case "${candidate}" in
         "${shared}/"*) rest="${candidate#"${shared}/"}" ;;
-        *) break ;;
+        *) rest="" ;;
       esac
       case "${rest}" in
-        repositories/*/* | worktrees/*/*/*) ;;
         repositories/* | worktrees/*/*)
-          row="${candidate}"
-          break
+          # A checkout is one name under `repositories`, a worktree
+          # two under `worktrees`; anything deeper walks up to it.
+          case "${rest}" in
+            repositories/*/* | worktrees/*/*/*) ;;
+            *)
+              row="${candidate}"
+              break
+              ;;
+          esac
+          ;;
+        "")
+          # Outside the workspace: only a listed directory above can
+          # make this a row.
           ;;
         *) break ;;
       esac
       candidate="$(dirname "${candidate}")"
     done
-    [ -n "${row}" ] || fail "not inside a repository or worktree of ${shared}: ${path}" 66
+    [ -n "${row}" ] || fail "not inside a repository, worktree or listed directory: ${path}" 66
     path="${row}"
     kind=select
     request_cwd="${path}"

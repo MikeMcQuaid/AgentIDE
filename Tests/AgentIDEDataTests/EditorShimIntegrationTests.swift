@@ -120,6 +120,31 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `a directory of your own is selected from anywhere inside it`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-listed")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+        let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let shared = paths(root: root).sharedWorkspace
+        let listed = root + "/opt/homebrew"
+        try FileManager.default.createDirectory(
+            atPath: listed + "/Library/Deep",
+            withIntermediateDirectories: true,
+        )
+        try FileManager.default.createDirectory(atPath: shared + "/agentide", withIntermediateDirectories: true)
+        try (listed + "\n").write(
+            toFile: shared + "/agentide/host-directories",
+            atomically: true,
+            encoding: .utf8,
+        )
+
+        let selecting = try run(shim, arguments: [listed + "/Library/Deep"], in: root, sharedWorkspace: shared)
+        try await exit(of: selecting)
+        #expect(selecting.terminationStatus == 0)
+        #expect(spool.pending().first?.path == listed)
+    }
+
+    @Test
     func `help is offered, and printed for anything it cannot make sense of`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-help")
         defer { try? FileManager.default.removeItem(atPath: root) }

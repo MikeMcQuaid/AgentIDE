@@ -59,11 +59,12 @@ before shipping.
   sessions started outside AgentIDE (so one window tells you who needs
   attention)
 - **Lists** directories of your own under a repository, `/opt/homebrew`
-  under brew or your dotfiles under theirs: a laptop icon, the path and an
-  "on your Mac" chip mark them out, the middle pane is a plain shell
-  running as you, and the editor, browser, diff and pull requests all work
-  as usual (so the places you work on by hand live beside the ones agents
-  work on, and no agent ever runs in them)
+  under brew or your dotfiles under theirs: a laptop icon and the path
+  where a branch would be, its checked-out branch below, the editor in the
+  pane an agent would have taken, and the diff, browser, shell and pull
+  requests where they always are; `agentide .` from inside one selects it
+  (so the places you work on by hand live beside the ones agents work on,
+  and no agent ever runs in them)
 - **Groups** worktrees by repository, showing unread terminal and agent activity
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to

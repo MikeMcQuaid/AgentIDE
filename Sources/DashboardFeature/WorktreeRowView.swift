@@ -26,7 +26,6 @@ struct WorktreeRowView: View {
 
     private static let unreadDotSize: CGFloat = 6
     private static let spacing: CGFloat = 4
-    private static let chipPadding: CGFloat = 5
     private static let badgeSpacing: CGFloat = 2
     /// Sits the icon on the branch line's baseline rather than the
     /// row's very top.
@@ -92,7 +91,6 @@ struct WorktreeRowView: View {
         HStack(spacing: Self.spacing) {
             Text(title)
                 .lineLimit(1)
-                .font(item.worktree.isHostDirectory ? .body.monospaced() : .body)
             Spacer(minLength: Self.spacing)
             if item.hasUnread {
                 Circle()
@@ -106,17 +104,22 @@ struct WorktreeRowView: View {
     /// What it is doing, under its name. The counts come after what
     /// the pull request is doing: its state is the news, they are
     /// detail.
-    private var detailLine: some View {
-        HStack(spacing: Self.spacing) {
-            if item.worktree.isHostDirectory {
-                Text("on your Mac")
-                    .padding(.horizontal, Self.chipPadding)
-                    .background(.quaternary, in: Capsule())
-                    .hoverHelp("A directory of your own: a shell, an editor and a diff, and no agent")
-                if item.worktree.branch.isEmpty == false {
-                    Text(item.worktree.branch)
-                }
+    @ViewBuilder private var detailLine: some View {
+        if item.worktree.isHostDirectory {
+            HStack(spacing: Self.spacing) {
+                Text(item.worktree.branch)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+            worktreeDetailLine
+        }
+    }
+
+    private var worktreeDetailLine: some View {
+        HStack(spacing: Self.spacing) {
             if let agent = item.session?.agent {
                 Text(agent.displayName)
             }

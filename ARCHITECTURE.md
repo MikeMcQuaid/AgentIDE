@@ -859,10 +859,14 @@ shim rather than a protocol:
    so every conversation stays attributed to its repository.
 4. Directories of your own are listed under a repository and marked as
    such (`Worktree.isHostDirectory`), which is what the sidebar row, the
-   pane and the menus all branch on: a laptop icon and an "on your Mac"
-   chip, a plain host shell in place of the agent pane, no session strip
-   controls, and a menu offering only Copy path and Forget, which touches
-   no file. They are kept in the metadata store per repository, since they
+   pane and the menus all branch on: a laptop icon with the path where a
+   branch would be and the branch below it, in the same face and size as
+   any other row; the editor in the pane an agent would have taken, hidden
+   from the utility pane so there is one editor with one set of shortcuts
+   wherever it shows; no session strip controls; and a menu offering only
+   Copy path and Forget, which touches no file. The app publishes the list
+   as `agentide/host-directories`, so `agentide .` from inside one selects
+   it the way it selects a worktree. They are kept in the metadata store per repository, since they
    are configuration rather than anything derivable. Every launch passes
    through one function, which refuses a path outside the shared
    workspace: the sandbox user can often read such a directory, and must

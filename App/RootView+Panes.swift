@@ -15,14 +15,10 @@ extension RootView {
     @ViewBuilder
     func primary(for item: WorktreeItem) -> some View {
         if item.worktree.isHostDirectory {
-            // Its own shell, keyed apart from the utility pane's, so
-            // the two are two shells rather than one fought over.
-            shellTerminal(
-                at: item.worktree.path,
-                onExit: { closeShell(at: item.worktree.path) },
-                isActive: isCovered == false,
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The editor takes the pane an agent would have, and
+            // leaves the utility pane, so it is one editor with one
+            // set of shortcuts wherever it shows.
+            editorPane(for: item)
         } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
@@ -107,6 +103,20 @@ extension RootView {
                 description: Text("Pick a worktree on the left or create a session."),
             )
         }
+    }
+
+    /// Parses the persisted path-tab lines; values are tab names
+    /// (unknown ones, including this store's old integer form, fall
+    /// back to the default tab when read).
+    static func decodeTabs(_ stored: String) -> [String: String] {
+        var tabs = [String: String]()
+        for line in stored.split(separator: "\n") {
+            let parts = line.split(separator: "\t")
+            if let path = parts.first, let name = parts.last, path != name {
+                tabs[String(path)] = String(name)
+            }
+        }
+        return tabs
     }
 
     /// A running shell stays mounted whichever tab, worktree or page

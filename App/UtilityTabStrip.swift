@@ -7,10 +7,15 @@ import TerminalUI
 struct UtilityTabStrip: View {
     // MARK: Internal
 
+    /// Tabs this worktree has no use for: a directory of your own
+    /// shows its editor in the pane the agent would have, so the
+    /// tab here would be a second copy of it.
+    var hiding: Set<UtilityTab> = []
+
     var body: some View {
         // The errors tab hides until the first failure of the
         // session, then sticks around even across a clear.
-        ForEach(UtilityTab.allCases, id: \.self) { tab in
+        ForEach(UtilityTab.allCases.filter { hiding.contains($0) == false }, id: \.self) { tab in
             button(tab)
         }
     }

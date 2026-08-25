@@ -61,7 +61,7 @@ extension RootView {
             // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip()
+                    UtilityTabStrip(hiding: item.worktree.isHostDirectory ? [.editor] : [])
                 }
             }
             Spacer(minLength: 0)
@@ -252,20 +252,6 @@ extension RootView {
         }
     }
 
-    /// Parses the persisted path-tab lines; values are tab names
-    /// (unknown ones, including this store's old integer form, fall
-    /// back to the default tab when read).
-    static func decodeTabs(_ stored: String) -> [String: String] {
-        var tabs = [String: String]()
-        for line in stored.split(separator: "\n") {
-            let parts = line.split(separator: "\t")
-            if let path = parts.first, let name = parts.last, path != name {
-                tabs[String(path)] = String(name)
-            }
-        }
-        return tabs
-    }
-
     // MARK: Private
 
     static let stripSpacing: CGFloat = 4
@@ -325,6 +311,19 @@ extension RootView {
         )
     }
 
+    /// The one editor, wherever it shows: the utility pane for a
+    /// worktree, the primary pane for a directory of your own.
+    func editorPane(for item: WorktreeItem) -> EditorPane {
+        EditorPane(
+            worktreePath: item.worktree.path,
+            service: dependencies.service,
+            // The closure stays a non-final argument: the formatter
+            // rewrites a trailing one after a multiline call.
+            onFinishedWaiting: { finishedWaitingEdit() },
+            waitingEdit: waitingEdit(in: item.worktree.path),
+        )
+    }
+
     /// The worktree the review surfaces describe: on the repository
     /// page, the conversation selected in the list wins, so clicking
     /// around conversations retargets Review and PRs.
@@ -343,7 +342,12 @@ extension RootView {
     @ViewBuilder
     func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
         let target = reviewTarget(for: item, conversationPath: conversationPath)
-        switch utilityTab {
+        // A directory of your own edits in the primary pane, so a
+        // request for the editor here, from opening a file in the
+        // diff or from the tab it was last on, shows the diff
+        // instead of a second editor.
+        let shown = utilityTab == .editor && item.worktree.isHostDirectory ? UtilityTab.review : utilityTab
+        switch shown {
         // Both keep their own always-mounted layers, so the
         // switched content has nothing to show for them.
         case .browser,
@@ -359,15 +363,7 @@ extension RootView {
             )
 
         case .editor:
-            EditorPane(
-                worktreePath: item.worktree.path,
-                service: dependencies.service,
-                // The closure stays a non-final argument: the
-                // formatter rewrites a trailing one after a
-                // multiline call.
-                onFinishedWaiting: { finishedWaitingEdit() },
-                waitingEdit: waitingEdit(in: item.worktree.path),
-            )
+            editorPane(for: item)
 
         case .pullRequests:
             PullRequestsView(
