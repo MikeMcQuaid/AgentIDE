@@ -63,6 +63,29 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         worktree.id
     }
 
+    /// The same row on a different branch, for a checkout that has
+    /// just moved: the sidebar says so before the next full reading
+    /// comes back.
+    public func renamed(branch: String) -> Self {
+        Self(
+            worktree: Worktree(
+                repositoryName: worktree.repositoryName,
+                repositoryPath: worktree.repositoryPath,
+                branch: branch,
+                path: worktree.path,
+                isHostDirectory: worktree.isHostDirectory,
+            ),
+            session: session,
+            isDirty: isDirty,
+            aheadOfUpstream: aheadOfUpstream,
+            hasUnread: hasUnread,
+            pastSessions: pastSessions,
+            aheadOfDefault: aheadOfDefault,
+            behindDefault: behindDefault,
+            lastActivityAt: lastActivityAt,
+        )
+    }
+
     /// The same row with no session running in it, for a close that
     /// should show on screen before herdr has been asked again.
     public func withoutSession() -> Self {

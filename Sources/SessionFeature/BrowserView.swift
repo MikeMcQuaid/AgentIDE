@@ -28,7 +28,7 @@ public struct BrowserView: View {
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Self.padding) {
-                TextField("http://localhost:3000", text: $address)
+                TextField("Address", text: $address)
                     .textFieldStyle(.roundedBorder)
                     .focused($editingAddress)
                     .onSubmit { load() }

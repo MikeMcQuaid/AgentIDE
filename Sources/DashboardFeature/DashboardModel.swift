@@ -27,24 +27,7 @@ public final class DashboardModel {
         self.store = store
         self.github = github
         self.launchProgress = launchProgress
-        groups = store.load().cachedSidebar.map { cached in
-            let repository = Repository(name: cached.name, path: cached.path, fullName: cached.fullName)
-            let items = cached.worktrees.map { worktree in
-                WorktreeItem(
-                    worktree: Worktree(
-                        repositoryName: cached.name,
-                        repositoryPath: cached.path,
-                        branch: worktree.branch,
-                        path: worktree.path,
-                    ),
-                    session: nil,
-                    isDirty: false,
-                    aheadOfUpstream: nil,
-                    hasUnread: false,
-                )
-            }
-            return RepositoryGroup(repository: repository, items: items)
-        }
+        restoreCachedSidebar()
     }
 
     deinit {
@@ -70,7 +53,12 @@ public final class DashboardModel {
 
     /// Whether the first reading of the system has landed; until then
     /// the window shows progress, not an empty selection.
-    public private(set) var hasLoaded = false
+    public internal(set) var hasLoaded = false
+
+    /// Worktrees the last run left an agent running in, until the
+    /// first herdr reading says otherwise: their panes wait for it
+    /// rather than showing the conversations a closed session has.
+    public internal(set) var awaitedSessions: Set<String> = []
 
     /// The repository the sheet preselects, set by the toolbar's new
     /// session button.
@@ -131,6 +119,11 @@ public final class DashboardModel {
     /// The repositories available for new sessions.
     public var repositories: [Repository] {
         service.repositories()
+    }
+
+    /// Whether a worktree's pane should wait rather than decide.
+    public func isAwaitingSession(_ item: WorktreeItem) -> Bool {
+        awaitedSessions.contains(item.worktree.path)
     }
 
     /// Reports an action's failure into the app-wide error log, for
@@ -207,6 +200,8 @@ public final class DashboardModel {
         }
         hasRestoredSelection = true
         hasLoaded = true
+        // herdr has answered, so nothing is waiting on it any more.
+        awaitedSessions = []
         cacheSidebar(listed)
         await refreshStalePullRequests(forcing: repositoryPath)
     }
@@ -326,6 +321,8 @@ public final class DashboardModel {
 
     // MARK: Internal
 
+    static let selectedWorktreeKey = "selectedWorktreePath"
+
     /// Internal rather than private so the repository extension file
     /// can reach the service too.
     let service: SessionService
@@ -354,10 +351,13 @@ public final class DashboardModel {
     /// cache.
     let store: MetadataStore
 
+    /// Whether the persisted selection has been re-applied, tried on
+    /// the first refresh only so a deliberate deselection sticks.
+    var hasRestoredSelection = false
+
     // MARK: Private
 
     private static let pollInterval = 5
-    private static let selectedWorktreeKey = "selectedWorktreePath"
 
     /// Models each CLI reported at startup; absent agents fall back.
     private var discoveredModels: [AgentKind: [String]] = [:]
@@ -366,10 +366,6 @@ public final class DashboardModel {
     /// tell it has been superseded and drop its reading.
     private var refreshGeneration = 0
 
-    /// Whether the persisted selection has been re-applied, tried on
-    /// the first refresh only so a deliberate deselection sticks.
-    private var hasRestoredSelection = false
-
     private func clearUnread(at path: String) {
         for groupIndex in groups.indices {
             let items = groups[groupIndex].items
@@ -377,23 +373,5 @@ public final class DashboardModel {
                 groups[groupIndex].items[itemIndex].hasUnread = false
             }
         }
-    }
-
-    private func cacheSidebar(_ groups: [RepositoryGroup]) {
-        var metadata = store.load()
-        metadata.cachedSidebar = groups.map { group in
-            var cached = CachedRepository()
-            cached.name = group.repository.name
-            cached.fullName = group.repository.fullName
-            cached.path = group.repository.path
-            cached.worktrees = group.items.map { item in
-                var worktree = CachedWorktree()
-                worktree.branch = item.worktree.branch
-                worktree.path = item.worktree.path
-                return worktree
-            }
-            return cached
-        }
-        store.save(metadata)
     }
 }

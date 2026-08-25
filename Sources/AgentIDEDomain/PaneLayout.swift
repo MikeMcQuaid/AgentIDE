@@ -50,6 +50,15 @@ public struct PaneLayout: Hashable, Sendable {
     /// Slim enough for icon-and-truncated-text rows while staying
     /// wider than the traffic lights band.
     public static let sidebarRange = 150.0 ... 440.0
+
+    /// What Resize Panes gives the sidebar: enough for a repository
+    /// and a branch to read without wrapping or ellipsis, which its
+    /// bare minimum is not.
+    public static let sidebarComfortable = 300.0
+
+    /// How Resize Panes divides what is left: the work in front of
+    /// you gets three fifths, the utilities two.
+    public static let utilityShare = 0.4
     public static let utilityRange = 340.0 ... 1_200.0
 
     /// What the conversation pane needs to stay readable.

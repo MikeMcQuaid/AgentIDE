@@ -23,7 +23,8 @@ struct PullRequestCreateForm: View {
             TextEditor(text: $model.prBody)
                 .font(.body)
                 .frame(minHeight: Self.bodyMinimumHeight)
-                .border(.separator)
+                .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+                .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
                 .disabled(isGenerating)
                 .hoverHelp("The description in your own words; the template below is appended after it")
             templateSection
@@ -38,6 +39,7 @@ struct PullRequestCreateForm: View {
 
     private static let overlayPadding: CGFloat = 4
 
+    private static let fieldCorner: CGFloat = 6
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
 
@@ -76,7 +78,8 @@ struct PullRequestCreateForm: View {
             TextEditor(text: $model.prTemplate)
                 .font(.body.monospaced())
                 .frame(minHeight: Self.templateMinimumHeight)
-                .border(.separator)
+                .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+                .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
                 .disabled(isGenerating)
                 .hoverHelp("The repository's pull request template, editable; appended below the body")
         }

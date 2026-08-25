@@ -53,6 +53,7 @@ struct ReviewFooterView: View {
 
     private static let messageHeightRange: ClosedRange<Double> = 90 ... 600
     private static let fieldInset: CGFloat = 5
+    private static let fieldCorner: CGFloat = 6
     private static let resizeHandleHeight: CGFloat = 7
 
     /// The cross-module signal that switches the utility pane's tab.
@@ -239,7 +240,8 @@ struct ReviewFooterView: View {
                 .overlay(alignment: .topLeading) { columnRule(at: Self.bodyLimit, inset: Self.fieldInset) }
                 .hoverHelp("The commit body; git convention wraps lines at 72 characters")
         }
-        .border(.separator)
+        .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+        .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
     }
 
     /// Live counts against the conventional widths, red when over.

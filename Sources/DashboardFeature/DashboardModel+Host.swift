@@ -23,6 +23,10 @@ public extension DashboardModel {
                 ),
             )
             ErrorLog.shared.note("Checked out and pulled the default branch in \(item.worktree.path).")
+            // The row says the new branch at once: a refresh reads
+            // every repository and worktree first, which is seconds
+            // of the row still claiming the branch just left.
+            await rename(item, to: service.currentBranch(worktreePath: item.worktree.path))
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -41,6 +45,21 @@ public extension DashboardModel {
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Puts a new branch name on a row in place, so the sidebar
+    /// keeps up with what just happened.
+    private func rename(_ item: WorktreeItem, to branch: String?) {
+        guard let branch else {
+            return
+        }
+
+        for group in groups.indices {
+            for row in groups[group].items.indices
+                where groups[group].items[row].worktree.path == item.worktree.path {
+                groups[group].items[row] = groups[group].items[row].renamed(branch: branch)
+            }
         }
     }
 

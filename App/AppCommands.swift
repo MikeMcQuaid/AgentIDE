@@ -12,6 +12,13 @@ struct AppCommands: Commands {
     let dashboard: DashboardModel
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            // The version already ends in the build number, so the
+            // panel's own build field would say it twice.
+            Button("About AgentIDE") {
+                NSApplication.shared.orderFrontStandardAboutPanel(options: [.version: ""])
+            }
+        }
         CommandGroup(after: .appSettings) {
             completionSoundMenu
         }

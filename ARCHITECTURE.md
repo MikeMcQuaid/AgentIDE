@@ -469,13 +469,7 @@ Sendable` and `nonisolated(unsafe)` are banned.
    step that reports nothing while it waits still shows the app working,
    the whole block pinned near the top of the pane so it grows downwards
    rather than shifting every line each time a step arrives. It is drawn
-   as a terminal writing itself out: monospaced white on a dark panel
-   under faint scanlines, a `>` prompt, each line typed at twenty
-   characters a second from the moment it was reported and completed the
-   instant the next one starts, finished lines ending `... OK`, a block
-   cursor blinking once a line is done and a frame's dimming as each
-   arrives, which is what every waiting pane in the app looks like; the
-   version banner belongs to the app's first wait alone; the version probe runs beside the naming and the worktree,
+   ticking every second, which is what every waiting pane looks like; the version probe runs beside the naming and the worktree,
    since it costs a sandbox launch of its own and only has to be finished
    before the agent starts, and a kill that closed nothing skips the
    listing that would confirm it. So a slow step names
@@ -869,7 +863,15 @@ shim rather than a protocol:
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
-4. Directories of your own are listed under a repository and marked as
+4. The window opens on what the last run knew. The sidebar, its
+   repositories, their worktrees, each row's branch, uncommitted state and
+   commit counts, the default branch and the selected worktree all come
+   from the metadata store before anything is read, so the frame is
+   furnished rather than empty; the listings, conversations, enriched pull
+   request headers and review threads paint from their own caches the same
+   way. Only what herdr owns arrives late, and a row the cache says had an
+   agent running waits for herdr rather than claiming its session ended.
+5. Directories of your own are listed under a repository and marked as
    such (`Worktree.isHostDirectory`), which is what the sidebar row, the
    pane and the menus all branch on: a laptop icon with the path where a
    branch would be and the branch below it, in the same face and size as
@@ -880,12 +882,13 @@ shim rather than a protocol:
    default branch, which fast-forwards only, so a diverged local branch
    stops rather than being merged behind your back. The app publishes the list
    as `agentide/host-directories`, so `agentide .` from inside one selects
-   it the way it selects a worktree. They are kept in the metadata store per repository, since they
-   are configuration rather than anything derivable. Every launch passes
+   it the way it selects a worktree. They are kept in the metadata store
+   per repository, since they are configuration rather than anything
+   derivable. Every launch passes
    through one function, which refuses a path outside the shared
    workspace: the sandbox user can often read such a directory, and must
    never be given a reason to write to one.
-5. The repository page, the main checkout's permanent sidebar entry, lists
+6. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
    deleted worktrees alike, resumes any of them into a fresh worktree and
    starts a fresh session on the default branch in the checkout itself,

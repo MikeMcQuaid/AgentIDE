@@ -30,6 +30,11 @@ extension RootView {
             // the resume kills, and a terminal left attached to it
             // reported the pane gone.
             LaunchProgressView("Resuming the conversation…", progress: dependencies.dashboard.launchProgress)
+        } else if dependencies.dashboard.isAwaitingSession(item) {
+            // The row had an agent when the app last looked and
+            // herdr has not answered yet: waiting is honest, where
+            // the conversations page would claim the session ended.
+            LaunchProgressView("Attaching to the agent…", waitingOn: "herdr to answer")
         } else if let session = item.session {
             agentTerminal(for: session, isActive: isCovered == false)
                 .id(session.name)
@@ -93,14 +98,13 @@ extension RootView {
     /// is the layout worth going back to when dragging has left them
     /// lopsided.
     func evenPanes(in windowWidth: CGFloat) {
-        sidebarWidth = PaneLayout.sidebarRange.lowerBound
+        sidebarWidth = PaneLayout.sidebarComfortable
         guard showsUtility, windowWidth > 0 else {
             return
         }
 
-        let free = windowWidth - sidebarWidth
-        let half = free / Self.evenShare
-        utilityPaneWidth = min(max(half, PaneLayout.utilityRange.lowerBound), PaneLayout.utilityRange.upperBound)
+        let share = (windowWidth - sidebarWidth) * PaneLayout.utilityShare
+        utilityPaneWidth = min(max(share, PaneLayout.utilityRange.lowerBound), PaneLayout.utilityRange.upperBound)
         fitPanes(to: windowWidth)
     }
 
@@ -217,13 +221,6 @@ extension RootView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
-}
-
-// MARK: - Even panes
-
-extension RootView {
-    /// Two panes doing the work, so half the free width each.
-    static let evenShare: CGFloat = 2
 }
 
 // MARK: - StartShellButton

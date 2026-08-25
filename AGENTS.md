@@ -82,7 +82,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   names each step and what it waits on as it happens, through
   `LaunchProgress`, and keeps something on screen changing at
   least once a second, the block pinned near the top of the pane so
-  it grows downwards. It is drawn as a terminal writing itself
+  it grows downwards. Prefer showing the last known state instantly
+  over showing a wait at all: the sidebar, the selection and every
+  pane that can be cached paint before anything is read, and only
+  what herdr owns is allowed to arrive late. It is drawn as a terminal writing itself
   out: monospaced white on a dark panel under faint scanlines,
   each line typed at twenty characters a second behind a `>`
   prompt, a line finishing the moment the next one starts,

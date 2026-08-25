@@ -19,6 +19,19 @@ public struct CachedWorktree: Codable, Hashable, Sendable {
 
     /// The worktree's canonical path.
     public var path = ""
+
+    /// Whether it is a directory of your own rather than a worktree.
+    public var isHostDirectory = false
+
+    /// What the row said last time: uncommitted work, the commit
+    /// counts, and whether a session was running in it, so the pane
+    /// knows to wait for herdr rather than showing conversations.
+    public var isDirty = false
+    public var aheadOfUpstream: Int?
+    public var aheadOfDefault: Int?
+    public var behindDefault: Int?
+    public var lastActivityAt = 0
+    public var hasSession = false
 }
 
 // MARK: - CachedRepository
@@ -40,6 +53,9 @@ public struct CachedRepository: Codable, Hashable, Sendable {
 
     /// The GitHub `owner/name`, when known.
     public var fullName: String?
+
+    /// The repository's default branch, when known.
+    public var defaultBranch: String?
 
     /// The checkout path.
     public var path = ""
