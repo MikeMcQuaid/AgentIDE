@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import SwiftTerm
 import SwiftUI
 
@@ -26,11 +27,13 @@ public struct TerminalPaneView: View {
         command: [String],
         reflowsCopies: Bool = false,
         isActive: Bool = true,
+        fixedAppearance: TerminalAppearance? = nil,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
         transport = .control(command: command)
         self.reflowsCopies = reflowsCopies
         self.isActive = isActive
+        self.fixedAppearance = fixedAppearance
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -48,6 +51,7 @@ public struct TerminalPaneView: View {
         transport = .shell(directory: directory, environment: environment)
         reflowsCopies = false
         self.isActive = isActive
+        fixedAppearance = nil
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -58,6 +62,7 @@ public struct TerminalPaneView: View {
             transport: transport,
             reflowsCopies: reflowsCopies,
             isActive: isActive,
+            fixedAppearance: fixedAppearance,
             clearRequest: clearShellRequest,
             onProcessTerminated: onProcessTerminated,
         )
@@ -74,6 +79,13 @@ public struct TerminalPaneView: View {
     private let transport: TerminalTransport
     private let reflowsCopies: Bool
     private let isActive: Bool
+
+    /// The palette the pane is pinned to, appearance regardless:
+    /// agent TUIs read the terminal's colours once at startup and
+    /// style themselves for them forever, so a pane that re-themed
+    /// on a macOS appearance switch left the agent white on white.
+    private let fixedAppearance: TerminalAppearance?
+
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
 
@@ -96,6 +108,11 @@ struct TerminalRepresentable: NSViewRepresentable {
     let transport: TerminalTransport
     let reflowsCopies: Bool
     let isActive: Bool
+
+    /// A palette to hold whatever the appearance does; nil follows
+    /// the appearance, which only shell panes do.
+    let fixedAppearance: TerminalAppearance?
+
     let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
 
@@ -152,7 +169,11 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// Black on white in light mode, white on black in dark mode; the
     /// app's one terminal look.
     private func applyTheme(to view: PaneTerminalView, context: Context) {
-        let scheme = context.environment.colorScheme
+        // A pinned pane keeps the palette its agent read at launch:
+        // the TUI styles itself for those colours once and forever,
+        // and following an appearance switch left it unreadable.
+        let scheme = fixedAppearance.map { $0 == .dark ? ColorScheme.dark : .light }
+            ?? context.environment.colorScheme
         guard context.coordinator.appliedScheme != scheme else {
             return
         }

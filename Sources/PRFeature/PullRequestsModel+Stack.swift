@@ -67,7 +67,9 @@ extension PullRequestsModel {
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
         stacking.selected = branch == stacking.stack.checkedOut ? nil : branch
-        Task { await reload(keepingSelection: false) }
+        // Every entry of a stack is one worktree, so nothing git
+        // would be asked has changed: the move is a listing swap.
+        Task { await reload(keepingSelection: false, refreshingFacts: false) }
     }
 
     /// Whether restacking would move anything: a branch not already
@@ -86,6 +88,42 @@ extension PullRequestsModel {
     var canSubmitStack: Bool {
         let open = Set(summaries.filter { $0.state == "OPEN" }.map(\.headBranch))
         return stacking.stack.branches.contains { open.contains($0) == false }
+    }
+
+    /// Fills in the listing cache for the stack's other branches,
+    /// so moving to one paints it complete rather than empty. The
+    /// answers land in the same cache an ordinary load reads, and
+    /// nothing on screen waits for them.
+    func prefetchStack() {
+        let others = stacking.stack.branches.filter { $0 != listedBranch }
+        guard others.isEmpty == false else {
+            return
+        }
+
+        Task { [weak self] in
+            for branch in others {
+                guard let self, Task.isCancelled == false else {
+                    return
+                }
+
+                let listed = try? await pullRequests.listing(
+                    repositoryPath: repository.path,
+                    scope: scope.listScope(branch: branch),
+                )
+                // The entry's open pull request warms too: its
+                // header and conversation are what clicking shows.
+                guard let open = listed?.first(where: { $0.state == "OPEN" }) else {
+                    continue
+                }
+
+                _ = try? await pullRequests.summary(repositoryPath: repository.path, number: open.number)
+                _ = try? await pullRequests.conversation(
+                    repositoryPath: repository.path,
+                    number: open.number,
+                    seededBody: open.body,
+                )
+            }
+        }
     }
 
     /// Reads the stack the worktree's branch belongs to.
@@ -136,6 +174,7 @@ extension PullRequestsModel {
 
         do {
             let opened = try await stacking.submit(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             ErrorLog.shared.note(
                 opened.isEmpty
                     ? "The stack is on GitHub already."
@@ -156,6 +195,7 @@ extension PullRequestsModel {
 
         do {
             let pushed = try await stacking.push(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             ErrorLog.shared.note("Pushed " + pushed.joined(separator: ", ") + ".")
             await reload(keepingSelection: true)
         } catch {

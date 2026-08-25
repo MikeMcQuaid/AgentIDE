@@ -194,6 +194,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   worktrees' terminals hold the same frame. A pane takes a wheel
   event only when the window's hit test lands on it and no other
   pane has claimed that event.
+- Agent TUIs (Codex, Claude Code) query the terminal's colours via
+  OSC 10/11 once at startup and cache them; re-theming the pane on
+  a macOS appearance switch made Codex draw white text on a white
+  composer. Agent panes pin the palette recorded at session launch
+  (`terminalSchemes` in the metadata) instead of following the
+  appearance; only shell panes re-theme live.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

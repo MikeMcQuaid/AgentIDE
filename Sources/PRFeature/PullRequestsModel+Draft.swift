@@ -5,10 +5,15 @@ import AgentIDEDomain
 /// from the model body for length: a branch's unfinished title, body
 /// and template survive leaving the tab and quitting the app.
 extension PullRequestsModel {
-    /// The worktree item this tab acts on: the one checked out on
-    /// the branch the tab lists.
+    /// The worktree this tab is for. Found by path first: a
+    /// worktree's branch changes under the app whenever an agent or
+    /// a restack checks another one out, and matching on the name
+    /// the sidebar last cached then found nothing at all, which
+    /// took the footer's actions and the whole stack with it.
     var branchItem: WorktreeItem? {
-        items.first { $0.worktree.branch == branch }
+        items.first { $0.worktree.path == worktreePath }
+            ?? items.first { $0.worktree.branch == branch }
+            ?? items.first { $0.worktree.branch == currentBranch }
     }
 
     /// Whether the list pane shows the creation form instead: the
@@ -29,7 +34,10 @@ extension PullRequestsModel {
     /// so returning to the tab shows it instantly rather than a
     /// loading state.
     func paintCachedListing() {
-        guard let cached = store.load().pullRequestListsCache[cacheKey]?.summaries else {
+        guard let cached = pullRequests.cachedListing(
+            repositoryPath: repository.path,
+            scope: scope.listScope(branch: listedBranch),
+        ) else {
             summaries = []
             return
         }

@@ -19,6 +19,7 @@ public struct PullRequestsView: View {
         service: SessionService,
         store: MetadataStore,
         branch: String? = nil,
+        worktreePath: String? = nil,
         defaultBranch: String? = nil,
         isMainCheckout: Bool = false,
     ) {
@@ -29,6 +30,7 @@ public struct PullRequestsView: View {
             PullRequestsModel(
                 repository: repository,
                 branch: branch,
+                worktreePath: worktreePath,
                 defaultBranch: defaultBranch,
                 items: items,
                 github: github,

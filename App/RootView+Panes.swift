@@ -36,7 +36,7 @@ extension RootView {
             // the conversations page would claim the session ended.
             LaunchProgressView("Attaching to the agent…", waitingOn: "herdr to answer")
         } else if let session = item.session {
-            agentTerminal(for: session, isActive: isCovered == false)
+            agentTerminal(for: session, at: item.worktree.path, isActive: isCovered == false)
                 .id(session.name)
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged

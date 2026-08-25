@@ -272,7 +272,14 @@ Two visually unmistakable terminal flavours:
   panes section above describes, and the tab bar's Close shell ends
   one instantly. Both
   terminals share one theme (black on white in light mode, white on
-  black in dark). Copies from the agent pane are reflowed for pasting
+  black in dark), with one deliberate exception: an agent pane is
+  pinned to the appearance its session was launched under, recorded
+  in the metadata at launch. Agent TUIs read the terminal's colours
+  once at startup (OSC 10/11) and style their own chrome for them
+  forever, so a pane that re-themed on a macOS appearance switch
+  left the composer white on white; the pinned palette keeps the
+  answer the agent cached true for the session's whole life,
+  relaunches of the app included. Copies from the agent pane are reflowed for pasting
   into prose, block by block rather than by the copy as a whole: a
   paragraph loses the terminal's hard wraps, while a run of lines that
   opens like a command keeps every one of them, so an answer that
@@ -565,7 +572,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    uncommitted changes when there are any) and the whole branch against
    its merge base: the open pull request's base branch when one exists,
    otherwise the default branch. Per-line rejection and message
-   amendment apply only to the last commit scope.
+   amendment apply only to the last commit scope. In the multi-commit
+   scopes each line of the commit listing links to that commit alone
+   (`git show`), which the pane then reviews with its message shown
+   read-only: only the tip can be amended, and a listing that stayed
+   one text block keeps selection running across its lines.
 2. Generated files are hidden by default via
    `git check-attr linguist-generated` plus heuristics (lockfiles and
    per-repository generated globs), one click to reveal.
@@ -724,14 +735,22 @@ shim rather than a protocol:
    outage the poll is riding out; one repository rather than all of
    them, since asking about everything is how a rate limit
    arrives.
-3. Poll cadence is tiered by attention and cached per branch: the selected
-   worktree refreshes most often, then its repository's other worktrees,
-   then other expanded repositories; repositories collapsed in the sidebar
-   poll rarely. Selecting a worktree jumps its branch to the front, and a
-   failed poll keeps the cached answer. Listings, conversations, enriched
-   headers and review threads all persist in the metadata store and paint
-   from it instantly, on pane switches and across restarts, before the
-   fetch refreshes them.
+3. Every pull request question the app asks goes through one gate,
+   `PullRequestStore`, which owns both the answers and the moments they
+   arrived: listings, enriched headers, conversations, review threads,
+   merge queues. One pull request is never asked about twice inside a
+   minute however much is clicked, and because the timers live in the
+   metadata file beside the answers, quitting and relaunching does not
+   restart the asking. Acting on a pull request (merging, queueing,
+   pushing, resolving a thread) clears its stamp so the truth shows at
+   once; looking never does. On top of that floor the poll's cadence is
+   tiered by attention: the selected worktree refreshes most often, then
+   its repository's other worktrees, then other expanded repositories;
+   repositories collapsed in the sidebar poll rarely, and a failed poll
+   keeps the cached answer. Everything the store holds paints instantly,
+   on pane switches and across restarts, before any fetch refreshes it;
+   the entries of a stack are warmed as soon as one of them loads, so
+   moving between its pull requests is a paint, never a load.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
@@ -770,21 +789,33 @@ shim rather than a protocol:
    also completes the template from the commits.
 6. Stacked branches live in one worktree, and the stack is derived rather
    than recorded: the branches sharing a fork point beyond the default
-   branch, ordered by where each forks and how far it has come. Ancestry
-   alone will not do, since a branch that gained a commit after its child
-   forked is no longer that child's ancestor, which is exactly when a
-   stack needs putting back in order. Reading a stack needs no checkout
+   branch, ordered by where each forks and how far it has come. What the
+   default branch has done since is beside the point: demanding that it
+   still be every branch's ancestor threw away each stack cut before the
+   last few merges landed, which is the one case a restack exists for. Reading a stack needs no checkout
    (`git diff parent...branch`), so the strip retargets the panes and
    leaves the worktree where it is, and an entry that is not checked out
    reviews read-only. Restacking records every tip first, then rebases
    bottom up with `--onto <parent> <the parent's recorded tip>` so only a
    branch's own commits replay, signing each; a branch already on its
    parent is skipped rather than rewritten, since renaming commits for
-   nothing is its own damage. Both stack actions sit where a lone
-   branch's Rebase and Push sit, in the footer's left, and dim when they
-   would do nothing: nothing out of place, or nothing the remote lacks. A
+   nothing is its own damage. The three stack actions sit where a lone
+   branch's Rebase and Push sit, in the footer's left, icon-only with
+   their words in the hover help, and dim when they would do nothing:
+   nothing out of place, or nothing the remote lacks. Moving between a
+   stack's entries asks git nothing at all, since every entry shares one
+   worktree: the listing paints from the cache and every entry's listing
+   is fetched in the background as soon as one of them loads, so the
+   strip moves like a tab switch rather than a load. A
    stacked branch's pull request opens against the branch below it, which
-   is one `--base` flag. Submit stack does the rest in one press: push
+   is one `--base` flag. Inference cannot tell a branch that belongs to
+   the work in hand from an old one that merely shares a fork point, so
+   the sidebar's Stack popover lists what it found and drops any branch
+   named there from the stack, remembered per worktree in the metadata
+   store and applied wherever a stack is derived. The checked-out branch
+   is never droppable, being the one branch the worktree undeniably
+   holds. The popover also cuts a new branch on top, which is how a
+   stack grows. Submit stack does the rest in one press: push
    bottom up, open a pull request for every branch missing one against the
    branch below it, titled and bodied from that branch's own commits, and
    then `gh stack link`, GitHub's own extension, to show them as a stack.
@@ -792,7 +823,12 @@ shim rather than a protocol:
    already exist without keeping local tracking of its own, so what a
    stack is here stays derived from ancestry and nothing else. The sidebar says where a row stands in its
    stack (`2/3`) from the pull request chain it already caches, naming
-   what it is built on and how much rides on it. A failure resets what moved, returns to the
+   what it is built on and how much rides on it. That chain says nothing
+   until the pull requests are open and based on each other, which is
+   every stack before it is submitted, so a chain of one falls back to
+   the stack derived from the worktree itself, a few worktrees per
+   refresh on a minute's rota to keep the git calls off the poll's
+   critical path. A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes
    bottom up so a base is on the remote before the branch pointing at it.
 7. The listing and the footer act on the branch actually checked out in the

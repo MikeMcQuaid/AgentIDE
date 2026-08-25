@@ -291,7 +291,12 @@ public struct GitClient: Sendable {
 
     /// The last commit's subject and body.
     public func lastCommitMessage(worktreePath: String) async throws -> String {
-        try await git(["log", "-1", "--format=%B"], in: worktreePath)
+        try await commitMessage(worktreePath: worktreePath, commit: "HEAD")
+    }
+
+    /// One commit's full message, named by anything git resolves.
+    public func commitMessage(worktreePath: String, commit: String) async throws -> String {
+        try await git(["log", "-1", "--format=%B", commit], in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

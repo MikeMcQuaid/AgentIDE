@@ -105,7 +105,8 @@ public struct SessionManagerSheet: View {
     }
 
     private static let spacing: CGFloat = 10
-    private static let listHeight: CGFloat = 260
+    /// Roughly twenty rows: the list scrolls only past that.
+    private static let listHeight: CGFloat = 560
     private static let minimumWidth: CGFloat = 640
 
     /// How many trailing path components place a worktree.

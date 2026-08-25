@@ -34,10 +34,72 @@ struct BranchStackIntegrationTests {
 
         #expect(stack.branches == ["lower", "middle", "upper"])
         #expect(stack.checkedOut == "middle")
-        #expect(stack.position == 2)
         #expect(stack.parent(of: "middle") == "lower")
-        #expect(stack.descendants(of: "lower") == ["middle", "upper"])
         #expect(stack.branches.contains("elsewhere") == false)
+    }
+
+    @Test
+    func `a stack the default branch has moved past is still a stack`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "upper",
+            path: repository.path,
+        )
+        try await Self.commit("first", in: repository.path)
+        for branch in ["lower", "upper"] {
+            _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
+            try await Self.commit(branch + " work", in: repository.path)
+        }
+        // The default branch gains work of its own, as it does while
+        // a stack is in review: neither branch descends from it any
+        // more, which is exactly what a restack is for.
+        _ = try await TestSupport.runGit(["checkout", "main"], in: repository.path)
+        try await Self.commit("someone else's merge", in: repository.path)
+        _ = try await TestSupport.runGit(["checkout", "upper"], in: repository.path)
+
+        let stack = await world.service.stack(for: worktree)
+
+        #expect(stack.branches == ["lower", "upper"])
+        #expect(stack.parent(of: "upper") == "lower")
+    }
+
+    @Test
+    func `a branch left out of the stack stops being counted in it`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "main",
+            path: repository.path,
+        )
+        try await Self.commit("first", in: repository.path)
+        for branch in ["lower", "middle", "upper"] {
+            _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
+            try await Self.commit(branch + " work", in: repository.path)
+        }
+        _ = try await TestSupport.runGit(["checkout", "middle"], in: repository.path)
+
+        world.service.setStackExclusion(branch: "upper", excluded: true, worktreePath: repository.path)
+
+        var stack = await world.service.stack(for: worktree)
+        #expect(stack.branches == ["lower", "middle"])
+        #expect(world.service.excludedStackBranches(worktreePath: repository.path) == ["upper"])
+
+        // The checked-out branch is the one branch the worktree
+        // undeniably holds, so excluding it changes nothing.
+        world.service.setStackExclusion(branch: "middle", excluded: true, worktreePath: repository.path)
+        stack = await world.service.stack(for: worktree)
+        #expect(stack.branches.contains("middle"))
+
+        world.service.setStackExclusion(branch: "upper", excluded: false, worktreePath: repository.path)
+        stack = await world.service.stack(for: worktree)
+        #expect(stack.branches == ["lower", "middle", "upper"])
     }
 
     @Test

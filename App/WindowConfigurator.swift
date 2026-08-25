@@ -64,11 +64,13 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private static let autosaveName = "AgentIDEMainWindow"
 
-        /// The size below which a saved frame is treated as junk:
-        /// three panes need room, and a window that opens tiny is a
-        /// bug rather than a preference.
-        private static let minimumWidth: CGFloat = 900
-        private static let minimumHeight: CGFloat = 600
+        /// The size below which a saved frame is treated as junk.
+        /// Small enough to be a deliberate choice on a small
+        /// screen, since a window shrunk on purpose must come back
+        /// as it was left; only a frame no window could be worked
+        /// in is thrown away.
+        private static let minimumWidth: CGFloat = 640
+        private static let minimumHeight: CGFloat = 420
 
         /// How long the window gets to appear before a remembered
         /// fullscreen is given up on: a fifth of a second at a time,
@@ -206,9 +208,11 @@ struct WindowConfigurator: NSViewRepresentable {
         /// fullscreen space must never be moved.
         private func restorePlacement(of window: NSWindow) {
             let defaults = UserDefaults.standard
-            if let saved = defaults.string(forKey: Self.displayKey),
-               let screen = NSScreen.screens.first(where: { $0.displayID.map(NSScreen.uuid(of:)) == saved }),
-               screen.frame.contains(CGPoint(x: window.frame.midX, y: window.frame.midY)) == false {
+            let saved = defaults.string(forKey: Self.displayKey)
+            let screen = saved.flatMap { name in
+                NSScreen.screens.first { $0.displayID.map(NSScreen.uuid(of:)) == name }
+            }
+            if let screen, screen.frame.contains(CGPoint(x: window.frame.midX, y: window.frame.midY)) == false {
                 window.setFrameOrigin(CGPoint(
                     x: screen.visibleFrame.midX - window.frame.width / Self.halves,
                     y: screen.visibleFrame.midY - window.frame.height / Self.halves,

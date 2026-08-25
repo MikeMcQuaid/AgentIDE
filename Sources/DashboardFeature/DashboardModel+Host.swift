@@ -56,8 +56,11 @@ public extension DashboardModel {
         }
 
         for group in groups.indices {
-            for row in groups[group].items.indices
-                where groups[group].items[row].worktree.path == item.worktree.path {
+            for row in groups[group].items.indices {
+                guard groups[group].items[row].worktree.path == item.worktree.path else {
+                    continue
+                }
+
                 groups[group].items[row] = groups[group].items[row].renamed(branch: branch)
             }
         }
@@ -73,6 +76,23 @@ public extension DashboardModel {
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
+    }
+
+    /// The stack this worktree's branch is inferred to belong to,
+    /// asked for fresh: branches move under the app all the time.
+    func inferredStack(for item: WorktreeItem) async -> BranchStack {
+        await service.stack(for: item.worktree)
+    }
+
+    /// The branches this worktree's stack has been told to ignore.
+    func excludedStackBranches(for item: WorktreeItem) -> [String] {
+        service.excludedStackBranches(worktreePath: item.worktree.path)
+    }
+
+    /// Takes a branch out of the inferred stack, or puts it back;
+    /// git is not touched either way.
+    func setStackExclusion(branch: String, excluded: Bool, for item: WorktreeItem) {
+        service.setStackExclusion(branch: branch, excluded: excluded, worktreePath: item.worktree.path)
     }
 
     /// Stops listing one; nothing on disk is touched.

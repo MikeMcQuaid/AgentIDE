@@ -46,6 +46,7 @@ extension SessionService {
     func awaitReady(sessionName: String) async {
         await progress("Waiting for the agent's interface to come up")
         let agents = AgentKind.allCases.map(\.rawValue)
+        var sawFinished = false
         for _ in 0 ..< Self.readyPolls {
             let panes = await (try? herdr.panes()) ?? []
             guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
@@ -53,7 +54,14 @@ extension SessionService {
             }
 
             let unrecognisable = pane.foregroundCommand.map { agents.contains($0) == false } ?? false
-            if pane.isFinished || pane.activity != nil || unrecognisable {
+            // One finished reading is not the truth: herdr reports a
+            // pane finished in the instant between its creation and
+            // the command's process registering, and returning on
+            // that flicker showed a live session as ended. Finished
+            // only counts when two consecutive readings agree.
+            let finished = pane.isFinished && sawFinished
+            sawFinished = pane.isFinished
+            if finished || pane.activity != nil || unrecognisable {
                 await progress(pane.activity == nil
                     ? "The pane is running `" + (pane.foregroundCommand ?? "nothing") + "`; nothing more to wait for"
                     : "The agent's interface is up")

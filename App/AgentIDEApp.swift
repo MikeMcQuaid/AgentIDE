@@ -30,10 +30,6 @@ struct AgentIDEApp: App {
 
     // MARK: Internal
 
-    /// What a first run opens at; a saved frame wins over it.
-    static let defaultWidth: CGFloat = 1_600
-    static let defaultHeight: CGFloat = 1_000
-
     var body: some Scene {
         WindowGroup {
             RootView(dependencies: dependencies)

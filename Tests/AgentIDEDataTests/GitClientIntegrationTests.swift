@@ -30,6 +30,15 @@ struct GitClientIntegrationTests {
         #expect(try await git.lastCommitMessage(worktreePath: worktreePath) == "Add new file")
         #expect(try await git.lastCommitDiff(worktreePath: worktreePath).contains("+new"))
         #expect(try await git.uncommittedDiff(worktreePath: worktreePath).isEmpty)
+
+        // An older commit reads on its own, which is what clicking a
+        // line of the review's commit listing asks for.
+        try "newer\n".write(toFile: worktreePath + "/newer.txt", atomically: true, encoding: .utf8)
+        try await git.commitAll(worktreePath: worktreePath, message: "Add newer file")
+        let older = try await git.commitDiff(worktreePath: worktreePath, commit: "HEAD~1")
+        #expect(older.contains("+new"))
+        #expect(older.contains("+newer") == false)
+        #expect(try await git.commitMessage(worktreePath: worktreePath, commit: "HEAD~1") == "Add new file")
     }
 
     @Test

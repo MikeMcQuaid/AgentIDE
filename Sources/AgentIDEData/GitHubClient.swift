@@ -188,10 +188,6 @@ public struct GitHubClient: Sendable {
     // MARK: Internal
 
     /// A remembered answer, including the answer that there is none.
-    struct Cached {
-        let value: String?
-    }
-
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
     static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"

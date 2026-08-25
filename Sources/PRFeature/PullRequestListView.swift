@@ -180,8 +180,8 @@ struct PullRequestFooterView: View {
     /// pushing them bottom up. Both dim when there is nothing to do.
     private var restackButton: some View {
         BusyButton(
-            "Restack",
-            busy: "Restacking",
+            "",
+            busy: "",
             systemImage: "square.stack.3d.up",
             accessibilityLabel: "Restack",
             disabled: model.canRestack == false,
@@ -197,12 +197,11 @@ struct PullRequestFooterView: View {
 
     private var pushStackButton: some View {
         BusyButton(
-            "Push stack",
-            busy: "Pushing",
+            "",
+            busy: "",
             systemImage: "arrow.up.square.on.square",
             accessibilityLabel: "Push stack",
             disabled: model.canPushStack == false,
-            keepsTitle: true,
         ) {
             await model.pushStack()
         }
@@ -217,8 +216,8 @@ struct PullRequestFooterView: View {
     /// push, open what is missing, and link them into a stack.
     private var submitStackButton: some View {
         BusyButton(
-            "Submit stack",
-            busy: "Submitting",
+            "",
+            busy: "",
             systemImage: "square.stack.3d.up.badge.automatic",
             accessibilityLabel: "Submit stack",
             disabled: model.canSubmitStack == false,

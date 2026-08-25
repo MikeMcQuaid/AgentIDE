@@ -116,6 +116,14 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String: PullRequestFormDraft].self, forKey: .pullRequestDrafts) ?? [:]
         hostDirectories = try container
             .decodeIfPresent([String: [String]].self, forKey: .hostDirectories) ?? [:]
+        stackExclusions = try container
+            .decodeIfPresent([String: [String]].self, forKey: .stackExclusions) ?? [:]
+        fetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .fetchedAt) ?? [:]
+        queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
+        mergeQueueCapability = try container
+            .decodeIfPresent([String: Bool].self, forKey: .mergeQueueCapability) ?? [:]
+        terminalSchemes = try container
+            .decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
     }
 
     // MARK: Public
@@ -124,6 +132,32 @@ public struct AppMetadata: Codable, Sendable {
     /// the Mac that get a shell, an editor and a diff but never an
     /// agent, keyed by the repository they are listed under.
     public var hostDirectories: [String: [String]] = [:]
+
+    /// When each pull request question was last put to GitHub, by
+    /// the asking key. The whole app's timers, in one place and in
+    /// the file, so no amount of clicking or relaunching asks about
+    /// one pull request more than once a minute. See
+    /// `PullRequestStore`, which is the only thing that writes here.
+    public var fetchedAt: [String: Date] = [:]
+
+    /// Each repository's merge queue at its last listing, kept so a
+    /// relaunch shows the queue it knew rather than asking at once.
+    public var queuedCache: [String: [Int]] = [:]
+
+    /// Whether each repository merges through a queue at all.
+    public var mergeQueueCapability: [String: Bool] = [:]
+
+    /// "dark" or "light" per worktree path: the appearance its agent
+    /// was launched under. Agent TUIs read the terminal's colours
+    /// once at startup and never again, so the pane must keep the
+    /// palette the agent believes in for the session's whole life.
+    public var terminalSchemes: [String: String] = [:]
+
+    /// Branches a worktree's stack should leave out, by worktree
+    /// path. The stack is inferred from ancestry, which cannot know
+    /// that an old branch sharing history is nothing to do with the
+    /// work in hand; this is where saying so is remembered.
+    public var stackExclusions: [String: [String]] = [:]
 
     /// When each session was last seen by the user, for unread state.
     public var lastSeen: [String: Date] = [:]
@@ -235,6 +269,12 @@ public struct AppMetadata: Codable, Sendable {
                 .prefix(Self.conversationCap)
             enrichedSummaryCache = Dictionary(uniqueKeysWithValues: Array(newest))
         }
+        // The ledger outlives every value it stamps, so it is
+        // trimmed by age rather than by count: a stamp older than
+        // the longest interval anything asks for can only say
+        // "ask again", which is what its absence says too.
+        let stale = Date().addingTimeInterval(-Self.stampLife)
+        fetchedAt = fetchedAt.filter { $0.value > stale }
         if threadsCache.count > Self.conversationCap {
             let newest = threadsCache
                 .sorted { $0.value.savedAt > $1.value.savedAt }
@@ -244,6 +284,11 @@ public struct AppMetadata: Codable, Sendable {
     }
 
     // MARK: Private
+
+    /// How long a fetch stamp is worth keeping: longer than the
+    /// slowest poll interval, short enough that the file does not
+    /// collect a line per pull request ever seen.
+    private static let stampLife: TimeInterval = 86_400
 
     /// Enough for every recently visited conversation and listing
     /// without the file growing forever.
@@ -275,104 +320,4 @@ public struct PullRequestFormDraft: Codable, Sendable {
 
     /// The template as edited.
     public let template: String
-}
-
-// MARK: - CachedSummary
-
-/// One enriched pull request header, stamped so the cap can evict
-/// the oldest.
-public struct CachedSummary: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached header stamped now by default.
-    public init(summary: PullRequestSummary, savedAt: Date = Date()) {
-        self.summary = summary
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The enriched summary.
-    public let summary: PullRequestSummary
-
-    /// When the header was cached.
-    public let savedAt: Date
-}
-
-// MARK: - CachedThreads
-
-/// One conversation's review threads, stamped so the cap can evict
-/// the oldest.
-public struct CachedThreads: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates cached threads stamped now by default.
-    public init(threads: [ReviewThread], savedAt: Date = Date()) {
-        self.threads = threads
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The conversation threads.
-    public let threads: [ReviewThread]
-
-    /// When the threads were cached.
-    public let savedAt: Date
-}
-
-// MARK: - CachedPullRequestList
-
-/// One repository scope's cached pull request listing, stamped so
-/// the cap can evict the oldest.
-public struct CachedPullRequestList: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached listing stamped now by default.
-    public init(summaries: [PullRequestSummary], savedAt: Date = Date()) {
-        self.summaries = summaries
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The listing as fetched.
-    public var summaries: [PullRequestSummary]
-
-    /// When the listing was cached, for eviction.
-    public var savedAt: Date
-}
-
-// MARK: - CachedConversation
-
-/// One pull request's cached body and feedback timeline.
-public struct CachedConversation: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached conversation stamped now by default.
-    public init(body: String = "", events: [ReviewComment] = [], savedAt: Date = Date()) {
-        self.body = body
-        self.events = events
-        self.savedAt = savedAt
-    }
-
-    /// Decodes tolerantly: entries cached before the stamp existed
-    /// count as oldest rather than failing the whole metadata load.
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
-        events = try container.decodeIfPresent([ReviewComment].self, forKey: .events) ?? []
-        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .distantPast
-    }
-
-    // MARK: Public
-
-    /// The pull request's description.
-    public var body: String
-
-    /// The reviews and comments, in fetched order.
-    public var events: [ReviewComment]
-
-    /// When the conversation was cached, for eviction.
-    public var savedAt: Date
 }

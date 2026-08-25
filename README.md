@@ -118,6 +118,11 @@ before shipping.
   hidden, a whitespace-only-change toggle and the open pull request's
   conversations inline under their files, resolvable in place (so you review
   what matters the way you would on GitHub)
+- **Opens** any commit under review on its own: click a line of the
+  commit listing and the pane shows that commit's diff and message, the
+  way the last commit reads, only read-only since amending reaches the
+  tip and nothing else (so a branch of ten commits reviews commit by
+  commit without leaving the pane)
 - **Rejects** individual lines to amend the commit, edits commit messages and
   edits files directly in a built-in syntax-highlighted editor, with a
   Markdown file rendering inline at the press of its own button (so small
@@ -145,16 +150,25 @@ before shipping.
 
 ### 🚢 Ship
 
-- **Stacks** branches in one worktree: a menu item cuts a branch on top
-  of the one you are on, the review and pull request tabs show the stack
+- **Stacks** branches in one worktree: a sidebar popover shows which
+  branches it reckons are stacked there, drops any that are nothing to do
+  with the work in hand and cuts a new branch on top of the one you are
+  on, the review and pull request tabs show the stack
   as `main ← lower ← upper` with each entry's own diff a click away, and
-  the sidebar says where a branch stands in its stack, its pull request
-  opens against the branch below it, and two buttons put the whole stack
+  the sidebar says where a branch stands in its stack, from git before
+  its pull requests are open and from them afterwards, each opening
+  against the branch below it, and two buttons put the whole stack
   back in order, push it bottom up and submit it, opening the pull
   requests it lacks and stacking them on GitHub,
   signing every commit they replay and leaving alone any branch already
   where it belongs (so a stack is one checkout, one session and no
   bookkeeping, and a branch on its own looks exactly as it always did)
+- **Remembers** every answer GitHub gives about a pull request, with
+  when it arrived, in one shared store: no pull request is asked about
+  twice inside a minute however much you click around, relaunching the
+  app included, and acting on one (merging, pushing, resolving) is what
+  refreshes it at once (so the tabs paint instantly and the rate limit
+  is spent on questions whose answers could actually have changed)
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
@@ -209,8 +223,10 @@ before shipping.
 - **Fits** itself to whatever display it is on: unplugging the monitor a
   fullscreen window is on drops it back onto the screen that is left, at a
   size that screen can show, with the panes narrowed to match, and a
-  fullscreen window sent to another monitor lays itself out again for it
-  (so a window is never stranded larger than the display under it)
+  fullscreen window sent to another monitor lays itself out again for it,
+  and the panes give way far enough that the window shrinks to the size
+  a small screen has room for (so a window is never stranded larger than
+  the display under it)
 - **Keeps** every running shell alive while you move around the app and
   keeps a worktree listed until it is really gone, rebases and failed
   listings included (so only closing a shell or destroying its worktree

@@ -89,8 +89,9 @@ public extension SessionService {
     /// than shown as a row that opens nothing.
     internal func hostItems(of repository: Repository, metadata: AppMetadata) async -> [WorktreeItem] {
         var items = [WorktreeItem]()
-        for path in metadata.hostDirectories[repository.path] ?? []
-            where FileManager.default.fileExists(atPath: path) {
+        let listed = (metadata.hostDirectories[repository.path] ?? [])
+            .filter { FileManager.default.fileExists(atPath: $0) }
+        for path in listed {
             let branch = await git.currentBranch(worktreePath: path) ?? ""
             await items.append(WorktreeItem(
                 worktree: Worktree(

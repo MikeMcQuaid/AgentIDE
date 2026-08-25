@@ -111,8 +111,6 @@ public final class DashboardModel {
             }
             service.markSeen(worktreePath: selection.worktree.path)
             clearUnread(at: selection.worktree.path)
-            // The freshly selected branch jumps the polling queue.
-            nextPullRequestFetch[selection.worktree.repositoryPath + "#" + selection.worktree.branch] = nil
         }
     }
 
@@ -203,6 +201,7 @@ public final class DashboardModel {
         // herdr has answered, so nothing is waiting on it any more.
         awaitedSessions = []
         cacheSidebar(listed)
+        await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: repositoryPath)
     }
 
@@ -275,17 +274,11 @@ public final class DashboardModel {
         return fresh
     }
 
-    /// The repository's open pull requests, cached like the issues.
+    /// The repository's open pull requests. The shared pull request
+    /// store answers from what it knows unless a minute has passed,
+    /// so the picker opens instantly without a cache of its own.
     public func openPullRequests(repository: Repository) async -> [PullRequestSummary] {
-        let fresh = await (try? service.openPullRequests(repository: repository)) ?? []
-        guard fresh.isEmpty == false else {
-            return store.load().openPullRequestsCache[repository.path] ?? []
-        }
-
-        var metadata = store.load()
-        metadata.openPullRequestsCache[repository.path] = fresh
-        store.save(metadata)
-        return fresh
+        await (try? service.openPullRequests(repository: repository)) ?? []
     }
 
     /// Fetches the item's repository and refreshes.
@@ -336,16 +329,18 @@ public final class DashboardModel {
     /// managed by the pull request extension file.
     var branchPullRequests: [String: PullRequestSummary?] = [:]
 
-    /// When each branch's pull request is next due, by cache key.
-    var nextPullRequestFetch: [String: Date] = [:]
+    /// The stack git says each worktree holds, by worktree path, and
+    /// when each is next worth deriving again. Managed by the stack
+    /// extension file, which is where the rota lives.
+    var derivedStacks: [String: BranchStack] = [:]
+
+    var nextStackDerivation: [String: Date] = [:]
 
     /// The pull requests in each repository's merge queue, by
-    /// repository path, and when that answer was last fetched. The
-    /// queue is asked once per repository rather than per branch,
-    /// so it is held here rather than beside the branch caches.
+    /// repository path, as the shared store last answered. When it
+    /// was asked is the store's business, like every other pull
+    /// request timer.
     var queuedNumbers: [String: Set<Int>] = [:]
-
-    var queuesFetchedAt: [String: Date] = [:]
 
     /// Internal so the pull request extension file can persist its
     /// cache.
@@ -354,6 +349,12 @@ public final class DashboardModel {
     /// Whether the persisted selection has been re-applied, tried on
     /// the first refresh only so a deliberate deselection sticks.
     var hasRestoredSelection = false
+
+    /// Every pull request question the sidebar asks goes through
+    /// here, which holds both the answers and when they arrived.
+    var pullRequests: PullRequestStore {
+        PullRequestStore(github: github, store: store)
+    }
 
     // MARK: Private
 

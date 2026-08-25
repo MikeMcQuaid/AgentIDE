@@ -279,7 +279,7 @@ public extension SessionService {
 
     /// The repository's open pull requests, for the PR source picker.
     func openPullRequests(repository: Repository) async throws -> [PullRequestSummary] {
-        try await github.pullRequests(repositoryPath: repository.path, scope: .open)
+        try await pullRequests.listing(repositoryPath: repository.path, scope: .open)
     }
 
     /// The user's login and organisations, for the repository
@@ -334,7 +334,7 @@ public extension SessionService {
     /// repository's default branch.
     func reviewBase(for worktree: Worktree) async -> String? {
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
-        let summaries = try? await github.pullRequests(
+        let summaries = try? await pullRequests.listing(
             repositoryPath: worktree.repositoryPath,
             scope: .branch(worktree.branch),
         )

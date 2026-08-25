@@ -287,11 +287,12 @@ extension RootView {
 extension RootView {
     /// The agent terminal: copies are prose, so multi-line copies
     /// reflow for pasting into chat and pull request bodies.
-    func agentTerminal(for session: AgentSession, isActive: Bool) -> some View {
+    func agentTerminal(for session: AgentSession, at worktreePath: String, isActive: Bool) -> some View {
         TerminalPaneView(
             command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
             reflowsCopies: true,
             isActive: isActive,
+            fixedAppearance: dependencies.service.launchAppearance(worktreePath: worktreePath),
         )
         // A hair of room either side: the agent's own frames draw to
         // their last column, which sat against the pane's edges.
@@ -382,6 +383,7 @@ extension RootView {
                 service: dependencies.service,
                 store: dependencies.store,
                 branch: target.worktree.branch,
+                worktreePath: target.worktree.path,
                 defaultBranch: defaultBranch(of: item),
                 isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )

@@ -16,9 +16,10 @@ public struct ReviewView: View {
         worktreePath = worktree.path
         self.worktree = worktree
         self.service = service
+        let pullRequests = service.pullRequestReads
         let fetchThreads: () async -> [ReviewThread] = {
             let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
-            let listed = try? await github.pullRequests(
+            let listed = try? await pullRequests.listing(
                 repositoryPath: worktree.repositoryPath,
                 scope: .branch(branch),
             )
@@ -26,14 +27,15 @@ public struct ReviewView: View {
                 return []
             }
 
-            let answer = await github.conversationThreads(
+            let answer = try? await pullRequests.conversation(
                 repositoryPath: worktree.repositoryPath,
                 number: number,
+                seededBody: nil,
             )
-            if let failure = answer.graphQLFailure {
+            if let failure = answer?.graphQLFailure {
                 ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
             }
-            return answer.threads
+            return answer?.threads ?? []
         }
         let setThreadResolved: (String, Bool) async throws -> Void = { threadID, resolved in
             try await github.setThreadResolved(
@@ -247,6 +249,7 @@ public struct ReviewView: View {
     ) -> some View {
         iconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
             model.scope = scope
+            model.commitTarget = nil
             collapseOverrides = [:]
             Task { await model.reload() }
         }
@@ -285,6 +288,7 @@ public struct ReviewView: View {
     /// this worktree does not hold.
     private func show(_ branch: String) {
         selectedBranch = branch
+        model.commitTarget = nil
         model.stackTarget = branch == stack.checkedOut
             ? nil
             : stack.parent(of: branch).map { (parent: $0, branch: branch) }

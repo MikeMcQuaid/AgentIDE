@@ -48,6 +48,19 @@ public struct MergeCleanupReport: Sendable {
 /// Pushing branches, drafting and opening pull requests, and
 /// tidying up after a merge.
 public extension SessionService {
+    /// Every pull request question goes through here, which holds
+    /// the answers and when each was last asked for.
+    internal var pullRequests: PullRequestStore {
+        PullRequestStore(github: github, store: store)
+    }
+
+    /// The same store, for the feature modules: a view asking about
+    /// a pull request must go through the app's one gate, not build
+    /// a query of its own.
+    var pullRequestReads: PullRequestStore {
+        pullRequests
+    }
+
     /// Pushes the branch to origin without opening anything. An
     /// unsigned tip refuses: every pushed commit must be GPG signed
     /// (a local hook enforces the same), and Rebase on origin is the

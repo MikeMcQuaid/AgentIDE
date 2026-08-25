@@ -50,6 +50,10 @@ public extension SessionService {
         command: String,
         probed version: String? = nil,
     ) async throws {
+        // The agent about to start reads the terminal's colours once
+        // and trusts them forever; remember which appearance it is
+        // being born into, so the pane can keep its word.
+        rememberTerminalScheme(worktreePath: directory)
         await progress("Closing any previous session")
         await killSession(name: sessionName)
         if let agent = agentKind(of: sessionName) {

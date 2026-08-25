@@ -33,11 +33,6 @@ public struct BranchStack: Hashable, Sendable {
         branches.count > 1
     }
 
-    /// Where the checked-out branch sits, counting from one.
-    public var position: Int? {
-        branches.firstIndex(of: checkedOut).map { $0 + 1 }
-    }
-
     /// What a branch is built on: the branch below it, or the
     /// repository's default branch for the bottom one.
     public func parent(of branch: String) -> String? {
@@ -46,14 +41,5 @@ public struct BranchStack: Hashable, Sendable {
         }
 
         return index == 0 ? base : branches[index - 1]
-    }
-
-    /// Everything built on a branch, in the order it must be rebased.
-    public func descendants(of branch: String) -> [String] {
-        guard let index = branches.firstIndex(of: branch) else {
-            return []
-        }
-
-        return Array(branches.dropFirst(index + 1))
     }
 }

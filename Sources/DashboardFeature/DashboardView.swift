@@ -78,10 +78,9 @@ public struct DashboardView: View {
     /// worktree, which always confirms since it always forces).
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
-    /// The worktree a branch is being stacked on, and what to call
-    /// it: a menu cannot ask, so the sidebar asks for it.
+    /// The worktree whose stack is being looked over: a menu cannot
+    /// hold a popover, so the sidebar holds it.
     @State private var pendingStack: WorktreeItem?
-    @State private var stackBranchName = ""
 
     private let model: DashboardModel
 
@@ -197,7 +196,9 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
-        .modifier(StackBranchPrompt(item: item, model: model, name: $stackBranchName, pending: $pendingStack))
+        .popover(isPresented: stackBinding(for: item), arrowEdge: .trailing) {
+            StackPopover(item: item, model: model)
+        }
         .confirmationDialog(
             forceDeleteTitle(for: item),
             isPresented: forceDeleteBinding(for: item),
@@ -233,6 +234,17 @@ public struct DashboardView: View {
     private func avatar(for repository: Repository) -> some View {
         OwnerAvatar(owner: repository.owner, size: Self.avatarSize)
             .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
+    }
+
+    private func stackBinding(for item: WorktreeItem) -> Binding<Bool> {
+        Binding(
+            get: { pendingStack?.id == item.id },
+            set: { shown in
+                if shown == false, pendingStack?.id == item.id {
+                    pendingStack = nil
+                }
+            },
+        )
     }
 
     private func forceDeleteBinding(for item: WorktreeItem) -> Binding<Bool> {

@@ -20,18 +20,21 @@ public extension SessionService {
             return BranchStack(base: nil, branches: [checkedOut], checkedOut: checkedOut)
         }
 
+        // The default branch is not part of any stack, and neither
+        // is a branch this worktree has been told to leave out;
+        // whatever is checked out is part of it whatever it says.
+        let excluded = Set(excludedStackBranches(worktreePath: path))
+        let candidates = await git.branches(worktreePath: path)
+            .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
         var related = [(branch: String, fork: Int, tip: Int)]()
-        for branch in await git.branches(worktreePath: path) where branch != base {
-            guard await git.isAncestor(baseRef, of: branch, worktreePath: path) else {
-                continue
-            }
-
+        for branch in candidates {
             // Related when the two last shared history beyond the
-            // default branch: one was cut from the other. Ancestry
-            // alone is not enough, since a branch that has gained a
-            // commit since its child forked is no longer the child's
-            // ancestor, and that is exactly when a stack needs
-            // putting back in order.
+            // default branch: one was cut from the other. What the
+            // default branch has since done to either of them is
+            // beside the point, and asking that it still be their
+            // ancestor threw away every stack cut before the last
+            // few merges landed, which is the one a restack exists
+            // to put back in order.
             let fork = branch == checkedOut
                 ? await git.tip(of: branch, worktreePath: path)
                 : await git.mergeBase(branch, checkedOut, worktreePath: path)
@@ -51,9 +54,13 @@ public extension SessionService {
         let branches = related
             .sorted { ($0.fork, $0.tip) < ($1.fork, $1.tip) }
             .map(\.branch)
+        // A worktree sitting on the default branch has no stack of
+        // its own, and listing the base as its only entry showed the
+        // same branch twice wherever both were named.
+        let fallback = checkedOut == base ? [] : [checkedOut]
         return BranchStack(
             base: base,
-            branches: branches.isEmpty ? [checkedOut] : branches,
+            branches: branches.isEmpty ? fallback : branches,
             checkedOut: checkedOut,
         )
     }
@@ -184,7 +191,7 @@ public extension SessionService {
         _ = try await pushStack(worktree: worktree)
         var opened = [String]()
         for branch in stack.branches {
-            let listed = try? await github.pullRequests(
+            let listed = try? await pullRequests.listing(
                 repositoryPath: worktree.repositoryPath,
                 scope: .branch(branch),
             )
@@ -204,6 +211,7 @@ public extension SessionService {
             )
             opened.append(url)
         }
+        pullRequests.invalidateListings(repositoryPath: worktree.repositoryPath)
         if stack.isStacked {
             await progress("Linking the stack on GitHub")
             try await github.linkStack(worktreePath: worktree.path)
@@ -230,6 +238,28 @@ public extension SessionService {
 
         let rest = subjects.dropLast().reversed().map { "- " + $0 }
         return (title, rest.joined(separator: "\n"))
+    }
+
+    /// The branches this worktree's stack has been told to leave
+    /// out. The checked-out branch is never among them: it is the
+    /// one branch the worktree undeniably holds.
+    func excludedStackBranches(worktreePath: String) -> [String] {
+        store.load().stackExclusions[worktreePath] ?? []
+    }
+
+    /// Takes a branch out of a worktree's inferred stack, or puts it
+    /// back. Nothing about git changes: the branch is left where it
+    /// is, and the stack simply stops counting it.
+    func setStackExclusion(branch: String, excluded: Bool, worktreePath: String) {
+        var metadata = store.load()
+        var branches = Set(metadata.stackExclusions[worktreePath] ?? [])
+        if excluded {
+            branches.insert(branch)
+        } else {
+            branches.remove(branch)
+        }
+        metadata.stackExclusions[worktreePath] = branches.isEmpty ? nil : branches.sorted()
+        store.save(metadata)
     }
 
     /// Cuts a new branch on top of the checked-out one, in the same

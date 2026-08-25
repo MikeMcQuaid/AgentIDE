@@ -7,6 +7,67 @@ import TerminalUI
 /// The footer's branch actions, split from the model body for
 /// length.
 extension PullRequestsModel {
+    /// What the worktree itself says: its stack, signing, rebase
+    /// need, template and checked-out branch. Skipped when moving
+    /// between a stack's entries, which share all of it.
+    func refreshWorktreeFacts(_ worktree: Worktree) async {
+        await loadStack()
+        isTipSigned = await checkTipSigned(worktree.path)
+        rebaseNeed = await fetchRebaseNeed(worktree)
+        let template = await fetchTemplate(worktree.path)
+        hasTemplate = template != nil
+        originalTemplate = template ?? ""
+        if prTemplate.isEmpty {
+            prTemplate = originalTemplate
+        }
+        await prefillFromSingleCommit(worktree)
+        if let live = await fetchCurrentBranch(worktree.path) {
+            currentBranch = live
+        }
+    }
+
+    /// Refreshes one pull request's header wherever it shows, so
+    /// actions like resolving conversations reflect immediately in
+    /// the selected conversation and its listed row.
+    func refreshSummary(_ number: Int) async {
+        guard let full = try? await fetchSummary(number) else {
+            return
+        }
+
+        cacheEnriched(full)
+        if selected?.number == number {
+            selected = full
+        }
+        if let index = summaries.firstIndex(where: { $0.number == number }) {
+            summaries[index] = full
+        }
+    }
+
+    /// Push makes sense with unpushed commits that this tab has not
+    /// already pushed and a GPG-signed tip; nil upstream means
+    /// nothing was ever pushed.
+    var canPush: Bool {
+        guard let item = branchItem, isPushed == false, isTipSigned else {
+            return false
+        }
+
+        return (item.aheadOfUpstream ?? 1) > 0
+    }
+
+    /// Why Push is in its current state, for the button's hover:
+    /// with nothing to push that is the whole story, and signing
+    /// only matters once commits are waiting.
+    var pushHelp: String {
+        guard let item = branchItem, isPushed == false, (item.aheadOfUpstream ?? 1) > 0 else {
+            return "Everything is already pushed"
+        }
+        guard isTipSigned else {
+            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
+        }
+
+        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
+    }
+
     /// Shows a status in the footer and keeps it in the messages
     /// pane, where a line that scrolls past can still be read.
     /// `detail` is what the messages pane keeps when the footer's
@@ -58,7 +119,8 @@ extension PullRequestsModel {
     /// instantly, then refreshes it; the open scope's light rows
     /// gain their status icons here.
     func select(_ summary: PullRequestSummary) {
-        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)]?.summary ?? summary
+        selected = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
+            ?? summary
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
@@ -73,14 +135,7 @@ extension PullRequestsModel {
     /// Caches one enriched summary, so reopening the conversation
     /// or restarting the app paints its header instantly.
     func cacheEnriched(_ summary: PullRequestSummary) {
-        var metadata = store.load()
-        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = CachedSummary(summary: summary)
-        store.save(metadata)
-    }
-
-    /// The enriched summary cache key for one pull request.
-    func enrichedKey(_ number: Int) -> String {
-        repository.path + "#" + String(number)
+        pullRequests.rememberSummary(repositoryPath: repository.path, summary: summary)
     }
 
     /// The stack size, following base branches that are other listed
@@ -212,6 +267,7 @@ extension PullRequestsModel {
         do {
             let url = try await performCreate(worktree, title, body)
             ErrorLog.shared.note("Opened pull request " + url)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             prTitle = ""
             prBody = ""
             Self.requestSidebarRefresh()
@@ -233,6 +289,7 @@ extension PullRequestsModel {
 
         do {
             let destination = try await performPush(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             isPushed = true
             setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()

@@ -184,6 +184,7 @@ public struct SessionService: Sendable {
     let git: GitClient
     let herdr: HerdrClient
     let github: GitHubClient
+
     let transcripts: TranscriptReader
     let spool: EventSpool
     let store: MetadataStore

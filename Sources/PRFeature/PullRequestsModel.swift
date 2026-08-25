@@ -20,6 +20,7 @@ final class PullRequestsModel {
     init(
         repository: Repository,
         branch: String?,
+        worktreePath: String?,
         defaultBranch: String?,
         items: [WorktreeItem],
         github: GitHubClient,
@@ -28,25 +29,32 @@ final class PullRequestsModel {
     ) {
         self.repository = repository
         self.branch = branch
+        self.worktreePath = worktreePath
         self.defaultBranch = defaultBranch
         self.items = items
         self.github = github
         self.store = store
+        let gate = PullRequestStore(github: github, store: store)
+        pullRequests = gate
         fetchList = { scope, limit in
-            try await github.pullRequests(repositoryPath: repository.path, scope: scope, limit: limit)
+            try await gate.listing(repositoryPath: repository.path, scope: scope, limit: limit)
         }
         fetchSummary = { number in
-            try await github.pullRequestSummary(repositoryPath: repository.path, number: number)
+            try await gate.summary(repositoryPath: repository.path, number: number)
         }
         fetchHasMergeQueue = {
-            await github.hasMergeQueue(repositoryPath: repository.path)
+            await gate.hasMergeQueue(repositoryPath: repository.path)
         }
         fetchThreads = { number in
-            let answer = await github.conversationThreads(repositoryPath: repository.path, number: number)
-            if let failure = answer.graphQLFailure {
+            let answer = try? await gate.conversation(
+                repositoryPath: repository.path,
+                number: number,
+                seededBody: nil,
+            )
+            if let failure = answer?.graphQLFailure {
                 ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
             }
-            return answer.threads
+            return answer?.threads ?? []
         }
         performCreate = { worktree, title, body in
             try await service.createPullRequest(worktree: worktree, title: title, body: body)
@@ -77,6 +85,7 @@ final class PullRequestsModel {
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
         }
         performMergeChange = { summary in
+            defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
             } else if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
@@ -132,8 +141,15 @@ final class PullRequestsModel {
     let repository: Repository
     let branch: String?
 
+    /// The worktree the tab is for, whatever branch it holds now.
+    let worktreePath: String?
+
     /// The conversation pane fetches its own details and caches.
     let github: GitHubClient
+
+    /// Every pull request question the tab asks goes through here,
+    /// which is also where the app keeps when it last asked.
+    let pullRequests: PullRequestStore
     let store: MetadataStore
 
     /// The branch actually checked out in the worktree, refreshed on
@@ -147,12 +163,13 @@ final class PullRequestsModel {
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.
-    private(set) var rebaseNeed: SessionService.RebaseNeed = .nothing
+    /// Set only by the actions extension's fact refresh.
+    var rebaseNeed: SessionService.RebaseNeed = .nothing
 
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
     /// Rebase on origin signs the branch.
-    private(set) var isTipSigned = true
+    var isTipSigned = true
 
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
@@ -183,7 +200,7 @@ final class PullRequestsModel {
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
-    private(set) var hasTemplate = false
+    var hasTemplate = false
 
     /// Test seams: the live client and service by default, fakes in
     /// tests.
@@ -241,31 +258,6 @@ final class PullRequestsModel {
         }
     }
 
-    /// Push makes sense with unpushed commits that this tab has not
-    /// already pushed and a GPG-signed tip; nil upstream means
-    /// nothing was ever pushed.
-    var canPush: Bool {
-        guard let item = branchItem, isPushed == false, isTipSigned else {
-            return false
-        }
-
-        return (item.aheadOfUpstream ?? 1) > 0
-    }
-
-    /// Why Push is in its current state, for the button's hover:
-    /// with nothing to push that is the whole story, and signing
-    /// only matters once commits are waiting.
-    var pushHelp: String {
-        guard let item = branchItem, isPushed == false, (item.aheadOfUpstream ?? 1) > 0 else {
-            return "Everything is already pushed"
-        }
-        guard isTipSigned else {
-            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
-        }
-
-        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
-    }
-
     /// The rebase button's label names exactly what it would do.
     var rebaseTitle: String {
         switch rebaseNeed {
@@ -293,8 +285,10 @@ final class PullRequestsModel {
         stacking.selected ?? currentBranch ?? branch
     }
 
+    /// What the listing on screen is of, so an answer that arrives
+    /// after the tab has moved on is dropped rather than shown.
     var cacheKey: String {
-        repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
+        String(describing: scope) + "#" + (listedBranch ?? "")
     }
 
     /// The worktree listing, or nothing at all on the default
@@ -319,28 +313,26 @@ final class PullRequestsModel {
     /// kept selection is re-selected once the fetch answers, and a
     /// single result opens its conversation directly. Extending
     /// keeps the current page and raises the fetch limit.
-    func reload(keepingSelection: Bool = false) async {
+    /// `refreshingFacts` re-reads what the worktree itself says:
+    /// its signing, its rebase need, its template and its stack.
+    /// Moving up and down a stack leaves all of that alone, since
+    /// every entry shares one worktree, and asking git again is
+    /// what made the move feel like a load rather than a click.
+    func reload(keepingSelection: Bool = false, refreshingFacts: Bool = true) async {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
-        if let worktree = branchItem?.worktree {
-            await loadStack()
-            isTipSigned = await checkTipSigned(worktree.path)
-            rebaseNeed = await fetchRebaseNeed(worktree)
-            let template = await fetchTemplate(worktree.path)
-            hasTemplate = template != nil
-            loadDraft()
-            originalTemplate = template ?? ""
-            if prTemplate.isEmpty {
-                prTemplate = originalTemplate
-            }
-            await prefillFromSingleCommit(worktree)
-            if let live = await fetchCurrentBranch(worktree.path) {
-                currentBranch = live
-            }
-        }
+        // The cache paints before any of the reading: the listing
+        // this branch had last time is on screen at once, and the
+        // fetch replaces it in place.
         page = 0
-        selected = nil
+        if keepingSelection == false {
+            selected = nil
+        }
         paintCachedListing()
+        loadDraft()
+        if let worktree = branchItem?.worktree, refreshingFacts {
+            await refreshWorktreeFacts(worktree)
+        }
         defer {
             isLoading = false
             hasLoaded = true
@@ -358,34 +350,20 @@ final class PullRequestsModel {
 
             summaries = fetched
             fetchedLimit = limit
-            var metadata = store.load()
-            metadata.pullRequestListsCache[requested] = CachedPullRequestList(summaries: fetched)
-            store.save(metadata)
+            pullRequests.rememberListing(
+                repositoryPath: repository.path,
+                scope: scope.listScope(branch: listedBranch),
+                summaries: fetched,
+            )
             let chosen = fetched.first { $0.number == previous }
                 ?? (fetched.count == 1 ? fetched.first : nil)
             if let chosen {
                 select(chosen)
             }
             ServiceStatus.shared.recordSuccess()
+            prefetchStack()
         } catch {
             ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)
-        }
-    }
-
-    /// Refreshes one pull request's header wherever it shows, so
-    /// actions like resolving conversations reflect immediately in
-    /// the selected conversation and its listed row.
-    func refreshSummary(_ number: Int) async {
-        guard let full = try? await fetchSummary(number) else {
-            return
-        }
-
-        cacheEnriched(full)
-        if selected?.number == number {
-            selected = full
-        }
-        if let index = summaries.firstIndex(where: { $0.number == number }) {
-            summaries[index] = full
         }
     }
 

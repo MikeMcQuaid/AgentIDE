@@ -37,6 +37,10 @@ struct PullRequestConversationPane: View {
                 )
             }
             .padding(.horizontal, Self.padding)
+            // One height however much the summary carries: a light
+            // row grows icons as the full fetch lands, and the page
+            // jumping under the reader read as a reload.
+            .frame(height: Self.headerHeight)
             Divider()
             PullRequestConversationView(
                 github: github,
@@ -53,6 +57,7 @@ struct PullRequestConversationPane: View {
 
     private static let spacing: CGFloat = 4
     private static let padding: CGFloat = 8
+    private static let headerHeight: CGFloat = 46
 }
 
 // MARK: - PullRequestConversationView
@@ -101,11 +106,14 @@ struct PullRequestConversationView: View {
         .task(id: number) {
             isLoading = true
             defer { isLoading = false }
-            let metadata = store.load()
-            let cached = metadata.conversationCache[cacheKey]
-            description = seededBody ?? cached?.body ?? ""
-            events = cached?.events ?? []
-            threads = metadata.threadsCache[cacheKey]?.threads ?? []
+            let cached = pullRequests.cachedConversation(
+                repositoryPath: repositoryPath,
+                number: number,
+                seededBody: seededBody,
+            )
+            description = cached.body
+            events = cached.events
+            threads = cached.threads
             await refresh()
         }
     }
@@ -124,8 +132,11 @@ struct PullRequestConversationView: View {
     @State private var threads: [ReviewThread] = []
     @State private var isLoading = true
 
-    private var cacheKey: String {
-        AppMetadata.threadsKey(repositoryPath: repositoryPath, number: number)
+    /// Every question about this pull request goes through the
+    /// shared store, which answers from what it already knows unless
+    /// a minute has passed since it last asked.
+    private var pullRequests: PullRequestStore {
+        PullRequestStore(github: github, store: store)
     }
 
     @ViewBuilder private var content: some View {
@@ -202,47 +213,24 @@ struct PullRequestConversationView: View {
     /// stays.
     private func refresh() async {
         do {
-            let freshBody: String
-            let freshEvents: [ReviewComment]
-            if let seededBody {
-                freshBody = seededBody
-                freshEvents = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
-            } else {
-                (freshBody, freshEvents) = try await github.conversation(
-                    repositoryPath: repositoryPath,
-                    number: number,
-                )
-            }
+            let answer = try await pullRequests.conversation(
+                repositoryPath: repositoryPath,
+                number: number,
+                seededBody: seededBody,
+            )
             guard Task.isCancelled == false else {
                 return
             }
 
-            description = freshBody
-            events = freshEvents
-            threads = await loadThreads()
-            var metadata = store.load()
-            metadata.conversationCache[cacheKey] = CachedConversation(body: freshBody, events: freshEvents)
-            store.save(metadata)
+            if let failure = answer.graphQLFailure {
+                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+            }
+            description = answer.body
+            events = answer.events
+            threads = answer.threads
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }
-    }
-
-    /// The threads from either source; a GraphQL failure reaches
-    /// Messages, since it is what removes the resolve buttons.
-    private func loadThreads() async -> [ReviewThread] {
-        let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
-        if let failure = answer.graphQLFailure {
-            ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
-        }
-        // The REST fallback never overwrites cached GraphQL threads:
-        // that would strip resolve buttons from an offline reopen.
-        if answer.graphQLFailure == nil {
-            var metadata = store.load()
-            metadata.threadsCache[cacheKey] = CachedThreads(threads: answer.threads)
-            store.save(metadata)
-        }
-        return answer.threads
     }
 
     /// Copies every open conversation as pasteable text.
@@ -262,7 +250,10 @@ struct PullRequestConversationView: View {
                 threadID: thread.resolveID,
                 resolved: thread.isResolved == false,
             )
-            threads = await loadThreads()
+            // Resolving is acting, not looking: the store forgets
+            // when it last asked so this reads the truth at once.
+            pullRequests.invalidate(repositoryPath: repositoryPath, number: number)
+            await refresh()
             await onResolvedChanged()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

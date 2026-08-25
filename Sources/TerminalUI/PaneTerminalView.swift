@@ -320,8 +320,20 @@ final class BlockSelector {
         )
     }
 
+    /// One character cell, the size the terminal itself draws it.
+    /// Dividing the pane by its rows is not the same thing: the grid
+    /// is laid out from the top in whole cells of the font's own
+    /// size and whatever is left over sits unused at the bottom, so
+    /// a marquee measured against the pane drifted further from the
+    /// text with every row down the screen. The optimal frame is
+    /// exactly one cell by the grid, the scroller here being hidden.
     private func cellSize(of view: PaneTerminalView, rows: Int, columns: Int) -> CGSize {
-        CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
+        let optimal = view.getOptimalFrameSize().size
+        guard optimal.width > 0, optimal.height > 0 else {
+            return CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
+        }
+
+        return CGSize(width: optimal.width / CGFloat(columns), height: optimal.height / CGFloat(rows))
     }
 
     private func update(to point: CGPoint, in view: PaneTerminalView) {

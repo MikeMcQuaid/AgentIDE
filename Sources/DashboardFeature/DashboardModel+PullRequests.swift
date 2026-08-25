@@ -28,8 +28,7 @@ extension DashboardModel {
     /// repository rather than all of them, since asking about every
     /// branch everywhere is how a rate limit is reached.
     public func refreshRepository(path: String) async {
-        nextPullRequestFetch = nextPullRequestFetch.filter { $0.key.hasPrefix(path + "#") == false }
-        queuesFetchedAt.removeValue(forKey: path)
+        pullRequests.invalidateListings(repositoryPath: path)
         await refresh(forcing: path)
     }
 
@@ -38,21 +37,12 @@ extension DashboardModel {
     /// per-pull-request field can answer, and it runs on the poll
     /// rather than per row.
     func refreshMergeQueues() async {
-        for repository in groups.map(\.repository) where queuesDue(repository.path) {
-            queuedNumbers[repository.path] = await github.queuedNumbers(repositoryPath: repository.path)
-            queuesFetchedAt[repository.path] = Date()
+        for repository in groups.map(\.repository) {
+            queuedNumbers[repository.path] = await pullRequests.queuedNumbers(
+                repositoryPath: repository.path,
+                interval: Self.queueInterval,
+            )
         }
-    }
-
-    /// Whether a repository's queue is due another look: it changes
-    /// as pull requests merge, so it is asked for regularly, but far
-    /// less often than the branches themselves.
-    private func queuesDue(_ repositoryPath: String) -> Bool {
-        guard let fetched = queuesFetchedAt[repositoryPath] else {
-            return true
-        }
-
-        return Date().timeIntervalSince(fetched) >= Self.queueInterval
     }
 
     /// The summary as the sidebar shows it: queued from the
@@ -101,19 +91,21 @@ extension DashboardModel {
             let rows = group.items.filter { $0.worktree.path != group.repository.path || isOffDefaultBranch($0) }
             for item in rows {
                 let key = item.worktree.repositoryPath + "#" + item.worktree.branch
-                if let due = nextPullRequestFetch[key], due > Date() {
-                    continue
-                }
                 if ridesOutOutage, item.id != selection?.id {
                     continue
                 }
 
-                nextPullRequestFetch[key] = Date().addingTimeInterval(interval(for: item, collapsed: collapsed))
                 do {
-                    let summaries = try await github.pullRequests(
+                    // Nil means the store asked recently enough; the
+                    // row keeps what it is already showing.
+                    guard let summaries = try await pullRequests.listingIfDue(
                         repositoryPath: group.repository.path,
                         scope: .branch(item.worktree.branch),
-                    )
+                        interval: interval(for: item, collapsed: collapsed),
+                    ) else {
+                        continue
+                    }
+
                     let summary = Self.displayed(summaries)
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
@@ -168,8 +160,11 @@ extension DashboardModel {
             byHead[summary.headBranch] = summary
             byBase[summary.baseBranch] = summary
         }
+        // Nothing open on GitHub chains to this branch, which is
+        // the ordinary case before the pull requests exist; git
+        // knows what is stacked here either way.
         guard let own = byHead[item.worktree.branch] else {
-            return StackStanding(position: 1, height: 1)
+            return derivedStanding(for: item) ?? StackStanding(position: 1, height: 1)
         }
 
         let position = stackDepth(for: item)
@@ -180,12 +175,24 @@ extension DashboardModel {
             height += 1
             current = next
         }
-        return StackStanding(position: position, height: height, base: own.baseBranch)
+        // GitHub's chain only reaches as far as the pull requests
+        // that exist: a stack whose top is not pushed yet, or whose
+        // entries all still target the default branch, measures
+        // short or not at all. git sees the whole thing, so the
+        // taller answer wins.
+        let chained = StackStanding(position: position, height: height, base: own.baseBranch)
+        guard let derived = derivedStanding(for: item), derived.height > chained.height else {
+            return chained.isStacked
+                ? chained
+                : derivedStanding(for: item) ?? chained
+        }
+
+        return derived
     }
 
     // MARK: Private
 
-    private static let selectedInterval: TimeInterval = 30
+    private static let selectedInterval: TimeInterval = 60
     private static let queueInterval: TimeInterval = 60
 
     /// How long after merging or closing a pull request still speaks
