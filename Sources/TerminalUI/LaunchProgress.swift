@@ -92,19 +92,27 @@ public struct LaunchProgressView: View {
         TimelineView(.periodic(from: appearedAt, by: Self.frameSeconds)) { context in
             let elapsed = max(0, context.date.timeIntervalSince(appearedAt))
             VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                Text(Self.typed(Self.bannerText, secondsIn: elapsed))
+                    .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
                 header(at: elapsed)
                 ForEach(steps) { step in
                     line(step, at: context.date)
                 }
             }
             .font(.system(.callout, design: .monospaced))
+            // Phosphor: the same white bled a little around itself,
+            // and a frame's dimming as each line lands.
+            .shadow(color: Self.ink.opacity(Self.glowOpacity), radius: Self.glowRadius)
+            .opacity(flicker(at: context.date))
             .frame(maxWidth: Self.blockWidth, alignment: .leading)
             // Pinned near the top so the log grows downwards: centred,
             // it shifted every line each time a step arrived.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(Self.padding)
             .padding(.top, Self.topInset)
-            .background(Self.screen, ignoresSafeAreaEdges: [])
+            .background(alignment: .topLeading) {
+                Self.screen.overlay(Scanlines())
+            }
         }
     }
 
@@ -125,6 +133,13 @@ public struct LaunchProgressView: View {
     private static let stepLines = 3
     private static let topInset: CGFloat = 40
     private static let padding: CGFloat = 20
+    /// What the machine says before it says anything else, and
+    /// what a finished line ends with, as a boot log's do.
+    private static let bannerText = "AGENTIDE · SANDBOXED AGENTS · READY"
+    private static let doneMarker = " ... OK"
+    private static let glowOpacity = 0.55
+    private static let glowRadius: CGFloat = 2.5
+    private static let flickerOpacity = 0.82
     private static let cursorBlinkSeconds = 0.6
     private static let blinkParity = 2
     private static let promptOpacity = 0.55
@@ -168,7 +183,8 @@ public struct LaunchProgressView: View {
     /// cursor sitting at the end of the newest line.
     private func line(_ step: LaunchProgress.Step, at now: Date) -> some View {
         let since = max(0, now.timeIntervalSince(step.startedAt))
-        let text = step.text + waitingDots(on: step, at: now)
+        let isDone = step.id != steps.last?.id
+        let text = step.text + (isDone ? Self.doneMarker : waitingDots(on: step, at: now))
         return HStack(spacing: 0) {
             Text(verbatim: "> ")
                 .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
@@ -208,6 +224,16 @@ public struct LaunchProgressView: View {
             ?? AttributedString(text)
     }
 
+    /// One frame dimmer as each line arrives, then steady again.
+    private func flicker(at now: Date) -> Double {
+        guard let latest = steps.last?.startedAt else {
+            return 1
+        }
+
+        let since = now.timeIntervalSince(latest)
+        return since >= 0 && since < Self.frameSeconds ? Self.flickerOpacity : 1
+    }
+
     /// A dot a second on the newest step, up to three: a step that
     /// waits without reporting anything still has to show the app is
     /// working rather than stopped.
@@ -218,5 +244,38 @@ public struct LaunchProgressView: View {
 
         let ticks = Int(max(0, now.timeIntervalSince(step.startedAt)) / Self.dotSeconds)
         return String(repeating: ".", count: 1 + ticks % Self.dotCycle)
+    }
+}
+
+// MARK: - Scanlines
+
+/// The faint banding a screen has, tiled down the panel: one
+/// gradient repeated rather than a view for every line.
+private struct Scanlines: View {
+    // MARK: Internal
+
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ForEach(0 ..< rows(in: geometry.size.height), id: \.self) { _ in
+                    LinearGradient(
+                        colors: [.black.opacity(Self.opacity), .clear, .black.opacity(Self.opacity)],
+                        startPoint: .top,
+                        endPoint: .bottom,
+                    )
+                    .frame(height: Self.height)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: Private
+
+    private static let opacity = 0.16
+    private static let height: CGFloat = 3
+
+    private func rows(in height: CGFloat) -> Int {
+        Int(height / Self.height) + 1
     }
 }

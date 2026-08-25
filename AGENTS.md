@@ -83,10 +83,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   `LaunchProgress`, and keeps something on screen changing at
   least once a second, the block pinned near the top of the pane so
   it grows downwards. It is drawn as a terminal writing itself
-  out: monospaced white on a dark panel, each line typed a
-  character at a time behind a `>` prompt, with a block cursor
-  that blinks once a line has finished, so a wait is worth
-  watching. Work that need not be serial is not: anything
+  out: monospaced white on a dark panel under faint scanlines, a
+  banner, each line typed at ten characters a second behind a `>`
+  prompt, finished lines ending `... OK`, a block cursor blinking
+  once a line is done and a frame's dimming as each arrives, so a
+  wait is worth watching. Work that need not be serial is not: anything
   the launch does not depend on yet runs beside it. The same holds
   for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming
@@ -190,6 +191,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   event only when the window's hit test lands on it and no other
   pane has claimed that event, or one scroll asks herdr for two or
   three repaints and the same lines arrive again.
+- `agentide <file>` can be handed anything readable: a file
+  belonging to no worktree opens in whichever worktree is on
+  screen, and the editor takes an absolute path as the file
+  itself rather than resolving it against a worktree.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

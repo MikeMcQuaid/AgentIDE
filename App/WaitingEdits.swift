@@ -86,7 +86,17 @@ final class WaitingEdits {
             edit.path == item.worktree.path || edit.path.hasPrefix(item.worktree.path + "/")
         }
         guard let item = holder ?? items.first(where: { edit.belongs(toWorktree: $0.worktree.path) }) else {
-            ErrorLog.shared.report("Not a worktree AgentIDE knows: " + edit.path)
+            // A file belonging to no worktree still opens, in
+            // whichever worktree is on screen: being handed a path
+            // from anywhere is the point of a command.
+            guard edit.kind == .open, FileManager.default.isReadableFile(atPath: edit.path),
+                  let showing = dashboard.selection
+            else {
+                ErrorLog.shared.report("Not a worktree AgentIDE knows: " + edit.path)
+                return
+            }
+
+            FileOpener.open(absolutePath: edit.path, line: nil, worktreePath: showing.worktree.path)
             return
         }
 
@@ -95,7 +105,7 @@ final class WaitingEdits {
             return
         }
         guard edit.path.hasPrefix(item.worktree.path + "/") else {
-            ErrorLog.shared.report("Outside the worktree, so not opened: " + edit.path)
+            FileOpener.open(absolutePath: edit.path, line: nil, worktreePath: item.worktree.path)
             return
         }
 

@@ -25,7 +25,12 @@ struct FileEditorView: View {
         // file that resolves outside the worktree gets no path at
         // all and the editor refuses to read or write it.
         let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
-        let target = URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
+        // A path of its own is the file: `agentide` can be handed
+        // something outside every worktree, which opens in whichever
+        // one is on screen rather than not at all.
+        let target = relativePath.hasPrefix("/")
+            ? URL(fileURLWithPath: relativePath).standardizedFileURL.path
+            : URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
         path = target == base || target.hasPrefix(base + "/") ? target : nil
         title = relativePath
         language = SyntaxLanguage.language(forPath: relativePath)
