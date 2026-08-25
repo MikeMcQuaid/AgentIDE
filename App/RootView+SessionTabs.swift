@@ -352,26 +352,21 @@ extension RootView {
         // request for the editor here, from opening a file in the
         // diff or from the tab it was last on, shows the diff
         // instead of a second editor.
+        // Review, the editor and the pull requests stay mounted and
+        // hide, rather than being rebuilt on every tab switch: each
+        // costs a git or GitHub read to come back, and flipping
+        // between them showed a loading state every time.
         let shown = utilityTab == .editor && item.worktree.isHostDirectory ? UtilityTab.review : utilityTab
-        switch shown {
-        // Both keep their own always-mounted layers, so the
-        // switched content has nothing to show for them.
-        case .browser,
-             .shell:
-            EmptyView()
-
-        case .review:
+        return ZStack {
             ReviewView(
                 worktree: target.worktree,
                 git: dependencies.git,
                 github: dependencies.github,
                 service: dependencies.service,
             )
-
-        case .editor:
+            .hidden(shown != .review)
             editorPane(for: item)
-
-        case .pullRequests:
+                .hidden(shown != .editor)
             PullRequestsView(
                 repository: Repository(
                     name: target.worktree.repositoryName,
@@ -387,9 +382,10 @@ extension RootView {
                 defaultBranch: defaultBranch(of: item),
                 isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
             )
-
-        case .errors:
-            ErrorsPane()
+            .hidden(shown != .pullRequests)
+            if shown == .errors {
+                ErrorsPane()
+            }
         }
     }
 }

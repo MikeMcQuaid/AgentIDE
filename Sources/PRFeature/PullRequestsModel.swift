@@ -115,6 +115,9 @@ final class PullRequestsModel {
             await service.isTipSigned(worktreePath: path)
         }
         currentBranch = branch
+        // Painted before anything is asked for, so a tab switched
+        // away from and back to opens on the rows it had.
+        paintCachedListing()
     }
 
     // swiftlint:enable function_body_length

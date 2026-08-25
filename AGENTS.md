@@ -183,6 +183,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   new display and is drawing nothing on the old one. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
+- The utility pane's review, editor and pull request surfaces stay
+  mounted and hide rather than being rebuilt on a tab switch: each
+  costs a git or GitHub read to come back, and flipping between
+  them showed a loading state every time. A model that can paint
+  from its cache does so in its initialiser, not on its first
+  reload.
 - Every mounted terminal pane watches the wheel through its own
   event monitor, and panes stack: hidden shells and other
   worktrees' terminals hold the same frame. A pane takes a wheel

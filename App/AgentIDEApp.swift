@@ -30,11 +30,17 @@ struct AgentIDEApp: App {
 
     // MARK: Internal
 
+    /// What a first run opens at; a saved frame wins over it.
+    static let defaultWidth: CGFloat = 1_600
+    static let defaultHeight: CGFloat = 1_000
+
     var body: some Scene {
         WindowGroup {
             RootView(dependencies: dependencies)
                 .environment(\.openURL, LinkOpener.action)
         }
+        // The saved frame wins; this is what a first run opens at.
+        .defaultSize(width: Self.defaultWidth, height: Self.defaultHeight)
         // Content over chrome: no title bar, compact toolbar.
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)

@@ -64,6 +64,15 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private static let autosaveName = "AgentIDEMainWindow"
 
+        /// What the window opens at with nothing saved, and the size
+        /// below which a saved frame is treated as junk: three panes
+        /// need room, and a window that opens tiny is a bug rather
+        /// than a preference.
+        private static let defaultWidth: CGFloat = 1_600
+        private static let defaultHeight: CGFloat = 1_000
+        private static let minimumWidth: CGFloat = 900
+        private static let minimumHeight: CGFloat = 600
+
         /// Long enough for the fullscreen animation to finish before
         /// the frame is measured; the notification arrives while the
         /// window is still leaving its space.
@@ -252,9 +261,27 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Dock), so the window restores as a plain frame the user
         /// can drag to a monitor before going fullscreen.
         private func restoreFrame(of window: NSWindow) {
-            if window.frameAutosaveName != Self.autosaveName {
-                window.setFrameAutosaveName(Self.autosaveName)
+            guard window.frameAutosaveName != Self.autosaveName else {
+                return
             }
+
+            window.setFrameAutosaveName(Self.autosaveName)
+            // Naming the autosave does not apply it: without this the
+            // window opens at whatever size its content asked for,
+            // which changed the moment the sidebar started painting
+            // from cache. A frame too small for the panes is grown to
+            // the default rather than restored as saved.
+            if window.setFrameUsingName(Self.autosaveName) {
+                let minimum = NSSize(width: Self.minimumWidth, height: Self.minimumHeight)
+                if window.frame.width < minimum.width || window.frame.height < minimum.height {
+                    window.setContentSize(NSSize(width: Self.defaultWidth, height: Self.defaultHeight))
+                    window.center()
+                }
+                return
+            }
+
+            window.setContentSize(NSSize(width: Self.defaultWidth, height: Self.defaultHeight))
+            window.center()
         }
     }
 

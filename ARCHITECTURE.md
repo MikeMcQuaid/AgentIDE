@@ -869,7 +869,9 @@ shim rather than a protocol:
    from the metadata store before anything is read, so the frame is
    furnished rather than empty; the listings, conversations, enriched pull
    request headers and review threads paint from their own caches the same
-   way. Only what herdr owns arrives late, and a row the cache says had an
+   way, in their models' initialisers rather than on a first reload, and
+   the review, editor and pull request surfaces stay mounted while the
+   utility tabs switch, so returning to one costs nothing. Only what herdr owns arrives late, and a row the cache says had an
    agent running waits for herdr rather than claiming its session ended.
 5. Directories of your own are listed under a repository and marked as
    such (`Worktree.isHostDirectory`), which is what the sidebar row, the
