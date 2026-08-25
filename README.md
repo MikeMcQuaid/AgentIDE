@@ -40,8 +40,9 @@ before shipping.
   sandbox share one checkout with nothing to keep in sync)
 - **Creates** a worktree and branch from a typed problem statement or an existing
   issue or pull request, narrating each step and the command it is waiting
-  on with a clock that ticks every second, a step that waits marking each
-  second it waits, and staying on that page until
+  on as a terminal writing itself out, a character at a time on a dark
+  panel with a blinking cursor and a clock, and staying on that page
+  until
   the agent's interface is up, the same when a conversation resumes (so
   starting work is one prompt, not a git ritual, a slow step is never a
   blank pane and the pane never appears before the agent does)
@@ -62,9 +63,11 @@ before shipping.
   under brew or your dotfiles under theirs: a laptop icon and the path
   where a branch would be, its checked-out branch below, the editor in the
   pane an agent would have taken, and the diff, browser, shell and pull
-  requests where they always are; `agentide .` from inside one selects it
-  (so the places you work on by hand live beside the ones agents work on,
-  and no agent ever runs in them)
+  requests where they always are, with the same ahead, behind, unpushed
+  and uncommitted marks every row carries, and a menu to fetch or to check
+  out and fast-forward the default branch; `agentide .` from inside one
+  selects it (so the places you work on by hand live beside the ones
+  agents work on, and no agent ever runs in them)
 - **Groups** worktrees by repository, showing unread terminal and agent activity
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to

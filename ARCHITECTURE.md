@@ -465,11 +465,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    step log the service and the herdr client report into: the branch
    name, the worktree, the prompt file, the server check, the workspace,
    the command submitted and what is being waited on) under a clock of
-   the launch's elapsed time ticking every second and a dot a second on
-   the newest step, so a step that reports nothing while it waits still
-   shows the app working, the whole block pinned near the top of the pane
-   so it grows downwards rather than shifting every line each time a step
-   arrives; the version probe runs beside the naming and the worktree,
+   the launch's elapsed time and a dot a second on the newest step, so a
+   step that reports nothing while it waits still shows the app working,
+   the whole block pinned near the top of the pane so it grows downwards
+   rather than shifting every line each time a step arrives. It is drawn
+   as a terminal writing itself out, monospaced white on a dark panel with
+   a `>` prompt, each line typed a character at a time from the moment it
+   was reported and a block cursor blinking once it has finished, which is
+   what every waiting pane in the app looks like; the version probe runs beside the naming and the worktree,
    since it costs a sandbox launch of its own and only has to be finished
    before the agent starts, and a kill that closed nothing skips the
    listing that would confirm it. So a slow step names
@@ -864,7 +867,9 @@ shim rather than a protocol:
    any other row; the editor in the pane an agent would have taken, hidden
    from the utility pane so there is one editor with one set of shortcuts
    wherever it shows; no session strip controls; and a menu offering only
-   Copy path and Forget, which touches no file. The app publishes the list
+   Copy path, Forget (which touches no file), Fetch, and Checkout and pull
+   default branch, which fast-forwards only, so a diverged local branch
+   stops rather than being merged behind your back. The app publishes the list
    as `agentide/host-directories`, so `agentide .` from inside one selects
    it the way it selects a worktree. They are kept in the metadata store per repository, since they
    are configuration rather than anything derivable. Every launch passes

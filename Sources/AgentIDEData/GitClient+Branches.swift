@@ -62,11 +62,25 @@ public extension GitClient {
         // Amending or rebasing a pushed branch rewrites what the
         // remote holds, and a plain push refuses that as a
         // non-fast-forward. The lease is what makes forcing safe:
-        // it still refuses if the remote moved since the last fetch,
-        // so someone else's work is never overwritten.
+        // it refuses if the remote moved since the last fetch. On
+        // its own that trusts a stale fetch, so `--force-if-includes`
+        // goes with it: the push is refused unless what it would
+        // replace is already in this branch's history, which is
+        // exactly the difference between a rewrite of your own work
+        // and overwriting someone else's.
         let rewrites = await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote)
-        let force = rewrites ? ["--force-with-lease"] : []
+        let force = rewrites ? ["--force-with-lease", "--force-if-includes"] : []
         try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+    }
+
+    /// Checks out the default branch and pulls it: `--ff-only`, so
+    /// a diverged local branch stops rather than being merged or
+    /// silently rewritten, and the reason lands in the caller's
+    /// error rather than in a merge commit.
+    func checkoutAndPullDefault(worktreePath: String, branch: String) async throws {
+        try await git(["fetch", "origin"], in: worktreePath)
+        try await git(["checkout", branch], in: worktreePath)
+        try await git(["pull", "--ff-only", "origin", branch], in: worktreePath)
     }
 
     /// Whether origin already carries the branch, after a fetch.

@@ -48,7 +48,7 @@ struct WorktreeRowView: View {
         // Something has to say the row is not just quiet but idle,
         // and only when nothing else on the line does.
         if parts.isEmpty {
-            return item.session == nil ? "idle" : ""
+            return item.session == nil && item.worktree.isHostDirectory == false ? "idle" : ""
         }
 
         return parts.joined(separator: " ")
@@ -109,6 +109,8 @@ struct WorktreeRowView: View {
             HStack(spacing: Self.spacing) {
                 Text(item.worktree.branch)
                     .lineLimit(1)
+                Text(counts)
+                    .hoverHelp(countsExplanation)
                 Spacer(minLength: 0)
             }
             .font(.caption)
@@ -134,10 +136,9 @@ struct WorktreeRowView: View {
 
     @ViewBuilder private var leadingIcon: some View {
         if item.worktree.isHostDirectory {
-            Image(systemName: "laptopcomputer")
-                .foregroundStyle(.secondary)
-                .font(.caption)
-                .accessibilityHidden(true)
+            // Sized and coloured as the branch and state icons are,
+            // so every row's text starts at the same place.
+            Octicon("laptopcomputer", colour: .green)
                 .hoverHelp("On your Mac, outside the sandbox")
         } else if let pullRequest {
             Octicon(

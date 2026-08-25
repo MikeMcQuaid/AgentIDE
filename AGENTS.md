@@ -82,7 +82,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   names each step and what it waits on as it happens, through
   `LaunchProgress`, and keeps something on screen changing at
   least once a second, the block pinned near the top of the pane so
-  it grows downwards. Work that need not be serial is not: anything
+  it grows downwards. It is drawn as a terminal writing itself
+  out: monospaced white on a dark panel, each line typed a
+  character at a time behind a `>` prompt, with a block cursor
+  that blinks once a line has finished, so a wait is worth
+  watching. Work that need not be serial is not: anything
   the launch does not depend on yet runs beside it. The same holds
   for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming

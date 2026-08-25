@@ -86,39 +86,58 @@ public struct LaunchProgressView: View {
     // MARK: Public
 
     public var body: some View {
-        TimelineView(.periodic(from: .now, by: Self.tickSeconds)) { context in
-            VStack(alignment: .leading, spacing: Self.spacing) {
-                HStack(spacing: Self.spacing) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(title)
-                    Text(elapsed(at: context.date))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
+        // Fast enough to type: each tick reveals a few more
+        // characters, so the log writes itself out the way a
+        // terminal does rather than appearing all at once.
+        TimelineView(.periodic(from: appearedAt, by: Self.frameSeconds)) { context in
+            let elapsed = max(0, context.date.timeIntervalSince(appearedAt))
+            VStack(alignment: .leading, spacing: Self.lineSpacing) {
+                header(at: elapsed)
                 ForEach(steps) { step in
-                    Text(Self.styled(step.text + waitingDots(on: step, at: context.date)))
-                        .font(.callout)
-                        .lineLimit(Self.stepLines)
+                    line(step, at: context.date)
                 }
             }
+            .font(.system(.callout, design: .monospaced))
             .frame(maxWidth: Self.blockWidth, alignment: .leading)
             // Pinned near the top so the log grows downwards: centred,
             // it shifted every line each time a step arrived.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding()
+            .padding(Self.padding)
             .padding(.top, Self.topInset)
+            .background(Self.screen, ignoresSafeAreaEdges: [])
         }
     }
 
     // MARK: Private
 
-    private static let tickSeconds = 1.0
-    private static let spacing: CGFloat = 6
-    private static let blockWidth: CGFloat = 560
+    /// The type-on rate: characters a second, and how often the
+    /// view redraws to show them.
+    private static let charactersPerSecond = 90.0
+    private static let framesPerSecond = 20.0
+    private static let frameSeconds = 1.0 / framesPerSecond
+
+    /// A dot a second on the newest step, cycling through three.
+    private static let dotSeconds = 1.0
+    private static let dotCycle = 3
+
+    private static let lineSpacing: CGFloat = 3
+    private static let blockWidth: CGFloat = 620
     private static let stepLines = 3
     private static let topInset: CGFloat = 40
-    private static let dotCycle = 3
+    private static let padding: CGFloat = 20
+    private static let cursorBlinkSeconds = 0.6
+    private static let blinkParity = 2
+    private static let promptOpacity = 0.55
+
+    /// The panel the log is written on: the app's own dark card,
+    /// under whichever appearance the window is in, so the pane
+    /// reads as a screen rather than as an empty view.
+    private static let screenOpacity = 0.85
+    private static let screen = Color.black.opacity(screenOpacity)
+
+    /// Written in the phosphor white the icon uses, with the prompt
+    /// and the clock dimmer than what they introduce.
+    private static let ink: Color = .white
 
     @State private var appearedAt: Date = .init()
 
@@ -130,6 +149,56 @@ public struct LaunchProgressView: View {
         progress?.steps
             ?? waitingOn.map { [LaunchProgress.Step(id: 0, text: "Waiting on " + $0, startedAt: appearedAt)] }
             ?? []
+    }
+
+    /// The banner: what is happening, and how long it has taken.
+    private func header(at elapsed: TimeInterval) -> some View {
+        HStack(spacing: 0) {
+            Text(Self.typed(title, secondsIn: elapsed))
+                .foregroundStyle(Self.ink)
+            cursor(at: elapsed, shown: Self.isTyping(title, secondsIn: elapsed))
+            Spacer(minLength: Self.lineSpacing)
+            Text(String(Int(elapsed)) + "s")
+                .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
+                .monospacedDigit()
+        }
+    }
+
+    /// One step, typed out from the moment it was reported, with the
+    /// cursor sitting at the end of the newest line.
+    private func line(_ step: LaunchProgress.Step, at now: Date) -> some View {
+        let since = max(0, now.timeIntervalSince(step.startedAt))
+        let text = step.text + waitingDots(on: step, at: now)
+        return HStack(spacing: 0) {
+            Text(verbatim: "> ")
+                .foregroundStyle(Self.ink.opacity(Self.promptOpacity))
+            Text(Self.styled(Self.typed(text, secondsIn: since)))
+                .foregroundStyle(Self.ink)
+                .lineLimit(Self.stepLines)
+            cursor(at: since, shown: step.id == steps.last?.id)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The block cursor: solid while characters are still arriving,
+    /// blinking once they have stopped, so a wait looks alive.
+    @ViewBuilder
+    private func cursor(at elapsed: TimeInterval, shown: Bool) -> some View {
+        if shown {
+            let blinking = Int(elapsed / Self.cursorBlinkSeconds).isMultiple(of: Self.blinkParity)
+            Text(verbatim: "\u{2588}")
+                .foregroundStyle(Self.ink)
+                .opacity(blinking ? 1 : 0)
+        }
+    }
+
+    /// As much of a line as has been typed by now.
+    private static func typed(_ text: String, secondsIn seconds: TimeInterval) -> String {
+        String(text.prefix(Int(seconds * charactersPerSecond)))
+    }
+
+    private static func isTyping(_ text: String, secondsIn seconds: TimeInterval) -> Bool {
+        typed(text, secondsIn: seconds).count < text.count
     }
 
     /// The step with its backtick spans marked as code; a span the
@@ -147,13 +216,7 @@ public struct LaunchProgressView: View {
             return ""
         }
 
-        let ticks = Int(max(0, now.timeIntervalSince(step.startedAt)) / Self.tickSeconds)
+        let ticks = Int(max(0, now.timeIntervalSince(step.startedAt)) / Self.dotSeconds)
         return String(repeating: ".", count: 1 + ticks % Self.dotCycle)
-    }
-
-    /// How long the wait has run, from its first step.
-    private func elapsed(at now: Date) -> String {
-        let since = progress?.steps.first?.startedAt ?? appearedAt
-        return String(Int(now.timeIntervalSince(since))) + "s"
     }
 }

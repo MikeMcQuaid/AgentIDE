@@ -11,6 +11,13 @@ struct HostDirectoryActions: View {
     let model: DashboardModel
 
     var body: some View {
+        Button("Fetch") { Task { await model.fetchHostDirectory(item) } }
+            .hoverHelp("git fetch all remotes of this directory")
+        Button("Checkout and pull default branch") {
+            Task { await model.checkoutAndPullDefault(item) }
+        }
+        .hoverHelp("Switch to the default branch and fast-forward it; a diverged branch stops instead")
+        Divider()
         Button("Copy path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(item.worktree.path, forType: .string)

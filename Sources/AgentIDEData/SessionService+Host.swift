@@ -47,6 +47,22 @@ public extension SessionService {
         )
     }
 
+    /// Checks out a repository's default branch where it is checked
+    /// out and brings it level with origin.
+    func checkoutAndPullDefault(worktreePath: String, repository: Repository) async throws {
+        guard let baseRef = await git.defaultBaseRef(of: repository) else {
+            throw CommandError(
+                command: "checkout default in " + worktreePath,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "No default branch"),
+            )
+        }
+
+        try await git.checkoutAndPullDefault(
+            worktreePath: worktreePath,
+            branch: Self.branchName(fromBaseRef: baseRef),
+        )
+    }
+
     // MARK: Internal
 
     /// Refuses a path outside the shared workspace. Every launch
