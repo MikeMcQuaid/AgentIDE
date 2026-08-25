@@ -209,7 +209,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   needs no checkout, so the strip retargets panes and an entry
   that is not checked out reviews read-only; restacking records
   every tip first and rebases with `--onto <parent> <recorded
-  tip>`, signed, skipping a branch already in place.
+  tip>`, signed, skipping a branch already in place. Only the last
+  step of submitting, `gh stack link`, belongs to GitHub's own
+  extension; it links pull requests this app opened and keeps no
+  local tracking, so nothing competes with the derivation.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

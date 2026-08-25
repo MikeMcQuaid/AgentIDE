@@ -173,6 +173,65 @@ public extension SessionService {
         return pushed
     }
 
+    /// Pushes the stack, opens a pull request for every branch
+    /// missing one, each against the branch below it, and then asks
+    /// GitHub to show them as a stack. The pull requests are this
+    /// app's own, with its templates, disclosures and titles: only
+    /// the last step needs anything GitHub-specific, and that step
+    /// keeps no local state of its own.
+    func submitStack(worktree: Worktree) async throws -> [String] {
+        let stack = await stack(for: worktree)
+        _ = try await pushStack(worktree: worktree)
+        var opened = [String]()
+        for branch in stack.branches {
+            let listed = try? await github.pullRequests(
+                repositoryPath: worktree.repositoryPath,
+                scope: .branch(branch),
+            )
+            guard listed?.contains(where: { $0.state == "OPEN" }) != true else {
+                continue
+            }
+
+            let parent = stack.parent(of: branch)
+            await progress("Opening a pull request for `" + branch + "`")
+            let described = await describe(branch: branch, parent: parent ?? stack.base, in: worktree)
+            let url = try await github.createPullRequest(
+                worktreePath: worktree.path,
+                title: described.title,
+                body: described.body,
+                head: pushDestination(worktree: worktree).head(branch: branch),
+                base: parent == stack.base ? nil : parent,
+            )
+            opened.append(url)
+        }
+        if stack.isStacked {
+            await progress("Linking the stack on GitHub")
+            try await github.linkStack(worktreePath: worktree.path)
+        }
+        return opened
+    }
+
+    /// A branch's own commits as a pull request: its first commit's
+    /// subject titles it, and the rest list the body, which is what
+    /// the single-branch form fills in from one commit today.
+    private func describe(
+        branch: String,
+        parent: String?,
+        in worktree: Worktree,
+    ) async -> (title: String, body: String) {
+        guard let parent else {
+            return (branch, "")
+        }
+
+        let subjects = await git.commitSubjects(from: parent, to: branch, worktreePath: worktree.path)
+        guard let title = subjects.last else {
+            return (branch, "")
+        }
+
+        let rest = subjects.dropLast().reversed().map { "- " + $0 }
+        return (title, rest.joined(separator: "\n"))
+    }
+
     /// Cuts a new branch on top of the checked-out one, in the same
     /// worktree, which is how a stack grows: the session carries on
     /// where it was, now building on what it just finished.

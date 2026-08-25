@@ -121,6 +121,17 @@ public extension GitClient {
         return Int((result?.standardOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
     }
 
+    /// One branch's own commit subjects, newest last, which is what
+    /// a pull request opened for it says.
+    func commitSubjects(from base: String, to branch: String, worktreePath: String) async -> [String] {
+        let result = try? await git(
+            ["log", "--reverse", "--format=%s", base + ".." + branch],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
+    }
+
     /// Where two refs last shared history, which is what says
     /// whether they belong to one stack: a fork point beyond the
     /// default branch means one was cut from the other.

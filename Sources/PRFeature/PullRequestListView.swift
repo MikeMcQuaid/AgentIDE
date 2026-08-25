@@ -116,6 +116,7 @@ struct PullRequestFooterView: View {
             if model.stack.isStacked {
                 restackButton
                 pushStackButton
+                submitStackButton
             } else {
                 rebaseButton
                 pushButton
@@ -209,6 +210,25 @@ struct PullRequestFooterView: View {
             model.canPushStack
                 ? "Push every branch of the stack, bottom first"
                 : "Every branch of the stack is already pushed",
+        )
+    }
+
+    /// Everything a stack needs to exist on GitHub, in one press:
+    /// push, open what is missing, and link them into a stack.
+    private var submitStackButton: some View {
+        BusyButton(
+            "Submit stack",
+            busy: "Submitting",
+            systemImage: "square.stack.3d.up.badge.automatic",
+            accessibilityLabel: "Submit stack",
+            disabled: model.canSubmitStack == false,
+        ) {
+            await model.submitStack()
+        }
+        .hoverHelp(
+            model.canSubmitStack
+                ? "Push the stack, open the pull requests it is missing, and stack them on GitHub"
+                : "Every branch of the stack already has a pull request",
         )
     }
 

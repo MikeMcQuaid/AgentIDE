@@ -784,8 +784,13 @@ shim rather than a protocol:
    branch's Rebase and Push sit, in the footer's left, and dim when they
    would do nothing: nothing out of place, or nothing the remote lacks. A
    stacked branch's pull request opens against the branch below it, which
-   is one `--base` flag and the whole of what makes GitHub show a stack;
-   no extension is involved. The sidebar says where a row stands in its
+   is one `--base` flag. Submit stack does the rest in one press: push
+   bottom up, open a pull request for every branch missing one against the
+   branch below it, titled and bodied from that branch's own commits, and
+   then `gh stack link`, GitHub's own extension, to show them as a stack.
+   Only that last step is GitHub-specific, and it links pull requests that
+   already exist without keeping local tracking of its own, so what a
+   stack is here stays derived from ancestry and nothing else. The sidebar says where a row stands in its
    stack (`2/3`) from the pull request chain it already caches, naming
    what it is built on and how much rides on it. A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes

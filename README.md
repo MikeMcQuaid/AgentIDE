@@ -150,7 +150,8 @@ before shipping.
   as `main ← lower ← upper` with each entry's own diff a click away, and
   the sidebar says where a branch stands in its stack, its pull request
   opens against the branch below it, and two buttons put the whole stack
-  back in order and push it bottom up,
+  back in order, push it bottom up and submit it, opening the pull
+  requests it lacks and stacking them on GitHub,
   signing every commit they replay and leaving alone any branch already
   where it belongs (so a stack is one checkout, one session and no
   bookkeeping, and a branch on its own looks exactly as it always did)

@@ -25,6 +25,7 @@ struct StackWork {
 
     var restack: (Worktree) async throws -> [String] = { _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
+    var submit: (Worktree) async throws -> [String] = { _ in [] }
     var pending: (Worktree) async -> Bool = { _ in false }
     var unpushed: (Worktree) async -> Bool = { _ in false }
 }
@@ -44,6 +45,9 @@ extension PullRequestsModel {
         }
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
+        }
+        stacking.submit = { worktree in
+            try await service.submitStack(worktree: worktree)
         }
         stacking.pending = { worktree in
             await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
@@ -78,6 +82,12 @@ extension PullRequestsModel {
         stacking.needsPush
     }
 
+    /// Whether any branch of the stack still wants a pull request.
+    var canSubmitStack: Bool {
+        let open = Set(summaries.filter { $0.state == "OPEN" }.map(\.headBranch))
+        return stacking.stack.branches.contains { open.contains($0) == false }
+    }
+
     /// Reads the stack the worktree's branch belongs to.
     func loadStack() async {
         guard let worktree = branchItem?.worktree else {
@@ -110,6 +120,27 @@ extension PullRequestsModel {
                     : "Rebased " + moved.joined(separator: ", ") + ".",
             )
             await loadStack()
+            await reload(keepingSelection: true)
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Pushes the stack, opens whatever pull requests are missing
+    /// against the branch below each, and asks GitHub to show them
+    /// as a stack.
+    func submitStack() async {
+        guard let worktree = branchItem?.worktree else {
+            return
+        }
+
+        do {
+            let opened = try await stacking.submit(worktree)
+            ErrorLog.shared.note(
+                opened.isEmpty
+                    ? "The stack is on GitHub already."
+                    : "Opened " + String(opened.count) + " pull requests and stacked them.",
+            )
             await reload(keepingSelection: true)
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

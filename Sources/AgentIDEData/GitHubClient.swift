@@ -141,6 +141,15 @@ public struct GitHubClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Asks GitHub to show a branch's open pull requests as a
+    /// stack. `gh stack link` links pull requests that already
+    /// exist and keeps no local tracking of its own, so the app's
+    /// own derivation stays the only thing that decides what a
+    /// stack is here.
+    public func linkStack(worktreePath: String) async throws {
+        try await gh(["stack", "link"], in: worktreePath)
+    }
+
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
