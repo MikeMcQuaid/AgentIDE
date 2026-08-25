@@ -70,6 +70,12 @@ struct WindowConfigurator: NSViewRepresentable {
         private static let minimumWidth: CGFloat = 900
         private static let minimumHeight: CGFloat = 600
 
+        /// How long the window gets to appear before a remembered
+        /// fullscreen is given up on: a fifth of a second at a time,
+        /// for a couple of seconds.
+        private static let readyAttempts = 20
+        private static let readySeconds = 0.2
+
         /// The margin left around a window filling its screen, and
         /// what centring divides by.
         private static let screenInset: CGFloat = 8
@@ -123,6 +129,7 @@ struct WindowConfigurator: NSViewRepresentable {
             let centre = NotificationCenter.default
             let names: [(Notification.Name, Any?)] = [
                 (NSApplication.didChangeScreenParametersNotification, nil),
+                (NSWindow.didBecomeMainNotification, window),
                 (NSWindow.didEnterFullScreenNotification, window),
                 (NSWindow.didExitFullScreenNotification, window),
                 (NSWindow.didChangeScreenNotification, window),
@@ -207,17 +214,33 @@ struct WindowConfigurator: NSViewRepresentable {
                     y: screen.visibleFrame.midY - window.frame.height / Self.halves,
                 ))
             }
-            guard defaults.bool(forKey: Self.fullScreenKey),
-                  window.styleMask.contains(.fullScreen) == false
-            else {
+            guard defaults.bool(forKey: Self.fullScreenKey) else {
                 return
             }
 
-            // Once the window has been placed: toggling one that is
-            // still being positioned leaves it in neither state.
-            DispatchQueue.main.async {
-                window.toggleFullScreen(nil)
+            enterFullScreen(window)
+        }
+
+        /// Goes fullscreen once the window is really on a screen.
+        /// AppKit drops the toggle on a window it has not shown yet,
+        /// which is exactly where this runs from, so it waits for
+        /// one rather than asking once and hoping.
+        private func enterFullScreen(_ window: NSWindow, attempts: Int = ConfiguringView.readyAttempts) {
+            guard window.styleMask.contains(.fullScreen) == false else {
+                return
             }
+            guard window.isVisible, window.screen != nil else {
+                guard attempts > 0 else {
+                    return
+                }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.readySeconds) { [weak self] in
+                    self?.enterFullScreen(window, attempts: attempts - 1)
+                }
+                return
+            }
+
+            window.toggleFullScreen(nil)
         }
 
         private func fit(displayGone: Bool) {
