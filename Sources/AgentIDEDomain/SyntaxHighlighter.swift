@@ -50,51 +50,44 @@ public enum SyntaxLanguage: Hashable, Sendable {
     case markdown
     case gitRebaseTodo
     case gitMessage
+    case cSource
+    case cpp
+    case golang
+    case rust
+    case java
+    case php
+    case html
+    case css
+    case regex
+    case erb
+
+    /// Keys, sections and comments: the shape `.gitconfig`, `.ini`,
+    /// `.toml`, `.env` and their kin share.
+    case config
+
+    /// Everything else that is text: strings, numbers and whatever
+    /// the first line suggests comments start with, which is enough
+    /// to stop an unknown file looking dead.
+    case generic
 
     // MARK: Public
 
     /// The language for a file path, judged by extension, or by whole
-    /// name for the files that have none; nil when unknown.
+    /// name for the files that have none. Anything else is
+    /// `generic`, which still finds its strings, numbers and
+    /// comments, so no file reads as dead text.
     public static func language(forPath path: String) -> Self? {
         let name = path.split(separator: "/").last.map(String.init) ?? path
         let extensionName = name.split(separator: ".").last.map(String.init) ?? ""
-        switch extensionName {
-        case "swift":
-            return .swift
-
-        case "gemspec",
-             "rake",
-             "rb":
-            return .ruby
-
-        case "bash",
-             "sh",
-             "zsh":
-            return .shell
-
-        case "py":
-            return .python
-
-        case "json":
-            return .json
-
-        case "cts",
-             "mts",
-             "ts",
-             "tsx":
-            return .typescript
-
-        case "yaml",
-             "yml":
-            return .yaml
-
-        case "markdown",
-             "md":
-            return .markdown
-
-        default:
-            return language(forName: name)
+        let known = extensionName.lowercased()
+        if let listed = byExtension[known] ?? language(forName: name) {
+            return listed
         }
+
+        // Everything else that is text gets the generic treatment;
+        // a picture or an archive gets nothing, since colouring
+        // bytes means nothing.
+        return binaryExtensions.contains(known) ? nil : .generic
     }
 
     /// The language of a file whose name carries it, git's own
@@ -109,7 +102,20 @@ public enum SyntaxLanguage: Hashable, Sendable {
         if ["COMMIT_EDITMSG", "MERGE_MSG", "NOTES_EDITMSG", "SQUASH_MSG", "TAG_EDITMSG"].contains(name) {
             return .gitMessage
         }
-        return name == "Gemfile" || name == "Rakefile" || name == "Brewfile" ? .ruby : nil
+        if ["Brewfile", "Gemfile", "Podfile", "Rakefile", "Thorfile", "Vagrantfile"].contains(name) {
+            return .ruby
+        }
+        if ["Containerfile"].contains(name) || name.hasPrefix("Containerfile.") {
+            return .dockerfile
+        }
+        if shellNames.contains(name) {
+            return .shell
+        }
+        if configNames.contains(name) {
+            return .config
+        }
+
+        return nil
     }
 
     // MARK: Internal
@@ -125,11 +131,19 @@ public enum SyntaxLanguage: Hashable, Sendable {
     /// The line-comment introducer, empty for languages without one.
     var commentPrefix: String {
         switch self {
-        case .swift,
+        case .cpp,
+             .cSource,
+             .css,
+             .golang,
+             .java,
+             .php,
+             .rust,
+             .swift,
              .typescript:
             "//"
 
-        case .dockerfile,
+        case .config,
+             .dockerfile,
              .gitMessage,
              .gitRebaseTodo,
              .python,
@@ -138,80 +152,13 @@ public enum SyntaxLanguage: Hashable, Sendable {
              .yaml:
             "#"
 
-        case .json,
-             .markdown:
+        case .erb,
+             .generic,
+             .html,
+             .json,
+             .markdown,
+             .regex:
             ""
-        }
-    }
-
-    /// The language's keywords.
-    var keywords: Set<String> {
-        switch self {
-        case .swift:
-            [
-                "func", "let", "var", "if", "else", "guard", "return", "struct", "class", "enum",
-                "protocol", "extension", "import", "public", "private", "internal", "static",
-                "case", "switch", "for", "while", "in", "throws", "throw", "try", "await",
-                "async", "init", "deinit", "self", "nil", "true", "false", "where", "defer",
-                "do", "catch", "some", "any", "actor", "mutating", "final", "override", "break",
-                "continue", "default", "typealias", "associatedtype", "package",
-            ]
-
-        case .ruby:
-            [
-                "def", "end", "if", "elsif", "else", "unless", "case", "when", "while", "until",
-                "for", "in", "do", "return", "class", "module", "self", "nil", "true", "false",
-                "and", "or", "not", "then", "yield", "begin", "rescue", "ensure", "raise",
-                "require", "require_relative", "attr_reader", "attr_writer", "attr_accessor",
-                "private", "public", "protected", "new", "lambda", "proc", "puts", "block_given?",
-            ]
-
-        case .shell:
-            [
-                "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
-                "case", "esac", "function", "return", "exit", "local", "export", "readonly",
-                "shift", "source", "set", "unset", "trap", "echo", "printf", "read", "eval",
-                "exec", "true", "false", "in",
-            ]
-
-        case .python:
-            [
-                "def", "class", "if", "elif", "else", "for", "while", "in", "return", "import",
-                "from", "as", "with", "try", "except", "finally", "raise", "pass", "break",
-                "continue", "lambda", "yield", "global", "nonlocal", "assert", "del", "not",
-                "and", "or", "is", "None", "True", "False", "async", "await", "match", "case",
-            ]
-
-        case .json:
-            ["true", "false", "null"]
-
-        case .typescript:
-            [
-                "const", "let", "var", "function", "return", "if", "else", "for", "while", "do",
-                "switch", "case", "default", "break", "continue", "class", "interface", "type",
-                "enum", "extends", "implements", "import", "export", "from", "as", "new", "this",
-                "null", "undefined", "true", "false", "async", "await", "try", "catch", "finally",
-                "throw", "typeof", "instanceof", "in", "of", "readonly", "public", "private",
-                "protected", "static", "abstract", "namespace", "declare", "keyof", "never",
-                "unknown", "any", "void", "string", "number", "boolean",
-            ]
-
-        case .dockerfile:
-            [
-                "FROM", "RUN", "CMD", "LABEL", "EXPOSE", "ENV", "ADD", "COPY", "ENTRYPOINT",
-                "VOLUME", "USER", "WORKDIR", "ARG", "ONBUILD", "STOPSIGNAL", "HEALTHCHECK",
-                "SHELL", "AS",
-            ]
-
-        case .yaml:
-            ["true", "false", "null", "yes", "no", "on", "off"]
-
-        case .gitRebaseTodo:
-            Self.rebaseCommands
-
-        case .gitMessage,
-             .markdown:
-            []
         }
     }
 }
@@ -240,12 +187,34 @@ public enum SyntaxHighlighter {
         case .gitMessage:
             messageTokens(line: line)
 
+        case .generic:
+            genericTokens(line: line)
+
         default:
             generalTokens(line: line, language: language)
         }
     }
 
     // MARK: Internal
+
+    /// What a comment starts with, across the formats that have no
+    /// grammar here: shells and configs, C-likes, SQL and Lua, Lisp
+    /// and ini, TeX and Erlang.
+    static let genericComments = ["#", "//", "--", ";", "%"]
+
+    /// A file of a kind the app has no grammar or word list for:
+    /// its strings and numbers still colour, and a line opening with
+    /// one of the introducers every text format borrows reads as a
+    /// comment. Guessing per line rather than per file keeps this
+    /// wrong in only the harmless direction.
+    static func genericTokens(line: String) -> [SyntaxToken] {
+        let opener = line.trimmingCharacters(in: .whitespaces)
+        if genericComments.contains(where: { opener.hasPrefix($0) }) {
+            return [SyntaxToken(kind: .comment, text: line)]
+        }
+
+        return generalTokens(line: line, language: .generic)
+    }
 
     /// Strings, line comments, numbers and keywords, wherever they
     /// fall on the line.

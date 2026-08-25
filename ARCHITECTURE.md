@@ -572,9 +572,15 @@ Sendable` and `nonisolated(unsafe)` are banned.
 2. Generated files are hidden by default via
    `git check-attr linguist-generated` plus heuristics (lockfiles and
    per-repository generated globs), one click to reveal.
-3. Rendering highlights with tree-sitter grammars (Swift, Ruby and Bash
-   today; JavaScript, TypeScript, Markdown, JSON and YAML as the review
-   slice deepens, alongside the move to STTextView), with line numbers
+3. Rendering highlights with tree-sitter grammars (Swift, Ruby, Bash,
+   Python, JSON, TypeScript and JavaScript, C, C++, Go, Rust, Java, PHP,
+   HTML, CSS, regular expressions and ERB), a word list for the formats
+   worth no grammar (YAML, Markdown, Dockerfile, git's own editable files
+   and a keys-and-sections mode covering `.gitconfig`, `.ini`, `.toml`,
+   `.env` and their kin), and for anything else that is text a generic
+   pass finding strings, numbers and whichever comment introducer the
+   line opens with, so no file reads as dead; pictures and archives are
+   left alone. With line numbers
    and visible whitespace in both the diff (tabs and trailing whitespace
    carry a background tint, so copied diff text stays character-exact)
    and the editor (substitute glyphs). Diff lines wrap to the pane's
@@ -1058,7 +1064,7 @@ official language or project organisation.
 | GRDB | metadata store | planned; a JSON file serves today |
 | STTextView | diff and editor text surface | TextKit 2; planned |
 | swift-tree-sitter | syntax highlighting runtime | official-organisation exception |
-| tree-sitter-* grammars | syntax highlighting | official organisation except Swift, as below |
+| tree-sitter-* grammars (ruby, bash, python, json, typescript, c, cpp, go, rust, java, php, html, css, regex, embedded-template) | syntax highlighting | official organisation, each pinned to the latest ABI 14 release the runtime accepts, except Swift, as below |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 

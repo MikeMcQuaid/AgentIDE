@@ -111,7 +111,10 @@ before shipping.
 ### 🔍 Review
 
 - **Presents** the agent's conversation beside a pull-request-style review of its
-  diff, syntax highlighted with per-file and total diffstats, generated files
+  diff, syntax highlighted through tree-sitter for sixteen languages and a
+  word list for the rest, with keys-and-sections files (`.gitconfig`,
+  `.ini`, `.toml`, `.env`) understood as such and anything else still
+  finding its strings, numbers and comments, with per-file and total diffstats, generated files
   hidden, a whitespace-only-change toggle and the open pull request's
   conversations inline under their files, resolvable in place (so you review
   what matters the way you would on GitHub)

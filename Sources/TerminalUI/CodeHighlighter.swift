@@ -2,9 +2,19 @@ import AgentIDEDomain
 import Foundation
 import SwiftTreeSitter
 import TreeSitterBash
+import TreeSitterC
+import TreeSitterCPP
+import TreeSitterCSS
+import TreeSitterEmbeddedTemplate
+import TreeSitterGo
+import TreeSitterHTML
+import TreeSitterJava
 import TreeSitterJSON
+import TreeSitterPHP
 import TreeSitterPython
+import TreeSitterRegex
 import TreeSitterRuby
+import TreeSitterRust
 import TreeSitterSwift
 import TreeSitterTypeScript
 
@@ -125,6 +135,16 @@ public enum CodeHighlighter {
         loaded[.python] = configuration(tree_sitter_python(), name: "Python")
         loaded[.json] = configuration(tree_sitter_json(), name: "JSON")
         loaded[.typescript] = configuration(tree_sitter_typescript(), name: "TypeScript")
+        loaded[.cSource] = configuration(tree_sitter_c(), name: "C")
+        loaded[.cpp] = configuration(tree_sitter_cpp(), name: "CPP")
+        loaded[.golang] = configuration(tree_sitter_go(), name: "Go")
+        loaded[.rust] = configuration(tree_sitter_rust(), name: "Rust")
+        loaded[.java] = configuration(tree_sitter_java(), name: "Java")
+        loaded[.php] = configuration(tree_sitter_php(), name: "PHP")
+        loaded[.html] = configuration(tree_sitter_html(), name: "HTML")
+        loaded[.css] = configuration(tree_sitter_css(), name: "CSS")
+        loaded[.regex] = configuration(tree_sitter_regex(), name: "Regex")
+        loaded[.erb] = configuration(tree_sitter_embedded_template(), name: "EmbeddedTemplate")
         return loaded
     }()
 

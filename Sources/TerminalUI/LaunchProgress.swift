@@ -112,7 +112,7 @@ public struct LaunchProgressView: View {
 
     /// The type-on rate: characters a second, and how often the
     /// view redraws to show them.
-    private static let charactersPerSecond = 90.0
+    private static let charactersPerSecond = 10.0
     private static let framesPerSecond = 20.0
     private static let frameSeconds = 1.0 / framesPerSecond
 

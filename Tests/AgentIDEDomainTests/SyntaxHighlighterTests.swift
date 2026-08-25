@@ -12,7 +12,16 @@ struct SyntaxHighlighterTests {
         #expect(SyntaxLanguage.language(forPath: ".github/workflows/tests.yml") == .yaml)
         #expect(SyntaxLanguage.language(forPath: "config.yaml") == .yaml)
         #expect(SyntaxLanguage.language(forPath: "README.md") == .markdown)
+        // A picture gets nothing; anything else that is text gets
+        // the generic treatment rather than reading as dead.
         #expect(SyntaxLanguage.language(forPath: "binary.png") == nil)
+        #expect(SyntaxLanguage.language(forPath: "schema.sql") == .generic)
+        #expect(SyntaxLanguage.language(forPath: "main.go") == .golang)
+        #expect(SyntaxLanguage.language(forPath: "app/main.c") == .cSource)
+        #expect(SyntaxLanguage.language(forPath: ".gitconfig") == .config)
+        #expect(SyntaxLanguage.language(forPath: "~/.zshrc") == .shell)
+        #expect(SyntaxLanguage.language(forPath: "index.jsx") == .typescript)
+        #expect(SyntaxLanguage.language(forPath: "Podfile") == .ruby)
         // The files commands hand to an editor have no extension.
         let rebase = ".git/worktrees/agent/rebase-merge/git-rebase-todo"
         #expect(SyntaxLanguage.language(forPath: rebase) == .gitRebaseTodo)
