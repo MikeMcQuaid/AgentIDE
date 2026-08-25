@@ -39,8 +39,7 @@ struct AgentIDEApp: App {
             RootView(dependencies: dependencies)
                 .environment(\.openURL, LinkOpener.action)
         }
-        // The saved frame wins; this is what a first run opens at.
-        .defaultSize(width: Self.defaultWidth, height: Self.defaultHeight)
+
         // Content over chrome: no title bar, compact toolbar.
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)

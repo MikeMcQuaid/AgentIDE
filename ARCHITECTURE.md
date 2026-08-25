@@ -863,7 +863,15 @@ shim rather than a protocol:
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
-4. The window opens on what the last run knew. The sidebar, its
+4. The window opens where and how it was left: the autosaved frame is
+   applied rather than merely named, on the display it was closed on
+   (remembered by that display's own identity, since numbers move), and
+   fullscreen again when it was closed fullscreen, toggled only once the
+   frame is placed. With nothing saved, or a saved frame too small for
+   three panes, it fills whichever screen it lands on less a margin,
+   rather than a fixed size that is too big for a laptop or too small for
+   a desk.
+5. The window opens on what the last run knew. The sidebar, its
    repositories, their worktrees, each row's branch, uncommitted state and
    commit counts, the default branch and the selected worktree all come
    from the metadata store before anything is read, so the frame is
@@ -873,7 +881,7 @@ shim rather than a protocol:
    the review, editor and pull request surfaces stay mounted while the
    utility tabs switch, so returning to one costs nothing. Only what herdr owns arrives late, and a row the cache says had an
    agent running waits for herdr rather than claiming its session ended.
-5. Directories of your own are listed under a repository and marked as
+6. Directories of your own are listed under a repository and marked as
    such (`Worktree.isHostDirectory`), which is what the sidebar row, the
    pane and the menus all branch on: a laptop icon with the path where a
    branch would be and the branch below it, in the same face and size as
@@ -890,7 +898,7 @@ shim rather than a protocol:
    through one function, which refuses a path outside the shared
    workspace: the sandbox user can often read such a directory, and must
    never be given a reason to write to one.
-6. The repository page, the main checkout's permanent sidebar entry, lists
+7. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
    deleted worktrees alike, resumes any of them into a fresh worktree and
    starts a fresh session on the default branch in the checkout itself,

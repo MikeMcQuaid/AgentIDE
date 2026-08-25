@@ -64,14 +64,20 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private static let autosaveName = "AgentIDEMainWindow"
 
-        /// What the window opens at with nothing saved, and the size
-        /// below which a saved frame is treated as junk: three panes
-        /// need room, and a window that opens tiny is a bug rather
-        /// than a preference.
-        private static let defaultWidth: CGFloat = 1_600
-        private static let defaultHeight: CGFloat = 1_000
+        /// The size below which a saved frame is treated as junk:
+        /// three panes need room, and a window that opens tiny is a
+        /// bug rather than a preference.
         private static let minimumWidth: CGFloat = 900
         private static let minimumHeight: CGFloat = 600
+
+        /// The margin left around a window filling its screen, and
+        /// what centring divides by.
+        private static let screenInset: CGFloat = 8
+        private static let halves: CGFloat = 2
+
+        /// Where the window was left, and how.
+        private static let displayKey = "mainWindowDisplay"
+        private static let fullScreenKey = "mainWindowFullScreen"
 
         /// Long enough for the fullscreen animation to finish before
         /// the frame is measured; the notification arrives while the
@@ -164,8 +170,53 @@ struct WindowConfigurator: NSViewRepresentable {
         }
 
         private func rememberDisplay() {
-            if let current = window?.screen?.displayID {
-                lastDisplayID = current
+            guard let current = window?.screen?.displayID else {
+                return
+            }
+
+            lastDisplayID = current
+            // Where and how the window was left, for the next run:
+            // its own display, and whether it was filling it.
+            let defaults = UserDefaults.standard
+            defaults.set(NSScreen.uuid(of: current), forKey: Self.displayKey)
+            defaults.set(window?.styleMask.contains(.fullScreen) == true, forKey: Self.fullScreenKey)
+        }
+
+        /// Fills whichever screen the window is on, less a margin: a
+        /// fixed default is either too big for a laptop or too small
+        /// for a desk.
+        private func fill(_ window: NSWindow) {
+            guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
+                return
+            }
+
+            window.setFrame(visible.insetBy(dx: Self.screenInset, dy: Self.screenInset), display: true)
+        }
+
+        /// Puts the window back where it was left: the same display,
+        /// and fullscreen again when that is how it was closed. The
+        /// frame is placed before any toggle, since a window in a
+        /// fullscreen space must never be moved.
+        private func restorePlacement(of window: NSWindow) {
+            let defaults = UserDefaults.standard
+            if let saved = defaults.string(forKey: Self.displayKey),
+               let screen = NSScreen.screens.first(where: { $0.displayID.map(NSScreen.uuid(of:)) == saved }),
+               screen.frame.contains(CGPoint(x: window.frame.midX, y: window.frame.midY)) == false {
+                window.setFrameOrigin(CGPoint(
+                    x: screen.visibleFrame.midX - window.frame.width / Self.halves,
+                    y: screen.visibleFrame.midY - window.frame.height / Self.halves,
+                ))
+            }
+            guard defaults.bool(forKey: Self.fullScreenKey),
+                  window.styleMask.contains(.fullScreen) == false
+            else {
+                return
+            }
+
+            // Once the window has been placed: toggling one that is
+            // still being positioned leaves it in neither state.
+            DispatchQueue.main.async {
+                window.toggleFullScreen(nil)
             }
         }
 
@@ -255,11 +306,14 @@ struct WindowConfigurator: NSViewRepresentable {
             window.setFrame(frame, display: true, animate: false)
         }
 
-        /// The frame autosave restores position and size. Fullscreen
-        /// deliberately does not restore: macOS reopens fullscreen
-        /// spaces on the display it chooses (often the one with the
-        /// Dock), so the window restores as a plain frame the user
-        /// can drag to a monitor before going fullscreen.
+        /// Puts the window back as it was left: the autosaved frame
+        /// applied rather than merely named, on the display it was
+        /// closed on, fullscreen again when it was closed that way,
+        /// and filling whichever screen it lands on when there is
+        /// nothing saved or what was saved is too small for three
+        /// panes. macOS reopens a fullscreen space on the display it
+        /// chooses, which is why the display is remembered by its
+        /// own identity and the window placed before any toggle.
         private func restoreFrame(of window: NSWindow) {
             guard window.frameAutosaveName != Self.autosaveName else {
                 return
@@ -274,14 +328,14 @@ struct WindowConfigurator: NSViewRepresentable {
             if window.setFrameUsingName(Self.autosaveName) {
                 let minimum = NSSize(width: Self.minimumWidth, height: Self.minimumHeight)
                 if window.frame.width < minimum.width || window.frame.height < minimum.height {
-                    window.setContentSize(NSSize(width: Self.defaultWidth, height: Self.defaultHeight))
-                    window.center()
+                    fill(window)
                 }
+                restorePlacement(of: window)
                 return
             }
 
-            window.setContentSize(NSSize(width: Self.defaultWidth, height: Self.defaultHeight))
-            window.center()
+            fill(window)
+            restorePlacement(of: window)
         }
     }
 
@@ -297,6 +351,16 @@ struct WindowConfigurator: NSViewRepresentable {
 // MARK: - NSScreen display identity
 
 private extension NSScreen {
+    /// The display's own identity, which outlives its number across
+    /// reboots and rearrangements.
+    static func uuid(of display: CGDirectDisplayID) -> String? {
+        guard let identity = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else {
+            return nil
+        }
+
+        return CFUUIDCreateString(nil, identity) as String?
+    }
+
     /// The display this screen renders on, which outlives the
     /// `NSScreen` object a reconfiguration replaces.
     var displayID: CGDirectDisplayID? {
