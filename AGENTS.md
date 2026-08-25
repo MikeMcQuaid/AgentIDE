@@ -85,15 +85,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   it grows downwards. Prefer showing the last known state instantly
   over showing a wait at all: the sidebar, the selection and every
   pane that can be cached paint before anything is read, and only
-  what herdr owns is allowed to arrive late. It is drawn as a terminal writing itself
-  out: monospaced white on a dark panel under faint scanlines,
-  each line typed at twenty characters a second behind a `>`
-  prompt, a line finishing the moment the next one starts,
-  finished lines ending `... OK`, a block cursor blinking once a
-  line is done and a frame's dimming as each arrives. The
-  version banner belongs to the app's first wait alone. Work that
-  need not be serial is not: anything the launch does not depend
-  on yet runs beside it. The same holds for every pane whose data
+  what herdr owns is allowed to arrive late. Work that need not be
+  serial is not: anything the launch does not depend on yet runs
+  beside it. The same holds for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming
   what it waits on until the first result lands, then snaps to the
   finished UI. An empty state ("Nothing running", "No changes")
@@ -193,8 +187,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   event monitor, and panes stack: hidden shells and other
   worktrees' terminals hold the same frame. A pane takes a wheel
   event only when the window's hit test lands on it and no other
-  pane has claimed that event, or one scroll asks herdr for two or
-  three repaints and the same lines arrive again.
+  pane has claimed that event.
+- An agent pane keeps no scrollback of its own, through
+  `changeScrollback(nil)`: herdr owns the history and answers a
+  scroll with a full repaint, so a local history filled up with
+  the screens those repaints replaced and the same output showed
+  two and three times over.
 - `agentide <file>` can be handed anything readable: a file
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file

@@ -106,6 +106,16 @@ final class PaneTerminalView: LocalProcessTerminalView {
         return nil
     }
 
+    /// Gives up the local scrollback: herdr owns an agent pane's
+    /// history and repaints the whole screen for every scroll, so
+    /// each repaint pushed the screen it replaced into SwiftTerm's
+    /// own history and the same output turned up two and three
+    /// times over. Nothing is lost, since scrolling asks herdr,
+    /// which has the real thing.
+    func dropLocalScrollback() {
+        getTerminal().changeScrollback(nil)
+    }
+
     /// Hides the scroll indicator. An agent pane's scrollback lives
     /// in herdr, which owns the scrolling, so the knob never moves
     /// and only takes up room; SwiftTerm gives the reserved width
