@@ -184,6 +184,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   new display and is drawing nothing on the old one. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
+- Every mounted terminal pane watches the wheel through its own
+  event monitor, and panes stack: hidden shells and other
+  worktrees' terminals hold the same frame. A pane takes a wheel
+  event only when the window's hit test lands on it and no other
+  pane has claimed that event, or one scroll asks herdr for two or
+  three repaints and the same lines arrive again.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

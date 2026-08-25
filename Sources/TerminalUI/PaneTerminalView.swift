@@ -76,8 +76,16 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// deltas accumulate against the cell height, while classic
     /// wheel notches already arrive in line units.
     func routeWheel(_ event: NSEvent) -> NSEvent? {
+        // Every mounted pane watches the wheel, and panes stack: a
+        // hidden shell or another worktree's terminal can hold the
+        // same frame as the one being scrolled. Only the view the
+        // window would actually hit takes the event, and only once,
+        // however many monitors see it: scrolling twice asked herdr
+        // for two repaints, which arrived as the same lines twice.
         guard let onScroll, event.window === window,
-              bounds.contains(convert(event.locationInWindow, from: nil))
+              let hit = window?.contentView?.hitTest(event.locationInWindow),
+              hit === self || hit.isDescendant(of: self),
+              Self.claim(event)
         else {
             return event
         }
@@ -110,8 +118,23 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
     // MARK: Private
 
+    /// The last wheel event any pane handled, so a second monitor
+    /// seeing the same event does nothing with it.
+    private static var lastWheel: (timestamp: TimeInterval, window: Int)?
+
     /// The wheel's fractional line carry between events.
     private var wheelRemainder: CGFloat = 0
+
+    /// Whether this pane is the first to take the event.
+    private static func claim(_ event: NSEvent) -> Bool {
+        let identity = (timestamp: event.timestamp, window: event.windowNumber)
+        guard lastWheel?.timestamp != identity.timestamp || lastWheel?.window != identity.window else {
+            return false
+        }
+
+        lastWheel = identity
+        return true
+    }
 }
 
 // MARK: - BlockSelector
