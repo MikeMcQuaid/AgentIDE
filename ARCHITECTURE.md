@@ -857,7 +857,17 @@ shim rather than a protocol:
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
-4. The repository page, the main checkout's permanent sidebar entry, lists
+4. Directories of your own are listed under a repository and marked as
+   such (`Worktree.isHostDirectory`), which is what the sidebar row, the
+   pane and the menus all branch on: a laptop icon and an "on your Mac"
+   chip, a plain host shell in place of the agent pane, no session strip
+   controls, and a menu offering only Copy path and Forget, which touches
+   no file. They are kept in the metadata store per repository, since they
+   are configuration rather than anything derivable. Every launch passes
+   through one function, which refuses a path outside the shared
+   workspace: the sandbox user can often read such a directory, and must
+   never be given a reason to write to one.
+5. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
    deleted worktrees alike, resumes any of them into a fresh worktree and
    starts a fresh session on the default branch in the checkout itself,

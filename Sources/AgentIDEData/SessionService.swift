@@ -98,7 +98,11 @@ public struct SessionService: Sendable {
             }
             // The main checkout stays pinned first; worktrees order by
             // recency of their own work.
-            let sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
+            var sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
+            // Directories of your own come last: they have no
+            // activity to order by and are not what the sidebar is
+            // mostly about.
+            sorted += await hostItems(of: repository, metadata: metadata)
             groups.append(RepositoryGroup(
                 repository: named,
                 items: sorted,
@@ -227,6 +231,8 @@ public struct SessionService: Sendable {
         slot: WorktreeSlot,
         probed version: String? = nil,
     ) async throws -> String {
+        try requireSandboxWorkspace(slot.path)
+
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
         await progress("Writing the prompt file")

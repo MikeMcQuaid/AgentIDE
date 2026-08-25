@@ -16,32 +16,8 @@ struct WorktreeRowView: View {
             leadingIcon
                 .padding(.top, Self.iconDrop)
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: Self.spacing) {
-                    Text(item.worktree.branch).lineLimit(1)
-                    // The dot sits at the row's edge, where a column
-                    // of them reads at a glance, rather than tight
-                    // against branch names of every length.
-                    Spacer(minLength: Self.spacing)
-                    if item.hasUnread {
-                        Circle()
-                            .fill(.tint)
-                            .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
-                            .hoverHelp("Unseen agent output")
-                    }
-                }
-                HStack(spacing: Self.spacing) {
-                    if let agent = item.session?.agent {
-                        Text(agent.displayName)
-                    }
-                    pullRequestBadge
-                    // The counts come after what the pull request is
-                    // doing: its state is the news, they are detail.
-                    Text(counts)
-                        .hoverHelp(countsExplanation)
-                    Spacer(minLength: 0)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                titleLine
+                detailLine
             }
         }
     }
@@ -50,6 +26,7 @@ struct WorktreeRowView: View {
 
     private static let unreadDotSize: CGFloat = 6
     private static let spacing: CGFloat = 4
+    private static let chipPadding: CGFloat = 5
     private static let badgeSpacing: CGFloat = 2
     /// Sits the icon on the branch line's baseline rather than the
     /// row's very top.
@@ -95,8 +72,71 @@ struct WorktreeRowView: View {
     /// else leads with what is running, or with the branch itself,
     /// green on a repository's own checkout since that branch is
     /// where merged work lands rather than something to open.
+    /// A directory of your own is named by where it is, since its
+    /// branch is not why it is listed.
+    private var title: String {
+        guard item.worktree.isHostDirectory else {
+            return item.worktree.branch
+        }
+
+        return item.worktree.path.replacing(
+            NSHomeDirectory() + "/",
+            with: "~/",
+        )
+    }
+
+    /// The name of the thing, with the unread dot at the row's
+    /// edge, where a column of them reads at a glance rather than
+    /// tight against branch names of every length.
+    private var titleLine: some View {
+        HStack(spacing: Self.spacing) {
+            Text(title)
+                .lineLimit(1)
+                .font(item.worktree.isHostDirectory ? .body.monospaced() : .body)
+            Spacer(minLength: Self.spacing)
+            if item.hasUnread {
+                Circle()
+                    .fill(.tint)
+                    .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
+                    .hoverHelp("Unseen agent output")
+            }
+        }
+    }
+
+    /// What it is doing, under its name. The counts come after what
+    /// the pull request is doing: its state is the news, they are
+    /// detail.
+    private var detailLine: some View {
+        HStack(spacing: Self.spacing) {
+            if item.worktree.isHostDirectory {
+                Text("on your Mac")
+                    .padding(.horizontal, Self.chipPadding)
+                    .background(.quaternary, in: Capsule())
+                    .hoverHelp("A directory of your own: a shell, an editor and a diff, and no agent")
+                if item.worktree.branch.isEmpty == false {
+                    Text(item.worktree.branch)
+                }
+            }
+            if let agent = item.session?.agent {
+                Text(agent.displayName)
+            }
+            pullRequestBadge
+            Text(counts)
+                .hoverHelp(countsExplanation)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
     @ViewBuilder private var leadingIcon: some View {
-        if let pullRequest {
+        if item.worktree.isHostDirectory {
+            Image(systemName: "laptopcomputer")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+                .accessibilityHidden(true)
+                .hoverHelp("On your Mac, outside the sandbox")
+        } else if let pullRequest {
             Octicon(
                 ChecksStyle.stateOcticonName(
                     state: pullRequest.state,

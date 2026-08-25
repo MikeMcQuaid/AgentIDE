@@ -14,7 +14,16 @@ extension RootView {
     /// a worktree with nothing to list offers the new session form.
     @ViewBuilder
     func primary(for item: WorktreeItem) -> some View {
-        if item.isPlaceholder {
+        if item.worktree.isHostDirectory {
+            // Its own shell, keyed apart from the utility pane's, so
+            // the two are two shells rather than one fought over.
+            shellTerminal(
+                at: item.worktree.path,
+                onExit: { closeShell(at: item.worktree.path) },
+                isActive: isCovered == false,
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
                 "Creating the worktree and starting the agent…",

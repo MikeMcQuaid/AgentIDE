@@ -10,7 +10,7 @@ struct PullRequestDisclosureTests {
 
     @Test
     func `the disclosure goes in the template's own section, once`() {
-        let sentence = "Claude Code with Opus-5 at Extra High effort, with local review and testing."
+        let sentence = "Claude Code with opus-5 at Extra High effort, with local review and testing."
         let ticked = PullRequestsModel.disclosing(in: Self.homebrewTemplate, sentence: sentence)
         let template = try? #require(ticked)
         #expect(template?.contains("- [x] I did not use AI/LLM") == true)
@@ -43,7 +43,10 @@ struct PullRequestDisclosureTests {
         #expect(PullRequestsModel.effort(inArguments: "") == nil)
         #expect(AgentOptionName.display("xhigh") == "Extra High")
         #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6-sol")
-        #expect(AgentOptionName.display("opus-5") == "Opus-5")
+        // Exactly what the picker shows, which for a name carrying
+        // digits or dashes is the name itself.
+        #expect(AgentOptionName.display("opus-5") == "opus-5")
+        #expect(AgentOptionName.display("minimal") == "Minimal")
     }
 
     // MARK: Private

@@ -190,12 +190,12 @@ extension DashboardModel {
         // the user to clean up or delete by hand.
         switch await cleanUp(item: item) {
         case .dirty:
-            ErrorLog.shared.report(
+            ErrorLog.shared.note(
                 "\(item.worktree.branch) merged but has uncommitted changes; left in place for you to review",
             )
 
         case .unmerged:
-            ErrorLog.shared.report(
+            ErrorLog.shared.note(
                 "\(item.worktree.branch) merged but has commits not on the base branch; left in place",
             )
 

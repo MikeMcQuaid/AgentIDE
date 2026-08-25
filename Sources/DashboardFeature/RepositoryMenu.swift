@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -15,6 +16,13 @@ struct RepositoryMenu: ViewModifier {
             .contextMenu {
                 Button("Refresh") { Task { await model.refreshRepository(path: group.repository.path) } }
                     .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
+                Divider()
+                Button("Add local directory…", systemImage: "laptopcomputer") { addDirectory() }
+                    .hoverHelp(
+                        "List a directory of your own here for a shell, an editor and a diff; "
+                            + "no agent ever runs in it",
+                    )
+                Divider()
                 Button("Delete repository", role: .destructive) { isConfirming = true }
                     .disabled(group.deletionBlocker != nil)
                     .hoverHelp(
@@ -45,4 +53,20 @@ struct RepositoryMenu: ViewModifier {
     /// confirmation; owned here because nothing outside the menu
     /// reads it.
     @State private var isConfirming = false
+
+    /// Asks for the directory, then lists it under this
+    /// repository. Nothing is copied or changed on disk.
+    private func addDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Add"
+        panel.message = "A directory of your own to list under " + group.repository.name
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        Task { await model.addHostDirectory(url.path, to: group.repository) }
+    }
 }

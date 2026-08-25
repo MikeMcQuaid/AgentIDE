@@ -98,9 +98,16 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String].self, forKey: .intentionallyClosed) ?? []
         pullRequestDrafts = try container
             .decodeIfPresent([String: PullRequestFormDraft].self, forKey: .pullRequestDrafts) ?? [:]
+        hostDirectories = try container
+            .decodeIfPresent([String: [String]].self, forKey: .hostDirectories) ?? [:]
     }
 
     // MARK: Public
+
+    /// Directories of your own listed under a repository: paths on
+    /// the Mac that get a shell, an editor and a diff but never an
+    /// agent, keyed by the repository they are listed under.
+    public var hostDirectories: [String: [String]] = [:]
 
     /// When each session was last seen by the user, for unread state.
     public var lastSeen: [String: Date] = [:]

@@ -226,7 +226,18 @@ extension RootView {
     /// this OS.
     @ViewBuilder
     func sessionStrip(for item: WorktreeItem) -> some View {
-        if let session = item.session {
+        if item.worktree.isHostDirectory {
+            HStack(spacing: Self.stripSpacing) {
+                Label(item.worktree.path, systemImage: "laptopcomputer")
+                    .font(.callout)
+                    .padding(.horizontal, Self.tabHorizontalPadding)
+                    .padding(.vertical, Self.tabVerticalPadding)
+                Spacer(minLength: 0)
+            }
+            .padding(Self.stripSpacing)
+            .hoverHelp("A directory of your own: this shell runs as you, and no agent runs here")
+            Divider()
+        } else if let session = item.session {
             HStack(spacing: Self.stripSpacing) {
                 Text(sessionTitle(for: session))
                     .font(.callout)
@@ -360,7 +371,12 @@ extension RootView {
 
         case .pullRequests:
             PullRequestsView(
-                repository: Repository(name: target.worktree.repositoryName, path: target.worktree.repositoryPath),
+                repository: Repository(
+                    name: target.worktree.repositoryName,
+                    path: target.worktree.isHostDirectory
+                        ? target.worktree.path
+                        : target.worktree.repositoryPath,
+                ),
                 items: repositoryItems(for: item),
                 github: dependencies.github,
                 service: dependencies.service,
