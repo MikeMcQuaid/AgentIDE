@@ -9,12 +9,24 @@ import TerminalUI
 /// stack itself, and the work it can be asked to do as a whole.
 struct StackWork {
     var stack: BranchStack = .init(base: nil, branches: [], checkedOut: "")
+
+    /// The entry the tab is listing, when it is not the branch the
+    /// worktree holds: reading up and down a stack must survive the
+    /// reload that asks git which branch is really checked out.
+    var selected: String?
+
+    /// What each of the stack's two actions would actually do, so
+    /// a button with nothing to do says so by dimming.
+    var needsRestack = false
+    var needsPush = false
     var fetch: (Worktree) async -> BranchStack = { worktree in
         BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)
     }
 
     var restack: (Worktree) async throws -> [String] = { _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
+    var pending: (Worktree) async -> Bool = { _ in false }
+    var unpushed: (Worktree) async -> Bool = { _ in false }
 }
 
 /// A stack of branches in one worktree, as the pull request tab sees
@@ -33,6 +45,12 @@ extension PullRequestsModel {
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
         }
+        stacking.pending = { worktree in
+            await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
+        }
+        stacking.unpushed = { worktree in
+            await service.branchesUnpushed(worktree: worktree).isEmpty == false
+        }
     }
 
     /// The stack itself, for the surfaces that show it.
@@ -44,8 +62,20 @@ extension PullRequestsModel {
     /// reading up and down a stack is navigation, and moving the
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
-        currentBranch = branch
-        Task { await reload() }
+        stacking.selected = branch == stacking.stack.checkedOut ? nil : branch
+        Task { await reload(keepingSelection: false) }
+    }
+
+    /// Whether restacking would move anything: a branch not already
+    /// sitting on the one below it.
+    var canRestack: Bool {
+        stacking.needsRestack
+    }
+
+    /// Whether any branch of the stack has commits the remote does
+    /// not carry.
+    var canPushStack: Bool {
+        stacking.needsPush
     }
 
     /// Reads the stack the worktree's branch belongs to.
@@ -55,6 +85,13 @@ extension PullRequestsModel {
         }
 
         stacking.stack = await stacking.fetch(worktree)
+        // A selection that no longer names a branch of this stack
+        // goes, so the tab returns to the worktree's own branch.
+        if let selected = stacking.selected, stacking.stack.branches.contains(selected) == false {
+            stacking.selected = nil
+        }
+        stacking.needsRestack = await stacking.pending(worktree)
+        stacking.needsPush = await stacking.unpushed(worktree)
     }
 
     /// Puts every branch back on the one below it and says what

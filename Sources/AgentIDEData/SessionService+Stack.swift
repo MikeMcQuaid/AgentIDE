@@ -58,6 +58,46 @@ public extension SessionService {
         )
     }
 
+    /// The branches a restack would actually move: those not
+    /// already sitting on the one below them. Empty means the stack
+    /// is in order and the button has nothing to do.
+    func branchesOutOfPlace(worktree: Worktree) async -> [String] {
+        let path = worktree.path
+        let stack = await stack(for: worktree)
+        guard let base = stack.base else {
+            return []
+        }
+
+        var pending = [String]()
+        for branch in stack.branches {
+            let parent = stack.parent(of: branch) ?? base
+            if await git.isAncestor(parent, of: branch, worktreePath: path) == false {
+                pending.append(branch)
+            }
+        }
+        return pending
+    }
+
+    /// The branches a stack push would actually send: those with
+    /// commits the remote does not carry, or no remote branch yet.
+    func branchesUnpushed(worktree: Worktree) async -> [String] {
+        let path = worktree.path
+        let stack = await stack(for: worktree)
+        var pending = [String]()
+        for branch in stack.branches {
+            let remote = "refs/remotes/origin/" + branch
+            guard await git.refExists(worktreePath: path, ref: remote) else {
+                pending.append(branch)
+                continue
+            }
+
+            if await git.commitCount(from: remote, to: branch, worktreePath: path) > 0 {
+                pending.append(branch)
+            }
+        }
+        return pending
+    }
+
     /// Puts every branch of a stack back on the one below it, bottom
     /// up, signing each commit it replays. A branch already sitting
     /// on its parent is left alone rather than rewritten: an

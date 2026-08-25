@@ -290,7 +290,7 @@ final class PullRequestsModel {
     /// The branch the tab lists and compares against: the checked
     /// out one when known, the worktree's recorded one otherwise.
     var listedBranch: String? {
-        currentBranch ?? branch
+        stacking.selected ?? currentBranch ?? branch
     }
 
     var cacheKey: String {

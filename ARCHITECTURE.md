@@ -780,7 +780,9 @@ shim rather than a protocol:
    bottom up with `--onto <parent> <the parent's recorded tip>` so only a
    branch's own commits replay, signing each; a branch already on its
    parent is skipped rather than rewritten, since renaming commits for
-   nothing is its own damage. A failure resets what moved, returns to the
+   nothing is its own damage. Both stack actions sit where a lone
+   branch's Rebase and Push sit, in the footer's left, and dim when they
+   would do nothing: nothing out of place, or nothing the remote lacks. A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes
    bottom up so a base is on the remote before the branch pointing at it.
 7. The listing and the footer act on the branch actually checked out in the

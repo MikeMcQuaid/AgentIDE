@@ -113,8 +113,13 @@ struct PullRequestFooterView: View {
 
     var body: some View {
         HStack {
-            rebaseButton
-            pushButton
+            if model.stack.isStacked {
+                restackButton
+                pushStackButton
+            } else {
+                rebaseButton
+                pushButton
+            }
             if let selected = model.selected {
                 copyButtons(for: selected)
             }
@@ -167,6 +172,44 @@ struct PullRequestFooterView: View {
         model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
             + "own origin ref when that is fully signed and only new commits need signatures, "
             + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+    }
+
+    /// A stack's own pair, in the place its branch's pair would
+    /// take: putting every branch back on the one below it, then
+    /// pushing them bottom up. Both dim when there is nothing to do.
+    private var restackButton: some View {
+        BusyButton(
+            "Restack",
+            busy: "Restacking",
+            systemImage: "square.stack.3d.up",
+            accessibilityLabel: "Restack",
+            disabled: model.canRestack == false,
+        ) {
+            await model.restack()
+        }
+        .hoverHelp(
+            model.canRestack
+                ? "Rebase every branch onto the one below it, signed, leaving alone any already there"
+                : "Every branch is already on the one below it",
+        )
+    }
+
+    private var pushStackButton: some View {
+        BusyButton(
+            "Push stack",
+            busy: "Pushing",
+            systemImage: "arrow.up.square.on.square",
+            accessibilityLabel: "Push stack",
+            disabled: model.canPushStack == false,
+            keepsTitle: true,
+        ) {
+            await model.pushStack()
+        }
+        .hoverHelp(
+            model.canPushStack
+                ? "Push every branch of the stack, bottom first"
+                : "Every branch of the stack is already pushed",
+        )
     }
 
     private var rebaseButton: some View {

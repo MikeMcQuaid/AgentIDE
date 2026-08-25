@@ -55,12 +55,8 @@ public struct PullRequestsView: View {
             // Shown only by a stack, so a lone branch's tab is the
             // one it always was.
             if model.stack.isStacked {
-                HStack(spacing: 0) {
-                    BranchStackStrip(stack: model.stack, selected: model.listedBranch ?? "") { branch in
-                        model.show(branch: branch)
-                    }
-                    Spacer(minLength: 0)
-                    stackActions
+                BranchStackStrip(stack: model.stack, selected: model.listedBranch ?? "") { branch in
+                    model.show(branch: branch)
                 }
                 Divider()
             }
@@ -134,23 +130,6 @@ public struct PullRequestsView: View {
     /// drives from the main checkout, where no worktree exists.
     private var worktreeScopeTitle: String {
         isMainCheckout ? "Branch" : "Worktree"
-    }
-
-    /// What a stack can be asked to do as a whole: put every
-    /// branch back on the one below it, then push them bottom up so
-    /// each pull request's base is on the remote before the branch
-    /// pointing at it.
-    @ViewBuilder private var stackActions: some View {
-        BusyButton("Restack", busy: "Restacking", systemImage: "square.stack.3d.up") {
-            await model.restack()
-        }
-        .controlSize(.small)
-        .hoverHelp("Rebase every branch onto the one below it, signed, leaving alone any already there")
-        BusyButton("Push stack", busy: "Pushing", systemImage: "arrow.up.square.on.square") {
-            await model.pushStack()
-        }
-        .controlSize(.small)
-        .hoverHelp("Push every branch of the stack, bottom first")
     }
 
     private var listView: some View {
