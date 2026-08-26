@@ -20,22 +20,21 @@ let package = Package(
         .library(name: "TerminalUI", targets: ["TerminalUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.19.0"),
         // Apple's GitHub-flavoured markdown parser; parsing by hand
         // kept misreading real review comments.
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.5.0"),
-        .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.9.0"),
-        // The newest grammar releases are generated with tree-sitter
-        // ABI 15, which swift-tree-sitter 0.9.0's runtime rejects, so
-        // both grammars pin the latest ABI 14 releases.
+        .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
-        .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.23.3"),
-        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.25.1"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", exact: "0.24.8"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
-        // The Swift grammar the tree-sitter ecosystem standardises on;
-        // the generated-files tag is the one consumable by SwiftPM.
-        .package(url: "https://github.com/alex-pinkus/tree-sitter-swift", exact: "0.7.3-with-generated-files"),
+        // The latest 0.7.3 grammar with the generated parser sources SwiftPM needs.
+        .package(
+            url: "https://github.com/alex-pinkus/tree-sitter-swift",
+            revision: "31d17fe7e818a2048c808b5c6fdc2dc792f4f5b5",
+        ),
     ],
     targets: [
         .target(

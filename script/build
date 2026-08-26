@@ -28,10 +28,15 @@ BUILD_NUMBER="$(
     git rev-list --count HEAD
 )"
 ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}")
+ACTIONS=(build)
 
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
+  if [[ "$(defaults read com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox 2>/dev/null || true)" != 1 ]]; then
+    defaults write com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox -bool YES
+    ACTIONS=(clean build)
+  fi
   # The literal $(inherited) is for xcodebuild, not the shell.
   # shellcheck disable=SC2016
   ARGS+=(
@@ -41,7 +46,11 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-xcodebuild "${ARGS[@]}" build
+if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
+  ARGS+=(-skipPackagePluginValidation)
+fi
+
+xcodebuild "${ARGS[@]}" "${ACTIONS[@]}"
 
 # Icon caches key on the bundle's modification time; bump it so the
 # Dock and Finder notice icon changes.

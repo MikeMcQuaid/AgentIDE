@@ -20,6 +20,7 @@ args=(
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
+  defaults write com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox -bool YES
   # The literal $(inherited) is for xcodebuild, not the shell.
   # shellcheck disable=SC2016
   args+=(
@@ -27,6 +28,13 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
     -IDEPackageSupportDisablePackageSandbox=1
     'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
   )
+fi
+
+if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
+  args+=(-skipPackagePluginValidation)
+  periphery_build_args=(-- -skipPackagePluginValidation)
+else
+  periphery_build_args=()
 fi
 
 # A failed build must never be analysed: SwiftLint and periphery
@@ -71,6 +79,8 @@ fi
 # SPM mode does not find an index store under the current build
 # system; the app scheme excludes the test targets, so the few
 # declarations used only by tests carry `// periphery:ignore`.
+# SwiftTerm's generated build information otherwise makes Periphery
+# report dependency output and required module imports as unused.
 if ! command -v periphery &>/dev/null; then
   echo "skipping periphery: not installed (add it via the Brewfile)" >&2
 elif [[ -n "${SV_SESSION_ID:-}" ]]; then
@@ -86,14 +96,20 @@ elif [[ -n "${SV_SESSION_ID:-}" ]]; then
     --schemes AgentIDEApp \
     --skip-build \
     --index-store-path .DerivedData/Index.noindex/DataStore \
+    --report-exclude '**/.DerivedData/**' '**/BuildToolPluginIntermediates/**' \
+    --retain-unused-imported-modules SwiftTerm \
     --strict \
-    --disable-update-check || failed=1
+    --disable-update-check \
+    "${periphery_build_args[@]}" || failed=1
 else
   periphery scan \
     --project AgentIDE.xcodeproj \
     --schemes AgentIDEApp \
+    --report-exclude '**/.DerivedData/**' '**/BuildToolPluginIntermediates/**' \
+    --retain-unused-imported-modules SwiftTerm \
     --strict \
-    --disable-update-check || failed=1
+    --disable-update-check \
+    "${periphery_build_args[@]}" || failed=1
 fi
 
 exit "$failed"

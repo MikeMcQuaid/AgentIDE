@@ -1028,7 +1028,7 @@ official language or project organisation.
 | GRDB | metadata store | planned; a JSON file serves today |
 | STTextView | diff and editor text surface | TextKit 2; planned |
 | swift-tree-sitter | syntax highlighting runtime | official-organisation exception |
-| tree-sitter-ruby, tree-sitter-bash | grammars | official organisation; pinned to the latest ABI 14 releases the runtime accepts |
+| tree-sitter-* grammars | syntax highlighting | official organisation except Swift, as below |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 
@@ -1038,8 +1038,13 @@ is no updater among them: releases ship as a Homebrew cask, so `brew
 upgrade` updates the app alongside the tools it already installs, rather
 than the app carrying an update framework of its own or living in the Mac
 App Store, whose sandbox forbids everything this app does.
-Versions are pinned by `Package.resolved`; the two exceptions are pinned
-exactly.
+Versions are pinned by `Package.resolved`. The Swift grammar's generated-files
+tag supplies the parser sources omitted from the ordinary tag for the same
+release, and is pinned to that tag's revision so Dependabot does not mistake
+it for an older version. Python 0.25.0's manifest checks for its external
+scanner relative to the root package instead of its own directory, so the
+root `src/scanner.c` sentinel makes SwiftPM include the scanner from the
+dependency checkout.
 
 Toolchain: Xcode 27, the macOS 27 SDK and Swift 6.4. XcodeGen generates the
 app project from `project.yml`; the `.xcodeproj` is gitignored. SwiftLint and
@@ -1056,8 +1061,10 @@ analysis), `style [--fix]` (all linters) and `attach <session>` (attach the
 current terminal to the sandboxed herdr session). Agent-driven builds inside the
 sandbox cannot nest macOS sandboxes, so build scripts gate on `SV_SESSION_ID`
 and pass `SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
-`-IDEPackageSupportDisable*Sandbox` xcodebuild flags, letting agents build
-AgentIDE itself.
+`-IDEPackageSupportDisable*Sandbox` xcodebuild flags. They also disable
+Xcode's inner package-plug-in execution sandbox for the already-sandboxed
+user. Package plug-in validation is skipped only in Sandvault and CI, where
+the outer sandbox or ephemeral runner remains the trust boundary.
 
 The guardrails are layered so a mistake is caught as early as possible:
 Swift 6 strict concurrency and the type system at compile time; SwiftLint and
