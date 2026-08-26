@@ -22,6 +22,9 @@ struct WorktreeRowView: View {
                 detailLine
             }
         }
+        // A row never wraps: what does not fit runs under the
+        // sidebar's edge and is hidden there.
+        .clipped()
     }
 
     // MARK: Private
@@ -122,6 +125,8 @@ struct WorktreeRowView: View {
                 Text(item.worktree.branch)
                     .lineLimit(1)
                 Text(counts)
+                    .lineLimit(1)
+                    .fixedSize()
                     .hoverHelp(countsExplanation)
                 Spacer(minLength: 0)
             }
@@ -139,6 +144,8 @@ struct WorktreeRowView: View {
             }
             pullRequestBadge
             Text(counts)
+                .lineLimit(1)
+                .fixedSize()
                 .hoverHelp(countsExplanation)
             Spacer(minLength: 0)
         }
@@ -227,6 +234,10 @@ struct WorktreeRowView: View {
                         .hoverHelp(stackHelp)
                 }
             }
+            // Badges keep their width: squeezed, the number and the
+            // stack marker broke into a column of digits.
+            .lineLimit(1)
+            .fixedSize()
         }
     }
 

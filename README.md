@@ -88,11 +88,13 @@ before shipping.
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel
   costs no session survival)
-- **Reflows** multi-line copies from agent terminals: indentation, gutter
-  marks and hard line breaks go while paragraphs and lists survive, but a
-  block that reads as commands or code keeps every line exactly, and
-  Option-drag copies a rectangle (so answers paste cleanly into chat,
-  notes and pull request bodies, and a copied script still runs)
+- **Reflows** multi-line copies from agent terminals only where the
+  lines prove they are prose, by their capitals and sentence punctuation:
+  those lose their indentation, gutter marks and hard line breaks while
+  paragraphs and lists survive, and every other line is kept exactly as
+  copied, since a command wrongly joined is broken and a sentence left
+  wrapped is merely untidy; Option-drag copies a rectangle (so a copied
+  script always still runs, and answers still paste cleanly into chat)
 - **Commits** work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
 - **Lets** you SSH into every session from an iOS SSH client, with
@@ -127,6 +129,10 @@ before shipping.
   edits files directly in a built-in syntax-highlighted editor, with a
   Markdown file rendering inline at the press of its own button (so small
   fixes and reading what the agent wrote need no other app)
+- **Follows** the page in its embedded browser: click a link or land on
+  a redirect and the address bar says where you are, and that is the
+  address the worktree remembers (so the bar is never a lie about the
+  page under it)
 - **Previews** web pages and rendered Markdown in an embedded browser and opens an
   embedded terminal running as your own user (so you can verify behaviour and
   use `git`, `gh` and other CLI tools without leaving the window)
@@ -157,18 +163,24 @@ before shipping.
   as `main ← lower ← upper` with each entry's own diff a click away, and
   the sidebar says where a branch stands in its stack, from git before
   its pull requests are open and from them afterwards, each opening
-  against the branch below it, and two buttons put the whole stack
+  against the branch below it with a form filled from that entry's own
+  commits and greyed out until the branch below is pushed and opened,
+  and two buttons put the whole stack
   back in order, push it bottom up and submit it, opening the pull
   requests it lacks and stacking them on GitHub,
   signing every commit they replay and leaving alone any branch already
   where it belongs (so a stack is one checkout, one session and no
   bookkeeping, and a branch on its own looks exactly as it always did)
 - **Remembers** every answer GitHub gives about a pull request, with
-  when it arrived, in one shared store: no pull request is asked about
-  twice inside a minute however much you click around, relaunching the
-  app included, and acting on one (merging, pushing, resolving) is what
-  refreshes it at once (so the tabs paint instantly and the rate limit
-  is spent on questions whose answers could actually have changed)
+  when it arrived and the entity tag it came with, in one shared store:
+  no pull request is asked about twice inside a minute however much you
+  click around, relaunching the app included, a branch's listing is
+  asked for conditionally so an unchanged answer costs no rate limit at
+  all, the worktree in front of you refreshes far more often than the
+  ones behind it, and acting on one (merging, pushing, resolving) is
+  what refreshes it at once, and every repository's merge queue is one
+  query rather than one each (so the tabs paint instantly and the rate
+  limit is spent on questions whose answers could actually have changed)
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
@@ -182,7 +194,8 @@ before shipping.
   about where the branch goes)
 - **Discloses** the agent that wrote a branch in one click, and whenever
   you tick every box: the harness with the model and effort it ran at,
-  worded as the pickers word them, followed by local review and testing,
+  the pickers' defaults when the launch named none, worded as the
+  pickers word them, followed by local review and testing,
   written into the template's own AI section where there is one (so an
   honest disclosure is not a thing you retype, and ticking that box never
   leaves the section empty)
@@ -234,16 +247,26 @@ before shipping.
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
+- **Waits** in proportion: a wait under half a second shows nothing,
+  one under a few seconds a spinner, and only a wait that can run long
+  narrates its steps
 - **Waits** out loud: any pane whose data takes a moment, the first
   reading of your worktrees, a diff, a pull request list or the session
   manager, shows what it is waiting on with a clock ticking every second,
   then snaps to the finished view (so an empty state is only ever shown
   once it has been proven empty, never while the answer is still coming)
+- **Keeps** every sidebar row on its two lines: nothing wraps, a row
+  too long for the sidebar runs under its edge and is hidden there,
+  and the sidebar cannot be dragged narrower than a full row (so a
+  branch name is a name and a pull request number is a number, never
+  a column of digits)
 - **Reads** the whole sidebar in parallel: every repository at once,
   every worktree within one at once and each worktree's handful of
-  git questions at once, on a machine built for exactly that (so a
-  wide sidebar refreshes in the time its slowest worktree takes, not
-  the sum of all of them)
+  git questions at once, on a machine built for exactly that, and
+  asks git about the selected repository every tick but an idle one
+  only every half minute, keeping its rows meanwhile (so a wide
+  sidebar refreshes in the time its slowest worktree takes, and
+  twenty-nine repositories nothing is happening in cost nothing)
 - **Times** every process it runs, every GitHub call and every cache
   hit or miss into a plain performance log, but only when asked:
   `script/performance-log on` (off by default and off again with

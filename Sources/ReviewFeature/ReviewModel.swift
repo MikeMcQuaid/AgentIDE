@@ -333,8 +333,11 @@ final class ReviewModel {
                 branch: branch,
                 ignoringWhitespace: hidesWhitespace,
             ))
-            commitMessage = ""
-            originalMessage = ""
+            // The entry's own tip commit, shown as the last-commit
+            // scope shows one, read-only: amending reaches the
+            // checked-out tip and nothing else.
+            commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: branch)
+            originalMessage = commitMessage
         } catch {
             report(error.localizedDescription)
         }

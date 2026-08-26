@@ -5,8 +5,9 @@ import Testing
 
 // MARK: - CountingRunner
 
-/// A `gh` that answers the same listing every time and counts how
-/// often it was asked.
+/// A `gh` and `git` that answer a branch's listing, counting how
+/// often GitHub was asked, and answering a repeated question with
+/// 304 the way GitHub does when the entity tag still matches.
 private final class CountingRunner: ProcessRunner, @unchecked Sendable {
     // MARK: Lifecycle
 
@@ -19,12 +20,38 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
     // periphery:ignore - read by the tests below.
     private(set) var calls = 0
 
+    // periphery:ignore - read by the tests below.
+    private(set) var unchangedAnswers = 0
+
     func run(
-        _: [String],
+        _ arguments: [String],
         workingDirectory _: String?,
         environment _: [String: String],
     ) -> ProcessResult {
+        if arguments.first == "git" || arguments.contains("remote") {
+            return ProcessResult(status: 0, standardOutput: "git@github.com:mike/repo.git\n", standardError: "")
+        }
+
         calls += 1
+        if arguments.contains("--include") {
+            if arguments.contains(where: { $0.hasPrefix("If-None-Match:") }) {
+                unchangedAnswers += 1
+                return ProcessResult(
+                    status: 1,
+                    standardOutput: "HTTP/2.0 304 Not Modified\netag: \"tag-1\"\n\n",
+                    standardError: "",
+                )
+            }
+            let body = """
+            [{"number": 7, "title": "Work", "html_url": "https://example.com/7", "head": {"ref": "work"},
+              "base": {"ref": "main"}, "state": "open", "draft": false, "user": {"login": "mike"}, "body": ""}]
+            """
+            return ProcessResult(
+                status: 0,
+                standardOutput: "HTTP/2.0 200 OK\netag: \"tag-1\"\n\n" + body,
+                standardError: "",
+            )
+        }
         let json = """
         [{"number": 7, "title": "Work", "url": "https://example.com/7", "headRefName": "work",
           "baseRefName": "main", "state": "OPEN", "isDraft": false, "author": {"login": "mike"},
@@ -68,10 +95,14 @@ struct PullRequestStoreTests {
         let due = try await relaunched.listingIfDue(repositoryPath: "/repo", scope: .branch("work"))
         #expect(due == nil)
 
-        // Acting on the branch, rather than looking at it, asks again.
+        // Acting on the branch, rather than looking at it, asks again;
+        // the entity tag goes with the question, GitHub says nothing
+        // changed, and the cache answers without a byte of listing.
         relaunched.invalidateListings(repositoryPath: "/repo")
-        _ = try await relaunched.listing(repositoryPath: "/repo", scope: .branch("work"))
+        let again = try await relaunched.listing(repositoryPath: "/repo", scope: .branch("work"))
         #expect(runner.calls == 2)
+        #expect(runner.unchangedAnswers == 1)
+        #expect(again.map(\.number) == [7])
     }
 
     @Test

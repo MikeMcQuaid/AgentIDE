@@ -134,7 +134,7 @@ public struct FoundationProcessRunner: ProcessRunner {
         // words name it, the directory says what it was about.
         try await PerformanceLog.time(
             .process,
-            arguments.prefix(Self.namedWords).joined(separator: " "),
+            Self.name(of: arguments),
             context: workingDirectory ?? "",
         ) {
             try await withCheckedThrowingContinuation { continuation in
@@ -155,8 +155,29 @@ public struct FoundationProcessRunner: ProcessRunner {
 
     /// How many words of a command name it in the log: enough for
     /// `git rev-list --count` or `gh pr list` without the arguments
-    /// that make every line unique.
+    /// that make every line unique. Git's `-c key=value` hardening
+    /// pairs are skipped, or every git call read the same.
     private static let namedWords = 3
+
+    private static func name(of arguments: [String]) -> String {
+        var words = [String]()
+        var skipNext = false
+        for word in arguments {
+            if skipNext {
+                skipNext = false
+                continue
+            }
+            if word == "-c" {
+                skipNext = true
+                continue
+            }
+            words.append(word)
+            if words.count == namedWords {
+                break
+            }
+        }
+        return words.joined(separator: " ")
+    }
 
     private static func runBlocking(
         _ arguments: [String],

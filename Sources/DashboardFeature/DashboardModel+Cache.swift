@@ -7,6 +7,50 @@ import Foundation
 /// on its own rows and its own selection rather than on an empty
 /// frame. Only what herdr owns arrives late.
 extension DashboardModel {
+    /// Seeds the pickers with the models each CLI reported last
+    /// time, so they open on the real list while the CLI is asked
+    /// again in the background.
+    /// Asks each CLI its models, beside the others, only when its
+    /// version has moved since the last answer.
+    func discoverModels() async {
+        // Keyed by the CLI's version, read from the host in a few
+        // milliseconds: a list can only change when the CLI does,
+        // and asking it otherwise was twenty seconds of sandbox
+        // launch on every start.
+        let known = store.load().discoveredModelsVersion
+        await withTaskGroup(of: (AgentKind, String?, [String]?).self) { tasks in
+            for agent in AgentKind.allCases {
+                tasks.addTask {
+                    let version = await self.service.probeVersion(of: agent)
+                    guard version == nil || version != known[agent.rawValue] else {
+                        return (agent, version, nil)
+                    }
+
+                    return await (agent, version, self.service.discoverModels(for: agent))
+                }
+            }
+            var metadata = store.load()
+            for await (agent, version, models) in tasks {
+                guard let models else {
+                    continue
+                }
+
+                discoveredModels[agent] = models
+                metadata.discoveredModels[agent.rawValue] = models
+                metadata.discoveredModelsVersion[agent.rawValue] = version
+            }
+            store.save(metadata)
+        }
+    }
+
+    func restoreDiscoveredModels() {
+        for (raw, models) in store.load().discoveredModels {
+            if let agent = AgentKind(rawValue: raw) {
+                discoveredModels[agent] = models
+            }
+        }
+    }
+
     /// Paints the remembered sidebar, selection included.
     func restoreCachedSidebar() {
         let cached = store.load().cachedSidebar
@@ -31,6 +75,17 @@ extension DashboardModel {
                 )
             }
             return RepositoryGroup(repository: repository, items: items, defaultBranch: cached.defaultBranch)
+        }
+        // The stacks the last run derived come back with the rows,
+        // and count as fresh for one interval: the first reading
+        // otherwise derived every one of them in its first second.
+        for worktree in cached.flatMap(\.worktrees) where worktree.stackCheckedOut != nil {
+            derivedStacks[worktree.path] = BranchStack(
+                base: worktree.stackBase,
+                branches: worktree.stackBranches,
+                checkedOut: worktree.stackCheckedOut ?? worktree.branch,
+            )
+            nextStackDerivation[worktree.path] = Date().addingTimeInterval(Self.stackInterval)
         }
         awaitedSessions = Set(
             cached.flatMap(\.worktrees).filter(\.hasSession).map(\.path),
@@ -62,6 +117,11 @@ extension DashboardModel {
                 worktree.behindDefault = item.behindDefault
                 worktree.lastActivityAt = item.lastActivityAt
                 worktree.hasSession = item.session != nil
+                if let stack = derivedStacks[item.worktree.path] {
+                    worktree.stackBase = stack.base
+                    worktree.stackBranches = stack.branches
+                    worktree.stackCheckedOut = stack.checkedOut
+                }
                 return worktree
             }
             return cached

@@ -96,7 +96,7 @@ public extension SessionService {
     /// asking there skips the sudo, environment scrub and
     /// sandbox-exec a sandbox launch wraps around one line of output.
     /// Only when no host copy answers does the sandbox get asked.
-    internal func probeVersion(of agent: AgentKind) async -> String? {
+    func probeVersion(of agent: AgentKind) async -> String? {
         let parse = runner(for: agent).parseVersion
         for prefix in Quarantine.homebrewBinaries {
             let binary = prefix + "/" + agent.rawValue

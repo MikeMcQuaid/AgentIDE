@@ -37,11 +37,13 @@ extension DashboardModel {
     /// per-pull-request field can answer, and it runs on the poll
     /// rather than per row.
     func refreshMergeQueues() async {
-        for repository in groups.map(\.repository) {
-            queuedNumbers[repository.path] = await pullRequests.queuedNumbers(
-                repositoryPath: repository.path,
-                interval: Self.queueInterval,
-            )
+        // One query for every repository due, not one each.
+        let answers = await pullRequests.queuedNumbers(
+            repositoryPaths: groups.map(\.repository.path),
+            interval: Self.queueInterval,
+        )
+        for (path, numbers) in answers {
+            queuedNumbers[path] = numbers
         }
     }
 

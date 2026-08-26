@@ -82,11 +82,13 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   remote data, cloning) show a loading state that fills the pane
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
-  delay over half a second. A transition made of several steps
-  names each step and what it waits on as it happens, through
-  `LaunchProgress`, and keeps something on screen changing at
-  least once a second, the block pinned near the top of the pane so
-  it grows downwards. Prefer showing the last known state instantly
+  delay over half a second; under that, show nothing rather than a
+  flash. A wait that ends within a few seconds is a spinner under a
+  title (`LaunchProgressView(spinner:)`). Only a transition that can
+  run long (resuming, attaching, cloning) names each step and what
+  it waits on as it happens, through `LaunchProgress`, and keeps
+  something on screen changing at least once a second, the block
+  pinned near the top of the pane so it grows downwards. Prefer showing the last known state instantly
   over showing a wait at all: the sidebar, the selection and every
   pane that can be cached paint before anything is read, and only
   what herdr owns is allowed to arrive late. Work that need not be
@@ -233,7 +235,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 ### Required Before Each Commit
 
 - Run `script/style --fix` and resolve anything it cannot fix
-- Run `script/test` and `script/analyze` when Swift changed
+- Run `script/test` and `script/analyze` when Swift changed; if
+  `script/analyze` has run for more than five minutes, stop it and
+  let CI run it instead rather than holding the commit
 - Run `script/analyze` again before opening or updating a pull
   request; unused imports and dead code otherwise surface in CI
   first (sandboxed runs reuse the analyze build's index store, so

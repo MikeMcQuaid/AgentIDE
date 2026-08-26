@@ -70,6 +70,15 @@ extension PullRequestsModel {
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
         stacking.selected = branch == stacking.stack.checkedOut ? nil : branch
+        // The form is the listed entry's: cleared here, under the
+        // new entry's key and without being saved as its draft, so
+        // the reload fills it from that entry's own draft or commit
+        // rather than seeing the last entry's text and leaving it.
+        loadingDraft = true
+        prTitle = ""
+        prBody = ""
+        prTemplate = originalTemplate
+        loadingDraft = false
         // Every entry of a stack is one worktree, so nothing git
         // would be asked has changed: the move is a listing swap.
         Task { await reload(keepingSelection: false, refreshingFacts: false) }

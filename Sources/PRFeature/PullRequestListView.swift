@@ -43,7 +43,7 @@ struct PullRequestListView: View {
             }
             .overlay {
                 if isLoading, summaries.isEmpty {
-                    LaunchProgressView("Loading pull requests…", waitingOn: "GitHub's listing for each branch")
+                    LaunchProgressView(spinner: "Loading pull requests…")
                 } else if summaries.isEmpty {
                     ContentUnavailableView("No pull requests", systemImage: "arrow.triangle.pull")
                 }

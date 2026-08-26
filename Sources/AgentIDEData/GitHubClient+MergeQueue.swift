@@ -17,30 +17,52 @@ public extension GitHubClient {
         return result?.contains("\"mergeQueue\":{") ?? false
     }
 
-    /// The pull requests actually in the repository's merge queue.
-    /// One query names every entry, which is far cheaper than asking
-    /// per pull request, and lets the sidebar mark the queued ones.
-    func queuedNumbers(repositoryPath: String) async -> Set<Int> {
-        let query = "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) "
-            + "{ mergeQueue { entries(first: 100) { nodes { pullRequest { number } } } } } }"
-        let result = await graphQL(query, repositoryPath: repositoryPath, cache: nil)
-        return Self.queuedNumbers(fromJSON: result ?? "")
+    /// Every repository's merge queue in one query, each repository
+    /// an alias: the sidebar asks about all of them at once every
+    /// minute, and one round trip is what that should cost rather
+    /// than one per repository.
+    func queuedNumbers(repositoryPaths: [String]) async -> [String: Set<Int>] {
+        var aliases = [(alias: String, path: String)]()
+        var fields = [String]()
+        for (index, path) in repositoryPaths.enumerated() {
+            let parts = await (fullName(repositoryPath: path) ?? "").split(separator: "/", maxSplits: 1)
+            guard let owner = parts.first, let name = parts.dropFirst().first else {
+                continue
+            }
+
+            let alias = "r" + String(index)
+            aliases.append((alias, path))
+            fields.append(alias + ": repository(owner: \"" + owner + "\", name: \"" + name + "\") "
+                + "{ mergeQueue { entries(first: 100) { nodes { pullRequest { number } } } } }")
+        }
+        guard fields.isEmpty == false, let directory = aliases.first?.path else {
+            return [:]
+        }
+
+        let query = "query { " + fields.joined(separator: " ") + " }"
+        let result = try? await gh(["api", "graphql", "-f", "query=" + query], in: directory, allowFailure: true)
+        let byAlias = Self.queuedNumbers(fromAliasedJSON: result?.standardOutput ?? "")
+        var queued = [String: Set<Int>]()
+        for (alias, path) in aliases {
+            queued[path] = byAlias[alias] ?? []
+        }
+        return queued
     }
 }
 
 extension GitHubClient {
-    /// The numbers in a merge queue entries answer; an answer that
-    /// does not parse means nothing queued, which is what a
-    /// repository without a queue reports anyway.
-    static func queuedNumbers(fromJSON json: String) -> Set<Int> {
+    /// The queued numbers under each alias of an answer; a plain
+    /// answer's one repository is under `repository`.
+    static func queuedNumbers(fromAliasedJSON json: String) -> [String: Set<Int>] {
         guard let data = json.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(MergeQueueResponse.self, from: data)
         else {
-            return []
+            return [:]
         }
 
-        let nodes = decoded.data?.repository?.mergeQueue?.entries?.nodes ?? []
-        return Set(nodes.compactMap(\.pullRequest?.number))
+        return decoded.data.mapValues { repository in
+            Set((repository?.mergeQueue?.entries?.nodes ?? []).compactMap(\.pullRequest?.number))
+        }
     }
 
     /// Runs a repository-scoped query, which every caller here is,
@@ -71,13 +93,25 @@ extension GitHubClient {
 /// GraphQL answers it, every level optional: a repository with no
 /// queue answers null the whole way down.
 private struct MergeQueueResponse: Decodable {
-    let data: ResponseData?
-}
+    // MARK: Lifecycle
 
-// MARK: - ResponseData
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        data = try container.decodeIfPresent([String: QueueRepository?].self, forKey: .data) ?? [:]
+    }
 
-private struct ResponseData: Decodable {
-    let repository: QueueRepository?
+    // MARK: Internal
+
+    /// Every top-level field is a repository under its alias; a
+    /// repository the token cannot see decodes as null, and an
+    /// answer with no data at all as no repositories.
+    let data: [String: QueueRepository?]
+
+    // MARK: Private
+
+    private enum CodingKeys: CodingKey {
+        case data
+    }
 }
 
 // MARK: - QueueRepository

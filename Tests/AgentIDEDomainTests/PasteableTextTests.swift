@@ -46,7 +46,10 @@ struct PasteableTextTests {
     func `gutter marks trim from lines and single copies`() {
         #expect(PasteableText.strippingGutter("\u{258E} hello") == "hello")
         #expect(PasteableText.strippingGutter("\u{258E}\u{258E} nested") == "nested")
-        #expect(PasteableText.reflow("\u{258E} first line\n\u{258E} second line") == "first line second line")
+        // Two lowercase lines prove nothing about being prose, so
+        // they are kept as copied, gutter marks gone.
+        #expect(PasteableText.reflow("\u{258E} first line\n\u{258E} second line") == "first line\nsecond line")
+        #expect(PasteableText.reflow("\u{258E} First line\n\u{258E} second line") == "First line second line")
         #expect(PasteableText.reflow("  \u{258E} one liner  ") == "one liner")
     }
 
@@ -101,11 +104,27 @@ struct PasteableTextTests {
     }
 
     @Test
-    func `prose that merely mentions a flag still reflows`() {
+    func `lowercase lines are kept as copied rather than joined`() {
+        // Commands, paths and flags open in lowercase; the doubt goes
+        // to keeping the line, since a sentence left wrapped is
+        // untidy and a command wrongly joined is broken.
+        let commands = """
+        brew install foo
+        cd ~/src
+        make test
+        """
+        #expect(PasteableText.reflow(commands) == commands)
+    }
+
+    @Test
+    func `a line that mentions a flag is kept as copied, not joined`() {
+        // The doubt goes to keeping the line: a sentence that names
+        // a flag might be the command itself, and a command wrongly
+        // joined is broken where a sentence left wrapped is untidy.
         let prose = """
         ▎ You can pass --verbose to see more, and the wrapped line
         ▎ continues here as ordinary explanation of the option.
         """
-        #expect(PasteableText.reflow(prose).contains("\n") == false)
+        #expect(PasteableText.reflow(prose).contains("\n"))
     }
 }

@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import Observation
 import TerminalUI
 
@@ -37,7 +38,16 @@ final class PullRequestsModel {
         let gate = PullRequestStore(github: github, store: store)
         pullRequests = gate
         fetchList = { scope, limit in
-            try await gate.listing(repositoryPath: repository.path, scope: scope, limit: limit)
+            // The tab in front of you refreshes at the floor; a tab
+            // kept mounted behind another worktree's asks GitHub far
+            // less often, like the sidebar's rows.
+            let isSelected = UserDefaults.standard.string(forKey: "selectedWorktreePath") == worktreePath
+            return try await gate.listing(
+                repositoryPath: repository.path,
+                scope: scope,
+                limit: limit,
+                interval: isSelected ? PullRequestStore.minimumInterval : PullRequestStore.backgroundInterval,
+            )
         }
         fetchSummary = { number in
             try await gate.summary(repositoryPath: repository.path, number: number)

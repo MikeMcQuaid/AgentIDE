@@ -32,6 +32,14 @@ public struct CachedWorktree: Codable, Hashable, Sendable {
     public var behindDefault: Int?
     public var lastActivityAt = 0
     public var hasSession = false
+
+    /// The stack the row's worktree held at the last reading: its
+    /// base, its branches bottom first and which was checked out.
+    /// Deriving one is a hundred git calls across a wide sidebar,
+    /// and every launch was doing all of them in its first second.
+    public var stackBase: String?
+    public var stackBranches: [String] = []
+    public var stackCheckedOut: String?
 }
 
 // MARK: - CachedRepository
@@ -122,6 +130,11 @@ public struct AppMetadata: Codable, Sendable {
         queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
         mergeQueueCapability = try container
             .decodeIfPresent([String: Bool].self, forKey: .mergeQueueCapability) ?? [:]
+        discoveredModels = try container
+            .decodeIfPresent([String: [String]].self, forKey: .discoveredModels) ?? [:]
+        discoveredModelsVersion = try container
+            .decodeIfPresent([String: String].self, forKey: .discoveredModelsVersion) ?? [:]
+        etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
         terminalSchemes = try container
             .decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
     }
@@ -146,6 +159,23 @@ public struct AppMetadata: Codable, Sendable {
 
     /// Whether each repository merges through a queue at all.
     public var mergeQueueCapability: [String: Bool] = [:]
+
+    /// The models each CLI last reported, by agent raw value, so the
+    /// pickers open on a relaunch with the real list while the CLI
+    /// is asked again in the background: asking took twenty seconds
+    /// of sandbox launch on every start.
+    public var discoveredModels: [String: [String]] = [:]
+
+    /// The CLI version each model list came from: a list is asked
+    /// for again only when the CLI has changed, since the answer
+    /// cannot have.
+    public var discoveredModelsVersion: [String: String] = [:]
+
+    /// The entity tag GitHub last answered each REST listing with,
+    /// by the listing's key. Sent back as `If-None-Match`, so a poll
+    /// that finds nothing changed is one round trip and no rate
+    /// limit, which is most polls.
+    public var etags: [String: String] = [:]
 
     /// "dark" or "light" per worktree path: the appearance its agent
     /// was launched under. Agent TUIs read the terminal's colours

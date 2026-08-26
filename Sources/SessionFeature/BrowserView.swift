@@ -42,7 +42,7 @@ public struct BrowserView: View {
             .padding(Self.padding)
             Divider()
             ZStack {
-                WebPane(request: $request, onProcess: record(processIdentifier:))
+                WebPane(request: $request, onProcess: record(processIdentifier:), onNavigate: follow(_:))
                 if request == nil || (address.isEmpty && editingAddress == false) {
                     ContentUnavailableView(
                         "Nothing loaded",
@@ -148,6 +148,21 @@ public struct BrowserView: View {
         request = URLRequest(url: url)
     }
 
+    /// The page moved on its own, by a click or a redirect: the
+    /// address bar says where it is now, and the worktree remembers
+    /// it. Left alone while the field is being typed into, so a
+    /// half-typed address is not replaced under the cursor. The
+    /// request follows too, so the pane is not asked to load the
+    /// page it is already on.
+    private func follow(_ url: URL) {
+        guard editingAddress == false, url.absoluteString != address, url.absoluteString != "about:blank" else {
+            return
+        }
+
+        request = URLRequest(url: url)
+        address = url.absoluteString
+    }
+
     /// Back to the default empty page: a blank load replaces the
     /// page and the placeholder covers it.
     private func reset() {
@@ -165,8 +180,9 @@ private struct WebPane: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         // MARK: Lifecycle
 
-        init(onProcess: @escaping (Int32?) -> Void) {
+        init(onProcess: @escaping (Int32?) -> Void, onNavigate: @escaping (URL) -> Void) {
             self.onProcess = onProcess
+            self.onNavigate = onNavigate
         }
 
         deinit {
@@ -180,19 +196,26 @@ private struct WebPane: NSViewRepresentable {
         // swiftlint:disable:next implicitly_unwrapped_optional
         func webView(_ webView: WKWebView, didCommit _: WKNavigation!) {
             onProcess(BrowserPanes.processIdentifier(of: webView))
+            // Every committed navigation, clicked or redirected, is
+            // where the page is now.
+            if let url = webView.url {
+                onNavigate(url)
+            }
         }
 
         // MARK: Private
 
         private let onProcess: (Int32?) -> Void
+        private let onNavigate: (URL) -> Void
     }
 
     @Binding var request: URLRequest?
 
     let onProcess: (Int32?) -> Void
+    let onNavigate: (URL) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onProcess: onProcess)
+        Coordinator(onProcess: onProcess, onNavigate: onNavigate)
     }
 
     func makeNSView(context: Context) -> WKWebView {

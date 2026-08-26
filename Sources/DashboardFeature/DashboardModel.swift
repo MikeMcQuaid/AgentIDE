@@ -28,6 +28,7 @@ public final class DashboardModel {
         self.github = github
         self.launchProgress = launchProgress
         restoreCachedSidebar()
+        restoreDiscoveredModels()
     }
 
     deinit {
@@ -178,7 +179,7 @@ public final class DashboardModel {
         // reappear in the sidebar until the next tick.
         refreshGeneration += 1
         let generation = refreshGeneration
-        let overview = await service.overview()
+        let overview = await service.overview(scope: gitReadScope(forcing: repositoryPath), kept: groups)
         guard generation == refreshGeneration else {
             return
         }
@@ -214,11 +215,11 @@ public final class DashboardModel {
         // the window showed "no worktree selected" while they ran.
         await refresh()
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-        for agent in AgentKind.allCases {
-            if let models = await service.discoverModels(for: agent) {
-                discoveredModels[agent] = models
-            }
-        }
+        // Each CLI is asked its models beside the others, not one
+        // after another, and the answers are kept: the pickers open
+        // on the last list at once and take the fresh one when it
+        // lands, where waiting on the sandbox took twenty seconds.
+        await discoverModels()
         publishSessionChoices()
         while Task.isCancelled == false {
             await refresh()
@@ -350,6 +351,14 @@ public final class DashboardModel {
     /// the first refresh only so a deliberate deselection sticks.
     var hasRestoredSelection = false
 
+    /// When each repository's git was last read in full; the git
+    /// reads extension keeps it.
+    var gitReadAt: [String: Date] = [:]
+
+    /// Models each CLI reported, seeded from the last launch's answer
+    /// by the cache extension; absent agents fall back.
+    var discoveredModels: [AgentKind: [String]] = [:]
+
     /// Every pull request question the sidebar asks goes through
     /// here, which holds both the answers and when they arrived.
     var pullRequests: PullRequestStore {
@@ -359,9 +368,6 @@ public final class DashboardModel {
     // MARK: Private
 
     private static let pollInterval = 5
-
-    /// Models each CLI reported at startup; absent agents fall back.
-    private var discoveredModels: [AgentKind: [String]] = [:]
 
     /// Counts refreshes, so a slower one that started earlier can
     /// tell it has been superseded and drop its reading.

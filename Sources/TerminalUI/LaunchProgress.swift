@@ -75,10 +75,21 @@ public struct LaunchProgressView: View {
 
     /// Creates the view over a log, under a title saying what the
     /// launch is.
+    /// A plain spinner under a title, for a wait of a second or
+    /// two: long enough to need something on screen, too short for
+    /// a narration to have anything to say.
+    public init(spinner title: String) {
+        self.title = title
+        progress = nil
+        waitingOn = nil
+        isSpinner = true
+    }
+
     public init(_ title: String, progress: LaunchProgress) {
         self.title = title
         self.progress = progress
         waitingOn = nil
+        isSpinner = false
     }
 
     /// Creates the view for a load with one thing to wait on, named
@@ -88,15 +99,27 @@ public struct LaunchProgressView: View {
         self.title = title
         progress = nil
         self.waitingOn = waitingOn
+        isSpinner = false
     }
 
     // MARK: Public
 
     public var body: some View {
-        // Keyed on the narration's generation: a second resume in the
-        // same pane otherwise kept the first one's appearance time,
-        // and its clock carried on from a minute ago.
-        timeline.id(progress?.generation ?? 0)
+        if isSpinner {
+            VStack(spacing: Self.spacing) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(title)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            // Keyed on the narration's generation: a second resume in
+            // the same pane otherwise kept the first one's appearance
+            // time, and its clock carried on from a minute ago.
+            timeline.id(progress?.generation ?? 0)
+        }
     }
 
     // MARK: Private
@@ -113,6 +136,7 @@ public struct LaunchProgressView: View {
     private let title: String
     private let progress: LaunchProgress?
     private let waitingOn: String?
+    private let isSpinner: Bool
 
     private var steps: [LaunchProgress.Step] {
         progress?.steps

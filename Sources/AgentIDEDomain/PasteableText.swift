@@ -74,6 +74,18 @@ public enum PasteableText {
         "gh", "docker", "ssh", "source", "exec", "printf", "grep", "sed", "awk", "find", "chmod",
     ]
 
+    /// Whether a line opens the way a sentence does: with a capital
+    /// letter, a quotation mark or an opening bracket, and without
+    /// the signature of a command. Lowercase openings are how
+    /// commands, paths and flags begin, and they stay as copied.
+    private static func readsAsProse(_ line: String) -> Bool {
+        guard let first = line.first, hasCodeSignature(line) == false else {
+            return false
+        }
+
+        return first.isUppercase || "\"'“‘(".contains(first)
+    }
+
     /// Gathers the lines into blocks. A blank line ends whatever is
     /// open, a list marker starts its own item, a line that reads as
     /// a command starts or continues a code block, and any other
@@ -96,11 +108,23 @@ public enum PasteableText {
                 continue
             }
 
-            let continuesCode = current?.kind == .code
-                && (hasCodeSignature(line) || current?.text.hasSuffix("\\") == true)
-            let kind: Kind = startsCode(line) || continuesCode
-                ? .code
-                : (isListItem(line) ? .listItem : .paragraph)
+            // Verbatim unless the line proves itself prose: a command
+            // wrongly joined onto its neighbour is broken, a sentence
+            // left on its own line is merely untidy, so the doubt
+            // goes to keeping the line. A line continues the prose
+            // above it only while that prose is still open.
+            let continuesProse = (current?.kind == .paragraph || current?.kind == .listItem)
+                && hasCodeSignature(line) == false
+            let kind: Kind =
+                if startsCode(line) {
+                    .code
+                } else if isListItem(line) {
+                    .listItem
+                } else if readsAsProse(line) || continuesProse {
+                    .paragraph
+                } else {
+                    .code
+                }
             if var block = current, block.kind == kind, kind != .listItem {
                 // Code keeps its line breaks; prose loses them.
                 block.text += kind == .code ? "\n" + line : " " + line

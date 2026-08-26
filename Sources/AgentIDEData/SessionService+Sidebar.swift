@@ -7,10 +7,17 @@ import Foundation
 public extension SessionService {
     /// The full dashboard state: every repository's worktrees joined
     /// with their sessions, plus foreign sessions.
-    func overview() async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
+    /// `scope` says whose git is read this time; the others come
+    /// back as `kept` gave them, with their sessions brought up to
+    /// date from the pane listing.
+    func overview(
+        scope: GitReadScope = .all,
+        kept: [RepositoryGroup] = [],
+    ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
         let panes = await (try? herdr.panes()) ?? []
         let activity = spool.activity()
         let metadata = store.load()
+        let keptByPath = Dictionary(kept.map { ($0.repository.path, $0) }) { first, _ in first }
         // Every repository is read at once, and every worktree within
         // one at once: each is a handful of git processes that share
         // nothing, and read one after another they were the seconds a
@@ -18,6 +25,13 @@ public extension SessionService {
         let repositories = repositories()
         var groups = await withTaskGroup(of: (Int, RepositoryGroup).self) { tasks in
             for (index, repository) in repositories.enumerated() {
+                // A repository not due keeps its last group, with only
+                // the live session state, which is a pane listing
+                // already in hand, brought up to date.
+                if scope.includes(repository.path) == false, let previous = keptByPath[repository.path] {
+                    tasks.addTask { (index, Self.refreshingSessions(of: previous, panes: panes)) }
+                    continue
+                }
                 tasks.addTask {
                     await (index, group(
                         of: repository,
@@ -78,6 +92,31 @@ public extension SessionService {
                 ?? baseRef.map(Self.branchName(fromBaseRef:)) ?? "main",
             path: repository.path,
         )
+    }
+
+    /// A kept group with each row's session re-read from the pane
+    /// listing: what runs where can change between full readings,
+    /// and the listing is free.
+    private static func refreshingSessions(of group: RepositoryGroup, panes: [HerdrPane]) -> RepositoryGroup {
+        var refreshed = group
+        refreshed.items = group.items.map { item in
+            let pane = panes.first { pane in
+                SessionName.isAgentIDE(pane.sessionName)
+                    && (pane.sessionName == item.session?.name || pane.currentPath == item.worktree.path)
+            }
+            return item.with(session: pane.map { pane in
+                AgentSession(
+                    name: pane.sessionName,
+                    agent: item.session?.agent ?? .claudeCode,
+                    status: pane.isFinished ? .finished : .running,
+                    workingDirectory: pane.currentPath,
+                    paneID: pane.paneID,
+                    activity: pane.activity,
+                    version: item.session?.version,
+                )
+            })
+        }
+        return refreshed
     }
 
     /// One repository's group: its checkout and every worktree,

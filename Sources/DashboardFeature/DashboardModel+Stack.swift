@@ -62,7 +62,7 @@ extension DashboardModel {
 
     /// How long a derived stack is trusted before being asked again,
     /// and how many worktrees one refresh will derive.
-    private static let stackInterval: TimeInterval = 60
+    static let stackInterval: TimeInterval = 60
     private static let loneInterval: TimeInterval = 300
     private static let stacksPerRefresh = 8
 }

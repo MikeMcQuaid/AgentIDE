@@ -30,6 +30,9 @@ public struct PullRequestStore: Sendable {
     /// How long a repository's settings are taken at their word.
     public static let capabilityInterval: TimeInterval = 3_600
 
+    /// How often a listing nobody is looking at is asked for.
+    public static let backgroundInterval: TimeInterval = 300
+
     /// A branch or scope's listing, fetched only when it is due;
     /// otherwise the last answer, which is what the tab paints.
     public func listing(
@@ -66,6 +69,34 @@ public struct PullRequestStore: Sendable {
         let key = Self.listingKey(repositoryPath: repositoryPath, scope: scope)
         guard due(key, interval: interval) else {
             return nil
+        }
+
+        // A branch listing, the question the sidebar asks most, goes
+        // conditional: GitHub answers an unchanged one with a 304,
+        // which costs no rate limit, and the cache is what it was.
+        // The other scopes are GraphQL, which has no entity tags.
+        if case let .branch(branch) = scope {
+            var metadata = store.load()
+            let answer = try await github.branchPullRequests(
+                repositoryPath: repositoryPath,
+                branch: branch,
+                etag: metadata.etags[key],
+            )
+            switch answer {
+            case .unchanged:
+                metadata.fetchedAt[key] = Date()
+                store.save(metadata)
+                PerformanceLog.record(.cacheHit, "etag " + key, seconds: 0)
+                return metadata.pullRequestListsCache[key]?.summaries ?? []
+
+            case let .changed(body, etag):
+                let fetched = GitHubClient.summaries(fromRESTJSON: body)
+                metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
+                metadata.etags[key] = etag
+                metadata.fetchedAt[key] = Date()
+                store.save(metadata)
+                return fetched
+            }
         }
 
         let fetched = try await github.pullRequests(repositoryPath: repositoryPath, scope: scope, limit: limit)
@@ -142,26 +173,6 @@ public struct PullRequestStore: Sendable {
         return fetched
     }
 
-    /// Which of a repository's pull requests are in its merge queue.
-    /// Kept in the metadata file like the rest, so a relaunch shows
-    /// the queue it last saw rather than asking again at once.
-    public func queuedNumbers(
-        repositoryPath: String,
-        interval: TimeInterval = minimumInterval,
-    ) async -> Set<Int> {
-        let key = "queue#" + repositoryPath
-        guard due(key, interval: interval) else {
-            return Set(store.load().queuedCache[repositoryPath] ?? [])
-        }
-
-        let fetched = await github.queuedNumbers(repositoryPath: repositoryPath)
-        var metadata = store.load()
-        metadata.queuedCache[repositoryPath] = fetched.sorted()
-        metadata.fetchedAt[key] = Date()
-        store.save(metadata)
-        return fetched
-    }
-
     /// Whether the repository merges through a queue, which changes
     /// about as often as its settings do; asked once an hour rather
     /// than on every visit to the tab.
@@ -180,6 +191,32 @@ public struct PullRequestStore: Sendable {
         metadata.fetchedAt[key] = Date()
         store.save(metadata)
         return answer
+    }
+
+    /// Every repository's merge queue, those due asked for in one
+    /// query and the rest answered from what they last said.
+    public func queuedNumbers(
+        repositoryPaths: [String],
+        interval: TimeInterval = minimumInterval,
+    ) async -> [String: Set<Int>] {
+        var metadata = store.load()
+        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval) }
+        var answers = [String: Set<Int>]()
+        for path in repositoryPaths where due.contains(path) == false {
+            answers[path] = Set(metadata.queuedCache[path] ?? [])
+        }
+        guard due.isEmpty == false else {
+            return answers
+        }
+
+        let fetched = await github.queuedNumbers(repositoryPaths: due)
+        for (path, numbers) in fetched {
+            answers[path] = numbers
+            metadata.queuedCache[path] = numbers.sorted()
+            metadata.fetchedAt["queue#" + path] = Date()
+        }
+        store.save(metadata)
+        return answers
     }
 
     /// Forgets when one pull request was last asked about, so the

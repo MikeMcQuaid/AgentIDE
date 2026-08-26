@@ -47,11 +47,12 @@ public struct PaneLayout: Hashable, Sendable {
 
     // MARK: Public
 
-    /// Slim enough for icon-and-truncated-text rows while staying
-    /// wider than the traffic lights band. The lower bound also
-    /// sets how small the window itself can be dragged, since the
-    /// sidebar holds whatever width it is given.
-    public static let sidebarRange = 130.0 ... 440.0
+    /// No narrower than one full row with every badge: rows never
+    /// wrap, so a sidebar narrower than that would only hide their
+    /// ends. The lower bound also sets how small the window itself
+    /// can be dragged, since the sidebar holds whatever width it is
+    /// given.
+    public static let sidebarRange = 300.0 ... 440.0
 
     /// What Resize Panes gives the sidebar: enough for a repository
     /// and a branch to read without wrapping or ellipsis, which its

@@ -163,7 +163,12 @@ bare exit code.
   `key=value` lines because the sandbox has no JSON tool, written by
   whichever surface starts a session and merged rather than replaced by
   both, with the app publishing what only it can know (the repositories,
-  and each agent's discovered models and efforts) on every poll. The model
+  and each agent's discovered models and efforts) on every poll. The
+  discovered models are asked of every CLI at once after the first
+  reading and kept in the metadata store under the CLI's version, read
+  from the host in milliseconds, so they are asked for again only when
+  the CLI has changed: `claude models` is a twenty-second sandbox launch,
+  which no relaunch should wait on. The model
   and effort are kept under their agent's name, since the form keeps one
   pair and Codex's model means nothing to Claude. An
   answer that is neither a number nor a name is asked again rather than
@@ -742,7 +747,16 @@ shim rather than a protocol:
 3. Every pull request question the app asks goes through one gate,
    `PullRequestStore`, which owns both the answers and the moments they
    arrived: listings, enriched headers, conversations, review threads,
-   merge queues. One pull request is never asked about twice inside a
+   merge queues. A branch's listing, the question the sidebar asks
+   most, goes through REST rather than `gh pr list`'s GraphQL, because
+   REST answers carry entity tags: the last one travels back as
+   `If-None-Match`, GitHub answers an unchanged listing with a 304 that
+   costs no rate limit and no body, and the cache stands. The other
+   scopes stay GraphQL, which has no tags, and the merge queues of every
+   repository are one aliased GraphQL query a minute rather than one
+   each. The pull request tab polls by
+   attention like the sidebar does: the worktree in front of you at the
+   minute floor, one kept mounted behind another every five minutes. One pull request is never asked about twice inside a
    minute however much is clicked, and because the timers live in the
    metadata file beside the answers, quitting and relaunching does not
    restart the asking. Acting on a pull request (merging, queueing,
@@ -751,7 +765,15 @@ shim rather than a protocol:
    tiered by attention: the selected worktree refreshes most often, then
    its repository's other worktrees, then other expanded repositories;
    repositories collapsed in the sidebar poll rarely, and a failed poll
-   keeps the cached answer. Everything the store holds paints instantly,
+   keeps the cached answer. The sidebar's git reading is tiered the same
+   way: the selected repository's worktrees are read every tick, an
+   idle repository's every half minute, its rows kept between readings
+   with only their sessions brought up to date from the pane listing
+   already in hand (`GitReadScope`), since twenty-nine repositories at
+   four git calls per worktree every five seconds was most of everything
+   the app did. A repository's full name comes from its remote's URL, a
+   local read, never from `gh repo view`, which was a network round trip
+   per repository per poll. Everything the store holds paints instantly,
    on pane switches and across restarts, before any fetch refreshes it.
    A listed pull request and its opened conversation share one header
    view, padding, height and browser button included, with the back
@@ -815,7 +837,13 @@ shim rather than a protocol:
    is fetched in the background as soon as one of them loads, so the
    strip moves like a tab switch rather than a load. A
    stacked branch's pull request opens against the branch below it, which
-   is one `--base` flag. Inference cannot tell a branch that belongs to
+   is one `--base` flag; its form fills from the entry's own span
+   (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, and
+   stays disabled with Open PR while any branch below it is not on the
+   remote, since a pull request cannot target a base GitHub has never
+   seen. A disclosure for a session launched on the pickers' defaults
+   names those defaults, the runner's first model and its default
+   effort, since a default launch writes no flags to read back. Inference cannot tell a branch that belongs to
    the work in hand from an old one that merely shares a fork point, so
    the sidebar's Stack popover lists what it found and drops any branch
    named there from the stack, remembered per worktree in the metadata
@@ -836,7 +864,10 @@ shim rather than a protocol:
    what it is built on and how much rides on it. That chain says nothing
    until the pull requests are open and based on each other, which is
    every stack before it is submitted, so a chain of one falls back to
-   the stack derived from the worktree itself, a few worktrees per
+   the stack derived from the worktree itself (persisted with the
+   sidebar snapshot and fresh for one interval on launch, since
+   deriving every one was a hundred `merge-base` calls in the first
+   second of every start), a few worktrees per
    refresh on a minute's rota to keep the git calls off the poll's
    critical path. A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes

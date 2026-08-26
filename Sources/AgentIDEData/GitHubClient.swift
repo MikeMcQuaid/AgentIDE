@@ -107,12 +107,11 @@ public struct GitHubClient: Sendable {
     /// every lookup die on an unknown flag, which read downstream as
     /// a missing origin.
     public func fullName(repositoryPath: String) async -> String? {
-        let result = try? await gh(
-            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
-            in: repositoryPath,
-        )
-        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? nil : name
+        // The remote's URL names the repository, and reading it is a
+        // local git call; asking GitHub the same was one network
+        // round trip per repository per poll.
+        let name = URL(fileURLWithPath: repositoryPath).lastPathComponent
+        return await GitClient(runner: runner).fullName(of: Repository(name: name, path: repositoryPath))
     }
 
     /// Opens a pull request from the worktree's branch; returns its

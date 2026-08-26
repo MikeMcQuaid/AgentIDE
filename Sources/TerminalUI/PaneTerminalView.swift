@@ -333,7 +333,12 @@ final class BlockSelector {
             return CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
         }
 
-        return CGSize(width: optimal.width / CGFloat(columns), height: optimal.height / CGFloat(rows))
+        // The optimal width includes a shell pane's scroller; the
+        // grid stops short of it, and measuring against the full
+        // width put every column a cell right and copied blanks.
+        let scroller = view.subviews.compactMap { $0 as? NSScroller }.first { $0.isHidden == false }
+        let gridWidth = optimal.width - (scroller?.frame.width ?? 0)
+        return CGSize(width: gridWidth / CGFloat(columns), height: optimal.height / CGFloat(rows))
     }
 
     private func update(to point: CGPoint, in view: PaneTerminalView) {
