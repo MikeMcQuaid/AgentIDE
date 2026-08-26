@@ -32,12 +32,15 @@ public struct BranchStackStrip: View {
                 if let base = stack.base {
                     Text(base)
                         .foregroundStyle(.secondary)
+                        .contextMenu { copyItem(base) }
                     arrow
                 }
                 ForEach(Array(stack.branches.enumerated()), id: \.element) { index, branch in
                     Button(branch) { onSelect(branch) }
                         .disabled(isEnabled(branch) == false)
                         .buttonStyle(.plain)
+                        // Copyable even when it cannot be opened yet.
+                        .contextMenu { copyItem(branch) }
                         .fontWeight(branch == selected ? .semibold : .regular)
                         .foregroundStyle(branch == stack.checkedOut ? Color.primary : .secondary)
                         .hoverHelp(help(for: branch))
@@ -71,6 +74,13 @@ public struct BranchStackStrip: View {
         Text(verbatim: "←")
             .foregroundStyle(.tertiary)
             .font(.caption)
+    }
+
+    private func copyItem(_ name: String) -> some View {
+        Button("Copy branch name") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(name, forType: .string)
+        }
     }
 
     private func help(for branch: String) -> String {

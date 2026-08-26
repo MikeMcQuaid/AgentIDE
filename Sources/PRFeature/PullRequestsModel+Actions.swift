@@ -158,27 +158,6 @@ extension PullRequestsModel {
         isPushed || branchItem?.aheadOfUpstream == 0
     }
 
-    /// A one-commit branch is its own description: the form
-    /// defaults to that commit, no model involved. Blank is blank
-    /// however it got that way, whitespace included, so a saved
-    /// draft holding nothing is no reason to leave the form empty.
-    func prefillFromSingleCommit(_ worktree: Worktree) async {
-        guard Self.isBlank(prTitle), Self.isBlank(prBody) else {
-            return
-        }
-
-        let commits = await fetchCommitMessages(worktree, listedRange)
-        if commits.count == 1, let only = commits.first {
-            apply(description: Self.description(splitFromMessage: only))
-        }
-    }
-
-    /// Whether a field holds nothing to lose: empty, or whitespace
-    /// alone.
-    static func isBlank(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     /// Fills the form's blank fields from the branch's commits: the
     /// one commit's own message when there is only one, otherwise a
     /// draft from the on-device model; false opens the errors
@@ -215,16 +194,6 @@ extension PullRequestsModel {
         return true
     }
 
-    /// Fills only the blank fields, so typed text always wins.
-    func apply(description: (title: String, body: String)) {
-        if Self.isBlank(prTitle) {
-            prTitle = description.title
-        }
-        if Self.isBlank(prBody) {
-            prBody = description.body
-        }
-    }
-
     /// What a push is reported as, which depends on where it went:
     /// a branch that went to a fork is worth saying so about, since
     /// it is not in the repository being looked at.
@@ -234,17 +203,6 @@ extension PullRequestsModel {
         }
 
         return "Pushed " + branch + " to " + owner + "'s fork, since this repository is not yours to push to."
-    }
-
-    /// Splits one commit message into the form's title and body.
-    /// The body comes back unwrapped: commit messages are wrapped by
-    /// hand to a narrow column, and a pull request reflows its own
-    /// text, so the hand-wrapping reads as broken bullets there.
-    static func description(splitFromMessage message: String) -> (title: String, body: String) {
-        let lines = message.split(separator: "\n", omittingEmptySubsequences: false)
-        let title = lines.first.map(String.init) ?? ""
-        let body = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return (title, Wrapping.unwrapped(body))
     }
 
     /// Opens the pull request from the form's title and body, with

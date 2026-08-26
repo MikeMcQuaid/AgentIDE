@@ -855,8 +855,8 @@ shim rather than a protocol:
    is one `--base` flag; its form fills from the entry's own span
    (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, and
    cannot be listed at all while any branch below it is not on the
-   remote, since a pull request cannot target a base GitHub has never
-   seen: the strip keeps those entries out of reach in the pull request
+   remote or has no open pull request, since a pull request cannot
+   target a base GitHub has no pull request for: the strip keeps those entries out of reach in the pull request
    tab (the review strip still shows them), and the first unpushed entry
    lists so it can be pushed and opened from its own form. A disclosure for a session launched on the pickers' defaults
    names those defaults, the runner's first model and its default

@@ -177,7 +177,20 @@ extension PullRequestsModel {
             return true
         }
 
-        return stacking.stack.branches[..<index].contains { stacking.unpushedBranches.contains($0) } == false
+        return stacking.stack.branches[..<index].contains { isBlocking($0) } == false
+    }
+
+    /// Whether a branch below stops the entries above it: not on the
+    /// remote, or on it without an open pull request, since a pull
+    /// request above it would target a base GitHub has no pull
+    /// request for. The pull request state is the store's cached
+    /// listing for that branch, which the stack prefetch fills.
+    private func isBlocking(_ branch: String) -> Bool {
+        if stacking.unpushedBranches.contains(branch) {
+            return true
+        }
+        let listed = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
+        return listed.contains { $0.state == "OPEN" } == false
     }
 
     /// The nearest branch below the listed one that the remote
@@ -190,7 +203,7 @@ extension PullRequestsModel {
             return nil
         }
 
-        return stacking.stack.branches[..<index].last { stacking.unpushedBranches.contains($0) }
+        return stacking.stack.branches[..<index].last { isBlocking($0) }
     }
 
     /// Puts every branch back on the one below it and says what

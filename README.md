@@ -174,8 +174,10 @@ before shipping.
   the sidebar says where a branch stands in its stack, from git before
   its pull requests are open and from them afterwards, each opening
   against the branch below it with a form filled from that entry's own
-  commits, entries above an unpushed branch out of reach in the pull
-  request tab until it is pushed and opened (they still review),
+  commits (one commit's message, or the first subject over the rest
+  listed), entries above a branch not yet pushed and opened out of
+  reach in the pull request tab (they still review, and every name in
+  the strip copies from its menu),
   and two buttons put the whole stack
   back in order, push it bottom up and submit it, opening the pull
   requests it lacks and stacking them on GitHub,
