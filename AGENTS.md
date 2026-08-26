@@ -149,6 +149,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   publishes no change, so asking twice for one page did nothing.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
+- `Validate plug-in "SwiftTermBuildInfoPlugin"` failing a build means
+  a non-interactive `xcodebuild` met an untrusted package plugin
+  (SwiftTerm 1.19 ships one); only the Xcode app can show the trust
+  prompt, so every script passes `-skipPackagePluginValidation`.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
   most tests. The toolchain is a downloadable asset each user mounts

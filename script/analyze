@@ -30,12 +30,11 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
-  args+=(-skipPackagePluginValidation)
-  periphery_build_args=(-- -skipPackagePluginValidation)
-else
-  periphery_build_args=()
-fi
+# Package plugins are trusted everywhere, as in script/build: only
+# the Xcode app can show the trust prompt a non-interactive build
+# would otherwise fail on.
+args+=(-skipPackagePluginValidation)
+periphery_build_args=(-- -skipPackagePluginValidation)
 
 # A failed build must never be analysed: SwiftLint and periphery
 # both read what the build produced, so a broken or stale build

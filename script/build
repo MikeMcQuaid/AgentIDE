@@ -46,9 +46,11 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
-  ARGS+=(-skipPackagePluginValidation)
-fi
+# Package plugins are trusted everywhere: SwiftTerm 1.19 ships a
+# build-tool plugin, and a non-interactive xcodebuild fails on an
+# untrusted one where the Xcode app would have asked. The prompt is
+# the app's alone, so the flag is the only answer from a script.
+ARGS+=(-skipPackagePluginValidation)
 
 xcodebuild "${ARGS[@]}" "${ACTIONS[@]}"
 
