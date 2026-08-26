@@ -853,7 +853,11 @@ shim rather than a protocol:
    strip moves like a tab switch rather than a load. A
    stacked branch's pull request opens against the branch below it, which
    is one `--base` flag; its form fills from the entry's own span
-   (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, and
+   (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, the
+   symbolic `origin/HEAD` resolved through the same default-base lookup
+   the sidebar uses, since a worktree whose remote never had its head
+   set cannot resolve it and git then listed the branch back to the root,
+   every merged pull request included; merge commits never count. And
    cannot be listed at all while any branch below it is not on the
    remote or has no open pull request, since a pull request cannot
    target a base GitHub has no pull request for: the strip keeps those entries out of reach in the pull request

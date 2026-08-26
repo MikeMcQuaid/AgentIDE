@@ -97,6 +97,30 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
+    func `a branch's commit messages are its own even where origin/HEAD is unset`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "feature",
+            path: repository.path,
+        )
+        try await Self.commit("first", in: repository.path)
+        try await Self.commit("second", in: repository.path)
+        _ = try await TestSupport.runGit(["checkout", "-b", "feature"], in: repository.path)
+        try await Self.commit("feature work", in: repository.path)
+
+        // This repository has no remote, so `origin/HEAD` names
+        // nothing; git given the raw range listed the branch back
+        // to the root, every commit on main included.
+        let messages = await world.service.commitMessages(worktree: worktree, range: "origin/HEAD..feature")
+
+        #expect(messages == ["feature work"])
+    }
+
+    @Test
     func `a branch left out of the stack stops being counted in it`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }

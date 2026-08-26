@@ -282,7 +282,8 @@ public extension GitClient {
     /// oldest first, for drafting pull request descriptions.
     func commitMessages(worktreePath: String, range: String) async -> [String] {
         let result = try? await git(
-            ["log", "--reverse", "--format=%B%x1e", range],
+            // Merges are history, not the branch's own work.
+            ["log", "--reverse", "--no-merges", "--format=%B%x1e", range],
             in: worktreePath,
             allowFailure: true,
         )

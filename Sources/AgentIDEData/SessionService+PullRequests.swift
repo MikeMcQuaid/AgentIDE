@@ -139,7 +139,18 @@ public extension SessionService {
     /// entry's own span (`parent..branch`), nil the checked-out
     /// branch against the default.
     func commitMessages(worktree: Worktree, range: String? = nil) async -> [String] {
-        await git.commitMessages(worktreePath: worktree.path, range: range ?? "origin/HEAD..HEAD")
+        // `origin/HEAD` names the default branch symbolically; a
+        // worktree whose remote never had its head set cannot
+        // resolve it, and git then listed the branch back to the
+        // root, every merged pull request included. The resolved
+        // default base stands in for it.
+        var span = range ?? "origin/HEAD..HEAD"
+        if span.hasPrefix("origin/HEAD..") {
+            let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+            let base = await git.defaultBaseRef(of: repository) ?? "origin/HEAD"
+            span = base + span.dropFirst("origin/HEAD".count)
+        }
+        return await git.commitMessages(worktreePath: worktree.path, range: span)
     }
 
     /// A pull request title and body drafted by the on-device model,
