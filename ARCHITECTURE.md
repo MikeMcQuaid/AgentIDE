@@ -1104,6 +1104,22 @@ sidebar of many repositories under a few owners fetches a few times and a
 GitHub outage leaves the icons showing. A failed fetch is silent: the icon
 is decoration and the messages pane is for what the user can act on.
 
+The one file the app writes outside its own support directory is the
+performance log, and only when asked for: with `AGENTIDE_PERFORMANCE_LOG`
+set, or a `performance-log` marker file present, every process the app
+runs, every `gh` call and every cache hit or miss of the pull request
+store is appended as one line to
+`/Users/Shared/sv-<user>/tmp/agentide/performance.log`, a directory both
+users can read since either may be the one reading it back. The gate is
+decided once per launch and is off by default, so a build by anyone else
+writes nothing anywhere. Lines older than a week are swept on the next
+write, and the metadata store's dated caches (listings, headers,
+conversations, threads) age out at a week on every save, beside their
+count caps, so neither grows past a week of use. Logging and caching are
+otherwise the host user's: the metadata store and the avatars live in the
+host's Application Support, and the sandbox user writes no cache of its
+own.
+
 ## Security model
 
 Trust boundaries, numbered:

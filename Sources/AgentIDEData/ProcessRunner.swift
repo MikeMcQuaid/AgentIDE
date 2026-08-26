@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 // MARK: - ProcessResult
@@ -128,18 +129,34 @@ public struct FoundationProcessRunner: ProcessRunner {
         workingDirectory: String?,
         environment: [String: String],
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global().async {
-                do {
-                    try continuation.resume(returning: Self.runBlocking(arguments, workingDirectory, environment))
-                } catch {
-                    continuation.resume(throwing: error)
+        // Every process the app runs passes through here, so this is
+        // where each one's cost is recorded: the command's first
+        // words name it, the directory says what it was about.
+        try await PerformanceLog.time(
+            .process,
+            arguments.prefix(Self.namedWords).joined(separator: " "),
+            context: workingDirectory ?? "",
+        ) {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global().async {
+                    do {
+                        try continuation.resume(
+                            returning: Self.runBlocking(arguments, workingDirectory, environment),
+                        )
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
         }
     }
 
     // MARK: Private
+
+    /// How many words of a command name it in the log: enough for
+    /// `git rev-list --count` or `gh pr list` without the arguments
+    /// that make every line unique.
+    private static let namedWords = 3
 
     private static func runBlocking(
         _ arguments: [String],

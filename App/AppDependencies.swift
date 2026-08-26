@@ -10,9 +10,6 @@ final class AppDependencies {
 
     init() {
         let paths = WorkspacePaths.current()
-        // The timing log goes where both users can read it, beside
-        // everything else the app writes for itself.
-        TimingLog.file = paths.agentideDirectory + "/timings.log"
         let runner = FoundationProcessRunner()
         let gitClient = GitClient(runner: runner)
         let githubClient = GitHubClient(runner: runner)

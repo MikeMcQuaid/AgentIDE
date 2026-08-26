@@ -154,7 +154,7 @@ extension RootView {
         // The item on screen is checked against herdr alone: a full
         // refresh reads every worktree's git state too, which is
         // seconds on a wide sidebar, to answer one yes-or-no.
-        let alive = await TimingLog.time("resume: is a session already live", context: context) {
+        let alive = await PerformanceLog.time(.process, "resume: is a session already live", context: context) {
             await dependencies.service.hasLiveSession(worktreePath: item.worktree.path)
         }
         guard alive == false else {
@@ -162,7 +162,7 @@ extension RootView {
         }
 
         do {
-            try await TimingLog.time("resume: launch", context: context) {
+            try await PerformanceLog.time(.process, "resume: launch", context: context) {
                 if let past = item.pastSessions.first {
                     _ = try await dependencies.service.resumePast(past, worktree: item.worktree)
                 } else {
@@ -172,7 +172,7 @@ extension RootView {
         } catch {
             dependencies.dashboard.report(error.localizedDescription)
         }
-        await TimingLog.time("resume: list until running", context: context) {
+        await PerformanceLog.time(.process, "resume: list until running", context: context) {
             await sessionStarted(in: item.worktree.path)
         }
     }

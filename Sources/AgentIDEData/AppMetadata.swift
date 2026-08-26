@@ -275,6 +275,14 @@ public struct AppMetadata: Codable, Sendable {
         // "ask again", which is what its absence says too.
         let stale = Date().addingTimeInterval(-Self.stampLife)
         fetchedAt = fetchedAt.filter { $0.value > stale }
+        // The dated caches age out at a week: a listing, header,
+        // conversation or thread set unread for that long is not
+        // worth the file it takes up.
+        let old = Date().addingTimeInterval(-Self.cacheLife)
+        pullRequestListsCache = pullRequestListsCache.filter { $0.value.savedAt > old }
+        conversationCache = conversationCache.filter { $0.value.savedAt > old }
+        enrichedSummaryCache = enrichedSummaryCache.filter { $0.value.savedAt > old }
+        threadsCache = threadsCache.filter { $0.value.savedAt > old }
         if threadsCache.count > Self.conversationCap {
             let newest = threadsCache
                 .sorted { $0.value.savedAt > $1.value.savedAt }
@@ -289,6 +297,9 @@ public struct AppMetadata: Codable, Sendable {
     /// slowest poll interval, short enough that the file does not
     /// collect a line per pull request ever seen.
     private static let stampLife: TimeInterval = 86_400
+
+    /// A week: how long a cached value is kept unread.
+    private static let cacheLife: TimeInterval = 604_800
 
     /// Enough for every recently visited conversation and listing
     /// without the file growing forever.

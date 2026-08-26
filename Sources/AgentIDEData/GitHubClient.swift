@@ -187,6 +187,10 @@ public struct GitHubClient: Sendable {
 
     // MARK: Internal
 
+    /// How many words of a `gh` call name it in the performance log:
+    /// `pr list`, `pr view`, never the arguments after.
+    static let loggedWords = 2
+
     /// A remembered answer, including the answer that there is none.
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
@@ -268,7 +272,15 @@ public struct GitHubClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
-        let result = try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        // `gh` is the app's network: the process funnel already
+        // times it, and this line says which calls were GitHub's.
+        let result = try await PerformanceLog.time(
+            .network,
+            "gh " + arguments.prefix(Self.loggedWords).joined(separator: " "),
+            context: directory ?? "",
+        ) {
+            try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        }
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "gh " + arguments.joined(separator: " "), result: result)
         }

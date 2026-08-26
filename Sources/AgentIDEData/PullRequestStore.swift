@@ -230,10 +230,13 @@ public struct PullRequestStore: Sendable {
     /// Whether enough time has passed to ask again. A caller asking
     /// for less than the floor gets the floor.
     func due(_ key: String, interval: TimeInterval) -> Bool {
-        guard let last = store.load().fetchedAt[key] else {
-            return true
-        }
-
-        return Date().timeIntervalSince(last) >= max(interval, Self.minimumInterval)
+        let isDue: Bool =
+            if let last = store.load().fetchedAt[key] {
+                Date().timeIntervalSince(last) >= max(interval, Self.minimumInterval)
+            } else {
+                true
+            }
+        PerformanceLog.record(cacheHit: isDue == false, key)
+        return isDue
     }
 }

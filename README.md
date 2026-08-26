@@ -244,10 +244,13 @@ before shipping.
   git questions at once, on a machine built for exactly that (so a
   wide sidebar refreshes in the time its slowest worktree takes, not
   the sum of all of them)
-- **Times** every launch, resume and listing step into a plain log at
-  `agentide/timings.log` in the shared workspace, readable by both
-  users, each line dropped a day after it is written (so a slow
-  resume can be read back rather than guessed at)
+- **Times** every process it runs, every GitHub call and every cache
+  hit or miss into a plain performance log, but only when asked:
+  set `AGENTIDE_PERFORMANCE_LOG` or drop a `performance-log` marker
+  file in `/Users/Shared/sv-<user>/tmp/agentide`, where the log then
+  lives so both users can read it, and lines older than a week are
+  swept (so a slow resume can be read back rather than guessed at,
+  and a build of the app by anyone else writes nothing anywhere)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the
   utility pane (so nothing is lost to a status line that scrolled past or
