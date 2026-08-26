@@ -59,7 +59,7 @@ extension PullRequestsModelTests {
         model.prBody = "Why it matters"
         model.prTemplate = "- [x] Tested"
         // The commit would otherwise fill a form it thinks is empty.
-        model.fetchCommitMessages = { _ in ["Some commit\n\nIts body"] }
+        model.fetchCommitMessages = { _, _ in ["Some commit\n\nIts body"] }
 
         // Push and rebase both reload the form underneath the user.
         #expect(await model.push())

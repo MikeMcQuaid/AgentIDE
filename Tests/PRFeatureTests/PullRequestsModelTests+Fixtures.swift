@@ -20,7 +20,7 @@ extension PullRequestsModelTests {
         model.fetchThreads = { _ in [] }
         model.performCreate = { _, _, _ in "" }
         model.fetchTemplate = { _ in nil }
-        model.fetchCommitMessages = { _ in [] }
+        model.fetchCommitMessages = { _, _ in [] }
         model.generateDescription = { _ in nil }
         model.fillTemplate = { _, _ in nil }
         model.performMergeChange = { _ in

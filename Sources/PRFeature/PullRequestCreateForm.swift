@@ -14,9 +14,14 @@ struct PullRequestCreateForm: View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             Text("No open pull request for this branch")
                 .font(.subheadline.weight(.semibold))
+            if let below = model.unpushedBelow {
+                Text("Waiting on `" + below + "` below it to be pushed and opened first")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             TextField("Title", text: $model.prTitle)
                 .textFieldStyle(.roundedBorder)
-                .disabled(isGenerating)
+                .disabled(isGenerating || isBlocked)
                 .overlay(alignment: .trailing) { generateButton.padding(.trailing, Self.overlayPadding) }
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
             Text("Body").font(.caption).foregroundStyle(.secondary)
@@ -25,7 +30,7 @@ struct PullRequestCreateForm: View {
                 .frame(minHeight: Self.bodyMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
-                .disabled(isGenerating)
+                .disabled(isGenerating || isBlocked)
                 .hoverHelp("The description in your own words; the template below is appended after it")
             templateSection
         }
@@ -50,6 +55,13 @@ struct PullRequestCreateForm: View {
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
+
+    /// Whether a branch below this one is not on the remote yet:
+    /// nothing here can be opened until it is, so nothing is typed
+    /// into a form that cannot be sent.
+    private var isBlocked: Bool {
+        model.unpushedBelow != nil
+    }
 
     /// The repository's template with its tick-all shortcut.
     @ViewBuilder private var templateSection: some View {
@@ -80,7 +92,7 @@ struct PullRequestCreateForm: View {
                 .frame(minHeight: Self.templateMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
-                .disabled(isGenerating)
+                .disabled(isGenerating || isBlocked)
                 .hoverHelp("The repository's pull request template, editable; appended below the body")
         }
     }

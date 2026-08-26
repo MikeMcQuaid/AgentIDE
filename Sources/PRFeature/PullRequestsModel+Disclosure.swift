@@ -54,11 +54,16 @@ extension PullRequestsModel {
             return nil
         }
 
+        // A launch with the picker's defaults writes no flags, so
+        // the defaults are what ran: the runner's first model and
+        // its default effort, the same the picker showed.
         let arguments = metadata.arguments[session] ?? ""
-        let model = Self.model(inArguments: arguments).map { " with " + AgentOptionName.display($0) } ?? ""
-        let effort = Self.effort(inArguments: arguments)
-            .map { " at " + AgentOptionName.display($0) + " effort" } ?? ""
-        return agent.displayName + model + effort + ", with local review and testing."
+        let choices = launchChoices(agent)
+        let model = Self.model(inArguments: arguments) ?? choices.models.first
+        let effort = Self.effort(inArguments: arguments) ?? choices.defaultEffort
+        let named = model.map { " with " + AgentOptionName.display($0) } ?? ""
+        let level = effort.map { " at " + AgentOptionName.display($0) + " effort" } ?? ""
+        return agent.displayName + named + level + ", with local review and testing."
     }
 
     /// The model out of the arguments a session was started with;

@@ -1,10 +1,12 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 @testable import PRFeature
 import Testing
 
 /// The AI disclosure the pull request form writes into a template's
 /// own section, which is what the Homebrew repositories ask for.
+@MainActor
 struct PullRequestDisclosureTests {
     // MARK: Internal
 
@@ -39,6 +41,25 @@ struct PullRequestDisclosureTests {
         )
         #expect(ticked?.contains("- [x] I did not use AI/LLM") == true)
         #expect(ticked?.contains("with local review and testing.") == true)
+    }
+
+    @Test
+    func `a session started on the picker's defaults discloses those defaults`() {
+        let file = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-disclosure-" + UUID().uuidString + ".json")
+            .path
+        defer { try? FileManager.default.removeItem(atPath: file) }
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)], metadataFile: file)
+        model.launchChoices = { _ in (["fable", "opus"], "high") }
+        // A default launch writes no flags: the arguments are empty.
+        var metadata = model.store.load()
+        metadata.sessionsByWorktree["/worktrees/feature"] = "agentide--repo--feature--claude"
+        metadata.arguments["agentide--repo--feature--claude"] = ""
+        model.store.save(metadata)
+
+        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
     }
 
     @Test

@@ -286,7 +286,8 @@ struct PullRequestFooterView: View {
             // with its placeholders intact helps nobody.
             disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
                 || model.isFullyPushed == false
-                || model.templateUnedited,
+                || model.templateUnedited
+                || model.unpushedBelow != nil,
         ) {
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -294,9 +295,10 @@ struct PullRequestFooterView: View {
         }
         .keyboardShortcut(.return, modifiers: .command)
         .hoverHelp(
-            model.templateUnedited
-                ? "Fill in the template before opening: it still reads as the repository wrote it"
-                : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed",
+            model.unpushedBelow.map { "Push and open `" + $0 + "` below this one first" }
+                ?? (model.templateUnedited
+                    ? "Fill in the template before opening: it still reads as the repository wrote it"
+                    : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed"),
         )
     }
 

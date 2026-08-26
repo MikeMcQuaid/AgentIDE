@@ -278,9 +278,9 @@ public extension GitClient {
 
     /// The branch's full commit messages beyond the base ref,
     /// oldest first, for drafting pull request descriptions.
-    func commitMessages(worktreePath: String, baseRef: String) async -> [String] {
+    func commitMessages(worktreePath: String, range: String) async -> [String] {
         let result = try? await git(
-            ["log", "--reverse", "--format=%B%x1e", baseRef + "..HEAD"],
+            ["log", "--reverse", "--format=%B%x1e", range],
             in: worktreePath,
             allowFailure: true,
         )

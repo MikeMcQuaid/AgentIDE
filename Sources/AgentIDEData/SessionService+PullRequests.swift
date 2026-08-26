@@ -129,8 +129,17 @@ public extension SessionService {
 
     /// The branch's full commit messages beyond origin/HEAD, oldest
     /// first, for drafting pull request descriptions.
-    func commitMessages(worktree: Worktree) async -> [String] {
-        await git.commitMessages(worktreePath: worktree.path, baseRef: "origin/HEAD")
+    /// The effort an agent runs at when no flag names one, for the
+    /// disclosure of a session started on the picker's defaults.
+    func defaultEffort(for agent: AgentKind) -> String? {
+        runner(for: agent).defaultEffort
+    }
+
+    /// The commits a pull request would carry: `range` names a stack
+    /// entry's own span (`parent..branch`), nil the checked-out
+    /// branch against the default.
+    func commitMessages(worktree: Worktree, range: String? = nil) async -> [String] {
+        await git.commitMessages(worktreePath: worktree.path, range: range ?? "origin/HEAD..HEAD")
     }
 
     /// A pull request title and body drafted by the on-device model,

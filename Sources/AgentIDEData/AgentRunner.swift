@@ -37,6 +37,11 @@ public protocol AgentRunner: Sendable {
     /// order.
     var efforts: [String] { get }
 
+    /// The effort a launch without a flag runs at, for saying what a
+    /// session started on defaults actually used; nil when the CLI
+    /// keeps that to itself.
+    var defaultEffort: String? { get }
+
     /// The argv that lists the agent's current models, asked at app
     /// startup so the picker tracks the CLI rather than a hardcoded
     /// list.
@@ -160,6 +165,11 @@ public struct ClaudeCodeRunner: AgentRunner {
         ["low", "medium", "high", "xhigh", "max"]
     }
 
+    /// What Claude Code runs at when not told otherwise.
+    public var defaultEffort: String? {
+        "high"
+    }
+
     /// How Claude Code names a working directory's transcript
     /// directory: every path separator, dot and underscore becomes a
     /// dash, so `install_method` lives under `install-method`.
@@ -246,6 +256,11 @@ public struct CodexRunner: AgentRunner {
     /// Codex's reasoning effort levels.
     public var efforts: [String] {
         ["minimal", "low", "medium", "high", "xhigh"]
+    }
+
+    /// What Codex runs at when not told otherwise.
+    public var defaultEffort: String? {
+        "medium"
     }
 
     /// `--model` plus the reasoning effort config override.

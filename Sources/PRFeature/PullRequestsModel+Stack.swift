@@ -19,6 +19,9 @@ struct StackWork {
     /// a button with nothing to do says so by dimming.
     var needsRestack = false
     var needsPush = false
+
+    /// The branches with commits the remote lacks, bottom first.
+    var unpushedBranches: [String] = []
     var fetch: (Worktree) async -> BranchStack = { worktree in
         BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)
     }
@@ -27,7 +30,7 @@ struct StackWork {
     var push: (Worktree) async throws -> [String] = { _ in [] }
     var submit: (Worktree) async throws -> [String] = { _ in [] }
     var pending: (Worktree) async -> Bool = { _ in false }
-    var unpushed: (Worktree) async -> Bool = { _ in false }
+    var unpushed: (Worktree) async -> [String] = { _ in [] }
 }
 
 /// A stack of branches in one worktree, as the pull request tab sees
@@ -53,7 +56,7 @@ extension PullRequestsModel {
             await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
         }
         stacking.unpushed = { worktree in
-            await service.branchesUnpushed(worktree: worktree).isEmpty == false
+            await service.branchesUnpushed(worktree: worktree)
         }
     }
 
@@ -139,7 +142,33 @@ extension PullRequestsModel {
             stacking.selected = nil
         }
         stacking.needsRestack = await stacking.pending(worktree)
-        stacking.needsPush = await stacking.unpushed(worktree)
+        stacking.unpushedBranches = await stacking.unpushed(worktree)
+        stacking.needsPush = stacking.unpushedBranches.isEmpty == false
+    }
+
+    /// The listed entry's own commits as a git range, nil for a
+    /// branch on its own, whose range is the default branch's.
+    var listedRange: String? {
+        guard stacking.stack.isStacked, let listed = listedBranch,
+              let parent = stacking.stack.parent(of: listed)
+        else {
+            return nil
+        }
+
+        return parent + ".." + listed
+    }
+
+    /// The nearest branch below the listed one that the remote
+    /// lacks: a pull request opened above it would target a base
+    /// GitHub has never seen, so the form waits for that push.
+    var unpushedBelow: String? {
+        guard stacking.stack.isStacked, let listed = listedBranch,
+              let index = stacking.stack.branches.firstIndex(of: listed)
+        else {
+            return nil
+        }
+
+        return stacking.stack.branches[..<index].last { stacking.unpushedBranches.contains($0) }
     }
 
     /// Puts every branch back on the one below it and says what

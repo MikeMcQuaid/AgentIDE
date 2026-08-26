@@ -167,7 +167,7 @@ extension PullRequestsModel {
             return
         }
 
-        let commits = await fetchCommitMessages(worktree)
+        let commits = await fetchCommitMessages(worktree, listedRange)
         if commits.count == 1, let only = commits.first {
             apply(description: Self.description(splitFromMessage: only))
         }
@@ -188,7 +188,7 @@ extension PullRequestsModel {
             return false
         }
 
-        let commits = await fetchCommitMessages(worktree)
+        let commits = await fetchCommitMessages(worktree, listedRange)
         guard commits.isEmpty == false else {
             ErrorLog.shared.report("No commits beyond origin/HEAD to describe.")
             return false

@@ -28,6 +28,10 @@ struct PromptCaptureRunner: AgentRunner {
         ["true"]
     }
 
+    var defaultEffort: String? {
+        nil
+    }
+
     /// `command cat` sidesteps whatever the interactive shell the
     /// pane runs has aliased `cat` to.
     func launchCommand(extraArguments: String, promptFile: String?) -> String {
@@ -75,11 +79,21 @@ struct SessionServiceIntegrationTests {
         )
         #expect(SessionName.isAgentIDE(name))
 
-        let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("do_the") })
-        #expect(item.session?.name == name)
-        #expect(item.session?.status == SessionStatus.running)
-        let worktreePath = item.worktree.path
+        // Polled, not read once: for the instant between the pane's
+        // shell starting and it running the command, herdr reports
+        // the shell as the foreground, which reads as finished. The
+        // fake agent is not one herdr recognises, so nothing else
+        // waits for it to settle.
+        var item: WorktreeItem?
+        let running = await TestSupport.poll {
+            let overview = await world.service.overview()
+            item = overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("do_the") }
+            return item?.session?.status == SessionStatus.running
+        }
+        #expect(running)
+        let found = try #require(item)
+        #expect(found.session?.name == name)
+        let worktreePath = found.worktree.path
 
         let delivered = await TestSupport.poll {
             let prompt = try? String(contentsOfFile: worktreePath + "/agent-prompt.txt", encoding: .utf8)

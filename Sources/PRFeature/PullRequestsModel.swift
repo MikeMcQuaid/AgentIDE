@@ -75,8 +75,12 @@ final class PullRequestsModel {
             }
             return nil
         }
-        fetchCommitMessages = { worktree in
-            await service.commitMessages(worktree: worktree)
+        fetchCommitMessages = { worktree, range in
+            await service.commitMessages(worktree: worktree, range: range)
+        }
+        launchChoices = { agent in
+            let choices = service.launchChoices(for: agent)
+            return (choices.models, service.defaultEffort(for: agent))
         }
         generateDescription = { commits in
             await service.draftPullRequestDescription(fromCommits: commits)
@@ -209,6 +213,10 @@ final class PullRequestsModel {
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
     var performCreate: (Worktree, String, String) async throws -> String
+
+    /// The picker's models and the effort a launch without a flag
+    /// runs at, for a disclosure of a session started on defaults.
+    var launchChoices: (AgentKind) -> (models: [String], defaultEffort: String?) = { _ in ([], nil) }
     /// The repository's default branch, which has no pull request
     /// of its own to look for.
     let defaultBranch: String?
@@ -218,7 +226,7 @@ final class PullRequestsModel {
     var stacking: StackWork = .init()
 
     var fetchTemplate: (String) async -> String?
-    var fetchCommitMessages: (Worktree) async -> [String]
+    var fetchCommitMessages: (Worktree, String?) async -> [String]
     var generateDescription: ([String]) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
@@ -330,8 +338,14 @@ final class PullRequestsModel {
         }
         paintCachedListing()
         loadDraft()
-        if let worktree = branchItem?.worktree, refreshingFacts {
-            await refreshWorktreeFacts(worktree)
+        if let worktree = branchItem?.worktree {
+            if refreshingFacts {
+                await refreshWorktreeFacts(worktree)
+            } else {
+                // An entry switch keeps the worktree's facts but
+                // fills the form from this entry's own commits.
+                await prefillFromSingleCommit(worktree)
+            }
         }
         defer {
             isLoading = false
