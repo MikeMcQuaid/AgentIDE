@@ -24,8 +24,13 @@ public struct PullRequestStore: Sendable {
     // MARK: Public
 
     /// The shortest time between two questions about the same pull
-    /// request. Callers may ask for longer, never for less.
+    /// request. Callers may ask for longer, never for less, except
+    /// for the one-pull-request question, where a caller watching
+    /// checks run or a queue move may ask down to `inFlightFloor`.
     public static let minimumInterval: TimeInterval = 60
+
+    /// The floor for a single pull request's summary.
+    public static let inFlightFloor: TimeInterval = 30
 
     /// How long a repository's settings are taken at their word.
     public static let capabilityInterval: TimeInterval = 3_600
@@ -157,7 +162,7 @@ public struct PullRequestStore: Sendable {
         interval: TimeInterval = minimumInterval,
     ) async throws -> PullRequestSummary? {
         let key = Self.summaryKey(repositoryPath: repositoryPath, number: number)
-        guard due(key, interval: interval) else {
+        guard due(key, interval: interval, floor: Self.inFlightFloor) else {
             return store.load().enrichedSummaryCache[key]?.summary
         }
 
@@ -200,7 +205,9 @@ public struct PullRequestStore: Sendable {
         interval: TimeInterval = minimumInterval,
     ) async -> [String: Set<Int>] {
         var metadata = store.load()
-        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval) }
+        // One batched query for every repository is cheap enough to
+        // allow under the floor while something is queued.
+        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
         var answers = [String: Set<Int>]()
         for path in repositoryPaths where due.contains(path) == false {
             answers[path] = Set(metadata.queuedCache[path] ?? [])
@@ -266,10 +273,10 @@ public struct PullRequestStore: Sendable {
 
     /// Whether enough time has passed to ask again. A caller asking
     /// for less than the floor gets the floor.
-    func due(_ key: String, interval: TimeInterval) -> Bool {
+    func due(_ key: String, interval: TimeInterval, floor: TimeInterval = minimumInterval) -> Bool {
         let isDue: Bool =
             if let last = store.load().fetchedAt[key] {
-                Date().timeIntervalSince(last) >= max(interval, Self.minimumInterval)
+                Date().timeIntervalSince(last) >= max(interval, floor)
             } else {
                 true
             }

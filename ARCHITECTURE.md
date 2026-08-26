@@ -765,7 +765,14 @@ shim rather than a protocol:
    tiered by attention: the selected worktree refreshes most often, then
    its repository's other worktrees, then other expanded repositories;
    repositories collapsed in the sidebar poll rarely, and a failed poll
-   keeps the cached answer. The sidebar's git reading is tiered the same
+   keeps the cached answer. A pull request in flight jumps every tier:
+   checks still running will pass or fail, and a queued one will merge
+   or leave the queue within the hour, so both are asked about every
+   half minute, the one question allowed under the minute floor. The
+   branch listing (conditional REST) carries no checks, review or
+   mergeability, so each open pull request's state comes from the
+   one-pull-request query on its own stamp, which is also what keeps
+   the sidebar's icons true between selections. The sidebar's git reading is tiered the same
    way: the selected repository's worktrees are read every tick, an
    idle repository's every half minute, its rows kept between readings
    with only their sessions brought up to date from the pane listing

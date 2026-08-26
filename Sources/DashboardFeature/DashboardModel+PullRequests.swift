@@ -38,9 +38,12 @@ extension DashboardModel {
     /// rather than per row.
     func refreshMergeQueues() async {
         // One query for every repository due, not one each.
+        // While anything is queued the queue is what is about to
+        // change, so it is asked about as often as the pull request.
+        let anythingQueued = branchPullRequests.values.contains { $0?.isQueued == true }
         let answers = await pullRequests.queuedNumbers(
             repositoryPaths: groups.map(\.repository.path),
-            interval: Self.queueInterval,
+            interval: anythingQueued ? Self.inFlightInterval : Self.queueInterval,
         )
         for (path, numbers) in answers {
             queuedNumbers[path] = numbers
@@ -108,7 +111,19 @@ extension DashboardModel {
                         continue
                     }
 
-                    let summary = Self.displayed(summaries)
+                    // The listing says which pull request the branch has;
+                    // its checks, review and mergeability come from the
+                    // one-pull-request query, on its own stamp, since the
+                    // listing's conditional REST carries none of them.
+                    var summary = Self.displayed(summaries)
+                    if let open = summary, open.state == "OPEN",
+                       let enriched = try? await pullRequests.summary(
+                           repositoryPath: group.repository.path,
+                           number: open.number,
+                           interval: interval(for: item, collapsed: collapsed),
+                       ) {
+                        summary = enriched
+                    }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
@@ -209,6 +224,11 @@ extension DashboardModel {
 
     private static let selectedInterval: TimeInterval = 60
     private static let queueInterval: TimeInterval = 60
+
+    /// How often a pull request with checks running or a place in
+    /// the queue is asked about: the store's floor is one minute,
+    /// so this asks as soon as it may.
+    private static let inFlightInterval: TimeInterval = 30
 
     /// How long after merging or closing a pull request still speaks
     /// for a branch of the same name: thirty days.
@@ -314,6 +334,17 @@ extension DashboardModel {
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {
+        // A pull request in flight is about to change: checks still
+        // running will pass or fail, and a queued one will merge or
+        // leave the queue within the hour. Those are asked about
+        // every half minute whatever their row's tier.
+        let pullRequest = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
+            .flatMap(\.self)
+        let inFlight = pullRequest?.state == "OPEN"
+            && (pullRequest?.checks == "PENDING" || pullRequest?.isQueued == true)
+        if inFlight {
+            return Self.inFlightInterval
+        }
         if collapsed.contains(item.worktree.repositoryPath) {
             return Self.collapsedInterval
         }

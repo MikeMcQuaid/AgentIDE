@@ -106,6 +106,30 @@ struct PullRequestStoreTests {
     }
 
     @Test
+    func `one pull request in flight may be asked about every half minute, a listing may not`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-inflight") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+
+        // A summary stamped 40 seconds ago is due again at a 30
+        // second interval; the listing beside it, stamped the same,
+        // is held to the minute floor.
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        var metadata = MetadataStore(file: file).load()
+        for key in metadata.fetchedAt.keys {
+            metadata.fetchedAt[key] = Date().addingTimeInterval(-40)
+        }
+        MetadataStore(file: file).save(metadata)
+        let before = runner.calls
+
+        _ = try await store.summary(repositoryPath: "/repo", number: 7, interval: 30)
+        #expect(runner.calls == before + 1)
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"), interval: 30)
+        #expect(runner.calls == before + 1)
+    }
+
+    @Test
     func `a caller cannot ask for a shorter interval than the floor`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-floor") + "/state.json"
         let runner = CountingRunner()
