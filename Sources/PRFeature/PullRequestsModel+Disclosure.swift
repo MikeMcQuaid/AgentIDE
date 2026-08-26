@@ -51,8 +51,17 @@ extension PullRequestsModel {
         // session recorded (a stack cut by hand, a branch resumed
         // elsewhere) still has its newest conversation to say which
         // agent wrote it, on the pickers' defaults.
+        // The listed branch's own session names the agent, wherever
+        // it ran: the worktree's recorded session first, then any
+        // recorded session whose name embeds this branch, then the
+        // worktree's newest conversation.
         let metadata = store.load()
-        let session = metadata.sessionsByWorktree[worktree.path] ?? ""
+        var session = metadata.sessionsByWorktree[worktree.path] ?? ""
+        if let listed = listedBranch, SessionName.branchSlug(of: session) != SessionName.slug(listed) {
+            session = metadata.sessionsByWorktree
+                .values
+                .first { SessionName.branchSlug(of: $0) == SessionName.slug(listed) } ?? session
+        }
         guard let agent = AgentKind.allCases.first(where: { session.hasSuffix("--" + $0.rawValue) })
             ?? branchItem?.pastSessions.first?.agent
         else {

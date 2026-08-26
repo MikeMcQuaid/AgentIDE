@@ -145,8 +145,10 @@ public struct GitHubClient: Sendable {
     /// exist and keeps no local tracking of its own, so the app's
     /// own derivation stays the only thing that decides what a
     /// stack is here.
-    public func linkStack(worktreePath: String) async throws {
-        try await gh(["stack", "link"], in: worktreePath)
+    public func linkStack(worktreePath: String, numbers: [Int]) async throws {
+        // The extension links the pull requests it is handed, bottom
+        // of the stack first, and keeps no local state.
+        try await gh(["stack", "link"] + numbers.map(String.init), in: worktreePath)
     }
 
     /// Enables automerge for a pull request.

@@ -883,7 +883,12 @@ shim rather than a protocol:
    stack grows. Submit stack does the rest in one press: push
    bottom up, open a pull request for every branch missing one against the
    branch below it, titled and bodied from that branch's own commits, and
-   then `gh stack link`, GitHub's own extension, to show them as a stack.
+   then `gh stack link` with every pull request's number bottom-up,
+   GitHub's own extension, to show them as a stack; a branch whose pull
+   request already exists joins the linking rather than failing the
+   submit, and the listings are asked of GitHub directly, since
+   submitting against a minute-old cache once tried to open over an
+   existing pull request.
    Only that last step is GitHub-specific, and it links pull requests that
    already exist without keeping local tracking of its own, so what a
    stack is here stays derived from ancestry and nothing else. The sidebar says where a row stands in its

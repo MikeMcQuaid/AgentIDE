@@ -234,13 +234,22 @@ public extension SessionService {
     func submitStack(worktree: Worktree) async throws -> [String] {
         let stack = await stack(for: worktree)
         _ = try await pushStack(worktree: worktree)
+        // Whatever happens, the tab must see what was opened: a
+        // throw midway otherwise left the cache saying no pull
+        // request existed for one that did.
+        defer { pullRequests.invalidateListings(repositoryPath: worktree.repositoryPath) }
         var opened = [String]()
+        var numbers = [Int]()
         for branch in stack.branches {
-            let listed = try? await pullRequests.listing(
+            // Asked of GitHub, not the cache: submitting against a
+            // minute-old listing tried to open over a pull request
+            // that already existed.
+            let listed = try? await github.pullRequests(
                 repositoryPath: worktree.repositoryPath,
                 scope: .branch(branch),
             )
-            guard listed?.contains(where: { $0.state == "OPEN" }) != true else {
+            if let existing = listed?.first(where: { $0.state == "OPEN" }) {
+                numbers.append(existing.number)
                 continue
             }
 
@@ -255,11 +264,15 @@ public extension SessionService {
                 base: parent == stack.base ? nil : parent,
             )
             opened.append(url)
+            if let number = url.split(separator: "/").last.flatMap({ Int($0) }) {
+                numbers.append(number)
+            }
         }
-        pullRequests.invalidateListings(repositoryPath: worktree.repositoryPath)
-        if stack.isStacked {
+        // Linking needs at least two pull requests, which is what a
+        // stack is; the numbers go bottom-up, the order they build.
+        if numbers.count >= Self.linkableCount {
             await progress("Linking the stack on GitHub")
-            try await github.linkStack(worktreePath: worktree.path)
+            try await github.linkStack(worktreePath: worktree.path, numbers: numbers)
         }
         return opened
     }
@@ -317,6 +330,9 @@ public extension SessionService {
     }
 
     // MARK: Internal
+
+    /// The fewest pull requests `gh stack link` will link: a stack.
+    internal static let linkableCount = 2
 
     /// Refuses while the worktree holds uncommitted work: a stack
     /// moves by checking branches out, which would take those
