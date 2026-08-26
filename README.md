@@ -76,9 +76,11 @@ before shipping.
   needed)
 - **Watches** what is about to change: a pull request whose checks are
   still running, or that is sitting in the merge queue, is asked about
-  every half minute whatever its row's place in the sidebar (so the
-  amber dot turns green or red, and a queued pull request merges,
-  about as soon as GitHub knows)
+  every half minute whatever its row's place in the sidebar, until
+  checks have been running a full hour, which is a stalled run or
+  GitHub itself rather than a result on its way (so the amber dot
+  turns green or red, and a queued pull request merges, about as soon
+  as GitHub knows, and an outage does not cost two calls a minute)
 - **Says** what a branch is doing in GitHub's own icons: green for an open
   pull request or a repository's own branch, purple once merged, orange
   while it actually sits in the merge queue, grey for a draft; then its

@@ -174,8 +174,24 @@ public struct PullRequestStore: Sendable {
         var metadata = store.load()
         metadata.enrichedSummaryCache[key] = CachedSummary(summary: fetched)
         metadata.fetchedAt[key] = Date()
+        // The moment checks were first seen running, kept until they
+        // finish, so a run stuck for an hour can be told from one
+        // about to end.
+        if fetched.checks == "PENDING" {
+            metadata.pendingSince[key] = metadata.pendingSince[key] ?? Date()
+        } else {
+            metadata.pendingSince.removeValue(forKey: key)
+        }
         store.save(metadata)
         return fetched
+    }
+
+    /// How long a pull request's checks have been seen running, nil
+    /// when they are not.
+    public func pendingFor(repositoryPath: String, number: Int) -> TimeInterval? {
+        store.load()
+            .pendingSince[Self.summaryKey(repositoryPath: repositoryPath, number: number)]
+            .map { Date().timeIntervalSince($0) }
     }
 
     /// Whether the repository merges through a queue, which changes

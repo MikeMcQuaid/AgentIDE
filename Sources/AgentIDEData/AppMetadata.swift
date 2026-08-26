@@ -130,13 +130,14 @@ public struct AppMetadata: Codable, Sendable {
         queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
         mergeQueueCapability = try container
             .decodeIfPresent([String: Bool].self, forKey: .mergeQueueCapability) ?? [:]
-        discoveredModels = try container
-            .decodeIfPresent([String: [String]].self, forKey: .discoveredModels) ?? [:]
-        discoveredModelsVersion = try container
-            .decodeIfPresent([String: String].self, forKey: .discoveredModelsVersion) ?? [:]
-        etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
-        terminalSchemes = try container
-            .decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
+        // The newer ledgers decode as one value from the same
+        // decoder, which keeps this initialiser within its length.
+        let ledgers = try Ledgers(from: decoder)
+        discoveredModels = ledgers.discoveredModels
+        discoveredModelsVersion = ledgers.discoveredModelsVersion
+        etags = ledgers.etags
+        pendingSince = ledgers.pendingSince
+        terminalSchemes = ledgers.terminalSchemes
     }
 
     // MARK: Public
@@ -176,6 +177,12 @@ public struct AppMetadata: Codable, Sendable {
     /// that finds nothing changed is one round trip and no rate
     /// limit, which is most polls.
     public var etags: [String: String] = [:]
+
+    /// When each pull request's checks were first seen still running,
+    /// by summary key: one that has been pending an hour is more
+    /// likely a stalled check or GitHub itself than a run about to
+    /// finish, and stops being asked about every half minute.
+    public var pendingSince: [String: Date] = [:]
 
     /// "dark" or "light" per worktree path: the appearance its agent
     /// was launched under. Agent TUIs read the terminal's colours
@@ -322,6 +329,30 @@ public struct AppMetadata: Codable, Sendable {
     }
 
     // MARK: Private
+
+    /// The newer ledgers of the metadata, each absent from an older
+    /// file and decoded tolerantly.
+    private struct Ledgers: Decodable {
+        // MARK: Lifecycle
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            discoveredModels = try container.decodeIfPresent([String: [String]].self, forKey: .discoveredModels) ?? [:]
+            discoveredModelsVersion = try container
+                .decodeIfPresent([String: String].self, forKey: .discoveredModelsVersion) ?? [:]
+            etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
+            pendingSince = try container.decodeIfPresent([String: Date].self, forKey: .pendingSince) ?? [:]
+            terminalSchemes = try container.decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
+        }
+
+        // MARK: Internal
+
+        var discoveredModels: [String: [String]] = [:]
+        var discoveredModelsVersion: [String: String] = [:]
+        var etags: [String: String] = [:]
+        var pendingSince: [String: Date] = [:]
+        var terminalSchemes: [String: String] = [:]
+    }
 
     /// How long a fetch stamp is worth keeping: longer than the
     /// slowest poll interval, short enough that the file does not

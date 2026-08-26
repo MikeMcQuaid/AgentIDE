@@ -769,6 +769,10 @@ shim rather than a protocol:
    checks still running will pass or fail, and a queued one will merge
    or leave the queue within the hour, so both are asked about every
    half minute, the one question allowed under the minute floor. The
+   store remembers when a pull request's checks were first seen running;
+   past an hour the row goes back to its tier, since a run that long is
+   a stalled check or GitHub down, and an outage must not be polled at
+   twice a minute. The
    branch listing (conditional REST) carries no checks, review or
    mergeability, so each open pull request's state comes from the
    one-pull-request query on its own stamp, which is also what keeps

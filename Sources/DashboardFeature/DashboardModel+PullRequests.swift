@@ -116,13 +116,13 @@ extension DashboardModel {
                     // one-pull-request query, on its own stamp, since the
                     // listing's conditional REST carries none of them.
                     var summary = Self.displayed(summaries)
-                    if let open = summary, open.state == "OPEN",
-                       let enriched = try? await pullRequests.summary(
-                           repositoryPath: group.repository.path,
-                           number: open.number,
-                           interval: interval(for: item, collapsed: collapsed),
-                       ) {
-                        summary = enriched
+                    if let open = summary, open.state == "OPEN" {
+                        let enriched = try? await pullRequests.summary(
+                            repositoryPath: group.repository.path,
+                            number: open.number,
+                            interval: interval(for: item, collapsed: collapsed),
+                        )
+                        summary = enriched ?? summary
                     }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
@@ -229,6 +229,26 @@ extension DashboardModel {
     /// the queue is asked about: the store's floor is one minute,
     /// so this asks as soon as it may.
     private static let inFlightInterval: TimeInterval = 30
+
+    /// Checks running longer than this are a stalled run or GitHub
+    /// itself, not a result on its way, and the row goes back to
+    /// its tier rather than asking twice a minute for hours.
+    private static let pendingPatience: TimeInterval = 3_600
+
+    /// Whether a pull request is about to change: queued, or with
+    /// checks that started running less than an hour ago.
+    private func isInFlight(_ pullRequest: PullRequestSummary, in repositoryPath: String) -> Bool {
+        if pullRequest.isQueued {
+            return true
+        }
+        guard pullRequest.checks == "PENDING",
+              let pending = pullRequests.pendingFor(repositoryPath: repositoryPath, number: pullRequest.number)
+        else {
+            return false
+        }
+
+        return pending < Self.pendingPatience
+    }
 
     /// How long after merging or closing a pull request still speaks
     /// for a branch of the same name: thirty days.
@@ -340,9 +360,7 @@ extension DashboardModel {
         // every half minute whatever their row's tier.
         let pullRequest = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
-        let inFlight = pullRequest?.state == "OPEN"
-            && (pullRequest?.checks == "PENDING" || pullRequest?.isQueued == true)
-        if inFlight {
+        if let pullRequest, pullRequest.state == "OPEN", isInFlight(pullRequest, in: item.worktree.repositoryPath) {
             return Self.inFlightInterval
         }
         if collapsed.contains(item.worktree.repositoryPath) {

@@ -11,11 +11,18 @@ import Testing
 private final class CountingRunner: ProcessRunner, @unchecked Sendable {
     // MARK: Lifecycle
 
+    init(checks: String = "SUCCESS") {
+        self.checks = checks
+    }
+
     deinit {
         // Nothing to clean up.
     }
 
     // MARK: Internal
+
+    /// What the one-pull-request answer says its checks are doing.
+    var checks: String
 
     // periphery:ignore - read by the tests below.
     private(set) var calls = 0
@@ -52,12 +59,16 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
                 standardError: "",
             )
         }
+        // `pr view` answers one object and `pr list` an array; the
+        // client wraps a view answer in brackets, so an object serves
+        // both here.
         let json = """
-        [{"number": 7, "title": "Work", "url": "https://example.com/7", "headRefName": "work",
-          "baseRefName": "main", "state": "OPEN", "isDraft": false, "author": {"login": "mike"},
-          "body": ""}]
+        {"number": 7, "title": "Work", "url": "https://example.com/7", "headRefName": "work",
+         "baseRefName": "main", "state": "OPEN", "isDraft": false, "author": {"login": "mike"},
+         "body": "", "statusCheckRollup": [{"state": "\(checks)"}]}
         """
-        return ProcessResult(status: 0, standardOutput: json, standardError: "")
+        let listed = arguments.contains("list") ? "[" + json + "]" : json
+        return ProcessResult(status: 0, standardOutput: listed, standardError: "")
     }
 }
 
@@ -127,6 +138,25 @@ struct PullRequestStoreTests {
         #expect(runner.calls == before + 1)
         _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"), interval: 30)
         #expect(runner.calls == before + 1)
+    }
+
+    @Test
+    func `checks are remembered as pending from when they were first seen running`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-pending") + "/state.json"
+        let runner = CountingRunner(checks: "PENDING")
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+
+        #expect(store.pendingFor(repositoryPath: "/repo", number: 7) == nil)
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        let pending = try #require(store.pendingFor(repositoryPath: "/repo", number: 7))
+        #expect(pending < 5)
+
+        // Finished checks forget the moment, so the next run starts
+        // its own clock.
+        runner.checks = "SUCCESS"
+        store.invalidate(repositoryPath: "/repo", number: 7)
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(store.pendingFor(repositoryPath: "/repo", number: 7) == nil)
     }
 
     @Test
