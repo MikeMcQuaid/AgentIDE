@@ -476,10 +476,14 @@ Sendable` and `nonisolated(unsafe)` are banned.
    step that reports nothing while it waits still shows the app working,
    the whole block pinned near the top of the pane so it grows downwards
    rather than shifting every line each time a step arrives. It is drawn
-   ticking every second, which is what every waiting pane looks like; the version probe runs beside the naming and the worktree,
-   since it costs a sandbox launch of its own and only has to be finished
-   before the agent starts, and a kill that closed nothing skips the
-   listing that would confirm it. So a slow step names
+   ticking every second, which is what every waiting pane looks like; the version probe runs beside the naming and the worktree
+   and asks the host's own copy of the CLI (Homebrew's prefix is one
+   place for both users), since a sandbox launch wraps a sudo, an
+   environment scrub and a sandbox-exec around one line of output; a
+   resume does not ask at all, the first launch having recorded the
+   answer. A kill that closed nothing skips the listing that would
+   confirm it, and a resume checks for a live session with one pane
+   listing rather than a whole overview. So a slow step names
    itself rather than showing a blank pane; resuming narrates the same
    way, one line per command tried. The narration stays until herdr
    detects the agent's interface (`awaitReady`, bounded at a minute), so
@@ -748,9 +752,12 @@ shim rather than a protocol:
    its repository's other worktrees, then other expanded repositories;
    repositories collapsed in the sidebar poll rarely, and a failed poll
    keeps the cached answer. Everything the store holds paints instantly,
-   on pane switches and across restarts, before any fetch refreshes it;
-   the entries of a stack are warmed as soon as one of them loads, so
-   moving between its pull requests is a paint, never a load.
+   on pane switches and across restarts, before any fetch refreshes it.
+   A listed pull request and its opened conversation share one header
+   view, padding, height and browser button included, with the back
+   chevron merely dimmed in the list, so opening and closing one moves
+   no text; the entries of a stack are warmed as soon as one of them
+   loads, so moving between its pull requests is a paint, never a load.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
@@ -822,7 +829,10 @@ shim rather than a protocol:
    Only that last step is GitHub-specific, and it links pull requests that
    already exist without keeping local tracking of its own, so what a
    stack is here stays derived from ancestry and nothing else. The sidebar says where a row stands in its
-   stack (`2/3`) from the pull request chain it already caches, naming
+   stack (`2/3`) from the pull request chain the app knows: the poll's
+   per-branch answers plus every listing the shared store has cached,
+   since a stack's other branches have no worktree and their pull
+   requests only arrive through the tab. It names
    what it is built on and how much rides on it. That chain says nothing
    until the pull requests are open and based on each other, which is
    every stack before it is submitted, so a chain of one falls back to

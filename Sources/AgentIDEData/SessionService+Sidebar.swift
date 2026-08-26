@@ -1,0 +1,207 @@
+import AgentIDEDomain
+import Foundation
+
+/// The sidebar's reading of the system: every repository's worktrees
+/// joined with their sessions. Read in parallel at every level, since
+/// each worktree is a handful of git processes sharing nothing.
+public extension SessionService {
+    /// The full dashboard state: every repository's worktrees joined
+    /// with their sessions, plus foreign sessions.
+    func overview() async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
+        let panes = await (try? herdr.panes()) ?? []
+        let activity = spool.activity()
+        let metadata = store.load()
+        // Every repository is read at once, and every worktree within
+        // one at once: each is a handful of git processes that share
+        // nothing, and read one after another they were the seconds a
+        // wide sidebar took to refresh. The order is put back after.
+        let repositories = repositories()
+        var groups = await withTaskGroup(of: (Int, RepositoryGroup).self) { tasks in
+            for (index, repository) in repositories.enumerated() {
+                tasks.addTask {
+                    await (index, group(
+                        of: repository,
+                        panes: panes,
+                        activity: activity,
+                        metadata: metadata,
+                    ))
+                }
+            }
+            var collected = [(Int, RepositoryGroup)]()
+            for await result in tasks {
+                collected.append(result)
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+        // Repositories order by their worktrees' activity; the main
+        // checkout's own churn deliberately does not count, except
+        // while a session runs there, so resuming on the repository
+        // page bumps its repository to the top like a worktree does.
+        groups.sort { first, second in
+            let firstActivity = Self.repositoryActivity(of: first)
+            let secondActivity = Self.repositoryActivity(of: second)
+            return firstActivity == secondActivity
+                ? first.repository.name < second.repository.name
+                : firstActivity > secondActivity
+        }
+        let foreign = panes
+            .filter { SessionName.isAgentIDE($0.sessionName) == false }
+            .map(Self.foreignSession(of:))
+        // The poll is the only thing running while a session is, so
+        // it is what keeps the conversation copies current; the
+        // schedule inside means this costs a dictionary lookup on
+        // almost every tick.
+        await backUpRunningConversations(groups)
+        return (groups, foreign)
+    }
+
+    /// A pane AgentIDE did not create, shown rather than hidden.
+    static func foreignSession(of pane: HerdrPane) -> AgentSession {
+        AgentSession(
+            name: pane.sessionName,
+            agent: nil,
+            status: pane.isFinished ? .finished : .running,
+            workingDirectory: pane.currentPath,
+            paneID: pane.paneID,
+            activity: pane.activity,
+        )
+    }
+
+    /// The repository's own checkout as a worktree: its branch is
+    /// whatever is actually checked out, so a feature branch in the
+    /// main checkout still matches its pull request in the listing.
+    func mainCheckout(of repository: Repository, baseRef: String?) async -> Worktree {
+        await Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: git.currentBranch(worktreePath: repository.path)
+                ?? baseRef.map(Self.branchName(fromBaseRef:)) ?? "main",
+            path: repository.path,
+        )
+    }
+
+    /// One repository's group: its checkout and every worktree,
+    /// each read beside the others.
+    func group(
+        of repository: Repository,
+        panes: [HerdrPane],
+        activity: [String: Date],
+        metadata: AppMetadata,
+    ) async -> RepositoryGroup {
+        async let fullName = git.fullName(of: repository)
+        async let worktrees = (try? git.worktrees(of: repository)) ?? []
+        let baseRef = await git.defaultBaseRef(of: repository)
+        // The main checkout always appears, so repositories show
+        // with no worktrees and orphaned conversations stay
+        // reachable.
+        let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
+        var seenPaths = Set<String>()
+        let candidates = await ([mainCheckout] + worktrees).filter { seenPaths.insert($0.path).inserted }
+        let items = await withTaskGroup(of: (Int, WorktreeItem).self) { tasks in
+            for (index, worktree) in candidates.enumerated() {
+                tasks.addTask {
+                    await (index, item(
+                        worktree: worktree,
+                        baseRef: baseRef,
+                        panes: panes,
+                        activity: activity,
+                        metadata: metadata,
+                    ))
+                }
+            }
+            var collected = [(Int, WorktreeItem)]()
+            for await result in tasks {
+                collected.append(result)
+            }
+            return collected.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+        // The main checkout stays pinned first; worktrees order by
+        // recency of their own work. Directories of your own come
+        // last: they have no activity to order by and are not what
+        // the sidebar is mostly about.
+        var sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
+        sorted += await hostItems(of: repository, metadata: metadata)
+        return await RepositoryGroup(
+            repository: Repository(name: repository.name, path: repository.path, fullName: fullName),
+            items: sorted,
+            defaultBranch: baseRef.map(Self.branchName(fromBaseRef:)),
+        )
+    }
+
+    /// Nothing to count against without a base ref.
+    private func aheadBehind(of worktree: Worktree, baseRef: String?) async -> (ahead: Int, behind: Int)? {
+        guard let baseRef else {
+            return nil
+        }
+
+        return await git.aheadBehind(worktreePath: worktree.path, baseRef: baseRef)
+    }
+
+    /// One worktree's row: its session, unread state and git counts.
+    func item(
+        worktree: Worktree,
+        baseRef: String?,
+        panes: [HerdrPane],
+        activity: [String: Date],
+        metadata: AppMetadata,
+    ) async -> WorktreeItem {
+        // Matched by the recorded session name first: the pane's
+        // current path drifts when the agent changes directory,
+        // which made live sessions vanish from the UI.
+        let recorded = metadata.sessionsByWorktree[worktree.path]
+        let pane = panes.first { pane in
+            SessionName.isAgentIDE(pane.sessionName)
+                && (pane.sessionName == recorded || pane.currentPath == worktree.path)
+        }
+        let session = pane.map { pane in
+            AgentSession(
+                name: pane.sessionName,
+                agent: agentKind(of: pane.sessionName),
+                status: pane.isFinished ? .finished : .running,
+                workingDirectory: pane.currentPath,
+                paneID: pane.paneID,
+                activity: pane.activity,
+                version: metadata.agentVersions[pane.sessionName],
+            )
+        }
+        let past = pastSessions(of: worktree, liveSession: session)
+
+        // Unread is any agent activity since the worktree was last
+        // viewed: the event spool and transcript modification count;
+        // herdr keeps no output clock, and the spool and transcripts
+        // already cover every agent message.
+        var lastEvent = Date.distantPast
+        if let session, let spooled = activity[session.name] {
+            lastEvent = spooled
+        }
+        if let newest = past.first {
+            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
+        }
+        let seen = metadata.seenAt[worktree.path] ?? session.flatMap { metadata.lastSeen[$0.name] } ?? startedAt
+        let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
+
+        // Four git reads that share nothing, asked at once.
+        async let counts = aheadBehind(of: worktree, baseRef: baseRef)
+        async let dirty = git.isDirty(worktreePath: worktree.path)
+        async let committedAt = git.lastCommitDate(worktreePath: worktree.path)
+        async let aheadOfUpstream = git.aheadOfUpstream(worktreePath: worktree.path)
+        let isDirty = await dirty
+        var lastActivity = await committedAt
+        if let session, session.status == .running || isDirty {
+            // A live session or uncommitted edits mean work right now.
+            lastActivity = Int(Date().timeIntervalSince1970)
+        }
+        lastActivity = max(lastActivity, Int(lastEvent.timeIntervalSince1970))
+        return await WorktreeItem(
+            worktree: worktree,
+            session: session,
+            isDirty: isDirty,
+            aheadOfUpstream: aheadOfUpstream,
+            hasUnread: unread,
+            pastSessions: past,
+            aheadOfDefault: counts?.ahead,
+            behindDefault: counts?.behind,
+            lastActivityAt: lastActivity,
+        )
+    }
+}

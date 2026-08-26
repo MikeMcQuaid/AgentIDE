@@ -239,6 +239,15 @@ before shipping.
   manager, shows what it is waiting on with a clock ticking every second,
   then snaps to the finished view (so an empty state is only ever shown
   once it has been proven empty, never while the answer is still coming)
+- **Reads** the whole sidebar in parallel: every repository at once,
+  every worktree within one at once and each worktree's handful of
+  git questions at once, on a machine built for exactly that (so a
+  wide sidebar refreshes in the time its slowest worktree takes, not
+  the sum of all of them)
+- **Times** every launch, resume and listing step into a plain log at
+  `agentide/timings.log` in the shared workspace, readable by both
+  users, each line dropped a day after it is written (so a slow
+  resume can be read back rather than guessed at)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the
   utility pane (so nothing is lost to a status line that scrolled past or

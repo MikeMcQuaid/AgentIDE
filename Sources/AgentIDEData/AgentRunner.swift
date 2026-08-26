@@ -160,6 +160,20 @@ public struct ClaudeCodeRunner: AgentRunner {
         ["low", "medium", "high", "xhigh", "max"]
     }
 
+    /// How Claude Code names a working directory's transcript
+    /// directory: every path separator, dot and underscore becomes a
+    /// dash, so `install_method` lives under `install-method`.
+    /// Leaving the underscore alone looked in a directory that never
+    /// existed, and the worktree's conversations were then found
+    /// only under a decoded path that did not exist either. One
+    /// rule here, for the fakes to share, so a test proves this one.
+    public static func projectDirectoryName(for workingDirectory: String) -> String {
+        workingDirectory
+            .replacing("/", with: "-")
+            .replacing(".", with: "-")
+            .replacing("_", with: "-")
+    }
+
     /// `--model` and `--effort` flags.
     public func optionArguments(model: String?, effort: String?) -> String {
         var arguments = [String]()
@@ -186,10 +200,7 @@ public struct ClaudeCodeRunner: AgentRunner {
     /// Claude Code keys transcript directories by the working
     /// directory with `/` and `.` replaced by `-`.
     public func transcriptDirectory(workingDirectory: String, sandboxHome: String) -> String? {
-        let dashified = workingDirectory
-            .replacing("/", with: "-")
-            .replacing(".", with: "-")
-        return sandboxHome + "/.claude/projects/" + dashified
+        sandboxHome + "/.claude/projects/" + Self.projectDirectoryName(for: workingDirectory)
     }
 }
 

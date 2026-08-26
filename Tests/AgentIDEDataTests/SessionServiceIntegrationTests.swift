@@ -41,7 +41,7 @@ struct PromptCaptureRunner: AgentRunner {
     }
 
     func transcriptDirectory(workingDirectory: String, sandboxHome: String) -> String? {
-        sandboxHome + "/transcripts/" + workingDirectory.replacing("/", with: "-")
+        sandboxHome + "/transcripts/" + ClaudeCodeRunner.projectDirectoryName(for: workingDirectory)
     }
 
     func optionArguments(model: String?, effort: String?) -> String {
@@ -318,6 +318,38 @@ struct RepositoryPageIntegrationTests {
         let ghost = try #require(sessions.first { $0.session.id == "ghost" })
         #expect(ghost.worktreePath == ghostPath)
         #expect(ghost.session.title == "ghost")
+    }
+
+    @Test
+    func `a worktree named with an underscore keeps its conversations resumable in place`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+
+        // Claude Code encodes the working directory by turning `/`,
+        // `.` and `_` into dashes, so `install_method` lands in a
+        // directory named `install-method`. Its conversation must
+        // still be attributed to the real worktree path, the one
+        // that exists, or Resume here has nothing to resume into.
+        let worktreePath = try await world.service.createWorktreePath(
+            repository: world.repository,
+            branch: "install_method",
+        )
+        // Encoded as the CLI itself encodes, through the one rule the
+        // service's runner shares; a hand-rolled copy here drifted
+        // from it over the dots in the scratch path.
+        let encoded = try #require(PromptCaptureRunner().transcriptDirectory(
+            workingDirectory: worktreePath,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        #expect(encoded.hasSuffix("-install-method"))
+        try FileManager.default.createDirectory(atPath: encoded, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"underscored"}]}}"# + "\n"
+        try transcript.write(toFile: encoded + "/underscored.jsonl", atomically: true, encoding: .utf8)
+
+        let sessions = await world.service.repositorySessions(for: world.repository)
+        let found = try #require(sessions.first { $0.session.id == "underscored" })
+        #expect(found.worktreePath == worktreePath)
+        #expect(FileManager.default.fileExists(atPath: found.worktreePath))
     }
 
     @Test

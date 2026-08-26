@@ -91,8 +91,18 @@ public extension SessionService {
         var items = [WorktreeItem]()
         let listed = (metadata.hostDirectories[repository.path] ?? [])
             .filter { FileManager.default.fileExists(atPath: $0) }
+        let branches = await withTaskGroup(of: (String, String).self) { tasks in
+            for path in listed {
+                tasks.addTask { await (path, self.git.currentBranch(worktreePath: path) ?? "") }
+            }
+            var collected = [String: String]()
+            for await (path, branch) in tasks {
+                collected[path] = branch
+            }
+            return collected
+        }
         for path in listed {
-            let branch = await git.currentBranch(worktreePath: path) ?? ""
+            let branch = branches[path] ?? ""
             await items.append(WorktreeItem(
                 worktree: Worktree(
                     repositoryName: repository.name,

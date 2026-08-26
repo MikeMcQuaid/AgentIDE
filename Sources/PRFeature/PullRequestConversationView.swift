@@ -9,8 +9,6 @@ import TerminalUI
 /// The conversation page: the back button and full header row over
 /// the timeline.
 struct PullRequestConversationPane: View {
-    // MARK: Internal
-
     let summary: PullRequestSummary
     let stackDepth: Int
     let github: GitHubClient
@@ -23,24 +21,13 @@ struct PullRequestConversationPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: Self.spacing) {
-                Button("Back to the list", systemImage: "chevron.backward", action: onBack)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .hoverHelp("Back to the pull request list")
-                PullRequestRowView(
-                    summary: summary,
-                    stackDepth: stackDepth,
-                    showsActions: true,
-                    onCopyComments: onCopyComments,
-                    onOpenChecks: onOpenChecks,
-                )
-            }
-            .padding(.horizontal, Self.padding)
-            // One height however much the summary carries: a light
-            // row grows icons as the full fetch lands, and the page
-            // jumping under the reader read as a reload.
-            .frame(height: Self.headerHeight)
+            PullRequestHeaderRow(
+                summary: summary,
+                stackDepth: stackDepth,
+                onBack: onBack,
+                onCopyComments: onCopyComments,
+                onOpenChecks: onOpenChecks,
+            )
             Divider()
             PullRequestConversationView(
                 github: github,
@@ -52,12 +39,55 @@ struct PullRequestConversationPane: View {
             )
         }
     }
+}
+
+// MARK: - PullRequestHeaderRow
+
+/// One pull request's header, drawn identically as a list row and
+/// as the open conversation's top: the same padding, the same fixed
+/// height however many icons the summary carries, the same browser
+/// button. The only difference is whether the back chevron can be
+/// clicked, and it takes its space either way so the title never
+/// shifts between the two.
+struct PullRequestHeaderRow: View {
+    // MARK: Internal
+
+    let summary: PullRequestSummary
+    let stackDepth: Int
+
+    /// Nil in the list, where there is nothing to go back to.
+    let onBack: (() -> Void)?
+
+    let onCopyComments: @MainActor () async -> Void
+    let onOpenChecks: @MainActor () async -> Void
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            Button("Back to the list", systemImage: "chevron.backward") { onBack?() }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .disabled(onBack == nil)
+                .opacity(onBack == nil ? 0 : 1)
+                .hoverHelp("Back to the pull request list")
+            PullRequestRowView(
+                summary: summary,
+                stackDepth: stackDepth,
+                showsActions: true,
+                onCopyComments: onCopyComments,
+                onOpenChecks: onOpenChecks,
+            )
+        }
+        .padding(.horizontal, Self.padding)
+        // The fixed height: a light row growing icons as the full
+        // fetch lands never moves the page under the reader.
+        .frame(height: Self.height)
+    }
 
     // MARK: Private
 
+    private static let height: CGFloat = 46
     private static let spacing: CGFloat = 4
     private static let padding: CGFloat = 8
-    private static let headerHeight: CGFloat = 46
 }
 
 // MARK: - PullRequestConversationView

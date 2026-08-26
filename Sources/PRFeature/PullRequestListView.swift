@@ -31,8 +31,15 @@ struct PullRequestListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List(pageSummaries) { summary in
-                row(summary)
+            // Plain rows, not a List: its inset and separator made
+            // a row sit a few points off the header it turns into.
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(pageSummaries) { summary in
+                        row(summary)
+                        Divider()
+                    }
+                }
             }
             .overlay {
                 if isLoading, summaries.isEmpty {
@@ -82,10 +89,14 @@ struct PullRequestListView: View {
     /// The conversation header's own look, without its actions; a
     /// click anywhere outside the inner links opens the conversation.
     private func row(_ summary: PullRequestSummary) -> some View {
-        PullRequestRowView(
+        // The conversation's own header, back chevron and all: the
+        // chevron is dimmed rather than absent so the title starts
+        // at the same x, and the browser button stays, since a row
+        // is a pull request whether or not it is open.
+        PullRequestHeaderRow(
             summary: summary,
             stackDepth: stackDepth(summary),
-            showsActions: false,
+            onBack: nil,
             onCopyComments: noAction,
             onOpenChecks: noAction,
         )

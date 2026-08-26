@@ -126,12 +126,10 @@ extension DashboardModel {
     /// base branches that are other cached pull requests' heads.
     /// 1 means unstacked.
     public func stackDepth(for item: WorktreeItem) -> Int {
-        let prefix = item.worktree.repositoryPath + "#"
         var byHead = [String: PullRequestSummary]()
-        let cached = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
         // Stacking is a question about open pull requests; a merged
         // one's base is history.
-        for summary in cached where summary.state == "OPEN" {
+        for summary in openPullRequests(in: item.worktree.repositoryPath) {
             byHead[summary.headBranch] = summary
         }
         guard var current = byHead[item.worktree.branch] else {
@@ -152,11 +150,9 @@ extension DashboardModel {
     /// what is under a branch and what rides on it are different
     /// questions, and both matter when deciding what to do next.
     public func stackStanding(for item: WorktreeItem) -> StackStanding {
-        let prefix = item.worktree.repositoryPath + "#"
         var byHead = [String: PullRequestSummary]()
         var byBase = [String: PullRequestSummary]()
-        let cached = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
-        for summary in cached where summary.state == "OPEN" {
+        for summary in openPullRequests(in: item.worktree.repositoryPath) {
             byHead[summary.headBranch] = summary
             byBase[summary.baseBranch] = summary
         }
@@ -191,6 +187,23 @@ extension DashboardModel {
     }
 
     // MARK: Private
+
+    /// Every open pull request the app knows of in a repository:
+    /// the per-branch answers the poll keeps, plus every listing
+    /// the shared store has cached. A stack's other branches have
+    /// no worktree of their own, so their pull requests only ever
+    /// arrive through the tab's listings, and a chain walked over
+    /// the poll's answers alone stopped at the first of them.
+    private func openPullRequests(in repositoryPath: String) -> [PullRequestSummary] {
+        let prefix = repositoryPath + "#"
+        let polled = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
+        let listed = store.load()
+            .pullRequestListsCache
+            .filter { $0.key.hasPrefix("list#" + repositoryPath + "#") }
+            .flatMap(\.value.summaries)
+        var seen = Set<Int>()
+        return (polled + listed).filter { $0.state == "OPEN" && seen.insert($0.number).inserted }
+    }
 
     private static let selectedInterval: TimeInterval = 60
     private static let queueInterval: TimeInterval = 60

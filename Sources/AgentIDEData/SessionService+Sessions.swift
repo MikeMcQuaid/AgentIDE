@@ -65,10 +65,15 @@ public extension SessionService {
         // which two copies starting at once contend for. Creation
         // hands one already running alongside the worktree, which is
         // where the seconds it costs are free.
-        await progress("Asking the agent's CLI its version")
         if let version {
             record(version: version, sessionName: sessionName)
-        } else {
+        } else if store.load().agentVersions[sessionName] == nil {
+            // A resume already knows: the first launch recorded the
+            // version, and asking again is a sandbox launch of the
+            // CLI that cost seconds on every resume for a fact that
+            // only changes when the CLI is upgraded, which a fresh
+            // creation catches. Only a name never launched asks.
+            await progress("Asking the agent's CLI its version")
             await recordAgentVersion(sessionName: sessionName)
         }
         try await herdr.newSession(name: sessionName, directory: directory, command: command)
@@ -86,9 +91,24 @@ public extension SessionService {
         await record(version: probeVersion(of: agent), sessionName: sessionName)
     }
 
-    /// Asks a CLI its version, which costs a sandbox launch of its
-    /// own; callers with anything else to do run it beside that.
+    /// Asks a CLI its version. The same install answers from the
+    /// host, since Homebrew's prefix is one place for both users, and
+    /// asking there skips the sudo, environment scrub and
+    /// sandbox-exec a sandbox launch wraps around one line of output.
+    /// Only when no host copy answers does the sandbox get asked.
     internal func probeVersion(of agent: AgentKind) async -> String? {
+        let parse = runner(for: agent).parseVersion
+        for prefix in Quarantine.homebrewBinaries {
+            let binary = prefix + "/" + agent.rawValue
+            guard FileManager.default.isExecutableFile(atPath: binary) else {
+                continue
+            }
+
+            let result = try? await processes.run([binary, "--version"], workingDirectory: nil, environment: [:])
+            if let version = parse(result?.standardOutput ?? "") {
+                return version
+            }
+        }
         let argv = launcher.command(
             payload: agent.rawValue + " --version </dev/null",
             initialDirectory: launcher.sharedWorkspace,
@@ -96,7 +116,7 @@ public extension SessionService {
             sessionName: "agentide-version",
         )
         let result = try? await processes.run(argv, workingDirectory: nil, environment: [:])
-        return runner(for: agent).parseVersion(result?.standardOutput ?? "")
+        return parse(result?.standardOutput ?? "")
     }
 
     /// Remembers a probed version under the session name, so the
@@ -167,6 +187,18 @@ public extension SessionService {
         await killSession(name: sessionName)
     }
 
+    /// Whether a live herdr pane holds this worktree's session: one
+    /// pane listing, which is all a resume needs to know before
+    /// launching, where a whole overview read every worktree's git.
+    func hasLiveSession(worktreePath: String) async -> Bool {
+        let recorded = store.load().sessionsByWorktree[worktreePath]
+        let panes = await (try? herdr.panes()) ?? []
+        return panes.contains { pane in
+            SessionName.isAgentIDE(pane.sessionName) && pane.isFinished == false
+                && (pane.sessionName == recorded || pane.currentPath == worktreePath)
+        }
+    }
+
     /// Whether the worktree's last session ended by explicit close,
     /// so automatic resumes skip it.
     func wasIntentionallyClosed(worktreePath: String) -> Bool {
@@ -223,83 +255,6 @@ public extension SessionService {
     /// Types text into a session's terminal, as pasted input.
     func typeText(_ text: String, sessionName: String) async throws {
         try await herdr.typeText(text, sessionName: sessionName)
-    }
-
-    /// Resumes the session last recorded in a worktree, whether or
-    /// not a live workspace still carries it, and whether or not
-    /// the one that does is still alive: a refused conversation
-    /// leaves an empty shell holding the label, so every way in is
-    /// tried until one is still running.
-    func resumeWorktree(_ worktree: Worktree) async throws {
-        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
-            throw CommandError(
-                command: "resume " + worktree.path,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
-            )
-        }
-        guard let agent = agentKind(of: sessionName) else {
-            throw CommandError(
-                command: "resume " + sessionName,
-                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
-            )
-        }
-
-        await progress("Backing up the conversation")
-        backUpConversation(of: worktree)
-        try await start(
-            sessionName: sessionName,
-            directory: worktree.path,
-            trying: resumeCommands(sessionName: sessionName, agent: agent, worktreePath: worktree.path),
-        )
-        clearIntentionalClose(worktreePath: worktree.path)
-    }
-
-    /// Relaunches a past conversation in its own worktree, replacing
-    /// whatever session is already there. An agent that will not
-    /// take the conversation back (one it has rolled away, or a
-    /// version that no longer reads that transcript) exits at once,
-    /// so the worktree's other conversations and then a fresh
-    /// session are tried rather than leaving a dead pane behind.
-    @discardableResult
-    func resumePast(_ past: TranscriptSession, worktree: Worktree) async throws -> String {
-        let sessionName = SessionName.make(
-            repository: worktree.repositoryName,
-            branch: worktree.branch,
-            agent: past.agent,
-        )
-        let agentRunner = runner(for: past.agent)
-        var commands = [agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: "")]
-        commands += resumeCommands(
-            sessionName: sessionName,
-            agent: past.agent,
-            worktreePath: worktree.path,
-        ).filter { commands.contains($0) == false }
-        try await start(sessionName: sessionName, directory: worktree.path, trying: commands)
-        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
-        ConversationBackup(paths: paths).store(past, worktree: worktree)
-        return sessionName
-    }
-
-    /// Creates a fresh worktree and branch and resumes a past
-    /// conversation there. The transcript is copied into the new
-    /// working directory's transcript directory first, because agents
-    /// look sessions up by working directory.
-    func resumeInNewWorktree(_ past: TranscriptSession, repository: Repository) async throws -> String {
-        let seed = past.title.isEmpty ? past.id : past.title
-        let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
-        let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
-        let agentRunner = runner(for: past.agent)
-        await progress("Copying the transcript into the new worktree")
-        copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
-        try await startFresh(
-            sessionName: sessionName,
-            directory: worktreePath,
-            command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
-        )
-        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
-        await awaitReady(sessionName: sessionName)
-        return sessionName
     }
 
     // MARK: Internal
@@ -362,34 +317,5 @@ public extension SessionService {
             .flatMap { path, _ in
                 sessionsInDirectories(of: path, liveSession: nil)
             }
-    }
-
-    // MARK: Private
-
-    private func copyTranscript(
-        _ past: TranscriptSession,
-        intoWorktree worktreePath: String,
-        using agentRunner: any AgentRunner,
-    ) {
-        guard agentRunner.scopesTranscriptsByWorkingDirectory,
-              let directory = agentRunner.transcriptDirectory(
-                  workingDirectory: worktreePath,
-                  sandboxHome: paths.sandboxHome,
-              )
-        else {
-            return
-        }
-
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.resumeID + ".jsonl")
-    }
-
-    private func remember(sessionName: String, worktreePath: String, resumeID: String) {
-        var metadata = store.load()
-        metadata.resumeIDs[sessionName] = resumeID
-        metadata.sessionsByWorktree[worktreePath] = sessionName
-        metadata.seenAt[worktreePath] = Date()
-        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
-        store.save(metadata)
     }
 }

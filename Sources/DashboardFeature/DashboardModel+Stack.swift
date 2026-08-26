@@ -21,14 +21,25 @@ extension DashboardModel {
             // rows are the ones whose missing marker is noticed.
             .sorted { first, _ in first.worktree.repositoryPath == selectedRepository }
             .prefix(Self.stacksPerRefresh)
-        for item in due {
-            let stack = await service.stack(for: item.worktree)
-            derivedStacks[item.worktree.path] = stack
+        // Each derivation is its own handful of git calls; the due
+        // ones run beside each other rather than in a line.
+        let derived = await withTaskGroup(of: (String, BranchStack).self) { tasks in
+            for item in due {
+                tasks.addTask { await (item.worktree.path, self.service.stack(for: item.worktree)) }
+            }
+            var collected = [(String, BranchStack)]()
+            for await result in tasks {
+                collected.append(result)
+            }
+            return collected
+        }
+        for (path, stack) in derived {
+            derivedStacks[path] = stack
             // A branch standing on its own is the common case and
             // the cheap answer to be wrong about for a while, so it
             // is asked about far less often than a real stack.
             let interval = stack.isStacked ? Self.stackInterval : Self.loneInterval
-            nextStackDerivation[item.worktree.path] = Date().addingTimeInterval(interval)
+            nextStackDerivation[path] = Date().addingTimeInterval(interval)
         }
     }
 
