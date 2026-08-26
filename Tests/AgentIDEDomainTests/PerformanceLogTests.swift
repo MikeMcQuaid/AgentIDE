@@ -25,8 +25,13 @@ struct PerformanceLogTests {
 
     @Test
     func `the log lives in the shared temporary directory`() {
-        #expect(PerformanceLog.file.hasSuffix("/tmp/agentide/performance.log"))
-        let overridden = ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG_DIRECTORY"] != nil
-        #expect(PerformanceLog.file.hasPrefix("/Users/Shared/sv-") || overridden)
+        // script/test points the log into the test scratch; run
+        // any other way it is the shared temporary directory.
+        if let override = ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG_DIRECTORY"] {
+            #expect(PerformanceLog.file == override + "/performance.log")
+        } else {
+            #expect(PerformanceLog.file.hasSuffix("/tmp/agentide/performance.log"))
+            #expect(PerformanceLog.file.hasPrefix("/Users/Shared/sv-"))
+        }
     }
 }

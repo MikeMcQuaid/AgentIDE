@@ -210,7 +210,7 @@ struct PullRequestFooterView: View {
         BusyButton(
             "",
             busy: "",
-            systemImage: "arrow.up.square.on.square",
+            systemImage: "arrow.up.circle",
             accessibilityLabel: "Push stack",
             disabled: model.canPushStack == false,
         ) {
@@ -229,7 +229,7 @@ struct PullRequestFooterView: View {
         BusyButton(
             "",
             busy: "",
-            systemImage: "square.stack.3d.up.badge.automatic",
+            systemImage: "paperplane",
             accessibilityLabel: "Submit stack",
             disabled: model.canSubmitStack == false,
         ) {

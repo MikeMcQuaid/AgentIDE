@@ -28,12 +28,14 @@ public struct TerminalPaneView: View {
         reflowsCopies: Bool = false,
         isActive: Bool = true,
         fixedAppearance: TerminalAppearance? = nil,
+        onPasteFiles: (([URL]) -> Bool)? = nil,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
         transport = .control(command: command)
         self.reflowsCopies = reflowsCopies
         self.isActive = isActive
         self.fixedAppearance = fixedAppearance
+        self.onPasteFiles = onPasteFiles
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -52,6 +54,7 @@ public struct TerminalPaneView: View {
         reflowsCopies = false
         self.isActive = isActive
         fixedAppearance = nil
+        onPasteFiles = nil
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -63,6 +66,7 @@ public struct TerminalPaneView: View {
             reflowsCopies: reflowsCopies,
             isActive: isActive,
             fixedAppearance: fixedAppearance,
+            onPasteFiles: onPasteFiles,
             clearRequest: clearShellRequest,
             onProcessTerminated: onProcessTerminated,
         )
@@ -85,6 +89,9 @@ public struct TerminalPaneView: View {
     /// style themselves for them forever, so a pane that re-themed
     /// on a macOS appearance switch left the agent white on white.
     private let fixedAppearance: TerminalAppearance?
+
+    /// Where a paste of files or an image goes, for agent panes.
+    private let onPasteFiles: (([URL]) -> Bool)?
 
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
@@ -113,6 +120,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// the appearance, which only shell panes do.
     let fixedAppearance: TerminalAppearance?
 
+    let onPasteFiles: (([URL]) -> Bool)?
     let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
 
@@ -141,6 +149,7 @@ struct TerminalRepresentable: NSViewRepresentable {
         // alone scroll and select natively without any modifier.
         view.font = CodeStyle.nsFont
         view.reflowsCopies = reflowsCopies
+        view.onPasteFiles = onPasteFiles
         context.coordinator.installBlockSelection(on: view)
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(transport, in: view)

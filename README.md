@@ -119,6 +119,9 @@ before shipping.
 
 ### 🔍 Review
 
+- **Takes** a pasted file or screenshot the way it takes a dropped one:
+  staged into the shared workspace, where the sandbox can read it, and
+  its path typed into the agent (so Cmd-V after Cmd-Shift-4 is enough)
 - **Presents** the agent's conversation beside a pull-request-style review of its
   diff, syntax highlighted through tree-sitter for sixteen languages and a
   word list for the rest, with keys-and-sections files (`.gitconfig`,
@@ -171,7 +174,8 @@ before shipping.
   the sidebar says where a branch stands in its stack, from git before
   its pull requests are open and from them afterwards, each opening
   against the branch below it with a form filled from that entry's own
-  commits and greyed out until the branch below is pushed and opened,
+  commits, entries above an unpushed branch out of reach in the pull
+  request tab until it is pushed and opened (they still review),
   and two buttons put the whole stack
   back in order, push it bottom up and submit it, opening the pull
   requests it lacks and stacking them on GitHub,

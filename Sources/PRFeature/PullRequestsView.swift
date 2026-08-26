@@ -57,9 +57,12 @@ public struct PullRequestsView: View {
             // Shown only by a stack, so a lone branch's tab is the
             // one it always was.
             if model.stack.isStacked {
-                BranchStackStrip(stack: model.stack, selected: model.listedBranch ?? "") { branch in
-                    model.show(branch: branch)
-                }
+                BranchStackStrip(
+                    stack: model.stack,
+                    selected: model.listedBranch ?? "",
+                    isEnabled: { model.canList($0) },
+                    onSelect: { model.show(branch: $0) },
+                )
                 Divider()
             }
             if let selected = model.selected {

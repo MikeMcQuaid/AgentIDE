@@ -15,10 +15,12 @@ public struct BranchStackStrip: View {
     public init(
         stack: BranchStack,
         selected: String,
+        isEnabled: @escaping (String) -> Bool = { _ in true },
         onSelect: @escaping @MainActor (String) -> Void,
     ) {
         self.stack = stack
         self.selected = selected
+        self.isEnabled = isEnabled
         self.onSelect = onSelect
     }
 
@@ -34,6 +36,7 @@ public struct BranchStackStrip: View {
                 }
                 ForEach(Array(stack.branches.enumerated()), id: \.element) { index, branch in
                     Button(branch) { onSelect(branch) }
+                        .disabled(isEnabled(branch) == false)
                         .buttonStyle(.plain)
                         .fontWeight(branch == selected ? .semibold : .regular)
                         .foregroundStyle(branch == stack.checkedOut ? Color.primary : .secondary)
@@ -56,6 +59,12 @@ public struct BranchStackStrip: View {
 
     private let stack: BranchStack
     private let selected: String
+
+    /// Whether an entry can be moved to here: the pull request tab
+    /// keeps entries above an unpushed branch out of reach, since
+    /// there is nothing to list or open for them yet.
+    private let isEnabled: (String) -> Bool
+
     private let onSelect: @MainActor (String) -> Void
 
     private var arrow: some View {

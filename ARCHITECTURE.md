@@ -829,7 +829,11 @@ shim rather than a protocol:
    also completes the template from the commits.
 6. Stacked branches live in one worktree, and the stack is derived rather
    than recorded: the branches sharing a fork point beyond the default
-   branch, ordered by where each forks and how far it has come. What the
+   branch, ordered by where each forks and how far it has come; two
+   branches at one commit are one entry, the checked-out name standing
+   for the pair, since that is a rename that left its old name behind
+   or a branch cut by mistake, and a restack must not replay the same
+   commits twice. What the
    default branch has done since is beside the point: demanding that it
    still be every branch's ancestor threw away each stack cut before the
    last few merges landed, which is the one case a restack exists for. Reading a stack needs no checkout
@@ -850,9 +854,11 @@ shim rather than a protocol:
    stacked branch's pull request opens against the branch below it, which
    is one `--base` flag; its form fills from the entry's own span
    (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, and
-   stays disabled with Open PR while any branch below it is not on the
+   cannot be listed at all while any branch below it is not on the
    remote, since a pull request cannot target a base GitHub has never
-   seen. A disclosure for a session launched on the pickers' defaults
+   seen: the strip keeps those entries out of reach in the pull request
+   tab (the review strip still shows them), and the first unpushed entry
+   lists so it can be pushed and opened from its own form. A disclosure for a session launched on the pickers' defaults
    names those defaults, the runner's first model and its default
    effort, since a default launch writes no flags to read back. Inference cannot tell a branch that belongs to
    the work in hand from an old one that merely shares a fork point, so

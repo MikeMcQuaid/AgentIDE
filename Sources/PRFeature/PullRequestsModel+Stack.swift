@@ -167,6 +167,19 @@ extension PullRequestsModel {
         return parent + ".." + listed
     }
 
+    /// Whether a stack entry can be listed at all: not while any
+    /// branch below it is unpushed, since a pull request above one
+    /// cannot exist yet and its form would only be greyed out. The
+    /// first unpushed entry itself lists, so it can be pushed and
+    /// opened from its own form.
+    func canList(_ branch: String) -> Bool {
+        guard stacking.stack.isStacked, let index = stacking.stack.branches.firstIndex(of: branch) else {
+            return true
+        }
+
+        return stacking.stack.branches[..<index].contains { stacking.unpushedBranches.contains($0) } == false
+    }
+
     /// The nearest branch below the listed one that the remote
     /// lacks: a pull request opened above it would target a base
     /// GitHub has never seen, so the form waits for that push.

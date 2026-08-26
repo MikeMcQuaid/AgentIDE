@@ -47,9 +47,14 @@ extension PullRequestsModel {
             return nil
         }
 
+        // The recorded session names the agent; a worktree with no
+        // session recorded (a stack cut by hand, a branch resumed
+        // elsewhere) still has its newest conversation to say which
+        // agent wrote it, on the pickers' defaults.
         let metadata = store.load()
-        guard let session = metadata.sessionsByWorktree[worktree.path],
-              let agent = AgentKind.allCases.first(where: { session.hasSuffix("--" + $0.rawValue) })
+        let session = metadata.sessionsByWorktree[worktree.path] ?? ""
+        guard let agent = AgentKind.allCases.first(where: { session.hasSuffix("--" + $0.rawValue) })
+            ?? branchItem?.pastSessions.first?.agent
         else {
             return nil
         }

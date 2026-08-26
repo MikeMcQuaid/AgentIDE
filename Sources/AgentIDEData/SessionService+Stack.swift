@@ -26,7 +26,7 @@ public extension SessionService {
         let excluded = Set(excludedStackBranches(worktreePath: path))
         let candidates = await git.branches(worktreePath: path)
             .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
-        var related = [(branch: String, fork: Int, tip: Int)]()
+        var related = [StackCandidate]()
         for branch in candidates {
             // Related when the two last shared history beyond the
             // default branch: one was cut from the other. What the
@@ -42,18 +42,18 @@ public extension SessionService {
                 continue
             }
 
-            await related.append((
-                branch,
-                git.commitCount(from: baseRef, to: fork, worktreePath: path),
-                git.commitCount(from: baseRef, to: branch, worktreePath: path),
+            await related.append(StackCandidate(
+                branch: branch,
+                fork: git.commitCount(from: baseRef, to: fork, worktreePath: path),
+                tip: git.commitCount(from: baseRef, to: branch, worktreePath: path),
             ))
         }
         // Ordered by where each forks from the line of work, then by
         // how far it has come: that is the order they were built in
         // and the order they must be rebased in.
-        let branches = related
-            .sorted { ($0.fork, $0.tip) < ($1.fork, $1.tip) }
-            .map(\.branch)
+        // Two branches at the same commit are one branch renamed or
+        // one cut by mistake, not two entries: see `collapsingTwins`.
+        let branches = await collapsingTwins(related, checkedOut: checkedOut, worktreePath: path)
         // A worktree sitting on the default branch has no stack of
         // its own, and listing the base as its only entry showed the
         // same branch twice wherever both were named.
@@ -63,6 +63,51 @@ public extension SessionService {
             branches: branches.isEmpty ? fallback : branches,
             checkedOut: checkedOut,
         )
+    }
+
+    /// The stack's entries in build order, with branches at one
+    /// commit collapsed to one: the checked-out name stands for the
+    /// pair, otherwise the one the remote knows, otherwise the one
+    /// created first (the other is the rename's leftover or the
+    /// mistake), so a restack never replays the same commits twice.
+    /// `related` arrives in creation order. Twins rank by one string:
+    /// checked-out first, then known to the remote, then creation
+    /// order, then name, so no tuple has to be compared.
+    private func collapsingTwins(
+        _ related: [StackCandidate],
+        checkedOut: String,
+        worktreePath: String,
+    ) async -> [String] {
+        var tips = [String: String]()
+        var pushed = Set<String>()
+        for entry in related {
+            tips[entry.branch] = await git.tip(of: entry.branch, worktreePath: worktreePath)
+            if await git.remoteBranchExists(worktreePath: worktreePath, branch: entry.branch) {
+                pushed.insert(entry.branch)
+            }
+        }
+        let created = Dictionary(uniqueKeysWithValues: related.enumerated().map { ($1.branch, $0) })
+        func rank(_ candidate: StackCandidate) -> String {
+            let first = candidate.branch == checkedOut ? "0" : "1"
+            let known = pushed.contains(candidate.branch) ? "0" : "1"
+            return first + known + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
+        }
+        var seenTips = Set<String>()
+        return related
+            .sorted { first, second in
+                if (first.fork, first.tip) != (second.fork, second.tip) {
+                    return (first.fork, first.tip) < (second.fork, second.tip)
+                }
+                return rank(first) < rank(second)
+            }
+            .filter { entry in
+                guard let tip = tips[entry.branch] else {
+                    return true
+                }
+
+                return seenTips.insert(tip).inserted
+            }
+            .map(\.branch)
     }
 
     /// The branches a restack would actually move: those not
@@ -290,4 +335,14 @@ public extension SessionService {
             result: ProcessResult(status: 1, standardOutput: "", standardError: message),
         )
     }
+}
+
+// MARK: - StackCandidate
+
+/// A branch that shares the line of work, with where it forks from
+/// the default branch and how far its tip has come.
+private struct StackCandidate {
+    let branch: String
+    let fork: Int
+    let tip: Int
 }

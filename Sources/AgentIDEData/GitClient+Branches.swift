@@ -92,7 +92,9 @@ public extension GitClient {
     /// Every local branch in the repository, in no order of merit.
     func branches(worktreePath: String) async -> [String] {
         let result = try? await git(
-            ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+            // Oldest first: when two branches sit at one commit the
+            // stack keeps the one that was there first.
+            ["for-each-ref", "--sort=creatordate", "--format=%(refname:short)", "refs/heads"],
             in: worktreePath,
             allowFailure: true,
         )

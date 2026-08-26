@@ -68,6 +68,35 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
+    func `two branches at one commit are one entry, the checked-out name standing for both`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "upper",
+            path: repository.path,
+        )
+        try await Self.commit("first", in: repository.path)
+        for branch in ["lower", "upper"] {
+            _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
+            try await Self.commit(branch + " work", in: repository.path)
+        }
+        // A rename that left the old name behind, and a branch cut
+        // by mistake at the same commit: neither is a new entry.
+        _ = try await TestSupport.runGit(["branch", "upper-old", "upper"], in: repository.path)
+        _ = try await TestSupport.runGit(["branch", "aaa-mistake", "lower"], in: repository.path)
+        // The remote knows `lower`, which is what makes it the real
+        // name rather than the copy beside it.
+        _ = try await TestSupport.runGit(["update-ref", "refs/remotes/origin/lower", "lower"], in: repository.path)
+
+        let stack = await world.service.stack(for: worktree)
+
+        #expect(stack.branches == ["lower", "upper"])
+    }
+
+    @Test
     func `a branch left out of the stack stops being counted in it`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
