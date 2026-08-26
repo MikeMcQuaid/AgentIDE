@@ -160,6 +160,13 @@ public struct FoundationProcessRunner: ProcessRunner {
     private static let namedWords = 3
 
     private static func name(of arguments: [String]) -> String {
+        // A sandbox launch reads as `sudo --login --set-home` whatever
+        // it runs; its own label, in the environment it sets, is the
+        // name worth logging.
+        let label = arguments.first == "sudo" ? arguments.first { $0.hasPrefix("AGENTIDE_SESSION=") } : nil
+        if let label {
+            return "sandbox " + label.dropFirst("AGENTIDE_SESSION=".count)
+        }
         var words = [String]()
         var skipNext = false
         for word in arguments {
