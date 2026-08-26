@@ -246,10 +246,10 @@ before shipping.
   the sum of all of them)
 - **Times** every process it runs, every GitHub call and every cache
   hit or miss into a plain performance log, but only when asked:
-  set `AGENTIDE_PERFORMANCE_LOG` or drop a `performance-log` marker
-  file in `/Users/Shared/sv-<user>/tmp/agentide`, where the log then
-  lives so both users can read it, and lines older than a week are
-  swept (so a slow resume can be read back rather than guessed at,
+  `script/performance-log on` (off by default and off again with
+  `off`; `AGENTIDE_PERFORMANCE_LOG` in the environment does the same),
+  the log living in `/Users/Shared/sv-<user>/tmp/agentide` so both
+  users can read it, and lines older than a week are swept (so a slow resume can be read back rather than guessed at,
   and a build of the app by anyone else writes nothing anywhere)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the

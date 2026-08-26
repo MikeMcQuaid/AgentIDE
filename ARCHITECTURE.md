@@ -1106,7 +1106,8 @@ is decoration and the messages pane is for what the user can act on.
 
 The one file the app writes outside its own support directory is the
 performance log, and only when asked for: with `AGENTIDE_PERFORMANCE_LOG`
-set, or a `performance-log` marker file present, every process the app
+set, or the `performance-log` marker file `script/performance-log on`
+creates (and `off` removes; off by default), every process the app
 runs, every `gh` call and every cache hit or miss of the pull request
 store is appended as one line to
 `/Users/Shared/sv-<user>/tmp/agentide/performance.log`, a directory both

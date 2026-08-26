@@ -23,6 +23,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
+- `script/performance-log [on|off|status]`: switch the installed
+  app's performance log on or off (off by default; on, every process
+  run, `gh` call and cache hit or miss lands in the shared
+  `tmp/agentide/performance.log`)
 - `script/attach [workspace]`: attach this terminal to the sandboxed
   herdr session, or list its workspaces when run without arguments
   (works as the host user or inside the sandbox)
