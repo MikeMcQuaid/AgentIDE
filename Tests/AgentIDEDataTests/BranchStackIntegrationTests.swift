@@ -116,8 +116,18 @@ struct BranchStackIntegrationTests {
         // nothing; git given the raw range listed the branch back
         // to the root, every commit on main included.
         let messages = await world.service.commitMessages(worktree: worktree, range: "origin/HEAD..feature")
-
         #expect(messages == ["feature work"])
+
+        // A remote default branch ahead of the branch's fork point,
+        // and a local main behind it: the span starts where the
+        // branch forked, so neither side's extra commits count.
+        _ = try await TestSupport.runGit(["checkout", "main"], in: repository.path)
+        try await Self.commit("later on main", in: repository.path)
+        _ = try await TestSupport.runGit(["update-ref", "refs/remotes/origin/main", "main"], in: repository.path)
+        _ = try await TestSupport.runGit(["reset", "-q", "--hard", "HEAD~2"], in: repository.path)
+        _ = try await TestSupport.runGit(["checkout", "feature"], in: repository.path)
+        let forked = await world.service.commitMessages(worktree: worktree, range: "origin/HEAD..feature")
+        #expect(forked == ["feature work"])
     }
 
     @Test

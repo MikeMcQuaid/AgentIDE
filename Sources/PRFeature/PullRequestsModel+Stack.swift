@@ -70,6 +70,9 @@ extension PullRequestsModel {
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
         stacking.selected = branch == stacking.stack.checkedOut ? nil : branch
+        if let worktreePath {
+            StackSelection.remember(branch, for: worktreePath)
+        }
         // The form is the listed entry's: cleared here, under the
         // new entry's key and without being saved as its draft, so
         // the reload fills it from that entry's own draft or commit
@@ -145,14 +148,19 @@ extension PullRequestsModel {
         }
 
         stacking.stack = await stacking.fetch(worktree)
-        // A selection that no longer names a branch of this stack
-        // goes, so the tab returns to the worktree's own branch.
-        if let selected = stacking.selected, stacking.stack.branches.contains(selected) == false {
-            stacking.selected = nil
-        }
         stacking.needsRestack = await stacking.pending(worktree)
         stacking.unpushedBranches = await stacking.unpushed(worktree)
         stacking.needsPush = stacking.unpushedBranches.isEmpty == false
+        // The entry in view: the one remembered for this worktree,
+        // else the first that could have a pull request opened (the
+        // top of a stack often cannot yet), else the checked-out
+        // branch. A selection naming no branch of this stack goes.
+        let remembered = StackSelection.branch(for: worktree.path)
+        let chosen = [remembered, firstOpenable, stacking.stack.checkedOut]
+            .compactMap(\.self)
+            .first { stacking.stack.branches.contains($0) }
+        stacking.selected = chosen == stacking.stack.checkedOut ? nil : chosen
+        StackSelection.remember(chosen, for: worktree.path)
     }
 
     /// The listed entry's own commits as a git range, nil for a
@@ -168,6 +176,19 @@ extension PullRequestsModel {
         // which is what `origin/HEAD..HEAD` would have described.
         let parent = stacking.stack.isStacked ? stacking.stack.parent(of: listed) : nil
         return (parent ?? "origin/HEAD") + ".." + listed
+    }
+
+    /// The lowest entry that can be listed and has no open pull
+    /// request yet: the one whose form is worth opening on.
+    private var firstOpenable: String? {
+        stacking.stack.branches.first { branch in
+            guard canList(branch) else {
+                return false
+            }
+
+            let listed = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
+            return listed.contains { $0.state == "OPEN" } == false
+        }
     }
 
     /// Whether a stack entry can be listed at all: not while any

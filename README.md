@@ -175,9 +175,12 @@ before shipping.
   its pull requests are open and from them afterwards, each opening
   against the branch below it with a form filled from that entry's own
   commits (one commit's message, or the first subject over the rest
-  listed), entries above a branch not yet pushed and opened out of
+  listed, counted from where the branch forked off the remote's default
+  branch), entries above a branch not yet pushed and opened out of
   reach in the pull request tab (they still review, and every name in
-  the strip copies from its menu),
+  the strip copies from its menu), the review and pull request tabs
+  keeping the same entry in view and opening on the first that could
+  have a pull request, read-only text everywhere still selectable,
   and two buttons put the whole stack
   back in order, push it bottom up and submit it, opening the pull
   requests it lacks and stacking them on GitHub,

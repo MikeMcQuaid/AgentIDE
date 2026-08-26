@@ -29,19 +29,21 @@ struct PullRequestStackTests {
         }
         await model.reload()
 
-        // The checked-out top entry: its own span, blocked by the
-        // unpushed branch under it.
-        #expect(model.listedRange == "lower..upper")
-        #expect(model.prTitle == "Upper work")
-        #expect(model.unpushedBelow == "lower")
-
-        // Moving down: the bottom entry's span, nothing under it.
-        model.clearDraft()
-        model.show(branch: "lower")
-        try? await Task.sleep(for: .milliseconds(200))
+        // The tab opens on the first entry that could have a pull
+        // request: the bottom one, with nothing under it, rather
+        // than the checked-out top, which is blocked by the unpushed
+        // branch beneath it.
         #expect(model.listedRange == "main..lower")
         #expect(model.prTitle == "Lower work")
         #expect(model.unpushedBelow == nil)
+
+        // Moving up: the top entry's own span, and the block.
+        model.clearDraft()
+        model.show(branch: "upper")
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(model.listedRange == "lower..upper")
+        #expect(model.prTitle == "Upper work")
+        #expect(model.unpushedBelow == "lower")
         #expect(ranges.withLock { $0 }.contains("main..lower"))
     }
 

@@ -146,9 +146,19 @@ public extension SessionService {
         // default base stands in for it.
         var span = range ?? "origin/HEAD..HEAD"
         if span.hasPrefix("origin/HEAD..") {
+            // From where the branch forked off the remote's default
+            // branch, not from a local `main` that may sit commits
+            // behind it and drag every one of them into the list.
             let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
-            let base = await git.defaultBaseRef(of: repository) ?? "origin/HEAD"
-            span = base + span.dropFirst("origin/HEAD".count)
+            let branch = String(span.dropFirst("origin/HEAD..".count))
+            var base = await git.defaultBaseRef(of: repository) ?? "origin/HEAD"
+            let isLocalName = base.hasPrefix("origin/") == false
+            let remoteRef = "refs/remotes/origin/" + base
+            if isLocalName, await git.refExists(worktreePath: worktree.path, ref: remoteRef) {
+                base = "origin/" + base
+            }
+            let fork = await git.mergeBase(base, branch, worktreePath: worktree.path) ?? base
+            span = fork + ".." + branch
         }
         return await git.commitMessages(worktreePath: worktree.path, range: span)
     }

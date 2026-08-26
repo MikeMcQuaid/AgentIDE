@@ -90,8 +90,10 @@ public struct ReviewView: View {
         .task(id: worktreePath) {
             model = makeModel()
             stack = await service.stack(for: worktree)
-            selectedBranch = stack.checkedOut
-            await model.reload()
+            // The same entry the pull request tab is on, when one is
+            // remembered for this worktree.
+            let remembered = StackSelection.branch(for: worktreePath)
+            show(remembered.flatMap { stack.branches.contains($0) ? $0 : nil } ?? stack.checkedOut)
         }
         // Cmd-F reaches the pane through the storage bus: a diff is
         // not a text view, so AppKit's own find bar, which the
@@ -290,6 +292,7 @@ public struct ReviewView: View {
     /// this worktree does not hold.
     private func show(_ branch: String) {
         selectedBranch = branch
+        StackSelection.remember(branch, for: worktreePath)
         model.commitTarget = nil
         model.stackTarget = branch == stack.checkedOut
             ? nil

@@ -857,7 +857,16 @@ shim rather than a protocol:
    symbolic `origin/HEAD` resolved through the same default-base lookup
    the sidebar uses, since a worktree whose remote never had its head
    set cannot resolve it and git then listed the branch back to the root,
-   every merged pull request included; merge commits never count. And
+   every merged pull request included, and the span starts at the
+   branch's merge-base with that remote default, since a local `main`
+   left behind it dragged its missing commits in; merge commits never
+   count. The entry in view is one per worktree, on the `@AppStorage`
+   bus (`StackSelection`), so the review and pull request tabs keep the
+   same branch, opening on the first entry that could have a pull
+   request rather than the top, which often cannot yet. Read-only text
+   (a stack entry's commit message, a blocked form) is never
+   `.disabled`, which takes selection with editing: its binding drops
+   writes and the view dims, so it can always be copied. And
    cannot be listed at all while any branch below it is not on the
    remote or has no open pull request, since a pull request cannot
    target a base GitHub has no pull request for: the strip keeps those entries out of reach in the pull request

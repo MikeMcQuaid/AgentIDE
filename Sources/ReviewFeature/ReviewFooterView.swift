@@ -222,16 +222,16 @@ struct ReviewFooterView: View {
     /// on save.
     private var messageEditor: some View {
         VStack(spacing: 0) {
-            TextField("Subject", text: subjectBinding)
-                .disabled(model.isReadOnly)
+            TextField("Subject", text: subjectBinding.readOnly(model.isReadOnly))
+                .readOnly(model.isReadOnly)
                 .textFieldStyle(.plain)
                 .font(.body.monospaced())
                 .padding(Self.fieldInset)
                 .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
                 .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
             Divider()
-            TextEditor(text: bodyBinding)
-                .disabled(model.isReadOnly)
+            TextEditor(text: bodyBinding.readOnly(model.isReadOnly))
+                .readOnly(model.isReadOnly)
                 .font(.body.monospaced())
                 .frame(height: messageHeight)
                 .overlay(alignment: .topLeading) { columnRule(at: Self.bodyLimit, inset: Self.fieldInset) }

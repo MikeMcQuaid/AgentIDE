@@ -24,17 +24,17 @@ struct PullRequestCreateForm: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            TextField("Title", text: $model.prTitle)
+            TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
                 .textFieldStyle(.roundedBorder)
-                .disabled(isGenerating || isBlocked)
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
             Text("Body").font(.caption).foregroundStyle(.secondary)
-            TextEditor(text: $model.prBody)
+            TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
                 .font(.body)
                 .frame(minHeight: Self.bodyMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
-                .disabled(isGenerating || isBlocked)
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The description in your own words; the template below is appended after it")
             templateSection
         }
@@ -118,12 +118,12 @@ struct PullRequestCreateForm: View {
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
                     .hoverHelp("Tick every unticked checkbox, and disclose the agent where the template asks")
             }
-            TextEditor(text: $model.prTemplate)
+            TextEditor(text: $model.prTemplate.readOnly(isGenerating || isBlocked))
                 .font(.body.monospaced())
                 .frame(minHeight: Self.templateMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
-                .disabled(isGenerating || isBlocked)
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The repository's pull request template, editable; appended below the body")
         }
     }
