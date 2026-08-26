@@ -1154,8 +1154,10 @@ runs, every `gh` call and every cache hit or miss of the pull request
 store is appended as one line to
 `/Users/Shared/sv-<user>/tmp/agentide/performance.log`, a directory both
 users can read since either may be the one reading it back. The gate is
-decided once per launch and is off by default, so a build by anyone else
-writes nothing anywhere. Lines older than a week are swept on the next
+off by default, so a build by anyone else writes nothing anywhere, and
+`script/test` points the log into the test scratch, since the tests run
+every process the app does and once wrote thousands of scratch lines
+into the real one. Lines older than a week are swept on the next
 write, and the metadata store's dated caches (listings, headers,
 conversations, threads) age out at a week on every save, beside their
 count caps, so neither grows past a week of use. Logging and caching are

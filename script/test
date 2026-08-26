@@ -4,6 +4,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# The tests run every process the app does, and with the performance
+# log switched on they wrote thousands of scratch-repository lines
+# into the real one; they log into their own scratch instead.
+export AGENTIDE_PERFORMANCE_LOG_DIRECTORY="${PWD}/.test-scratch/performance"
+
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
