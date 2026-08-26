@@ -174,7 +174,13 @@ extension PullRequestsModel {
         // branch on its own from the default branch. Either way it
         // is the listed branch's span, never the checked-out one's,
         // which is what `origin/HEAD..HEAD` would have described.
-        let parent = stacking.stack.isStacked ? stacking.stack.parent(of: listed) : nil
+        // The bottom entry's parent is the stack's base, a bare
+        // local name that may sit commits behind the remote; the
+        // symbolic form makes the service resolve the fork point.
+        var parent = stacking.stack.isStacked ? stacking.stack.parent(of: listed) : nil
+        if parent == stacking.stack.base {
+            parent = nil
+        }
         return (parent ?? "origin/HEAD") + ".." + listed
     }
 

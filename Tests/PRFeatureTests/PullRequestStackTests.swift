@@ -25,7 +25,7 @@ struct PullRequestStackTests {
         let ranges = Mutex([String?]())
         model.fetchCommitMessages = { _, range in
             ranges.withLock { $0.append(range) }
-            return range == "main..lower" ? ["Lower work\n\nWhy lower."] : ["Upper work\n\nWhy upper."]
+            return range == "origin/HEAD..lower" ? ["Lower work\n\nWhy lower."] : ["Upper work\n\nWhy upper."]
         }
         await model.reload()
 
@@ -33,7 +33,7 @@ struct PullRequestStackTests {
         // request: the bottom one, with nothing under it, rather
         // than the checked-out top, which is blocked by the unpushed
         // branch beneath it.
-        #expect(model.listedRange == "main..lower")
+        #expect(model.listedRange == "origin/HEAD..lower")
         #expect(model.prTitle == "Lower work")
         #expect(model.unpushedBelow == nil)
 
@@ -44,7 +44,7 @@ struct PullRequestStackTests {
         #expect(model.listedRange == "lower..upper")
         #expect(model.prTitle == "Upper work")
         #expect(model.unpushedBelow == "lower")
-        #expect(ranges.withLock { $0 }.contains("main..lower"))
+        #expect(ranges.withLock { $0 }.contains("origin/HEAD..lower"))
     }
 
     @Test
