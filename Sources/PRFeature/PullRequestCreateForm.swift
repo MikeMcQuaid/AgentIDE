@@ -12,8 +12,13 @@ struct PullRequestCreateForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("No open pull request for this branch")
-                .font(.subheadline.weight(.semibold))
+            HStack {
+                Text("No open pull request for this branch")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                generateButton
+                resetButton
+            }
             if let below = model.unpushedBelow {
                 Text("Waiting on `" + below + "` below it to be pushed and opened first")
                     .font(.caption)
@@ -22,7 +27,6 @@ struct PullRequestCreateForm: View {
             TextField("Title", text: $model.prTitle)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isGenerating || isBlocked)
-                .overlay(alignment: .trailing) { generateButton.padding(.trailing, Self.overlayPadding) }
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody)
@@ -42,8 +46,6 @@ struct PullRequestCreateForm: View {
 
     private static let spacing: CGFloat = 8
 
-    private static let overlayPadding: CGFloat = 4
-
     private static let fieldCorner: CGFloat = 6
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
@@ -51,6 +53,9 @@ struct PullRequestCreateForm: View {
     /// Drafting locks every field, so a slow model never races
     /// typing it would then overwrite.
     @State private var isGenerating = false
+
+    /// Whether Reset is asking before throwing typed text away.
+    @State private var isConfirmingReset = false
 
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage(UtilityTabTarget.key)
@@ -61,6 +66,32 @@ struct PullRequestCreateForm: View {
     /// into a form that cannot be sent.
     private var isBlocked: Bool {
         model.unpushedBelow != nil
+    }
+
+    /// Back to what the commits say. Typed text asks first; blank
+    /// fields reset without a word.
+    private var resetButton: some View {
+        Button {
+            if Self.hasText(model.prTitle) || Self.hasText(model.prBody) {
+                isConfirmingReset = true
+            } else {
+                Task { await model.resetToCommits() }
+            }
+        } label: {
+            Image(systemName: "arrow.counterclockwise")
+                .accessibilityLabel("Reset to the commit message")
+        }
+        .buttonStyle(.borderless)
+        .disabled(isGenerating || isBlocked)
+        .hoverHelp("Replace the title and body with what the branch's commits say")
+        .confirmationDialog(
+            "Replace what you typed with the commit message?",
+            isPresented: $isConfirmingReset,
+            titleVisibility: .visible,
+        ) {
+            Button("Reset", role: .destructive) { Task { await model.resetToCommits() } }
+            Button("Cancel", role: .cancel) { isConfirmingReset = false }
+        }
     }
 
     /// The repository's template with its tick-all shortcut.

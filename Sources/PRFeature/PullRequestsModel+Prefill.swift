@@ -8,6 +8,23 @@ extension PullRequestsModel {
     /// defaults to that commit, no model involved. Blank is blank
     /// however it got that way, whitespace included, so a saved
     /// draft holding nothing is no reason to leave the form empty.
+    /// Throws away the title and body and fills them from the
+    /// branch's commits again; the caller has asked, so nothing
+    /// typed is spared. The template stays, since it is the
+    /// repository's rather than the commits'.
+    func resetToCommits() async {
+        guard let worktree = actionWorktree else {
+            return
+        }
+
+        loadingDraft = true
+        prTitle = ""
+        prBody = ""
+        loadingDraft = false
+        await prefillFromSingleCommit(worktree)
+        saveDraft()
+    }
+
     func prefillFromSingleCommit(_ worktree: Worktree) async {
         guard Self.isBlank(prTitle), Self.isBlank(prBody) else {
             return

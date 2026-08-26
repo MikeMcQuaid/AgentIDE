@@ -46,6 +46,25 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `the listed branch's span is its own, stacked or not`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        // On its own: from the default branch to the listed branch,
+        // never `HEAD`, which is whatever happens to be checked out.
+        model.fetchCurrentBranch = { _ in "feature" }
+        await model.reload()
+        #expect(model.listedRange == "origin/HEAD..feature")
+
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "feature")
+        }
+        await model.loadStack()
+        model.show(branch: "upper")
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(model.listedRange == "lower..upper")
+    }
+
+    @Test
     func `a stack entry stays listed through the reload that reads the real branch`() async {
         let model = makeModel()
         model.fetchCurrentBranch = { _ in "upper" }

@@ -205,6 +205,11 @@ before shipping.
   creating it and its remote the first time and opening the pull request from
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
+- **Fills** a pull request's title and body from the branch's commits,
+  drafts them with the on-device model at the press of the sparkles
+  button, and resets them to the commit message from the button beside
+  it, asking first when something is typed (so the form is never stuck
+  on a draft you no longer want)
 - **Discloses** the agent that wrote a branch in one click, and whenever
   you tick every box: the harness with the model and effort it ran at,
   the pickers' defaults when the launch named none, worded as the

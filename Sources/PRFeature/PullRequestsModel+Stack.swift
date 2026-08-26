@@ -158,13 +158,16 @@ extension PullRequestsModel {
     /// The listed entry's own commits as a git range, nil for a
     /// branch on its own, whose range is the default branch's.
     var listedRange: String? {
-        guard stacking.stack.isStacked, let listed = listedBranch,
-              let parent = stacking.stack.parent(of: listed)
-        else {
+        guard let listed = listedBranch else {
             return nil
         }
 
-        return parent + ".." + listed
+        // A stack entry's span runs from the branch below it; a
+        // branch on its own from the default branch. Either way it
+        // is the listed branch's span, never the checked-out one's,
+        // which is what `origin/HEAD..HEAD` would have described.
+        let parent = stacking.stack.isStacked ? stacking.stack.parent(of: listed) : nil
+        return (parent ?? "origin/HEAD") + ".." + listed
     }
 
     /// Whether a stack entry can be listed at all: not while any
