@@ -122,6 +122,30 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `a worktree on a local-only twin lists the branch that has the pull request`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        // What a renamed branch leaves behind: the worktree holds a
+        // local-only name, and the stack lists the pushed twin that
+        // stands for it at the same commit.
+        model.fetchCurrentBranch = { _ in "worktree-name" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        await model.reload()
+
+        // Listing the checked-out name instead found no pull
+        // request for a branch whose pull request was open all along.
+        #expect(model.listedBranch == "lower")
+        model.show(branch: "upper")
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(model.listedBranch == "upper")
+        // The entry standing in for what is checked out is still the
+        // worktree's own work to rebase and push.
+        #expect(model.isListedCheckedOut)
+    }
+
+    @Test
     func `the listed branch's span is its own, stacked or not`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])

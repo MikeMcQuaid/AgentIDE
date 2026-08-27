@@ -10,9 +10,11 @@ import TerminalUI
 struct StackWork {
     var stack: BranchStack = .init(base: nil, branches: [], checkedOut: "")
 
-    /// The entry the tab is listing, when it is not the branch the
-    /// worktree holds: reading up and down a stack must survive the
-    /// reload that asks git which branch is really checked out.
+    /// The entry the tab is listing, always named rather than left
+    /// to the branch the worktree holds: reading up and down a stack
+    /// must survive the reload that asks git which branch is really
+    /// checked out, and where a local-only twin is checked out the
+    /// entry standing for it is a different name entirely.
     var selected: String?
 
     /// What each of the stack's two actions would actually do, so
@@ -65,7 +67,7 @@ extension PullRequestsModel {
     /// reading up and down a stack is navigation, and moving the
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
-        stacking.selected = branch == stacking.stack.checkedOut ? nil : branch
+        stacking.selected = branch
         if let worktreePath {
             StackSelection.remember(branch, for: worktreePath)
         }
@@ -149,7 +151,7 @@ extension PullRequestsModel {
         let chosen = [remembered, firstOpenable, stacking.stack.checkedOut]
             .compactMap(\.self)
             .first { stacking.stack.branches.contains($0) }
-        stacking.selected = chosen == stacking.stack.checkedOut ? nil : chosen
+        stacking.selected = chosen
         StackSelection.remember(chosen, for: worktree.path)
     }
 

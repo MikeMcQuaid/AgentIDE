@@ -30,9 +30,12 @@ extension PullRequestsModel {
     }
 
     /// Whether the entry on screen is the branch the worktree
-    /// actually holds, which is always so outside a stack.
+    /// actually holds, which is always so outside a stack. The
+    /// stack's own checked-out name counts too: where a local-only
+    /// twin is checked out, the entry standing for it is at the same
+    /// commit, so rebasing and pushing are still its work.
     var isListedCheckedOut: Bool {
-        listedBranch == currentBranch ?? branch
+        listedBranch == currentBranch ?? branch || listedBranch == stacking.stack.checkedOut
     }
 
     /// Push makes sense with unpushed commits that this tab has not
