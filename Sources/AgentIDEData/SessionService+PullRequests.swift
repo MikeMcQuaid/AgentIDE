@@ -112,6 +112,33 @@ public extension SessionService {
         )
     }
 
+    /// Asks GitHub to show the stack's open pull requests as a
+    /// stack, bottom up, which is what makes them a stack there
+    /// rather than pull requests that happen to chain. Read fresh
+    /// rather than from the cache, which may be a minute behind the
+    /// pull request just opened. `gh stack link` adds to a stack it
+    /// already knows and never removes from one, so repeating it
+    /// whenever a pull request opens is safe, and two is the fewest
+    /// that make a stack.
+    func linkStack(worktree: Worktree) async throws {
+        let stack = await stack(for: worktree)
+        var numbers = [Int]()
+        for branch in stack.branches {
+            let listed = try? await github.pullRequests(
+                repositoryPath: worktree.repositoryPath,
+                scope: .branch(branch),
+            )
+            if let open = listed?.first(where: { $0.state == "OPEN" }) {
+                numbers.append(open.number)
+            }
+        }
+        guard numbers.count >= Self.linkableCount else {
+            return
+        }
+
+        try await github.linkStack(worktreePath: worktree.path, numbers: numbers)
+    }
+
     /// The repository's default branch by name, nil when neither
     /// the remote's head nor a local main or master says what it is.
     func defaultBranchName(of repository: Repository) async -> String? {
@@ -137,6 +164,17 @@ public extension SessionService {
         }
 
         return asked
+    }
+
+    /// Whether GitHub shows the worktree's branches as a stack:
+    /// what the link makes, asked for rather than remembered.
+    func isStackLinked(worktree: Worktree) async -> Bool {
+        await github.stackedNumbers(worktreePath: worktree.path).count >= Self.linkableCount
+    }
+
+    /// Merges a stacked pull request and everything below it.
+    func mergeStack(worktree: Worktree) async throws {
+        try await github.mergeStack(worktreePath: worktree.path)
     }
 
     /// Where this branch belongs: the repository itself when GitHub

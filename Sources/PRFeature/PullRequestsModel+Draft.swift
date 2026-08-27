@@ -42,8 +42,17 @@ extension PullRequestsModel {
             return
         }
 
-        summaries = cached
+        summaries = Self.worthShowing(cached)
         hasLoaded = true
+    }
+
+    /// What a branch's listing shows: once anything is open, the
+    /// closed and merged ones are history and only get in the way of
+    /// the one that is live. Everything is shown when nothing is
+    /// open, so a branch whose pull request was closed still says so.
+    static func worthShowing(_ summaries: [PullRequestSummary]) -> [PullRequestSummary] {
+        let open = summaries.filter { $0.state == "OPEN" }
+        return open.isEmpty ? summaries : open
     }
 
     /// Where a branch's draft is stored, nil without a branch.

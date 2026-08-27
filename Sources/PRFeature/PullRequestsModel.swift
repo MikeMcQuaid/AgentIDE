@@ -69,6 +69,15 @@ final class PullRequestsModel {
         performCreate = { worktree, title, body in
             try await service.createPullRequest(worktree: worktree, title: title, body: body)
         }
+        performLinkStack = { worktree in
+            try await service.linkStack(worktree: worktree)
+        }
+        checkStackLinked = { worktree in
+            await service.isStackLinked(worktree: worktree)
+        }
+        performMergeStack = { worktree in
+            try await service.mergeStack(worktree: worktree)
+        }
         // On disk first, so an edited template is the one offered,
         // then out of git: a sparse checkout carries the tracked
         // template without materialising it, which is how the
@@ -180,6 +189,10 @@ final class PullRequestsModel {
     /// Set only by the actions extension's fact refresh.
     var rebaseNeed: SessionService.RebaseNeed = .nothing
 
+    /// Whether GitHub shows the stack as a stack, refreshed with
+    /// the worktree's other facts; the stacked merge waits for it.
+    var isStackLinked = false
+
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
     /// Rebase on origin signs the branch.
@@ -223,6 +236,19 @@ final class PullRequestsModel {
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
     var performCreate: (Worktree, String, String) async throws -> String
+
+    /// Tells GitHub the stack's open pull requests are a stack; run
+    /// whenever one opens, since a stack is built one at a time.
+    var performLinkStack: (Worktree) async throws -> Void
+
+    /// Whether GitHub shows this worktree's pull requests as a
+    /// stack, which is what the stacked merge waits for.
+    var checkStackLinked: (Worktree) async -> Bool = { _ in false }
+
+    /// Merges a stacked pull request and everything below it.
+    var performMergeStack: (Worktree) async throws -> Void = { _ in
+        // Replaced by the initialiser.
+    }
 
     /// The picker's models and the effort a launch without a flag
     /// runs at, for a disclosure of a session started on defaults.
@@ -276,32 +302,8 @@ final class PullRequestsModel {
         }
     }
 
-    /// The branch the tab lists and compares against: the checked
-    /// out one when known, the worktree's recorded one otherwise.
-    var listedBranch: String? {
-        stacking.selected ?? currentBranch ?? branch
-    }
-
-    /// What the listing on screen is of, so an answer that arrives
-    /// after the tab has moved on is dropped rather than shown.
-    var cacheKey: String {
-        String(describing: scope) + "#" + (listedBranch ?? "")
-    }
-
-    /// The worktree listing, or nothing at all on the default
-    /// branch: asking GitHub for a pull request whose head is
-    /// `main` searches a repository's whole history of them to say
-    /// what the branch itself already says, which on a large tap
-    /// takes seconds every time the tab opens.
-    func listing(limit: Int) async throws -> [PullRequestSummary] {
-        guard scope != .worktree || listedBranch != defaultBranch else {
-            return []
-        }
-
-        return try await fetchList(scope.listScope(branch: listedBranch), limit)
-    }
-
-    /// Where a branch's draft is stored, nil without a branch.
+    /// The merge queue answer for the repository, which decides
+    /// whether the merge action queues or merges.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
     }
@@ -351,15 +353,17 @@ final class PullRequestsModel {
                 return
             }
 
-            summaries = fetched
+            summaries = Self.worthShowing(fetched)
             fetchedLimit = limit
             pullRequests.rememberListing(
                 repositoryPath: repository.path,
                 scope: scope.listScope(branch: listedBranch),
                 summaries: fetched,
             )
-            let chosen = fetched.first { $0.number == previous }
-                ?? (fetched.count == 1 ? fetched.first : nil)
+            // A branch with one live pull request opens it: there
+            // is nothing else the list could be for.
+            let chosen = summaries.first { $0.number == previous }
+                ?? (summaries.count == 1 ? summaries.first : nil)
             if let chosen {
                 select(chosen)
             }

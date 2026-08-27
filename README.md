@@ -183,12 +183,13 @@ before shipping.
   the strip copies from its menu), the review and pull request tabs
   keeping the same entry in view and opening on the first that could
   have a pull request, read-only text everywhere still selectable,
-  and two buttons put the whole stack
-  back in order, push it bottom up and submit it, opening the pull
-  requests it lacks and stacking them on GitHub,
-  signing every commit they replay and leaving alone any branch already
-  where it belongs (so a stack is one checkout, one session and no
-  bookkeeping, and a branch on its own looks exactly as it always did)
+  the stack's own Rebase and Push standing exactly where a lone
+  branch's do, putting every branch back on the one below it and
+  pushing them bottom up, signing every commit they replay and leaving
+  alone any branch already where it belongs, and each pull request
+  opened one at a time telling GitHub the stack it belongs to (so a
+  stack is one checkout, one session and no bookkeeping, and a branch
+  on its own looks exactly as it always did)
 - **Remembers** every answer GitHub gives about a pull request, with
   when it arrived and the entity tag it came with, in one shared store:
   no pull request is asked about twice inside a minute however much you

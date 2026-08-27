@@ -190,11 +190,11 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - A fullscreen space sent to another display leaves the display it
   came from black until a space switch repaints it. This is macOS's
   vacated space, not a pane of ours: the app owns exactly one window
-  (one `WindowGroup`, no panels, no `collectionBehavior` changes),
-  and `WindowConfigurator` says so in the messages pane when a
-  settled fullscreen window's frame does not match its screen, so a
-  silent Messages tab means the window is correctly framed on its
-  new display and is drawing nothing on the old one. Setting the
+  (one `WindowGroup`, no panels, no `collectionBehavior` changes).
+  A fullscreen window that keeps the menu bar fills its screen's
+  visible frame rather than its whole frame, which is correct;
+  reporting that difference to the messages pane said so on every
+  move and told nobody anything. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
 - The utility pane's review, editor and pull request surfaces stay

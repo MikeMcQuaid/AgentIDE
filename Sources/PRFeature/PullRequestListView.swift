@@ -122,20 +122,25 @@ struct PullRequestFooterView: View {
 
     @Bindable var model: PullRequestsModel
 
+    /// The cross-module signal that switches the utility pane's tab.
+    @AppStorage(UtilityTabTarget.key)
+    var utilityTab = ""
+
+    /// Sidebar-style: how far the branch sits behind its base.
+    var rebaseCount: String {
+        let behind = model.branchItem?.behindDefault ?? 0
+        return behind > 0 ? "\u{2193}" + String(behind) : ""
+    }
+
+    var rebaseHelp: String {
+        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
+            + "own origin ref when that is fully signed and only new commits need signatures, "
+            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+    }
+
     var body: some View {
         HStack {
-            // The bottom of a stack is an ordinary branch opening
-            // against the default one: it keeps the ordinary
-            // actions, and only an entry opening against another
-            // branch asks for the stack's.
-            if model.isStackedEntry {
-                restackButton
-                pushStackButton
-                submitStackButton
-            } else {
-                rebaseButton
-                pushButton
-            }
+            branchActions
             if let selected = model.selected {
                 copyButtons(for: selected)
             }
@@ -150,7 +155,9 @@ struct PullRequestFooterView: View {
             if model.needsCreateForm {
                 openButton
             }
-            if let mergeTitle = model.mergeActionTitle {
+            if model.isStackedEntry {
+                mergeStackButton
+            } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
                     await model.performMergeAction()
                 }
@@ -164,89 +171,7 @@ struct PullRequestFooterView: View {
         .background(.bar)
     }
 
-    // MARK: Private
-
-    private static let padding: CGFloat = 8
-
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage(UtilityTabTarget.key)
-    private var utilityTab = ""
-
-    /// Sidebar-style: how far the branch sits behind its base.
-    private var rebaseCount: String {
-        let behind = model.branchItem?.behindDefault ?? 0
-        return behind > 0 ? "\u{2193}" + String(behind) : ""
-    }
-
-    /// Sidebar-style: how many commits a push would send.
-    private var pushCount: String {
-        let ahead = model.branchItem?.aheadOfUpstream ?? 0
-        return ahead > 0 ? String(ahead) : ""
-    }
-
-    private var rebaseHelp: String {
-        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
-            + "own origin ref when that is fully signed and only new commits need signatures, "
-            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
-    }
-
-    /// A stack's own pair, in the place its branch's pair would
-    /// take: putting every branch back on the one below it, then
-    /// pushing them bottom up. Both dim when there is nothing to do.
-    private var restackButton: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "square.stack.3d.up",
-            accessibilityLabel: "Restack",
-            disabled: model.canRestack == false,
-        ) {
-            await model.restack()
-        }
-        .hoverHelp(
-            model.canRestack
-                ? "Rebase every branch onto the one below it, signed, leaving alone any already there"
-                : "Every branch is already on the one below it",
-        )
-    }
-
-    private var pushStackButton: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "arrow.up.circle",
-            accessibilityLabel: "Push stack",
-            disabled: model.canPushStack == false,
-        ) {
-            await model.pushStack()
-        }
-        .hoverHelp(
-            model.canPushStack
-                ? "Push every branch of the stack, bottom first"
-                : "Every branch of the stack is already pushed",
-        )
-    }
-
-    /// Everything a stack needs to exist on GitHub, in one press:
-    /// push, open what is missing, and link them into a stack.
-    private var submitStackButton: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "paperplane",
-            accessibilityLabel: "Submit stack",
-            disabled: model.canSubmitStack == false,
-        ) {
-            await model.submitStack()
-        }
-        .hoverHelp(
-            model.canSubmitStack
-                ? "Push the stack, open the pull requests it is missing, and stack them on GitHub"
-                : "Every branch of the stack already has a pull request",
-        )
-    }
-
-    private var rebaseButton: some View {
+    var rebaseButton: some View {
         BusyButton(
             rebaseCount,
             busy: "Rebasing",
@@ -261,7 +186,7 @@ struct PullRequestFooterView: View {
         .hoverHelp(rebaseHelp)
     }
 
-    private var pushButton: some View {
+    var pushButton: some View {
         BusyButton(
             pushCount,
             busy: "Pushing",
@@ -275,6 +200,16 @@ struct PullRequestFooterView: View {
             }
         }
         .hoverHelp(model.pushHelp)
+    }
+
+    // MARK: Private
+
+    private static let padding: CGFloat = 8
+
+    /// Sidebar-style: how many commits a push would send.
+    private var pushCount: String {
+        let ahead = model.branchItem?.aheadOfUpstream ?? 0
+        return ahead > 0 ? String(ahead) : ""
     }
 
     private var openButton: some View {

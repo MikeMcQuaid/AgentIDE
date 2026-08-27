@@ -903,25 +903,31 @@ shim rather than a protocol:
    store and applied wherever a stack is derived. The checked-out branch
    is never droppable, being the one branch the worktree undeniably
    holds. The popover also cuts a new branch on top, which is how a
-   stack grows. Submit stack does the rest in one press: push
-   bottom up, open a pull request for every branch missing one against the
-   branch below it, titled and bodied from that branch's own commits, and
-   then `gh stack link` with every pull request's number bottom-up,
-   GitHub's own extension, to show them as a stack; a branch whose pull
-   request already exists joins the linking rather than failing the
-   submit, and the listings are asked of GitHub directly, since
-   submitting against a minute-old cache once tried to open over an
-   existing pull request.
-   Only that last step is GitHub-specific, and it links pull requests that
-   already exist without keeping local tracking of its own, so what a
-   stack is here stays derived from ancestry and nothing else. The sidebar says where a row stands in its
+   stack grows. A stack's pull requests are opened one at a time, from
+   the same form and with the same review as any other, and each one
+   links what is open: `gh stack link` with every open pull request's
+   number bottom-up, GitHub's own extension, whenever one opens. That
+   is what makes them a stack on GitHub rather than pull requests that
+   happen to chain, and a pull request opened into a branch GitHub has
+   not been told about otherwise shows its own "this can be stacked"
+   notice instead. The numbers are asked of GitHub directly, since a
+   minute-old cache does not know about the pull request just opened,
+   and linking adds to a stack it already knows without ever removing
+   from one, so repeating it is safe. Only that step is
+   GitHub-specific, and it keeps no local tracking of its own, so what
+   a stack is here stays derived from ancestry and nothing else. A
+   stacked entry's merge action is the stack's: one word, dim until
+   `gh stack` sees a stack, and merging that pull request together
+   with every one below it, since merging one out of order would land
+   its parent's commits under another pull request's name. The sidebar says where a row stands in its
    stack (`2/3`) from the pull request chain the app knows: the poll's
    per-branch answers plus every listing the shared store has cached,
    since a stack's other branches have no worktree and their pull
    requests only arrive through the tab. It names
    what it is built on and how much rides on it. That chain says nothing
    until the pull requests are open and based on each other, which is
-   every stack before it is submitted, so a chain of one falls back to
+   every stack before its pull requests are open, so a chain of one
+   falls back to
    the stack derived from the worktree itself (persisted with the
    sidebar snapshot and fresh for one interval on launch, since
    deriving every one was a hundred `merge-base` calls in the first

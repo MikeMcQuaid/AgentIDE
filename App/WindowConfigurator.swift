@@ -94,10 +94,6 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private var observers: [any NSObjectProtocol] = []
 
-        /// The last reported mismatch, so a window that stays wrong
-        /// says so once rather than on every move.
-        private var lastMismatch: String?
-
         /// The display the window was last seen on, so a screen
         /// change can tell one that has gone from one that merely
         /// changed resolution or place.
@@ -174,7 +170,6 @@ struct WindowConfigurator: NSViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
                 self?.fit(displayGone: displayGone)
                 self?.rememberDisplay()
-                self?.reportUnfittedFullScreen()
             }
         }
 
@@ -290,31 +285,6 @@ struct WindowConfigurator: NSViewRepresentable {
             }
 
             window.setFrame(screen.frame, display: true, animate: false)
-        }
-
-        /// Says once, in Messages, when a settled fullscreen window
-        /// still does not match the screen it is on: the frame AppKit
-        /// left behind is the fact needed to fix a window that has to
-        /// be toggled out of fullscreen by hand, and it cannot be
-        /// read from outside the app. A fullscreen window that keeps
-        /// the menu bar fills the screen's visible frame rather than
-        /// its whole frame, which is correct and said nothing worth
-        /// reading.
-        private func reportUnfittedFullScreen() {
-            guard let window, window.styleMask.contains(.fullScreen), let screen = window.screen,
-                  window.frame != screen.frame, window.frame != screen.visibleFrame
-            else {
-                return
-            }
-
-            let mismatch = "Fullscreen window is " + NSStringFromRect(window.frame)
-                + " on a screen of " + NSStringFromRect(screen.frame)
-            guard mismatch != lastMismatch else {
-                return
-            }
-
-            lastMismatch = mismatch
-            ErrorLog.shared.note(mismatch)
         }
 
         /// Brings the frame back inside the screen it is on, keeping

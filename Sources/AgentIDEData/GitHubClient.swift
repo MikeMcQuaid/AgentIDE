@@ -139,17 +139,6 @@ public struct GitHubClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Asks GitHub to show a branch's open pull requests as a
-    /// stack. `gh stack link` links pull requests that already
-    /// exist and keeps no local tracking of its own, so the app's
-    /// own derivation stays the only thing that decides what a
-    /// stack is here.
-    public func linkStack(worktreePath: String, numbers: [Int]) async throws {
-        // The extension links the pull requests it is handed, bottom
-        // of the stack first, and keeps no local state.
-        try await gh(["stack", "link"] + numbers.map(String.init), in: worktreePath)
-    }
-
     /// Enables automerge for a pull request.
     public func enableAutomerge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
@@ -213,6 +202,32 @@ public struct GitHubClient: Sendable {
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields =
         "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt"
+
+    /// Every pull request number anywhere in `gh stack view --json`.
+    /// Read for the shape rather than a schema: the answer is only
+    /// ever asked whether it holds a stack's worth of numbers, and a
+    /// format that gains a field must not turn that into "no stack".
+    static func numbers(inStackJSON json: String) -> [Int] {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data)
+        else {
+            return []
+        }
+
+        var found = [Int]()
+        var pending = [root]
+        while let next = pending.popLast() {
+            if let object = next as? [String: Any] {
+                if let number = object["number"] as? Int {
+                    found.append(number)
+                }
+                pending += object.values
+            } else if let array = next as? [Any] {
+                pending += array
+            }
+        }
+        return found
+    }
 
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one

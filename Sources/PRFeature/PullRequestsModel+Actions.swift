@@ -12,6 +12,8 @@ extension PullRequestsModel {
     /// between a stack's entries, which share all of it.
     func refreshWorktreeFacts(_ worktree: Worktree) async {
         await loadStack()
+        // Only a stack can be linked, and asking costs a `gh` call.
+        isStackLinked = stacking.stack.isStacked ? await checkStackLinked(worktree) : false
         isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
         rebaseNeed = await fetchRebaseNeed(worktree)
         let template = await fetchTemplate(worktree.path)
@@ -181,6 +183,14 @@ extension PullRequestsModel {
         do {
             let url = try await performCreate(worktree, title, body)
             ErrorLog.shared.note("Opened pull request " + url)
+            // A stack is built one pull request at a time: each one
+            // links what is open into the stack, and failing to link
+            // never takes the pull request that opened with it.
+            do {
+                try await performLinkStack(worktree)
+            } catch {
+                ErrorLog.shared.report("Stacking on GitHub failed: " + error.localizedDescription)
+            }
             pullRequests.invalidateListings(repositoryPath: repository.path)
             prTitle = ""
             prBody = ""
@@ -267,6 +277,26 @@ extension PullRequestsModel {
 
         default:
             "Enabling automerge"
+        }
+    }
+
+    /// Merges a stacked pull request together with every one below
+    /// it, in order; false opens the errors surface. GitHub decides
+    /// how each is merged, so the button says only that it merges.
+    func mergeStack() async -> Bool {
+        guard let worktree = listedWorktree else {
+            return false
+        }
+
+        do {
+            try await performMergeStack(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
+            setStatus("Merging the stack.")
+            await reload(keepingSelection: true)
+            return true
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+            return false
         }
     }
 

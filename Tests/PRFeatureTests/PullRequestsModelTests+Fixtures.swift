@@ -19,6 +19,9 @@ extension PullRequestsModelTests {
         model.fetchHasMergeQueue = { false }
         model.fetchThreads = { _ in [] }
         model.performCreate = { _, _, _ in "" }
+        model.performLinkStack = { _ in
+            // Succeeds without side effects.
+        }
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _, _ in [] }
         model.generateDescription = { _ in nil }

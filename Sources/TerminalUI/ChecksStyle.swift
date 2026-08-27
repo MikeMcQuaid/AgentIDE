@@ -51,12 +51,12 @@ public nonisolated enum ChecksStyle {
     /// something to answer rather than a verdict on the branch.
     public static let commentOcticonName = "octicon-comment"
 
-    /// The octicon asset for a checks rollup state.
+    /// The octicon asset for a checks rollup state. Checks are
+    /// dots, whatever they say; the tick belongs to a review's
+    /// approval, and one row carrying both showed the same green
+    /// tick twice for two unrelated facts.
     public static func octiconName(for checks: String) -> String {
         switch checks {
-        case "SUCCESS":
-            "octicon-check-circle-fill"
-
         case "FAILURE":
             "octicon-x-circle-fill"
 
