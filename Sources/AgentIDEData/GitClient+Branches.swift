@@ -1,5 +1,3 @@
-import Foundation
-
 /// Branch inspection and the repository-local exclude file, split
 /// from the client body for length.
 public extension GitClient {

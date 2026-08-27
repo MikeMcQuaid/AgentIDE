@@ -1,5 +1,3 @@
-import Foundation
-
 /// A stack of branches in one worktree: each branch built on the one
 /// below it, the bottom built on the repository's default branch.
 /// Derived from ancestry rather than recorded anywhere, so a stack an

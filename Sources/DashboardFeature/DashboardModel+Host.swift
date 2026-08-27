@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 import TerminalUI
 
 public extension DashboardModel {

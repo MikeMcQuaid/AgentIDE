@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// Stacked branches, all in one worktree: each built on the one
 /// below, the bottom on the repository's default branch. The stack is

@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// Filling the creation form from a branch's own commits, split from
 /// the actions for length.

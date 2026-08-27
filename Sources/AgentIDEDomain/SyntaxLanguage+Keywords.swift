@@ -1,5 +1,3 @@
-import Foundation
-
 /// What the app knows about each language by name: which files are
 /// which, and what each calls its own words. tree-sitter does the
 /// real parsing where a grammar is loaded; these carry the rest,

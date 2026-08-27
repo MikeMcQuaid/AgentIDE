@@ -1,5 +1,3 @@
-import Foundation
-
 /// How a model or effort name is written for a person: the pickers
 /// show these and the pull request disclosure says them, so they
 /// read the same in both.

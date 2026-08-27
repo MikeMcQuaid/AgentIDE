@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import AppKit
 import SwiftUI
 import TerminalUI
 

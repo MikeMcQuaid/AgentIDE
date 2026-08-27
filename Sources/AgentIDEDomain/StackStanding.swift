@@ -1,5 +1,3 @@
-import Foundation
-
 /// Where a branch sits in its stack: how many pull requests are
 /// under it, how tall the whole stack is, and what it is built on.
 /// A branch on its own stands one of one on nothing in particular.
