@@ -251,9 +251,16 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Run `script/test` and `script/analyze` when Swift changed; if
   `script/analyze` has run for more than five minutes, stop it and
   let CI run it instead rather than holding the commit
-- Run `script/analyze` again before opening or updating a pull
-  request; unused imports and dead code otherwise surface in CI
-  first (sandboxed runs reuse the analyze build's index store, so
+- Run `script/analyze` on the host before opening or updating a
+  pull request, and say so plainly if you could not: inside the
+  sandbox it skips every file whose macros must expand, since
+  `sandbox-exec` does not nest and the plugin server that expands
+  `@State` or `@Observable` is denied its own sandbox, leaving the
+  compiler to wait out a timeout for each one (a view with nineteen
+  of them took seven minutes; a file with none takes a quarter of a
+  second). The host and CI still check what the sandbox skips, and
+  unused imports and dead code otherwise surface in CI first (sandboxed
+  runs reuse the analyze build's index store, so
   periphery's dead-code pass now runs everywhere). Both passes
   always run and the script fails at the end if either did: the
   beta's macro plugin server trips SwiftLint's analyzer often

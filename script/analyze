@@ -69,7 +69,33 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   baseline=".build/swiftlint-analyze-baseline.json"
   sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
     .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
-  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline" || failed=1
+  # A file whose macros must expand is left to the host and to CI.
+  # `sandbox-exec` does not nest, so the plugin server that expands
+  # `@State` and `@Observable` is denied its own sandbox and the
+  # compiler waits out a timeout for every one of them: a view with
+  # nineteen took seven minutes on its own, against a quarter of a
+  # second for a file with none. What they report here would be read
+  # off code the compiler never finished expanding anyway.
+  macros='^[[:space:]]*@(State|StateObject|Observable|ObservedObject'
+  macros+='|Environment|EnvironmentObject|AppStorage|Bindable|FocusState'
+  macros+='|Previewable|Query|Model)\b'
+  analysable=()
+  skipped=0
+  while IFS= read -r file; do
+    # Its own stdin, or it eats the list the loop is reading.
+    if grep -qE "${macros}" "${file}" </dev/null; then
+      skipped=$((skipped + 1))
+    else
+      analysable+=("${file}")
+    fi
+    # Absolute paths, to match what the build log records: relative
+    # ones match nothing in it, and the analyser then reports a
+    # confident zero violations having read no file at all.
+  done < <(find "${PWD}/App" "${PWD}/Sources" -name '*.swift' -type f | sort)
+  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline" \
+    "${analysable[@]}" || failed=1
+  echo "skipped ${skipped} files whose macros cannot expand inside the sandbox" >&2
+  echo "run script/analyze on the host before opening a pull request" >&2
 else
   swiftlint analyze --compiler-log-path "$log" --strict || failed=1
 fi
