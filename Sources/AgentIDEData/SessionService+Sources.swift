@@ -169,10 +169,20 @@ public extension SessionService {
     /// pushable: the sandbox cannot sign and a hook blocks unsigned
     /// pushes, so signing always happens here on the host.
     func rebaseSigned(worktree: Worktree) async throws {
+        let branch = worktree.branch
+        let held = await git.currentBranch(worktreePath: worktree.path)
+        if let held, held != branch {
+            // Git checks the branch out to rebase it, so the
+            // worktree must be quiet and is put back afterwards.
+            try await requireQuiet(worktree: worktree, action: "rebase")
+        }
+
         try await git.fetch(repositoryPath: worktree.path)
-        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
         try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
+        if let held, held != branch {
+            try await git.checkout(branch: held, worktreePath: worktree.path)
+        }
     }
 
     /// What a signed rebase would actually change, so the button
@@ -189,12 +199,14 @@ public extension SessionService {
     /// itself fetches first, so a stale answer only mislabels until
     /// the next reload.
     func rebaseNeed(worktree: Worktree) async -> RebaseNeed {
-        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+        // The caller's branch, which for a stack is the entry being
+        // looked at rather than whichever one the worktree holds.
+        let branch = worktree.branch
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
         let movesBase = await (git.aheadBehind(worktreePath: worktree.path, baseRef: target)?.behind ?? 0) > 0
         let needsSigning = await git.allCommitsSigned(
             worktreePath: worktree.path,
-            range: target + "..HEAD",
+            range: target + ".." + branch,
         ) == false
         switch (movesBase, needsSigning) {
         case (true, true):

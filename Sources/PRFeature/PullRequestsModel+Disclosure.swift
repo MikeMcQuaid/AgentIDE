@@ -5,28 +5,6 @@ import Foundation
 extension PullRequestsModel {
     // MARK: Internal
 
-    /// Whether this branch has an agent session to disclose.
-    var hasAIDisclosure: Bool {
-        disclosure != nil
-    }
-
-    /// Names the harness and model that wrote the branch, in the
-    /// template's own AI section when it has one (Homebrew's asks
-    /// for exactly this, and ticking its box is what disclosing
-    /// means) and at the end of the body otherwise.
-    func insertAIDisclosure() {
-        guard let disclosure else {
-            return
-        }
-
-        if let ticked = Self.disclosing(in: prTemplate, sentence: disclosure) {
-            prTemplate = ticked
-            return
-        }
-
-        prBody = prBody.isEmpty ? disclosure : prBody + "\n\n" + disclosure
-    }
-
     /// Writes the disclosure into the template's own AI section,
     /// and nowhere else: a template without one has nothing to say
     /// about it, and the body is not the place to volunteer it.

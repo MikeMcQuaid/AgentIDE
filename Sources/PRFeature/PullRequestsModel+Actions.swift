@@ -13,7 +13,7 @@ extension PullRequestsModel {
     func refreshWorktreeFacts(_ worktree: Worktree) async {
         await loadStack()
         isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
-        rebaseNeed = await fetchRebaseNeed(worktree)
+        rebaseNeed = await fetchRebaseNeed(listedWorktree ?? worktree)
         let template = await fetchTemplate(worktree.path)
         hasTemplate = template != nil
         originalTemplate = template ?? ""
@@ -237,7 +237,7 @@ extension PullRequestsModel {
     /// Rebases onto origin with signed commits; false means the
     /// rebase aborted and the errors tab should open with the cause.
     func rebaseSigned() async -> Bool {
-        guard let worktree = actionWorktree else {
+        guard let worktree = listedWorktree else {
             return true
         }
 
