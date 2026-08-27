@@ -36,6 +36,27 @@ struct MetadataStoreTests {
     }
 
     @Test
+    func `changes made at the same moment are all kept`() async throws {
+        let root = try TestSupport.temporaryDirectory("store-update")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Loading, changing and saving as three steps kept only the
+        // last writer's copy: everything saved while it held its own
+        // was overwritten, which is how a branch's cached pull
+        // requests and a worktree's recorded session went missing.
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0 ..< 20 {
+                group.addTask {
+                    store.update { $0.prompts["session-" + String(index)] = "prompt" }
+                }
+            }
+        }
+
+        #expect(store.load().prompts.count == 20)
+    }
+
+    @Test
     func `decoding tolerates files written before new fields existed`() throws {
         let root = try TestSupport.temporaryDirectory("store-old")
         defer { try? FileManager.default.removeItem(atPath: root) }

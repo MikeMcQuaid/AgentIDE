@@ -27,9 +27,9 @@ public extension SessionService {
         // The system appearance, readable without AppKit: the key is
         // set to Dark in the global domain and absent in light mode.
         let isDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-        var metadata = store.load()
-        metadata.terminalSchemes[worktreePath] = isDark ? Self.darkName : Self.lightName
-        store.save(metadata)
+        store.update { metadata in
+            metadata.terminalSchemes[worktreePath] = isDark ? Self.darkName : Self.lightName
+        }
     }
 
     /// The strings the metadata file stores.

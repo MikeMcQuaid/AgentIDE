@@ -309,15 +309,15 @@ public extension SessionService {
     /// back. Nothing about git changes: the branch is left where it
     /// is, and the stack simply stops counting it.
     func setStackExclusion(branch: String, excluded: Bool, worktreePath: String) {
-        var metadata = store.load()
-        var branches = Set(metadata.stackExclusions[worktreePath] ?? [])
-        if excluded {
-            branches.insert(branch)
-        } else {
-            branches.remove(branch)
+        store.update { metadata in
+            var branches = Set(metadata.stackExclusions[worktreePath] ?? [])
+            if excluded {
+                branches.insert(branch)
+            } else {
+                branches.remove(branch)
+            }
+            metadata.stackExclusions[worktreePath] = branches.isEmpty ? nil : branches.sorted()
         }
-        metadata.stackExclusions[worktreePath] = branches.isEmpty ? nil : branches.sorted()
-        store.save(metadata)
     }
 
     /// Cuts a new branch on top of the checked-out one, in the same

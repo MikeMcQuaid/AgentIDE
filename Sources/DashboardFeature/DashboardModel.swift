@@ -269,9 +269,9 @@ public final class DashboardModel {
             return store.load().openIssuesCache[repository.path] ?? []
         }
 
-        var metadata = store.load()
-        metadata.openIssuesCache[repository.path] = fresh
-        store.save(metadata)
+        store.update { metadata in
+            metadata.openIssuesCache[repository.path] = fresh
+        }
         return fresh
     }
 

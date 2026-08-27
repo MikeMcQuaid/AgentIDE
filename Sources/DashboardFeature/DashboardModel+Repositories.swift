@@ -18,9 +18,9 @@ public extension DashboardModel {
             return cachedOrganisations()
         }
 
-        var metadata = store.load()
-        metadata.organisations = fresh
-        store.save(metadata)
+        store.update { metadata in
+            metadata.organisations = fresh
+        }
         return fresh
     }
 
@@ -38,9 +38,9 @@ public extension DashboardModel {
             return cachedRepositories(owner: owner)
         }
 
-        var metadata = store.load()
-        metadata.ownerRepositories[owner] = fresh
-        store.save(metadata)
+        store.update { metadata in
+            metadata.ownerRepositories[owner] = fresh
+        }
         return fresh
     }
 

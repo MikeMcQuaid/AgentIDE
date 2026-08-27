@@ -49,15 +49,15 @@ public extension PullRequestStore {
             (body, events) = try await github.conversation(repositoryPath: repositoryPath, number: number)
         }
         let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
-        var metadata = store.load()
-        metadata.conversationCache[key] = CachedConversation(body: body, events: events)
-        // A REST fallback never overwrites cached GraphQL threads:
-        // that would strip the resolve buttons from a reopen.
-        if answer.graphQLFailure == nil {
-            metadata.threadsCache[threadsKey] = CachedThreads(threads: answer.threads)
+        store.update { metadata in
+            metadata.conversationCache[key] = CachedConversation(body: body, events: events)
+            // A REST fallback never overwrites cached GraphQL threads:
+            // that would strip the resolve buttons from a reopen.
+            if answer.graphQLFailure == nil {
+                metadata.threadsCache[threadsKey] = CachedThreads(threads: answer.threads)
+            }
+            metadata.fetchedAt[key] = Date()
         }
-        metadata.fetchedAt[key] = Date()
-        store.save(metadata)
         return PullRequestConversation(
             body: body,
             events: events,

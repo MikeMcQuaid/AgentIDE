@@ -344,13 +344,13 @@ extension DashboardModel {
     }
 
     private func persist(_ summary: PullRequestSummary?, key: String) {
-        var metadata = store.load()
-        if let summary {
-            metadata.pullRequestCache[key] = summary
-        } else {
-            metadata.pullRequestCache.removeValue(forKey: key)
+        store.update { metadata in
+            if let summary {
+                metadata.pullRequestCache[key] = summary
+            } else {
+                metadata.pullRequestCache.removeValue(forKey: key)
+            }
         }
-        store.save(metadata)
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {

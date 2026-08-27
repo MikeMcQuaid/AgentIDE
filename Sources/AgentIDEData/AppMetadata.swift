@@ -317,6 +317,10 @@ public struct AppMetadata: Codable, Sendable {
         // worth the file it takes up.
         let old = Date().addingTimeInterval(-Self.cacheLife)
         pullRequestListsCache = pullRequestListsCache.filter { $0.value.savedAt > old }
+        // An entity tag outlives nothing: without the listing it
+        // stamped, sending it back asks GitHub to answer 304 for a
+        // listing the app cannot produce.
+        etags = etags.filter { pullRequestListsCache[$0.key] != nil }
         conversationCache = conversationCache.filter { $0.value.savedAt > old }
         enrichedSummaryCache = enrichedSummaryCache.filter { $0.value.savedAt > old }
         threadsCache = threadsCache.filter { $0.value.savedAt > old }

@@ -99,7 +99,7 @@ extension PullRequestsModelTests {
         )
     }
 
-    func item(branch: String, ahead: Int?) -> WorktreeItem {
+    func item(branch: String, ahead: Int?, session: AgentSession? = nil) -> WorktreeItem {
         WorktreeItem(
             worktree: Worktree(
                 repositoryName: "repo",
@@ -107,7 +107,7 @@ extension PullRequestsModelTests {
                 branch: branch,
                 path: "/worktrees/" + branch,
             ),
-            session: nil,
+            session: session,
             isDirty: false,
             aheadOfUpstream: ahead,
             hasUnread: false,

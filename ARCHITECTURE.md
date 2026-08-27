@@ -751,7 +751,12 @@ shim rather than a protocol:
    most, goes through REST rather than `gh pr list`'s GraphQL, because
    REST answers carry entity tags: the last one travels back as
    `If-None-Match`, GitHub answers an unchanged listing with a 304 that
-   costs no rate limit and no body, and the cache stands. The other
+   costs no rate limit and no body, and the cache stands. A tag is only
+   ever sent while the listing it stamped is still cached, and is
+   dropped with it: the caches are capped and age out, the tags do not,
+   and a 304 answering for a listing the app no longer holds reported a
+   branch as having no pull request at all for as long as GitHub's own
+   answer stayed the same. The other
    scopes stay GraphQL, which has no tags, and the merge queues of every
    repository are one aliased GraphQL query a minute rather than one
    each. The pull request tab polls by
@@ -1163,6 +1168,15 @@ with `DatabaseMigrator`), deliberately outside the shared workspace so agents
 can neither read nor corrupt it. Deleting it loses only unread state, prompt
 history, settings and the attribution of conversations to worktrees that no
 longer exist; everything else re-derives from the system (P1).
+
+Every change to it goes through `MetadataStore.update`, which loads,
+changes and saves under one lock. The file is written whole, so loading
+it, changing a copy and saving that copy back kept only the last
+writer's version: a poll that read the file before a slow request and
+saved it afterwards silently erased whatever the launch, the draft or
+another poll had written in between, which is how a branch's cached pull
+requests and a worktree's recorded session went missing while the app
+was busy.
 
 Repository icons are GitHub owner avatars, cached one per owner (not per
 repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a

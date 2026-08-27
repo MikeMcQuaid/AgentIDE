@@ -9,26 +9,24 @@ import Foundation
 public extension SessionService {
     /// Lists a directory of your own under a repository.
     func addHostDirectory(_ path: String, to repository: Repository) {
-        var metadata = store.load()
-        var listed = metadata.hostDirectories[repository.path] ?? []
+        var listed = store.load().hostDirectories[repository.path] ?? []
         guard listed.contains(path) == false else {
             return
         }
 
         listed.append(path)
-        metadata.hostDirectories[repository.path] = listed.sorted()
-        store.save(metadata)
+        store.update { $0.hostDirectories[repository.path] = listed.sorted() }
     }
 
     /// Stops listing one. Nothing on disk is touched: these are not
     /// AgentIDE's to delete.
     func forgetHostDirectory(_ path: String, from repositoryPath: String) {
-        var metadata = store.load()
-        metadata.hostDirectories[repositoryPath]?.removeAll { $0 == path }
-        if metadata.hostDirectories[repositoryPath]?.isEmpty == true {
-            metadata.hostDirectories[repositoryPath] = nil
+        store.update { metadata in
+            metadata.hostDirectories[repositoryPath]?.removeAll { $0 == path }
+            if metadata.hostDirectories[repositoryPath]?.isEmpty == true {
+                metadata.hostDirectories[repositoryPath] = nil
+            }
         }
-        store.save(metadata)
     }
 
     /// Publishes the listed directories where the `agentide`

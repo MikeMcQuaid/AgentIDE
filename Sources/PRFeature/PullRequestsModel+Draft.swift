@@ -79,13 +79,13 @@ extension PullRequestsModel {
             return
         }
 
-        var metadata = store.load()
-        metadata.pullRequestDrafts[key] = PullRequestFormDraft(
-            title: prTitle,
-            body: prBody,
-            template: prTemplate,
-        )
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestDrafts[key] = PullRequestFormDraft(
+                title: prTitle,
+                body: prBody,
+                template: prTemplate,
+            )
+        }
     }
 
     /// Restores a saved draft into whatever is still empty. Only
@@ -121,9 +121,9 @@ extension PullRequestsModel {
             return
         }
 
-        var metadata = store.load()
-        metadata.pullRequestDrafts.removeValue(forKey: key)
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestDrafts.removeValue(forKey: key)
+        }
         loadingDraft = true
         prTitle = ""
         prBody = ""

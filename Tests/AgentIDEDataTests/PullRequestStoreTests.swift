@@ -117,6 +117,35 @@ struct PullRequestStoreTests {
     }
 
     @Test
+    func `an entity tag is not sent back once the listing it stamped has gone`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-etag") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let key = PullRequestStore.listingKey(repositoryPath: "/repo", scope: .branch("work"))
+
+        // The listing caches are capped and age out; a tag left
+        // behind by one asked GitHub for a 304 the app could not
+        // answer, so the branch showed no pull request at all for as
+        // long as GitHub's own answer stayed the same. A file
+        // written that way is answered by asking again in full.
+        var orphaned = AppMetadata()
+        orphaned.etags[key] = "\"tag-1\""
+        try JSONEncoder().encode(orphaned).write(to: URL(fileURLWithPath: file))
+
+        let listed = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        #expect(runner.unchangedAnswers == 0)
+        #expect(listed.map(\.number) == [7])
+
+        // And a tag is dropped with the listing it belongs to, so
+        // the pair can never come apart again.
+        let metadata = MetadataStore(file: file)
+        var stripped = metadata.load()
+        stripped.pullRequestListsCache = [:]
+        metadata.save(stripped)
+        #expect(metadata.load().etags.isEmpty)
+    }
+
+    @Test
     func `one pull request in flight may be asked about every half minute, a listing may not`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-inflight") + "/state.json"
         let runner = CountingRunner()

@@ -63,6 +63,28 @@ struct PullRequestDisclosureTests {
     }
 
     @Test
+    func `the session running in the worktree discloses a stack entry`() {
+        // Every branch of a stack shares one worktree, and the row
+        // already knows which agent is running in it. Reading only
+        // the metadata file meant a lost or never-recorded session
+        // took the whole button away.
+        let fixtures = PullRequestsModelTests()
+        let running = AgentSession(
+            name: "agentide--repo--feature--claude",
+            agent: .claudeCode,
+            status: .running,
+            workingDirectory: "/worktrees/feature",
+            paneID: "p1",
+            activity: nil,
+            version: nil,
+        )
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1, session: running)])
+        model.launchChoices = { _ in (["fable", "opus"], "high") }
+
+        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
+    }
+
+    @Test
     func `what a session was started with reads as the pickers write it`() {
         let claude = "--model opus-5 --effort xhigh"
         #expect(PullRequestsModel.model(inArguments: claude) == "opus-5")

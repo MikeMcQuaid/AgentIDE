@@ -174,24 +174,27 @@ extension SessionService {
     /// while the window is being used.
     @concurrent
     func backUpRunningConversations(_ groups: [RepositoryGroup]) async {
-        var metadata = store.load()
-        var copied = false
+        let backedUpAt = store.load().conversationBackupAt
+        var copied = [String]()
         let now = Date()
         for item in groups.flatMap(\.items) where item.session?.status == .running {
-            let last = metadata.conversationBackupAt[item.worktree.path] ?? .distantPast
+            let last = backedUpAt[item.worktree.path] ?? .distantPast
             guard now.timeIntervalSince(last) >= Self.backupIntervalSeconds else {
                 continue
             }
 
             backUpConversation(of: item.worktree)
-            metadata.conversationBackupAt[item.worktree.path] = now
-            copied = true
+            copied.append(item.worktree.path)
         }
-        guard copied else {
+        guard copied.isEmpty == false else {
             return
         }
 
-        store.save(metadata)
+        store.update { metadata in
+            for path in copied {
+                metadata.conversationBackupAt[path] = now
+            }
+        }
     }
 
     /// The ways to continue a worktree's own agent, best first: the
@@ -290,11 +293,11 @@ extension SessionService {
     }
 
     private func remember(sessionName: String, worktreePath: String, resumeID: String) {
-        var metadata = store.load()
-        metadata.resumeIDs[sessionName] = resumeID
-        metadata.sessionsByWorktree[worktreePath] = sessionName
-        metadata.seenAt[worktreePath] = Date()
-        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
-        store.save(metadata)
+        store.update { metadata in
+            metadata.resumeIDs[sessionName] = resumeID
+            metadata.sessionsByWorktree[worktreePath] = sessionName
+            metadata.seenAt[worktreePath] = Date()
+            metadata.intentionallyClosed.removeAll { $0 == worktreePath }
+        }
     }
 }

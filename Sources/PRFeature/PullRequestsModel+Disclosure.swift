@@ -47,23 +47,23 @@ extension PullRequestsModel {
             return nil
         }
 
-        // The recorded session names the agent; a worktree with no
-        // session recorded (a stack cut by hand, a branch resumed
-        // elsewhere) still has its newest conversation to say which
-        // agent wrote it, on the pickers' defaults.
-        // The listed branch's own session names the agent, wherever
-        // it ran: the worktree's recorded session first, then any
-        // recorded session whose name embeds this branch, then the
-        // worktree's newest conversation.
+        // Which session wrote the listed branch: one whose name
+        // embeds that branch, wherever it ran, else the one running
+        // in this worktree, which is the row's own reading and the
+        // answer for every entry of a stack, else what the metadata
+        // recorded. Failing all three, the worktree's newest
+        // conversation still names the agent, on the pickers'
+        // defaults.
         let metadata = store.load()
-        var session = metadata.sessionsByWorktree[worktree.path] ?? ""
-        if let listed = listedBranch, SessionName.branchSlug(of: session) != SessionName.slug(listed) {
-            session = metadata.sessionsByWorktree
+        let branchSession = listedBranch.flatMap { listed in
+            metadata.sessionsByWorktree
                 .values
-                .first { SessionName.branchSlug(of: $0) == SessionName.slug(listed) } ?? session
+                .first { SessionName.branchSlug(of: $0) == SessionName.slug(listed) }
         }
-        guard let agent = AgentKind.allCases.first(where: { session.hasSuffix("--" + $0.rawValue) })
-            ?? branchItem?.pastSessions.first?.agent
+        let session = branchSession ?? branchItem?.session?.name ?? metadata.sessionsByWorktree[worktree.path]
+        guard let agent = session.flatMap({ name in
+            AgentKind.allCases.first { name.hasSuffix("--" + $0.rawValue) }
+        }) ?? branchItem?.session?.agent ?? branchItem?.pastSessions.first?.agent
         else {
             return nil
         }
@@ -71,7 +71,7 @@ extension PullRequestsModel {
         // A launch with the picker's defaults writes no flags, so
         // the defaults are what ran: the runner's first model and
         // its default effort, the same the picker showed.
-        let arguments = metadata.arguments[session] ?? ""
+        let arguments = session.flatMap { metadata.arguments[$0] } ?? ""
         let choices = launchChoices(agent)
         let model = Self.model(inArguments: arguments) ?? choices.models.first
         let effort = Self.effort(inArguments: arguments) ?? choices.defaultEffort

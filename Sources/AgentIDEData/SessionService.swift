@@ -153,9 +153,9 @@ public struct SessionService: Sendable {
             return
         }
 
-        var metadata = store.load()
-        metadata.resumeIDs[sessionName] = transcripts.resumeID(of: transcript)
-        store.save(metadata)
+        store.update { metadata in
+            metadata.resumeIDs[sessionName] = transcripts.resumeID(of: transcript)
+        }
     }
 
     /// Launches an agent in a prepared worktree slot: symlink, prompt
@@ -187,13 +187,13 @@ public struct SessionService: Sendable {
         )
 
         await progress("Recording the session `" + sessionName + "`")
-        var metadata = store.load()
-        metadata.prompts[sessionName] = prompt
-        metadata.arguments[sessionName] = arguments
-        metadata.seenAt[slot.path] = Date()
-        metadata.sessionsByWorktree[slot.path] = sessionName
-        metadata.intentionallyClosed.removeAll { $0 == slot.path }
-        store.save(metadata)
+        store.update { metadata in
+            metadata.prompts[sessionName] = prompt
+            metadata.arguments[sessionName] = arguments
+            metadata.seenAt[slot.path] = Date()
+            metadata.sessionsByWorktree[slot.path] = sessionName
+            metadata.intentionallyClosed.removeAll { $0 == slot.path }
+        }
         await awaitReady(sessionName: sessionName)
         return sessionName
     }

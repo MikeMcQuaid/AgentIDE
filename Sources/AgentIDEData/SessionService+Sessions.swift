@@ -127,36 +127,36 @@ public extension SessionService {
             return
         }
 
-        var metadata = store.load()
-        metadata.agentVersions[sessionName] = version
-        store.save(metadata)
+        store.update { metadata in
+            metadata.agentVersions[sessionName] = version
+        }
     }
 
     /// Marks a worktree viewed: clears its unread state, including a
     /// manual mark.
     func markSeen(worktreePath: String) {
-        var metadata = store.load()
-        metadata.seenAt[worktreePath] = Date()
-        metadata.unreadMarks.removeAll { $0 == worktreePath }
-        store.save(metadata)
+        store.update { metadata in
+            metadata.seenAt[worktreePath] = Date()
+            metadata.unreadMarks.removeAll { $0 == worktreePath }
+        }
     }
 
     /// Records that the worktree's current activity has been seen
     /// without clearing a manual unread mark, for the selected item
     /// staying on screen.
     func acknowledgeActivity(worktreePath: String) {
-        var metadata = store.load()
-        metadata.seenAt[worktreePath] = Date()
-        store.save(metadata)
+        store.update { metadata in
+            metadata.seenAt[worktreePath] = Date()
+        }
     }
 
     /// Flags a worktree unread until it is next viewed.
     func markUnread(worktreePath: String) {
-        var metadata = store.load()
-        if metadata.unreadMarks.contains(worktreePath) == false {
-            metadata.unreadMarks.append(worktreePath)
+        store.update { metadata in
+            if metadata.unreadMarks.contains(worktreePath) == false {
+                metadata.unreadMarks.append(worktreePath)
+            }
         }
-        store.save(metadata)
     }
 
     /// Commits anything the agent left uncommitted.
@@ -179,11 +179,11 @@ public extension SessionService {
         backUpConversation(of: worktree)
         let worktreePath = worktree.path
         rememberResumeID(sessionName: sessionName, worktreePath: worktreePath)
-        var metadata = store.load()
-        if metadata.intentionallyClosed.contains(worktreePath) == false {
-            metadata.intentionallyClosed.append(worktreePath)
+        store.update { metadata in
+            if metadata.intentionallyClosed.contains(worktreePath) == false {
+                metadata.intentionallyClosed.append(worktreePath)
+            }
         }
-        store.save(metadata)
         await killSession(name: sessionName)
     }
 
@@ -208,9 +208,9 @@ public extension SessionService {
     /// A session starting or resuming clears the deliberate-close
     /// mark, so automatic resumes apply again afterwards.
     internal func clearIntentionalClose(worktreePath: String) {
-        var metadata = store.load()
-        metadata.intentionallyClosed.removeAll { $0 == worktreePath }
-        store.save(metadata)
+        store.update { metadata in
+            metadata.intentionallyClosed.removeAll { $0 == worktreePath }
+        }
     }
 
     /// Whether a closed session is recorded for a worktree, so panes

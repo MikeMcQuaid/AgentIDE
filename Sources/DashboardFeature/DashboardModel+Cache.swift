@@ -29,17 +29,24 @@ extension DashboardModel {
                     return await (agent, version, self.service.discoverModels(for: agent))
                 }
             }
-            var metadata = store.load()
+            // Collected first and stored in one step: the probes
+            // take seconds each, and metadata loaded before them is
+            // stale by the time they answer.
+            var discovered = [(agent: AgentKind, version: String?, models: [String])]()
             for await (agent, version, models) in tasks {
                 guard let models else {
                     continue
                 }
 
                 discoveredModels[agent] = models
-                metadata.discoveredModels[agent.rawValue] = models
-                metadata.discoveredModelsVersion[agent.rawValue] = version
+                discovered.append((agent, version, models))
             }
-            store.save(metadata)
+            store.update { metadata in
+                for entry in discovered {
+                    metadata.discoveredModels[entry.agent.rawValue] = entry.models
+                    metadata.discoveredModelsVersion[entry.agent.rawValue] = entry.version
+                }
+            }
         }
     }
 
@@ -99,8 +106,7 @@ extension DashboardModel {
     }
 
     func cacheSidebar(_ groups: [RepositoryGroup]) {
-        var metadata = store.load()
-        metadata.cachedSidebar = groups.map { group in
+        let cached = groups.map { group in
             var cached = CachedRepository()
             cached.name = group.repository.name
             cached.fullName = group.repository.fullName
@@ -126,6 +132,6 @@ extension DashboardModel {
             }
             return cached
         }
-        store.save(metadata)
+        store.update { $0.cachedSidebar = cached }
     }
 }

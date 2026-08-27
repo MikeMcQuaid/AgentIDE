@@ -81,34 +81,40 @@ public struct PullRequestStore: Sendable {
         // which costs no rate limit, and the cache is what it was.
         // The other scopes are GraphQL, which has no entity tags.
         if case let .branch(branch) = scope {
-            var metadata = store.load()
+            // The tag goes back only while the listing it stamped is
+            // still here: caches are capped and age out, and a 304
+            // against a listing the app no longer holds would report
+            // a branch as having no pull request at all, for as long
+            // as GitHub's answer stayed the same.
+            let held = store.load()
+            let cached = held.pullRequestListsCache[key]?.summaries
             let answer = try await github.branchPullRequests(
                 repositoryPath: repositoryPath,
                 branch: branch,
-                etag: metadata.etags[key],
+                etag: cached == nil ? nil : held.etags[key],
             )
             switch answer {
             case .unchanged:
-                metadata.fetchedAt[key] = Date()
-                store.save(metadata)
+                store.update { $0.fetchedAt[key] = Date() }
                 PerformanceLog.record(.cacheHit, "etag " + key, seconds: 0)
-                return metadata.pullRequestListsCache[key]?.summaries ?? []
+                return cached ?? []
 
             case let .changed(body, etag):
                 let fetched = GitHubClient.summaries(fromRESTJSON: body)
-                metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
-                metadata.etags[key] = etag
-                metadata.fetchedAt[key] = Date()
-                store.save(metadata)
+                store.update { metadata in
+                    metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
+                    metadata.etags[key] = etag
+                    metadata.fetchedAt[key] = Date()
+                }
                 return fetched
             }
         }
 
         let fetched = try await github.pullRequests(repositoryPath: repositoryPath, scope: scope, limit: limit)
-        var metadata = store.load()
-        metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
-        metadata.fetchedAt[key] = Date()
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
+            metadata.fetchedAt[key] = Date()
+        }
         return fetched
     }
 
@@ -119,11 +125,11 @@ public struct PullRequestStore: Sendable {
         scope: GitHubClient.ListScope,
         summaries: [PullRequestSummary],
     ) {
-        var metadata = store.load()
-        metadata.pullRequestListsCache[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] =
-            CachedPullRequestList(summaries: summaries)
-        metadata.fetchedAt[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] = Date()
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestListsCache[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] =
+                CachedPullRequestList(summaries: summaries)
+            metadata.fetchedAt[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] = Date()
+        }
     }
 
     /// The last full summary without asking anything.
@@ -135,10 +141,10 @@ public struct PullRequestStore: Sendable {
 
     /// Remembers a summary fetched elsewhere.
     public func rememberSummary(repositoryPath: String, summary: PullRequestSummary) {
-        var metadata = store.load()
-        metadata.enrichedSummaryCache[Self.summaryKey(repositoryPath: repositoryPath, number: summary.number)] =
-            CachedSummary(summary: summary)
-        store.save(metadata)
+        store.update { metadata in
+            metadata.enrichedSummaryCache[Self.summaryKey(repositoryPath: repositoryPath, number: summary.number)] =
+                CachedSummary(summary: summary)
+        }
     }
 
     /// The last listing without asking anything, for painting before
@@ -171,18 +177,18 @@ public struct PullRequestStore: Sendable {
             return store.load().enrichedSummaryCache[key]?.summary
         }
 
-        var metadata = store.load()
-        metadata.enrichedSummaryCache[key] = CachedSummary(summary: fetched)
-        metadata.fetchedAt[key] = Date()
-        // The moment checks were first seen running, kept until they
-        // finish, so a run stuck for an hour can be told from one
-        // about to end.
-        if fetched.checks == "PENDING" {
-            metadata.pendingSince[key] = metadata.pendingSince[key] ?? Date()
-        } else {
-            metadata.pendingSince.removeValue(forKey: key)
+        store.update { metadata in
+            metadata.enrichedSummaryCache[key] = CachedSummary(summary: fetched)
+            metadata.fetchedAt[key] = Date()
+            // The moment checks were first seen running, kept until they
+            // finish, so a run stuck for an hour can be told from one
+            // about to end.
+            if fetched.checks == "PENDING" {
+                metadata.pendingSince[key] = metadata.pendingSince[key] ?? Date()
+            } else {
+                metadata.pendingSince.removeValue(forKey: key)
+            }
         }
-        store.save(metadata)
         return fetched
     }
 
@@ -207,10 +213,10 @@ public struct PullRequestStore: Sendable {
         }
 
         let answer = await github.hasMergeQueue(repositoryPath: repositoryPath)
-        var metadata = store.load()
-        metadata.mergeQueueCapability[repositoryPath] = answer
-        metadata.fetchedAt[key] = Date()
-        store.save(metadata)
+        store.update { metadata in
+            metadata.mergeQueueCapability[repositoryPath] = answer
+            metadata.fetchedAt[key] = Date()
+        }
         return answer
     }
 
@@ -220,25 +226,28 @@ public struct PullRequestStore: Sendable {
         repositoryPaths: [String],
         interval: TimeInterval = minimumInterval,
     ) async -> [String: Set<Int>] {
-        var metadata = store.load()
+        let queued = store.load().queuedCache
         // One batched query for every repository is cheap enough to
         // allow under the floor while something is queued.
         let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
         var answers = [String: Set<Int>]()
         for path in repositoryPaths where due.contains(path) == false {
-            answers[path] = Set(metadata.queuedCache[path] ?? [])
+            answers[path] = Set(queued[path] ?? [])
         }
         guard due.isEmpty == false else {
             return answers
         }
 
         let fetched = await github.queuedNumbers(repositoryPaths: due)
+        store.update { metadata in
+            for (path, numbers) in fetched {
+                metadata.queuedCache[path] = numbers.sorted()
+                metadata.fetchedAt["queue#" + path] = Date()
+            }
+        }
         for (path, numbers) in fetched {
             answers[path] = numbers
-            metadata.queuedCache[path] = numbers.sorted()
-            metadata.fetchedAt["queue#" + path] = Date()
         }
-        store.save(metadata)
         return answers
     }
 
@@ -247,25 +256,25 @@ public struct PullRequestStore: Sendable {
     /// conversation did must show at once, and none of those are
     /// clicking around.
     public func invalidate(repositoryPath: String, number: Int) {
-        var metadata = store.load()
-        for key in [
-            Self.summaryKey(repositoryPath: repositoryPath, number: number),
-            Self.conversationKey(repositoryPath: repositoryPath, number: number),
-            "queue#" + repositoryPath,
-        ] {
-            metadata.fetchedAt.removeValue(forKey: key)
+        store.update { metadata in
+            for key in [
+                Self.summaryKey(repositoryPath: repositoryPath, number: number),
+                Self.conversationKey(repositoryPath: repositoryPath, number: number),
+                "queue#" + repositoryPath,
+            ] {
+                metadata.fetchedAt.removeValue(forKey: key)
+            }
         }
-        store.save(metadata)
     }
 
     /// Forgets a repository's listings, for what pushing a branch or
     /// opening a pull request has just changed.
     public func invalidateListings(repositoryPath: String) {
-        var metadata = store.load()
-        metadata.fetchedAt = metadata.fetchedAt.filter { entry in
-            entry.key.hasPrefix("list#" + repositoryPath + "#") == false
+        store.update { metadata in
+            metadata.fetchedAt = metadata.fetchedAt.filter { entry in
+                entry.key.hasPrefix("list#" + repositoryPath + "#") == false
+            }
         }
-        store.save(metadata)
     }
 
     // MARK: Internal
