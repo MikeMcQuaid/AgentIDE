@@ -10,11 +10,16 @@ public enum PushDestination: Hashable, Sendable {
 
     // MARK: Public
 
-    /// What `gh pr create` needs to name the branch when it lives in
-    /// a fork, nil when the branch is where the pull request is.
-    public func head(branch: String) -> String? {
+    /// How `gh pr create` must name the branch: `owner:branch` when
+    /// it lives in a fork, since the pull request belongs to the
+    /// repository it is opened against rather than the one holding
+    /// the branch, and the plain name otherwise. Never nil: left to
+    /// itself `gh` opens a pull request for whatever is checked out,
+    /// which in a stack of branches in one worktree is rarely the
+    /// branch being looked at.
+    public func head(branch: String) -> String {
         guard case let .fork(owner) = self else {
-            return nil
+            return branch
         }
 
         return owner + ":" + branch
@@ -66,7 +71,7 @@ public extension SessionService {
     /// (a local hook enforces the same), and Rebase on origin is the
     /// signing path.
     func push(worktree: Worktree) async throws -> PushDestination {
-        guard await git.isCommitSigned(worktreePath: worktree.path) else {
+        guard await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) else {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )
@@ -88,11 +93,13 @@ public extension SessionService {
     /// request belongs to the repository it is opened against rather
     /// than the one holding the branch.
     func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
-        // A stacked branch opens against the branch below it: that
-        // one flag is the whole of what makes GitHub show a stack,
-        // and `gh pr create` needs nothing else for it.
+        // The branch is the caller's, which is the entry whose form
+        // was filled in, never whatever the worktree has checked out.
+        // A branch opening against the branch below it is what makes
+        // GitHub show a stack, and the bottom of one opens against
+        // the default branch exactly as a lone branch does.
         let stack = await stack(for: worktree)
-        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
+        let branch = worktree.branch
         let parent = stack.parent(of: branch)
         return try await github.createPullRequest(
             worktreePath: worktree.path,
@@ -117,8 +124,8 @@ public extension SessionService {
     }
 
     /// Whether the worktree's tip commit is GPG signed, gating Push.
-    func isTipSigned(worktreePath: String) async -> Bool {
-        await git.isCommitSigned(worktreePath: worktreePath)
+    func isTipSigned(worktree: Worktree) async -> Bool {
+        await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch)
     }
 
     /// The branch actually checked out in a worktree, nil when

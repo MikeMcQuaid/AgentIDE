@@ -296,10 +296,13 @@ struct WindowConfigurator: NSViewRepresentable {
         /// still does not match the screen it is on: the frame AppKit
         /// left behind is the fact needed to fix a window that has to
         /// be toggled out of fullscreen by hand, and it cannot be
-        /// read from outside the app.
+        /// read from outside the app. A fullscreen window that keeps
+        /// the menu bar fills the screen's visible frame rather than
+        /// its whole frame, which is correct and said nothing worth
+        /// reading.
         private func reportUnfittedFullScreen() {
             guard let window, window.styleMask.contains(.fullScreen), let screen = window.screen,
-                  window.frame != screen.frame
+                  window.frame != screen.frame, window.frame != screen.visibleFrame
             else {
                 return
             }

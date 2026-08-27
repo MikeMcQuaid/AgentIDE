@@ -163,6 +163,29 @@ extension PullRequestsModel {
         StackSelection.remember(chosen, for: worktree.path)
     }
 
+    /// The branch the listed entry opens against, nil when that is
+    /// the default branch. The bottom of a stack targets the default
+    /// branch exactly as a lone branch does, whatever sits above it,
+    /// and the stack's base is a bare local name that may sit
+    /// commits behind the remote, so it is never used as one.
+    var listedParent: String? {
+        guard stacking.stack.isStacked, let listed = listedBranch,
+              let parent = stacking.stack.parent(of: listed), parent != stacking.stack.base
+        else {
+            return nil
+        }
+
+        return parent
+    }
+
+    /// Whether the entry on screen is stacked work: only a branch
+    /// opening against another branch is. At the bottom of a stack
+    /// the tab is the ordinary one branch tab, actions and all,
+    /// however many branches sit above it.
+    var isStackedEntry: Bool {
+        listedParent != nil
+    }
+
     /// The listed entry's own commits as a git range, nil for a
     /// branch on its own, whose range is the default branch's.
     var listedRange: String? {
@@ -171,17 +194,12 @@ extension PullRequestsModel {
         }
 
         // A stack entry's span runs from the branch below it; a
-        // branch on its own from the default branch. Either way it
-        // is the listed branch's span, never the checked-out one's,
-        // which is what `origin/HEAD..HEAD` would have described.
-        // The bottom entry's parent is the stack's base, a bare
-        // local name that may sit commits behind the remote; the
-        // symbolic form makes the service resolve the fork point.
-        var parent = stacking.stack.isStacked ? stacking.stack.parent(of: listed) : nil
-        if parent == stacking.stack.base {
-            parent = nil
-        }
-        return (parent ?? "origin/HEAD") + ".." + listed
+        // branch on its own, the bottom of a stack included, from
+        // the default branch. Either way it is the listed branch's
+        // span, never the checked-out one's, which is what
+        // `origin/HEAD..HEAD` would have described. The symbolic
+        // form makes the service resolve the fork point.
+        return (listedParent ?? "origin/HEAD") + ".." + listed
     }
 
     /// The lowest entry that can be listed and has no open pull

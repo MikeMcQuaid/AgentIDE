@@ -173,7 +173,9 @@ before shipping.
   as `main ← lower ← upper` with each entry's own diff a click away, and
   the sidebar says where a branch stands in its stack, from git before
   its pull requests are open and from them afterwards, each opening
-  against the branch below it with a form filled from that entry's own
+  against the branch below it (the bottom one against the default
+  branch, with the lone branch's buttons and behaviour, however many
+  sit above it) with a form filled from that entry's own
   commits (one commit's message, or the first subject over the rest
   listed, counted from where the branch forked off the remote's default
   branch), entries above a branch not yet pushed and opened out of

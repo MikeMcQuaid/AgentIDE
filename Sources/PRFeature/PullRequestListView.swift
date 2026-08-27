@@ -124,7 +124,11 @@ struct PullRequestFooterView: View {
 
     var body: some View {
         HStack {
-            if model.stack.isStacked {
+            // The bottom of a stack is an ordinary branch opening
+            // against the default one: it keeps the ordinary
+            // actions, and only an entry opening against another
+            // branch asks for the stack's.
+            if model.isStackedEntry {
                 restackButton
                 pushStackButton
                 submitStackButton

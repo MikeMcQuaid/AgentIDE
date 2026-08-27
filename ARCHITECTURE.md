@@ -860,7 +860,17 @@ shim rather than a protocol:
    is fetched in the background as soon as one of them loads, so the
    strip moves like a tab switch rather than a load. A
    stacked branch's pull request opens against the branch below it, which
-   is one `--base` flag; its form fills from the entry's own span
+   is one `--base` flag, and always names its own branch as the head,
+   since `gh pr create` left to itself opens one for whatever the
+   worktree has checked out, which in a stack is rarely the entry being
+   looked at. Only an entry opening against another branch is stacked
+   work: the bottom of a stack opens against the default branch exactly
+   as a lone branch does, and keeps the lone branch's Rebase and Push
+   rather than the stack's three buttons, however many branches sit
+   above it. Push acts on the entry in view, so it is that branch's
+   commits that are counted and that branch's tip whose signature is
+   checked; Rebase moves the branch the worktree holds, so it dims for
+   an entry being read without being checked out; its form fills from the entry's own span
    (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, the
    symbolic `origin/HEAD` resolved through the same default-base lookup
    the sidebar uses, since a worktree whose remote never had its head

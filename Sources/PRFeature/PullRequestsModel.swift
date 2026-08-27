@@ -134,8 +134,8 @@ final class PullRequestsModel {
         performRebase = { worktree in
             try await service.rebaseSigned(worktree: worktree)
         }
-        checkTipSigned = { path in
-            await service.isTipSigned(worktreePath: path)
+        checkTipSigned = { worktree in
+            await service.isTipSigned(worktree: worktree)
         }
         currentBranch = branch
         wireStack(service: service)
@@ -245,7 +245,7 @@ final class PullRequestsModel {
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> Void
-    var checkTipSigned: (String) async -> Bool
+    var checkTipSigned: (Worktree) async -> Bool
 
     /// The visible page. Every scope asks GitHub for one small
     /// listing and no more, so paging walks what is already here
@@ -274,27 +274,6 @@ final class PullRequestsModel {
         didSet {
             isPushed = false
         }
-    }
-
-    /// The rebase button's label names exactly what it would do.
-    var rebaseTitle: String {
-        switch rebaseNeed {
-        case .sign:
-            "Sign commits"
-
-        case .rebaseAndSign:
-            "Rebase and sign"
-
-        case .nothing,
-             .rebase:
-            "Rebase on origin"
-        }
-    }
-
-    /// Rebase only lights up when it would actually change
-    /// something: move the base, sign commits, or both.
-    var canRebase: Bool {
-        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
     /// The branch the tab lists and compares against: the checked

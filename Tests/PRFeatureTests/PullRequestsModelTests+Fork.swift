@@ -16,10 +16,11 @@ extension PullRequestsModelTests {
         // looking at is worth knowing.
         #expect(model.status == "Pushed.")
 
-        // A branch in a fork names itself for the pull request; one
-        // in the repository does not.
+        // A branch in a fork names its owner too; either way the
+        // branch is named, since `gh pr create` left to itself opens
+        // a pull request for whatever happens to be checked out.
         #expect(PushDestination.fork(owner: "MikeMcQuaid").head(branch: "feature") == "MikeMcQuaid:feature")
-        #expect(PushDestination.origin.head(branch: "feature") == nil)
+        #expect(PushDestination.origin.head(branch: "feature") == "feature")
     }
 
     @Test

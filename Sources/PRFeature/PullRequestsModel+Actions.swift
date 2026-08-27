@@ -12,7 +12,7 @@ extension PullRequestsModel {
     /// between a stack's entries, which share all of it.
     func refreshWorktreeFacts(_ worktree: Worktree) async {
         await loadStack()
-        isTipSigned = await checkTipSigned(worktree.path)
+        isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
         rebaseNeed = await fetchRebaseNeed(worktree)
         let template = await fetchTemplate(worktree.path)
         hasTemplate = template != nil
@@ -43,31 +43,6 @@ extension PullRequestsModel {
         }
     }
 
-    /// Push makes sense with unpushed commits that this tab has not
-    /// already pushed and a GPG-signed tip; nil upstream means
-    /// nothing was ever pushed.
-    var canPush: Bool {
-        guard let item = branchItem, isPushed == false, isTipSigned else {
-            return false
-        }
-
-        return (item.aheadOfUpstream ?? 1) > 0
-    }
-
-    /// Why Push is in its current state, for the button's hover:
-    /// with nothing to push that is the whole story, and signing
-    /// only matters once commits are waiting.
-    var pushHelp: String {
-        guard let item = branchItem, isPushed == false, (item.aheadOfUpstream ?? 1) > 0 else {
-            return "Everything is already pushed"
-        }
-        guard isTipSigned else {
-            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
-        }
-
-        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
-    }
-
     /// Shows a status in the footer and keeps it in the messages
     /// pane, where a line that scrolls past can still be read.
     /// `detail` is what the messages pane keeps when the footer's
@@ -76,25 +51,6 @@ extension PullRequestsModel {
     func setStatus(_ message: String, detail: String? = nil) {
         status = message
         ErrorLog.shared.note(detail ?? message)
-    }
-
-    /// The branch item's worktree with the checked-out branch
-    /// substituted, so pushes and pull requests act on what is
-    /// actually checked out.
-    var actionWorktree: Worktree? {
-        guard let item = branchItem else {
-            return nil
-        }
-        guard let currentBranch, currentBranch != item.worktree.branch else {
-            return item.worktree
-        }
-
-        return Worktree(
-            repositoryName: item.worktree.repositoryName,
-            repositoryPath: item.worktree.repositoryPath,
-            branch: currentBranch,
-            path: item.worktree.path,
-        )
     }
 
     /// Copies every unresolved review conversation to the
@@ -210,7 +166,7 @@ extension PullRequestsModel {
     /// false opens the errors surface. The button dims until the
     /// branch is pushed, so nothing pushes implicitly here.
     func createPullRequest() async -> Bool {
-        guard let worktree = actionWorktree else {
+        guard let worktree = listedWorktree else {
             return false
         }
 
@@ -241,7 +197,7 @@ extension PullRequestsModel {
     /// Pushes the checked-out branch; false means the push failed
     /// and the errors tab should open with the cause.
     func push() async -> Bool {
-        guard let worktree = actionWorktree else {
+        guard let worktree = listedWorktree else {
             return true
         }
 

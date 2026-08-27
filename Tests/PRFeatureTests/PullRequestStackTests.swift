@@ -48,6 +48,44 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `the bottom of a stack is an ordinary branch, and opens a pull request for itself`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        // The worktree holds the top branch while the bottom one is
+        // being looked at, which is the ordinary way round: reading
+        // an entry checks nothing out.
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        let opened = Mutex([String]())
+        model.performCreate = { worktree, _, _ in
+            opened.withLock { $0.append(worktree.branch) }
+            return "https://example.com/1"
+        }
+        await model.reload()
+
+        // Nothing above it makes the bottom entry stacked work: it
+        // opens against the default branch, so the tab is the plain
+        // one branch tab, actions and all.
+        #expect(model.listedBranch == "lower")
+        #expect(model.listedParent == nil)
+        #expect(model.isStackedEntry == false)
+
+        model.prTitle = "Lower work"
+        #expect(await model.createPullRequest())
+        // The pull request is the listed branch's, not the checked
+        // out one's: opening one for `lower` once opened it for
+        // `upper`, against `lower`, which GitHub already had.
+        #expect(opened.withLock { $0 } == ["lower"])
+
+        model.show(branch: "upper")
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(model.listedParent == "lower")
+        #expect(model.isStackedEntry)
+    }
+
+    @Test
     func `the listed branch's span is its own, stacked or not`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
