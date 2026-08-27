@@ -158,6 +158,19 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   a non-interactive `xcodebuild` met an untrusted package plugin
   (SwiftTerm 1.19 ships one); only the Xcode app can show the trust
   prompt, so every script passes `-skipPackagePluginValidation`.
+- `CustomTask Generate SwiftTerm build information` failing, with
+  `sandbox-exec: sandbox_apply: Operation not permitted` above it,
+  is that same plugin actually running rather than being validated.
+  Xcode runs a build tool plugin under `sandbox-exec`, which cannot
+  nest, so the sandbox can never generate this: it builds only
+  because the file is already there and the task is skipped. Never
+  delete `.DerivedData` or its `BuildToolPluginIntermediates` from
+  in here, and if the task does come back, build with `swift build
+  --disable-sandbox` (every package target, and what `script/test`
+  uses anyway) and leave the Xcode build of the app shell to the
+  host and CI. Regenerating the file by hand does not help: the
+  trigger beside it carries a fresh UUID per build, so the task
+  runs again whatever its outputs say.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
   most tests. The toolchain is a downloadable asset each user mounts
