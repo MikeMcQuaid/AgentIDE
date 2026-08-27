@@ -210,8 +210,7 @@ extension PullRequestsModel {
                 return false
             }
 
-            let listed = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
-            return listed.contains { $0.state == "OPEN" } == false
+            return hasOpenPullRequest(branch) == false
         }
     }
 
@@ -225,7 +224,22 @@ extension PullRequestsModel {
             return true
         }
 
+        // A branch whose own pull request is already open is always
+        // there to be read, whatever sits below it: a lower branch
+        // whose pull request was closed under it must not hide one
+        // that GitHub is showing.
+        guard hasOpenPullRequest(branch) == false else {
+            return true
+        }
+
         return stacking.stack.branches[..<index].contains { isBlocking($0) } == false
+    }
+
+    /// Whether the store's cached listing shows an open pull request
+    /// for a branch; the stack's prefetch is what fills it.
+    func hasOpenPullRequest(_ branch: String) -> Bool {
+        let listed = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
+        return listed.contains { $0.state == "OPEN" }
     }
 
     /// Whether a branch below stops the entries above it: not on the
@@ -237,8 +251,8 @@ extension PullRequestsModel {
         if stacking.unpushedBranches.contains(branch) {
             return true
         }
-        let listed = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
-        return listed.contains { $0.state == "OPEN" } == false
+
+        return hasOpenPullRequest(branch) == false
     }
 
     /// The nearest branch below the listed one that the remote
