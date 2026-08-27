@@ -110,6 +110,19 @@ struct PullRequestStackTests {
         remember(model, branch: "lower", fixtures.summary(1, head: "lower", base: "main"))
         #expect(model.isStackLinked)
 
+        // Open is not ready: a stack merges all at once, so the one
+        // below must be mergeable, green and approved on its own.
+        #expect(model.isStackBelowReady == false)
+        #expect(model.canMergeStack == false)
+        model.cacheEnriched(fixtures.summary(
+            1,
+            head: "lower",
+            base: "main",
+            mergeable: "MERGEABLE",
+            checks: "SUCCESS",
+        ))
+        #expect(model.canMergeStack)
+
         // Merging links first: a chain GitHub does not hold as a
         // stack must never be merged as one, and a link that fails
         // takes the merge with it.

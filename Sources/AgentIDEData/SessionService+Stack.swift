@@ -192,8 +192,11 @@ public extension SessionService {
             throw stackError("No default branch to stack on", in: path)
         }
 
+        // The base's tip counts as much as any branch's: the bottom
+        // entry forks from it, and without it that entry was skipped
+        // every time while the button went on saying there was work.
         var tips = [String: String]()
-        for branch in stack.branches {
+        for branch in [base] + stack.branches {
             tips[branch] = await git.tip(of: branch, worktreePath: path)
         }
 

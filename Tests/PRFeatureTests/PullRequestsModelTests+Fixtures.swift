@@ -98,15 +98,17 @@ extension PullRequestsModelTests {
         head: String,
         base: String = "main",
         state: String = "OPEN",
+        mergeable: String = "",
+        checks: String = "",
     ) -> PullRequestSummary {
         PullRequestSummary(
             number: number,
             title: "Title \(number)",
             url: "",
             headBranch: head,
-            mergeable: "",
+            mergeable: mergeable,
             reviewDecision: "",
-            checks: "",
+            checks: checks,
             baseBranch: base,
             state: state,
         )

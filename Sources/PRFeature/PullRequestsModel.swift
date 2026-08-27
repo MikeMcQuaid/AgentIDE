@@ -317,6 +317,12 @@ final class PullRequestsModel {
             selected = nil
         }
         paintCachedListing()
+        // Selected from the cache, not after the fetch: a branch
+        // with one pull request opens it the moment the tab does,
+        // and clicking between worktrees paints what each had.
+        if selected == nil, summaries.count == 1, let only = summaries.first {
+            select(only)
+        }
         loadDraft()
         if let worktree = branchItem?.worktree {
             if refreshingFacts {

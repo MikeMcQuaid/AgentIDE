@@ -800,7 +800,10 @@ shim rather than a protocol:
    against are read once and remembered until a fetch, since only a
    rename or a change of default branch moves either and reading them
    again per row per poll was thousands of shell-outs an hour. Everything the store holds paints instantly,
-   on pane switches and across restarts, before any fetch refreshes it.
+   on pane switches and across restarts, before any fetch refreshes it,
+   and a branch whose cache holds one pull request opens that one there
+   and then: selecting only once the fetch answered made every move
+   between worktrees wait on GitHub for what was already in hand.
    A listed pull request and its opened conversation share one header
    view, padding, height and browser button included, with the back
    chevron merely dimmed in the list, so opening and closing one moves
@@ -932,9 +935,14 @@ shim rather than a protocol:
    GitHub does not hold as a stack can be merged as one, and a link
    that fails takes the merge with it. Merging one out of order would
    land its parent's commits under another pull request's name, so
-   the button also waits for the whole chain below it to be open: every branch's pull request
-   based on the branch below, read from the listings the tab has
-   already cached. That reading is derived rather than asked, because
+   the button also waits for the whole chain below it to be open and
+   ready: every pull request below mergeable, its checks green and
+   its review approved wherever one is required, read from the
+   enriched summaries the stack's prefetch warms, since a stack
+   merges all at once and one that is not ready would take the rest
+   with it. What makes them a stack at all is every branch's pull
+   request being based on the branch below, read from the listings
+   the tab has already cached. That reading is derived rather than asked, because
    `gh stack view` knows only stacks it created and tracked locally
    and calls a linked one "not part of a stack" while GitHub itself
    shows it as one. The sidebar says where a row stands in its

@@ -68,6 +68,38 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
+    func `restacking moves the bottom branch onto the base and then says so`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        try await Self.signable(repository.path)
+        try await Self.commit("first", in: repository.path)
+        _ = try await TestSupport.runGit(["checkout", "-b", "lower"], in: repository.path)
+        try await Self.commit("lower work", in: repository.path)
+        // The default branch moves on under the stack, which is what
+        // leaves the bottom entry out of place.
+        _ = try await TestSupport.runGit(["checkout", "main"], in: repository.path)
+        try await Self.commit("main moved on", in: repository.path)
+        _ = try await TestSupport.runGit(["checkout", "lower"], in: repository.path)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "lower",
+            path: repository.path,
+        )
+
+        #expect(await world.service.branchesOutOfPlace(worktree: worktree) == ["lower"])
+
+        // The bottom entry forks from the base, whose tip was never
+        // recorded: it was skipped in silence, so pressing the
+        // button did nothing and the button never dimmed.
+        let moved = try await world.service.restack(worktree: worktree)
+
+        #expect(moved == ["lower"])
+        #expect(await world.service.branchesOutOfPlace(worktree: worktree).isEmpty)
+    }
+
+    @Test
     func `a local-only twin of a pushed branch never hides it, even checked out`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }

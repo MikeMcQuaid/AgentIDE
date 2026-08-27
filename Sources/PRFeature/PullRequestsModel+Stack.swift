@@ -178,6 +178,41 @@ extension PullRequestsModel {
         listedParent != nil
     }
 
+    /// Whether every pull request below this entry could merge on
+    /// its own: mergeable, checks passed, and approved wherever a
+    /// review is required. A stacked merge takes them all at once,
+    /// so one that is not ready would take the rest with it.
+    /// Read from the enriched summaries the stack's prefetch warms;
+    /// an entry not yet read counts as not ready.
+    var isStackBelowReady: Bool {
+        guard let listed = listedBranch,
+              let index = stacking.stack.branches.firstIndex(of: listed)
+        else {
+            return false
+        }
+
+        return stacking.stack.branches[..<index].allSatisfy { branch in
+            let listing = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
+            guard let open = listing.first(where: { $0.state == "OPEN" }),
+                  let full = pullRequests.cachedSummary(repositoryPath: repository.path, number: open.number)
+            else {
+                return false
+            }
+
+            return Self.isReadyToMerge(full)
+        }
+    }
+
+    /// Whether one pull request could be merged as it stands: no
+    /// draft, no conflict, checks green, and no review outstanding
+    /// or refused. An empty review decision is a repository that
+    /// asks for none.
+    static func isReadyToMerge(_ summary: PullRequestSummary) -> Bool {
+        summary.state == "OPEN" && summary.isDraft == false
+            && summary.mergeable == "MERGEABLE" && summary.checks == "SUCCESS"
+            && ["", "APPROVED"].contains(summary.reviewDecision)
+    }
+
     /// Whether GitHub has the chain this entry sits on: every branch
     /// below it open against the branch below that, which is what a
     /// stack there is made of and what a stacked merge needs.
@@ -201,6 +236,12 @@ extension PullRequestsModel {
             let below = stacking.stack.branches[position - 1]
             return listing.contains { $0.state == "OPEN" && $0.baseBranch == below }
         }
+    }
+
+    /// Whether the stacked merge can run: GitHub holds the chain as
+    /// a stack, and everything below is ready to go with it.
+    var canMergeStack: Bool {
+        isStackLinked && isStackBelowReady
     }
 
     /// The listed entry's own commits as a git range, nil for a
