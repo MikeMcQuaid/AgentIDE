@@ -22,6 +22,9 @@ extension PullRequestsModelTests {
         model.performLinkStack = { _ in
             // Succeeds without side effects.
         }
+        model.performMergeStack = { _, _ in
+            // Succeeds without side effects.
+        }
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _, _ in [] }
         model.generateDescription = { _ in nil }

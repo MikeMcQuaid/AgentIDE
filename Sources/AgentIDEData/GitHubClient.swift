@@ -203,32 +203,6 @@ public struct GitHubClient: Sendable {
     static let statusFields =
         "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt"
 
-    /// Every pull request number anywhere in `gh stack view --json`.
-    /// Read for the shape rather than a schema: the answer is only
-    /// ever asked whether it holds a stack's worth of numbers, and a
-    /// format that gains a field must not turn that into "no stack".
-    static func numbers(inStackJSON json: String) -> [Int] {
-        guard let data = json.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data)
-        else {
-            return []
-        }
-
-        var found = [Int]()
-        var pending = [root]
-        while let next = pending.popLast() {
-            if let object = next as? [String: Any] {
-                if let number = object["number"] as? Int {
-                    found.append(number)
-                }
-                pending += object.values
-            } else if let array = next as? [Any] {
-                pending += array
-            }
-        }
-        return found
-    }
-
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one
     /// method nearly every repository here allows. Plain substring

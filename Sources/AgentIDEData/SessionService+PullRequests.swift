@@ -166,15 +166,9 @@ public extension SessionService {
         return asked
     }
 
-    /// Whether GitHub shows the worktree's branches as a stack:
-    /// what the link makes, asked for rather than remembered.
-    func isStackLinked(worktree: Worktree) async -> Bool {
-        await github.stackedNumbers(worktreePath: worktree.path).count >= Self.linkableCount
-    }
-
-    /// Merges a stacked pull request and everything below it.
-    func mergeStack(worktree: Worktree) async throws {
-        try await github.mergeStack(worktreePath: worktree.path)
+    /// Merges a stacked pull request and every one below it.
+    func mergeStack(worktree: Worktree, number: Int) async throws {
+        try await github.mergeStack(repositoryPath: worktree.repositoryPath, number: number)
     }
 
     /// Where this branch belongs: the repository itself when GitHub

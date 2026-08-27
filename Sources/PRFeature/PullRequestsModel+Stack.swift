@@ -176,6 +176,31 @@ extension PullRequestsModel {
         listedParent != nil
     }
 
+    /// Whether GitHub has the chain this entry sits on: every branch
+    /// below it open against the branch below that, which is what a
+    /// stack there is made of and what a stacked merge needs.
+    /// Derived rather than asked: `gh stack view` knows only stacks
+    /// it created and tracked locally, and calls a linked one no
+    /// stack at all, so asking it would dim the button forever.
+    var isStackLinked: Bool {
+        guard let listed = listedBranch,
+              let index = stacking.stack.branches.firstIndex(of: listed), index > 0
+        else {
+            return false
+        }
+
+        return stacking.stack.branches[...index].enumerated().allSatisfy { position, branch in
+            let listing = pullRequests.cachedListing(repositoryPath: repository.path, scope: .branch(branch)) ?? []
+            guard position > 0 else {
+                // The bottom holds the chain up by existing.
+                return listing.contains { $0.state == "OPEN" }
+            }
+
+            let below = stacking.stack.branches[position - 1]
+            return listing.contains { $0.state == "OPEN" && $0.baseBranch == below }
+        }
+    }
+
     /// The listed entry's own commits as a git range, nil for a
     /// branch on its own, whose range is the default branch's.
     var listedRange: String? {

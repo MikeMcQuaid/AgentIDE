@@ -1,9 +1,12 @@
 import AgentIDEDomain
 import Foundation
 
-/// What `gh stack` is for: linking pull requests into a stack on
-/// GitHub, asking whether they are one, and merging one with
-/// everything below it. Split from the client body for length.
+/// What `gh stack` is for here: linking pull requests into a stack
+/// on GitHub, and merging one with everything below it. Not asking
+/// whether they are a stack: `gh stack view` knows only the stacks
+/// it created and tracked locally, and answers "not part of a
+/// stack" for a linked one GitHub itself shows as a stack. Split
+/// from the client body for length.
 public extension GitHubClient {
     /// Asks GitHub to show a branch's open pull requests as a
     /// stack. `gh stack link` links pull requests that already
@@ -16,23 +19,17 @@ public extension GitHubClient {
         try await gh(["stack", "link"] + numbers.map(String.init), in: worktreePath)
     }
 
-    /// The pull request numbers `gh stack` sees in the worktree's
-    /// stack, empty when it sees no stack at all. What makes a stack
-    /// a stack on GitHub is the link, so this is how the app asks
-    /// whether that link is there rather than remembering that it
-    /// made one.
-    func stackedNumbers(worktreePath: String) async -> [Int] {
-        let result = try? await gh(["stack", "view", "--json"], in: worktreePath, allowFailure: true)
-        guard let result, result.succeeded else {
-            return []
-        }
-
-        return Self.numbers(inStackJSON: result.standardOutput)
-    }
-
-    /// Merges a stack: every pull request from the bottom up to the
-    /// one checked out, in order, however the repository merges.
-    func mergeStack(worktreePath: String) async throws {
-        try await gh(["stack", "merge"], in: worktreePath)
+    /// Merges a stack up to and including one pull request: every
+    /// member below it goes too, in one all-or-nothing operation, or
+    /// joins the merge queue when the base branch has one. The
+    /// number, the method and the confirmation are all named: with
+    /// none of them the command picks the current branch's stack,
+    /// the last method used and, on a terminal, a wizard.
+    func mergeStack(repositoryPath: String, number: Int) async throws {
+        let method = await mergeMethodFlag(repositoryPath: repositoryPath).replacing("--", with: "")
+        try await gh(
+            ["stack", "merge", String(number), "--yes", "--merge-method", method],
+            in: repositoryPath,
+        )
     }
 }

@@ -916,10 +916,18 @@ shim rather than a protocol:
    from one, so repeating it is safe. Only that step is
    GitHub-specific, and it keeps no local tracking of its own, so what
    a stack is here stays derived from ancestry and nothing else. A
-   stacked entry's merge action is the stack's: one word, dim until
-   `gh stack` sees a stack, and merging that pull request together
-   with every one below it, since merging one out of order would land
-   its parent's commits under another pull request's name. The sidebar says where a row stands in its
+   stacked entry's merge action is the stack's: one word, and
+   `gh stack merge <number> --yes --merge-method <method>`, which
+   merges that pull request and every one below it in one
+   all-or-nothing operation, or puts them in the queue where the base
+   branch has one. Merging one out of order would land its parent's
+   commits under another pull request's name, so the button waits for
+   the whole chain below it to be open: every branch's pull request
+   based on the branch below, read from the listings the tab has
+   already cached. That reading is derived rather than asked, because
+   `gh stack view` knows only stacks it created and tracked locally
+   and calls a linked one "not part of a stack" while GitHub itself
+   shows it as one. The sidebar says where a row stands in its
    stack (`2/3`) from the pull request chain the app knows: the poll's
    per-branch answers plus every listing the shared store has cached,
    since a stack's other branches have no worktree and their pull

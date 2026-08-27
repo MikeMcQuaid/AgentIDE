@@ -72,11 +72,8 @@ final class PullRequestsModel {
         performLinkStack = { worktree in
             try await service.linkStack(worktree: worktree)
         }
-        checkStackLinked = { worktree in
-            await service.isStackLinked(worktree: worktree)
-        }
-        performMergeStack = { worktree in
-            try await service.mergeStack(worktree: worktree)
+        performMergeStack = { worktree, number in
+            try await service.mergeStack(worktree: worktree, number: number)
         }
         // On disk first, so an edited template is the one offered,
         // then out of git: a sparse checkout carries the tracked
@@ -189,10 +186,6 @@ final class PullRequestsModel {
     /// Set only by the actions extension's fact refresh.
     var rebaseNeed: SessionService.RebaseNeed = .nothing
 
-    /// Whether GitHub shows the stack as a stack, refreshed with
-    /// the worktree's other facts; the stacked merge waits for it.
-    var isStackLinked = false
-
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
     /// Rebase on origin signs the branch.
@@ -241,12 +234,8 @@ final class PullRequestsModel {
     /// whenever one opens, since a stack is built one at a time.
     var performLinkStack: (Worktree) async throws -> Void
 
-    /// Whether GitHub shows this worktree's pull requests as a
-    /// stack, which is what the stacked merge waits for.
-    var checkStackLinked: (Worktree) async -> Bool = { _ in false }
-
-    /// Merges a stacked pull request and everything below it.
-    var performMergeStack: (Worktree) async throws -> Void = { _ in
+    /// Merges a stacked pull request and every one below it.
+    var performMergeStack: (Worktree, Int) async throws -> Void = { _, _ in
         // Replaced by the initialiser.
     }
 

@@ -12,8 +12,6 @@ extension PullRequestsModel {
     /// between a stack's entries, which share all of it.
     func refreshWorktreeFacts(_ worktree: Worktree) async {
         await loadStack()
-        // Only a stack can be linked, and asking costs a `gh` call.
-        isStackLinked = stacking.stack.isStacked ? await checkStackLinked(worktree) : false
         isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
         rebaseNeed = await fetchRebaseNeed(worktree)
         let template = await fetchTemplate(worktree.path)
@@ -284,12 +282,12 @@ extension PullRequestsModel {
     /// it, in order; false opens the errors surface. GitHub decides
     /// how each is merged, so the button says only that it merges.
     func mergeStack() async -> Bool {
-        guard let worktree = listedWorktree else {
+        guard let worktree = listedWorktree, let number = selected?.number else {
             return false
         }
 
         do {
-            try await performMergeStack(worktree)
+            try await performMergeStack(worktree, number)
             pullRequests.invalidateListings(repositoryPath: repository.path)
             setStatus("Merging the stack.")
             await reload(keepingSelection: true)

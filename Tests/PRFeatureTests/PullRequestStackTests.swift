@@ -86,6 +86,32 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `a stacked entry merges only once its chain is open on GitHub`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        await model.reload()
+        model.show(branch: "upper")
+        try? await Task.sleep(for: .milliseconds(200))
+
+        // Nothing is open yet, so there is no stack on GitHub to
+        // merge, whatever the branches say locally.
+        #expect(model.isStackedEntry)
+        #expect(model.isStackLinked == false)
+
+        // The entry's own pull request is not enough: merging a
+        // stack merges everything below it, which must be there.
+        remember(model, branch: "upper", fixtures.summary(2, head: "upper", base: "lower"))
+        #expect(model.isStackLinked == false)
+
+        remember(model, branch: "lower", fixtures.summary(1, head: "lower", base: "main"))
+        #expect(model.isStackLinked)
+    }
+
+    @Test
     func `the listed branch's span is its own, stacked or not`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
@@ -138,6 +164,16 @@ struct PullRequestStackTests {
     }
 
     // MARK: Private
+
+    /// Puts one branch's listing in the store the model reads, the
+    /// way the stack's own prefetch does.
+    private func remember(_ model: PullRequestsModel, branch: String, _ summary: PullRequestSummary) {
+        model.pullRequests.rememberListing(
+            repositoryPath: model.repository.path,
+            scope: .branch(branch),
+            summaries: [summary],
+        )
+    }
 
     private func makeModel() -> PullRequestsModel {
         PullRequestsModelTests().makeModel()
