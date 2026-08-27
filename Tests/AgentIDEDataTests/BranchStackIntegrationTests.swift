@@ -68,6 +68,42 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
+    func `a local-only twin of a pushed branch never hides it, even checked out`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        try await Self.commit("first", in: repository.path)
+        for branch in ["lower", "upper"] {
+            _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
+            try await Self.commit(branch + " work", in: repository.path)
+            _ = try await TestSupport.runGit(
+                ["update-ref", "refs/remotes/origin/" + branch, branch],
+                in: repository.path,
+            )
+        }
+        // The worktree's own name, cut at the same commit as the
+        // pushed branch above and checked out: the shape a worktree
+        // takes when its branch was renamed after being pushed.
+        _ = try await TestSupport.runGit(["checkout", "-b", "worktree-name", "upper"], in: repository.path)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "worktree-name",
+            path: repository.path,
+        )
+
+        let stack = await world.service.stack(for: worktree)
+
+        // The pushed name stands for the pair: it is the one a pull
+        // request can be open on, and listing the local-only twin
+        // instead put that pull request out of reach entirely.
+        #expect(stack.branches == ["lower", "upper"])
+        // And it stands in for what is checked out, so the actions
+        // that move the checked-out branch stay live.
+        #expect(stack.checkedOut == "upper")
+    }
+
+    @Test
     func `a pull request opens against the branch below it, or the default branch`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
@@ -97,7 +133,7 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
-    func `two branches at one commit are one entry, the checked-out name standing for both`() async throws {
+    func `two branches at one commit are one entry, the pushed name standing for both`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }
         let repository = try #require(world.service.repositories().first)

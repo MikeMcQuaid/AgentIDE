@@ -225,7 +225,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   itself rather than resolving it against a worktree.
 - A stack of branches lives in one worktree and is derived from
   ancestry, never recorded: branches sharing a fork point beyond
-  the default branch, ordered by where each forks. Reading one
+  the default branch, ordered by where each forks. Two branches at
+  one commit are one entry, and the name the remote knows wins:
+  that is the one a pull request can be open on, and preferring the
+  checked-out name hid a pushed twin's pull request completely. Reading one
   needs no checkout, so the strip retargets panes and an entry
   that is not checked out reviews read-only; restacking records
   every tip first and rebases with `--onto <parent> <recorded

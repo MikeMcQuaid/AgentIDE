@@ -58,21 +58,32 @@ public extension SessionService {
         // its own, and listing the base as its only entry showed the
         // same branch twice wherever both were named.
         let fallback = checkedOut == base ? [] : [checkedOut]
+        // A checked-out branch collapsed into its twin is still the
+        // branch the worktree holds: the twin stands for it, at the
+        // same commit, so the actions that move what is checked out
+        // stay live rather than dimming on a name that has gone.
+        let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
         return BranchStack(
             base: base,
             branches: branches.isEmpty ? fallback : branches,
-            checkedOut: checkedOut,
+            checkedOut: standingIn ?? checkedOut,
         )
     }
 
     /// The stack's entries in build order, with branches at one
-    /// commit collapsed to one: the checked-out name stands for the
-    /// pair, otherwise the one the remote knows, otherwise the one
-    /// created first (the other is the rename's leftover or the
-    /// mistake), so a restack never replays the same commits twice.
-    /// `related` arrives in creation order. Twins rank by one string:
-    /// checked-out first, then known to the remote, then creation
-    /// order, then name, so no tuple has to be compared.
+    /// commit collapsed to one, so a restack never replays the same
+    /// commits twice. The one the remote knows stands for the pair,
+    /// since that is the one a pull request can be open on and the
+    /// other is a rename's leftover or a branch cut by mistake;
+    /// failing that the checked-out name, failing that the one
+    /// created first. `related` arrives in creation order. Twins
+    /// rank by one string: on the remote first, then checked out,
+    /// then creation order, then name, so no tuple is compared.
+    ///
+    /// A worktree checked out on the leftover twin is why the remote
+    /// comes first: the branch on screen was the local-only name,
+    /// and the pull request open on its pushed twin could not be
+    /// reached at all.
     private func collapsingTwins(
         _ related: [StackCandidate],
         checkedOut: String,
@@ -88,9 +99,9 @@ public extension SessionService {
         }
         let created = Dictionary(uniqueKeysWithValues: related.enumerated().map { ($1.branch, $0) })
         func rank(_ candidate: StackCandidate) -> String {
-            let first = candidate.branch == checkedOut ? "0" : "1"
             let known = pushed.contains(candidate.branch) ? "0" : "1"
-            return first + known + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
+            let here = candidate.branch == checkedOut ? "0" : "1"
+            return known + here + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
         }
         var seenTips = Set<String>()
         return related
@@ -108,6 +119,22 @@ public extension SessionService {
                 return seenTips.insert(tip).inserted
             }
             .map(\.branch)
+    }
+
+    /// The entry standing in for the checked-out branch when that
+    /// name was collapsed away: the twin at the same commit, or nil
+    /// when the branch is listed under its own name.
+    private func twin(of checkedOut: String, among branches: [String], worktreePath: String) async -> String? {
+        guard branches.contains(checkedOut) == false,
+              let tip = await git.tip(of: checkedOut, worktreePath: worktreePath)
+        else {
+            return nil
+        }
+
+        for branch in branches where await git.tip(of: branch, worktreePath: worktreePath) == tip {
+            return branch
+        }
+        return nil
     }
 
     /// The branches a restack would actually move: those not
