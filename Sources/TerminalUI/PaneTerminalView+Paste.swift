@@ -1,5 +1,4 @@
 import AppKit
-import SwiftTerm
 
 /// What a paste carries, for the agent panes: files, or an image
 /// with no file behind it. Split from the view for length.
