@@ -9,8 +9,9 @@ import Foundation
 /// which is how the installed build is switched on without
 /// rebuilding. The file lives in a temporary directory both the
 /// host user and the sandbox user can read, since either may be the
-/// one reading it back, and lines older than a week are swept on
-/// the next write so the file never outgrows a week of use.
+/// one reading it back. Lines older than a day are swept on the next
+/// write, and once the file passes a hundred megabytes its oldest
+/// half goes, so a busy day cannot fill the disk between sweeps.
 public enum PerformanceLog {
     // MARK: Public
 
@@ -42,8 +43,16 @@ public enum PerformanceLog {
         }
     }
 
-    /// How long a line is kept: a week.
-    public static let lifetime: TimeInterval = 604_800
+    /// How long a line is kept: a day.
+    public static let lifetime: TimeInterval = 86_400
+
+    /// The size the file is trimmed at: a hundred megabytes, which a
+    /// day of heavy use reaches between sweeps.
+    public static let sizeCap = 104_857_600
+
+    /// What it is trimmed back to: fifty megabytes, so the oldest
+    /// half goes rather than the whole day at once.
+    public static let sizeFloor = 52_428_800
 
     /// Whether anything is recorded: the variable, or the marker file
     /// in the log's directory, which is how the installed build is
@@ -64,6 +73,28 @@ public enum PerformanceLog {
         written > now.addingTimeInterval(-lifetime)
     }
 
+    /// The newest lines of `text` that fit in `bytes`, whole lines
+    /// only and oldest dropped first. Pure, so the trimming is
+    /// tested without writing a hundred megabytes.
+    public static func newest(of text: String, within bytes: Int) -> String {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+        var kept = [Substring]()
+        var size = 0
+        for line in lines.reversed() {
+            size += line.utf8.count + 1
+            guard size <= bytes else {
+                break
+            }
+
+            kept.append(line)
+        }
+        guard kept.isEmpty == false else {
+            return ""
+        }
+
+        return kept.reversed().joined(separator: "\n") + "\n"
+    }
+
     /// Records one wait. `what` names the process or call briefly;
     /// `context` is the directory or key it was about.
     public static func record(_ kind: Kind, _ what: String, seconds: TimeInterval, context: String = "") {
@@ -75,6 +106,7 @@ public enum PerformanceLog {
             + String(format: "%8.3f", seconds) + "\t" + context + "\t" + what + "\n"
         queue.async {
             sweepIfDue()
+            trimIfHuge()
             append(line)
         }
     }
@@ -162,6 +194,20 @@ public enum PerformanceLog {
 
         try? (kept.joined(separator: "\n") + (kept.isEmpty ? "" : "\n"))
             .write(toFile: file, atomically: true, encoding: .utf8)
+    }
+
+    /// Drops the oldest half of the file once it passes the cap.
+    /// The size is one stat; reading the file only happens on the
+    /// rare write that finds it over.
+    private static func trimIfHuge() {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file)
+        guard let size = attributes?[.size] as? Int, size > sizeCap,
+              let text = try? String(contentsOfFile: file, encoding: .utf8)
+        else {
+            return
+        }
+
+        try? newest(of: text, within: sizeFloor).write(toFile: file, atomically: true, encoding: .utf8)
     }
 
     private static func append(_ line: String) {

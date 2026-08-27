@@ -102,51 +102,6 @@ public struct GitClient: Sendable {
         return results
     }
 
-    /// The repository's GitHub `owner/name`, parsed from the origin
-    /// remote, nil for non-GitHub or remoteless repositories.
-    public func fullName(of repository: Repository) async -> String? {
-        let result = try? await git(
-            ["remote", "get-url", "origin"],
-            in: repository.path,
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return nil
-        }
-
-        let url = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let range = url.range(of: "github.com") else {
-            return nil
-        }
-
-        let path = url[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: ":/"))
-        let components = path.split(separator: "/").map(String.init)
-        guard let owner = components.first, let repo = components.dropFirst().first else {
-            return nil
-        }
-
-        let name = repo.hasSuffix(".git") ? String(repo.dropLast(".git".count)) : repo
-        return owner + "/" + name
-    }
-
-    /// The base ref merges are judged against: the origin's default
-    /// branch when known, otherwise a local main or master.
-    public func defaultBaseRef(of repository: Repository) async -> String? {
-        let head = try? await git(
-            ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-            in: repository.path,
-            allowFailure: true,
-        )
-        if let head, head.succeeded {
-            return head.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        for candidate in ["main", "master"] where await branchExists(repository: repository, branch: candidate) {
-            return candidate
-        }
-        return nil
-    }
-
     /// How many commits the worktree is ahead of and behind a base
     /// ref, nil when the refs cannot be compared.
     public func aheadBehind(worktreePath: String, baseRef: String) async -> (ahead: Int, behind: Int)? {
@@ -244,6 +199,7 @@ public struct GitClient: Sendable {
 
     /// Fetches and prunes every remote.
     public func fetch(repositoryPath: String) async throws {
+        await RepositoryFacts.shared.forget(repositoryPath)
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 

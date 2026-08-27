@@ -3,13 +3,25 @@ import Foundation
 import Testing
 
 /// The performance log is off unless asked for, lives where both
-/// users can read it, and keeps a week.
+/// users can read it, keeps a day and never grows past its cap.
 struct PerformanceLogTests {
     @Test
-    func `a line older than a week is not kept`() {
+    func `a line older than a day is not kept`() {
         let now = Date()
-        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-600_000), now: now))
-        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-700_000), now: now) == false)
+        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-80_000), now: now))
+        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-90_000), now: now) == false)
+    }
+
+    @Test
+    func `trimming keeps the newest whole lines that fit`() {
+        let text = (1 ... 10).map { "line-" + String($0) }.joined(separator: "\n") + "\n"
+
+        // Each line is seven bytes and a newline: a budget of
+        // twenty-four holds three of them, newest last.
+        #expect(PerformanceLog.newest(of: text, within: 24) == "line-8\nline-9\nline-10\n")
+        #expect(PerformanceLog.newest(of: text, within: 1).isEmpty)
+        #expect(PerformanceLog.newest(of: text, within: 1_000) == text)
+        #expect(PerformanceLog.sizeFloor < PerformanceLog.sizeCap)
     }
 
     @Test

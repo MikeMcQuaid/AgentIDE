@@ -789,7 +789,10 @@ shim rather than a protocol:
    four git calls per worktree every five seconds was most of everything
    the app did. A repository's full name comes from its remote's URL, a
    local read, never from `gh repo view`, which was a network round trip
-   per repository per poll. Everything the store holds paints instantly,
+   per repository per poll; that name and the branch merges are judged
+   against are read once and remembered until a fetch, since only a
+   rename or a change of default branch moves either and reading them
+   again per row per poll was thousands of shell-outs an hour. Everything the store holds paints instantly,
    on pane switches and across restarts, before any fetch refreshes it.
    A listed pull request and its opened conversation share one header
    view, padding, height and browser button included, with the back
@@ -1195,10 +1198,12 @@ users can read since either may be the one reading it back. The gate is
 off by default, so a build by anyone else writes nothing anywhere, and
 `script/test` points the log into the test scratch, since the tests run
 every process the app does and once wrote thousands of scratch lines
-into the real one. Lines older than a week are swept on the next
-write, and the metadata store's dated caches (listings, headers,
-conversations, threads) age out at a week on every save, beside their
-count caps, so neither grows past a week of use. Logging and caching are
+into the real one. Lines older than a day are swept on the next write,
+and once the file passes a hundred megabytes its oldest half goes at
+once, since a day of heavy use fills that much between sweeps. The
+metadata store's dated caches (listings, headers, conversations,
+threads) age out at a week on every save, beside their count caps, and
+a listing's entity tag is dropped with the listing it stamped. Logging and caching are
 otherwise the host user's: the metadata store and the avatars live in the
 host's Application Support, and the sandbox user writes no cache of its
 own.
