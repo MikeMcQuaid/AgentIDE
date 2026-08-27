@@ -247,11 +247,20 @@ public final class DashboardModel {
         if selection?.id == item.id {
             selection = nil
         }
+        guard item.isPlaceholder == false else {
+            // Nothing was ever created under `.pending`: the row is
+            // a drawing of work that failed to start, and asking git
+            // to remove it reported a missing file and a missing
+            // branch, neither of which meant anything.
+            forgetPlaceholder(item)
+            return
+        }
+
         do {
             try await service.deleteWorktree(item: item)
             await refresh()
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            ErrorLog.shared.report(error.localizedDescription, about: item.worktree.repositoryName)
         }
     }
 

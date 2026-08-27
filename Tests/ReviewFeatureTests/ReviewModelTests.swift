@@ -44,7 +44,11 @@ struct ReviewModelTests {
         try "dirty\n".write(toFile: path + "/dirty.txt", atomically: true, encoding: .utf8)
         try await runGit(["add", "-A"], in: path)
 
-        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        let model = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
         model.scope = .lastCommit
         await model.reload()
         #expect(model.files.map(\.path) == ["committed.txt"])
@@ -71,7 +75,11 @@ struct ReviewModelTests {
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
 
-        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        let model = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
         model.scope = .upstream
         await model.reload()
         #expect(model.hasUpstream == false)
@@ -109,7 +117,11 @@ struct ReviewModelTests {
         try "a NEEDLE too\n".write(toFile: path + "/three.txt", atomically: true, encoding: .utf8)
         try await runGit(["add", "-A"], in: path)
 
-        let model = ReviewModel(worktreePath: path, git: GitClient(runner: FoundationProcessRunner()))
+        let model = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
         model.scope = .uncommitted
         await model.reload()
         #expect(model.findTargets.isEmpty)

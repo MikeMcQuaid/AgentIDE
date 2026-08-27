@@ -68,32 +68,6 @@ public extension SessionService {
         return (runner.models, runner.efforts)
     }
 
-    // nil means "keep the fallback list", which callers treat
-    // differently from an empty answer.
-    // swiftlint:disable discouraged_optional_collection
-
-    /// Asks the agent's CLI for its current models; nil when the
-    /// command fails or yields nothing. The CLI runs inside the
-    /// sandbox, where sessions run it anyway; running it as the host
-    /// user made macOS prompt for broad disk access.
-    func discoverModels(for agent: AgentKind) async -> [String]? {
-        // swiftlint:enable discouraged_optional_collection
-        let runner = runner(for: agent)
-        let argv = launcher.command(
-            payload: runner.modelListingCommand.joined(separator: " ") + " </dev/null",
-            initialDirectory: launcher.sharedWorkspace,
-            sessionID: UUID().uuidString,
-            sessionName: "agentide-model-listing",
-        )
-        let result = try? await processes.run(argv, workingDirectory: nil, environment: [:])
-        guard let result, result.succeeded else {
-            return nil
-        }
-
-        let models = runner.parseModelList(result.standardOutput)
-        return models.isEmpty ? nil : models
-    }
-
     /// Creates a session whose prompt is a GitHub issue plus the
     /// user's additional context.
     func createSession(

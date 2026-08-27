@@ -106,7 +106,15 @@ extension DashboardModel {
     }
 
     func cacheSidebar(_ groups: [RepositoryGroup]) {
-        let cached = groups.map { group in
+        // Placeholders are what a creation looks like while it runs;
+        // remembering one meant a failed creation came back on every
+        // launch as a row nothing could delete.
+        let real = groups.map { group in
+            var kept = group
+            kept.items = group.items.filter { $0.isPlaceholder == false }
+            return kept
+        }
+        let cached = real.map { group in
             var cached = CachedRepository()
             cached.name = group.repository.name
             cached.fullName = group.repository.fullName

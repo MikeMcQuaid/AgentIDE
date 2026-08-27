@@ -50,7 +50,18 @@ extension PullRequestsModel {
     /// footer's own line is kept, once.
     func setStatus(_ message: String, detail: String? = nil) {
         status = message
-        ErrorLog.shared.note(detail ?? message)
+        note(detail ?? message)
+    }
+
+    /// A note about this repository's work, named as the sidebar
+    /// names it.
+    func note(_ message: String) {
+        ErrorLog.shared.note(message, about: repository.name)
+    }
+
+    /// The same for a failure.
+    func report(_ message: String) {
+        ErrorLog.shared.report(message, about: repository.name)
     }
 
     /// Copies every unresolved review conversation to the
@@ -60,7 +71,7 @@ extension PullRequestsModel {
         let text = threads.map(\.asText).joined(separator: "\n\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        ErrorLog.shared.note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
+        note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
     }
 
     /// Jumps to the one failing check, or to the checks page when
@@ -125,7 +136,7 @@ extension PullRequestsModel {
 
         let commits = await fetchCommitMessages(worktree, listedRange)
         guard commits.isEmpty == false else {
-            ErrorLog.shared.report("No commits beyond origin/HEAD to describe.")
+            report("No commits beyond origin/HEAD to describe.")
             return false
         }
 
@@ -133,7 +144,7 @@ extension PullRequestsModel {
             apply(description: Self.description(splitFromMessage: only))
         } else {
             guard let drafted = await generateDescription(commits) else {
-                ErrorLog.shared.report(
+                report(
                     "The on-device model is unavailable; is Apple Intelligence enabled?",
                 )
                 return false
@@ -172,7 +183,7 @@ extension PullRequestsModel {
 
         let title = prTitle.trimmingCharacters(in: .whitespaces)
         guard title.isEmpty == false else {
-            ErrorLog.shared.report("The pull request needs a title.")
+            report("The pull request needs a title.")
             return false
         }
 
@@ -180,14 +191,14 @@ extension PullRequestsModel {
         let body = prBody + (template.isEmpty ? "" : "\n\n" + template)
         do {
             let url = try await performCreate(worktree, title, body)
-            ErrorLog.shared.note("Opened pull request " + url)
+            note("Opened pull request " + url)
             // A stack is built one pull request at a time: each one
             // links what is open into the stack, and failing to link
             // never takes the pull request that opened with it.
             do {
                 try await performLinkStack(worktree)
             } catch {
-                ErrorLog.shared.report("Stacking on GitHub failed: " + error.localizedDescription)
+                report("Stacking on GitHub failed: " + error.localizedDescription)
             }
             pullRequests.invalidateListings(repositoryPath: repository.path)
             prTitle = ""
@@ -197,7 +208,7 @@ extension PullRequestsModel {
             clearDraft()
             return true
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
             return false
         }
     }
@@ -218,7 +229,7 @@ extension PullRequestsModel {
             await reload(keepingSelection: true)
             return true
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
             return false
         }
     }
@@ -237,7 +248,7 @@ extension PullRequestsModel {
             await reload(keepingSelection: true)
             return true
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
             return false
         }
     }
@@ -299,7 +310,7 @@ extension PullRequestsModel {
             await reload(keepingSelection: true)
             return true
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
             return false
         }
     }
@@ -330,7 +341,7 @@ extension PullRequestsModel {
             await reload(keepingSelection: true)
             return true
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
             return false
         }
     }

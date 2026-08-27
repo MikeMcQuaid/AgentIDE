@@ -280,7 +280,13 @@ public struct GitClient: Sendable {
     /// keeps the commits recoverable. Pruning drops any stale
     /// bookkeeping so the listing never shows a removed worktree.
     public func removeWorktree(repository: Repository, worktreePath: String, branch: String) async throws {
-        try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
+        // A path git never registered, or one already gone, is not a
+        // reason to stop: what follows prunes and forgets it, which
+        // is the whole point of asking.
+        let listed = FileManager.default.fileExists(atPath: worktreePath)
+        if listed {
+            try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
+        }
         try await forgetWorktree(repository: repository, branch: branch)
     }
 
@@ -299,7 +305,10 @@ public struct GitClient: Sendable {
     /// way.
     public func forgetWorktree(repository: Repository, branch: String) async throws {
         try await git(["worktree", "prune"], in: repository.path)
-        try await git(["branch", "-D", branch], in: repository.path)
+        // A branch that is not there is the state this was asking
+        // for: a worktree whose creation failed part way has none,
+        // and refusing to finish left the row undeletable.
+        try await git(["branch", "-D", branch], in: repository.path, allowFailure: true)
     }
 
     // MARK: Internal
