@@ -65,8 +65,12 @@ public extension GitHubClient {
         }
 
         let owner = fullName.split(separator: "/").first.map(String.init) ?? ""
+        // Encoded as a query value: a branch name may hold `#`, `&`
+        // or a space, any of which cuts the query short or splits it.
+        let head = (owner + ":" + branch)
+            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? branch
         let path = "repos/" + fullName + "/pulls?state=all&per_page=" + String(Self.listLimit)
-            + "&head=" + owner + ":" + branch
+            + "&head=" + head
         return try await conditionalGet(path: path, etag: etag, repositoryPath: repositoryPath)
     }
 

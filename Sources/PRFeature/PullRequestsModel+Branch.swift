@@ -35,7 +35,7 @@ extension PullRequestsModel {
     /// twin is checked out, the entry standing for it is at the same
     /// commit, so rebasing and pushing are still its work.
     var isListedCheckedOut: Bool {
-        listedBranch == currentBranch ?? branch || listedBranch == stacking.stack.checkedOut
+        listedBranch == (currentBranch ?? branch) || listedBranch == stacking.stack.checkedOut
     }
 
     /// Push makes sense with unpushed commits that this tab has not

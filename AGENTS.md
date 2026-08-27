@@ -92,8 +92,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   run long (resuming, attaching, cloning) names each step and what
   it waits on as it happens, through `LaunchProgress`, and keeps
   something on screen changing at least once a second, the block
-  pinned near the top of the pane so it grows downwards. Prefer showing the last known state instantly
-  over showing a wait at all: the sidebar, the selection and every
+  pinned near the top of the pane so it grows downwards. Prefer
+  showing the last known state instantly over showing a wait at all:
+  the sidebar, the selection and every
   pane that can be cached paint before anything is read, and only
   what herdr owns is allowed to arrive late. Work that need not be
   serial is not: anything the launch does not depend on yet runs
@@ -228,7 +229,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   the default branch, ordered by where each forks. Two branches at
   one commit are one entry, and the name the remote knows wins:
   that is the one a pull request can be open on, and preferring the
-  checked-out name hid a pushed twin's pull request completely. Reading one
+  checked-out name hid a pushed twin's pull request completely.
+  Reading one
   needs no checkout, so the strip retargets panes and an entry
   that is not checked out reviews read-only; restacking records
   every tip first and rebases with `--onto <parent> <recorded

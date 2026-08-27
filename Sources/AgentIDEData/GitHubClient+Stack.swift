@@ -1,6 +1,3 @@
-import AgentIDEDomain
-import Foundation
-
 /// What `gh stack` is for here: linking pull requests into a stack
 /// on GitHub, and merging one with everything below it. Not asking
 /// whether they are a stack: `gh stack view` knows only the stacks

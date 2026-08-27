@@ -16,9 +16,9 @@ public extension View {
 // MARK: - ReadOnlyStyle
 
 /// How read-only text looks.
-public enum ReadOnlyStyle {
+enum ReadOnlyStyle {
     /// Dim enough to read as not editable, bright enough to read.
-    public static let dimmedOpacity = 0.6
+    static let dimmedOpacity = 0.6
 }
 
 public extension Binding where Value == String {

@@ -247,7 +247,10 @@ agentide_new() {
 
   repositories="$(default_for repositories "${defaults}")"
   if [ -z "${repositories}" ] && [ -d "${shared}/repositories" ]; then
-    repositories="$(ls "${shared}/repositories" 2>/dev/null | tr '\n' ' ')"
+    for entry in "${shared}"/repositories/*/; do
+      [ -d "${entry}" ] || continue
+      repositories="${repositories}$(basename "${entry}") "
+    done
   fi
 
   # shellcheck disable=SC2086

@@ -13,13 +13,16 @@ extension DashboardModel {
     /// Derives the stacks that are due, oldest answers first.
     func refreshStacks(of listed: [RepositoryGroup]) async {
         let selectedRepository = selection?.worktree.repositoryPath
-        let due = listed
+        let ready = listed
             .flatMap(\.items)
             .filter { $0.worktree.isHostDirectory == false && $0.isPlaceholder == false }
             .filter { (nextStackDerivation[$0.worktree.path] ?? .distantPast) <= Date() }
-            // What is on screen first: the selected repository's
-            // rows are the ones whose missing marker is noticed.
-            .sorted { first, _ in first.worktree.repositoryPath == selectedRepository }
+        // What is on screen first: the selected repository's rows
+        // are the ones whose missing marker is noticed. A partition
+        // rather than a sort, which needs an ordering of every pair
+        // and had none to give.
+        let onScreen = ready.filter { $0.worktree.repositoryPath == selectedRepository }
+        let due = (onScreen + ready.filter { $0.worktree.repositoryPath != selectedRepository })
             .prefix(Self.stacksPerRefresh)
         // Each derivation is its own handful of git calls; the due
         // ones run beside each other rather than in a line.

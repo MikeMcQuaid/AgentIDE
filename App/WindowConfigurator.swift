@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import TerminalUI
 
 // MARK: - WindowConfigurator
 
