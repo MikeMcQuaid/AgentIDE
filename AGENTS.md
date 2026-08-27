@@ -23,6 +23,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
+- `script/performance-log [on|off|status]`: switch the installed
+  app's performance log on or off (off by default; on, every process
+  run, `gh` call and cache hit or miss lands in the shared
+  `tmp/agentide/performance.log`)
 - `script/attach [workspace]`: attach this terminal to the sandboxed
   herdr session, or list its workspaces when run without arguments
   (works as the host user or inside the sandbox)
@@ -34,7 +38,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `AGENTS.md`: this file; `CLAUDE.md` is a symlink to it
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
-  (the generated `.xcodeproj` stays gitignored)
+  (the generated `.xcodeproj` stays gitignored). `Package.swift`
+  also carries these sources as `AgentIDEAppSources`, which builds
+  no bundle and exists only so `swift build` type-checks them
 - `bin/`: the `agentide` command shipped inside the app bundle: the
   editor shim a shell pane puts on its `PATH` (waiting only with
   `--wait`, and taking a directory anywhere inside a worktree or
@@ -64,6 +70,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   CommandLineTools alone cannot load SourceKit
 - UK English (organised, colour) in documentation, comments and UI
   strings; proper nouns keep their official spellings
+- Name every argument a shelled command takes: `gh` and git both
+  fall back to whatever is checked out or configured, and code has
+  no reason to lean on the shorthand a human types. `gh pr create`
+  names `--head` and `--base`, a rebase names its branch
 - Keep comments minimal; prefer self-documenting code
 - Two-space indentation, four-space for Swift (see `.editorconfig`)
 
@@ -78,13 +88,19 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   remote data, cloning) show a loading state that fills the pane
   instantly; never leave the old content interactive so that the
   result pops over it later. The bar is any actual or possible
-  delay over half a second. A transition made of several steps
-  names each step and what it waits on as it happens, through
-  `LaunchProgress`, and keeps something on screen changing at
-  least once a second, the block pinned near the top of the pane so
-  it grows downwards. Work that need not be serial is not: anything
-  the launch does not depend on yet runs beside it. The same holds
-  for every pane whose data
+  delay over half a second; under that, show nothing rather than a
+  flash. A wait that ends within a few seconds is a spinner under a
+  title (`LaunchProgressView(spinner:)`). Only a transition that can
+  run long (resuming, attaching, cloning) names each step and what
+  it waits on as it happens, through `LaunchProgress`, and keeps
+  something on screen changing at least once a second, the block
+  pinned near the top of the pane so it grows downwards. Prefer
+  showing the last known state instantly over showing a wait at all:
+  the sidebar, the selection and every
+  pane that can be cached paint before anything is read, and only
+  what herdr owns is allowed to arrive late. Work that need not be
+  serial is not: anything the launch does not depend on yet runs
+  beside it. The same holds for every pane whose data
   arrives later than the pane: it shows `LaunchProgressView` naming
   what it waits on until the first result lands, then snaps to the
   finished UI. An empty state ("Nothing running", "No changes")
@@ -140,6 +156,25 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   publishes no change, so asking twice for one page did nothing.
 - Octicon SVG imagesets in `App/Assets.xcassets` render as template
   images; `ChecksStyle` maps GitHub states to them.
+- `Validate plug-in "SwiftTermBuildInfoPlugin"` failing a build means
+  a non-interactive `xcodebuild` met an untrusted package plugin
+  (SwiftTerm 1.19 ships one); only the Xcode app can show the trust
+  prompt, so every script passes `-skipPackagePluginValidation`.
+- Xcode runs SwiftTerm's build tool plugin under `sandbox-exec`,
+  which cannot nest, so `xcodebuild` cannot get past it in here
+  however its flags are set: `CustomTask Generate SwiftTerm build
+  information` fails with `sandbox_apply: Operation not permitted`,
+  and regenerating the file by hand does not help, since the trigger
+  beside it carries a fresh UUID per planning pass. `script/build`
+  therefore uses `swift build --disable-sandbox` in the sandbox,
+  which runs the same plugin unsandboxed and compiles every target,
+  `App` included, through the `AgentIDEAppSources` target that
+  exists for that alone. The bundle itself, and both of
+  `script/analyze`'s passes, belong to the host and CI: SwiftLint's
+  analyser wants a full `xcodebuild` log and reads a `swift build`
+  one as a confident zero, and periphery cannot load the manifest
+  here either. `script/analyze` says so and stops rather than
+  passing on nothing.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
   most tests. The toolchain is a downloadable asset each user mounts
@@ -173,13 +208,53 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - A fullscreen space sent to another display leaves the display it
   came from black until a space switch repaints it. This is macOS's
   vacated space, not a pane of ours: the app owns exactly one window
-  (one `WindowGroup`, no panels, no `collectionBehavior` changes),
-  and `WindowConfigurator` says so in the messages pane when a
-  settled fullscreen window's frame does not match its screen, so a
-  silent Messages tab means the window is correctly framed on its
-  new display and is drawing nothing on the old one. Setting the
+  (one `WindowGroup`, no panels, no `collectionBehavior` changes).
+  A fullscreen window that keeps the menu bar fills its screen's
+  visible frame rather than its whole frame, which is correct;
+  reporting that difference to the messages pane said so on every
+  move and told nobody anything. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
+- The utility pane's review, editor and pull request surfaces stay
+  mounted and hide rather than being rebuilt on a tab switch: each
+  costs a git or GitHub read to come back, and flipping between
+  them showed a loading state every time. A model that can paint
+  from its cache does so in its initialiser, not on its first
+  reload.
+- Every mounted terminal pane watches the wheel through its own
+  event monitor, and panes stack: hidden shells and other
+  worktrees' terminals hold the same frame. A pane takes a wheel
+  event only when the window's hit test lands on it and no other
+  pane has claimed that event.
+- Agent TUIs (Codex, Claude Code) query the terminal's colours via
+  OSC 10/11 once at startup and cache them; re-theming the pane on
+  a macOS appearance switch made Codex draw white text on a white
+  composer. Agent panes pin the palette recorded at session launch
+  (`terminalSchemes` in the metadata) instead of following the
+  appearance; only shell panes re-theme live.
+- An agent pane keeps no scrollback of its own, through
+  `changeScrollback(nil)`: herdr owns the history and answers a
+  scroll with a full repaint, so a local history filled up with
+  the screens those repaints replaced and the same output showed
+  two and three times over.
+- `agentide <file>` can be handed anything readable: a file
+  belonging to no worktree opens in whichever worktree is on
+  screen, and the editor takes an absolute path as the file
+  itself rather than resolving it against a worktree.
+- A stack of branches lives in one worktree and is derived from
+  ancestry, never recorded: branches sharing a fork point beyond
+  the default branch, ordered by where each forks. Two branches at
+  one commit are one entry, and the name the remote knows wins:
+  that is the one a pull request can be open on, and preferring the
+  checked-out name hid a pushed twin's pull request completely.
+  Reading one
+  needs no checkout, so the strip retargets panes and an entry
+  that is not checked out reviews read-only; restacking records
+  every tip first and rebases with `--onto <parent> <recorded
+  tip>`, signed, skipping a branch already in place. Only the last
+  step of submitting, `gh stack link`, belongs to GitHub's own
+  extension; it links pull requests this app opened and keeps no
+  local tracking, so nothing competes with the derivation.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
@@ -190,10 +265,15 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 ### Required Before Each Commit
 
 - Run `script/style --fix` and resolve anything it cannot fix
-- Run `script/test` and `script/analyze` when Swift changed
-- Run `script/analyze` again before opening or updating a pull
-  request; unused imports and dead code otherwise surface in CI
-  first (sandboxed runs reuse the analyze build's index store, so
+- Run `script/test` and `script/analyze` when Swift changed; if
+  `script/analyze` has run for more than five minutes, stop it and
+  let CI run it instead rather than holding the commit
+- Run `script/analyze` on the host before opening or updating a
+  pull request, and say plainly that you could not when you are in
+  the sandbox, where it compiles every target and stops: neither
+  its passes can run there (see the platform notes). Unused imports
+  and dead code otherwise surface in CI first (sandboxed
+  runs reuse the analyze build's index store, so
   periphery's dead-code pass now runs everywhere). Both passes
   always run and the script fails at the end if either did: the
   beta's macro plugin server trips SwiftLint's analyzer often

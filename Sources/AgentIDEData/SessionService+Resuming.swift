@@ -8,6 +8,83 @@ import Foundation
 /// prompt. Every way in therefore replaces whatever holds the label
 /// and is checked for still being alive a moment later.
 extension SessionService {
+    /// Resumes the session last recorded in a worktree, whether or
+    /// not a live workspace still carries it, and whether or not
+    /// the one that does is still alive: a refused conversation
+    /// leaves an empty shell holding the label, so every way in is
+    /// tried until one is still running.
+    public func resumeWorktree(_ worktree: Worktree) async throws {
+        guard let sessionName = store.load().sessionsByWorktree[worktree.path] else {
+            throw CommandError(
+                command: "resume " + worktree.path,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "No session recorded here yet"),
+            )
+        }
+        guard let agent = agentKind(of: sessionName) else {
+            throw CommandError(
+                command: "resume " + sessionName,
+                result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown agent in session name"),
+            )
+        }
+
+        await progress("Backing up the conversation")
+        backUpConversation(of: worktree)
+        try await start(
+            sessionName: sessionName,
+            directory: worktree.path,
+            trying: resumeCommands(sessionName: sessionName, agent: agent, worktreePath: worktree.path),
+        )
+        clearIntentionalClose(worktreePath: worktree.path)
+    }
+
+    /// Relaunches a past conversation in its own worktree, replacing
+    /// whatever session is already there. An agent that will not
+    /// take the conversation back (one it has rolled away, or a
+    /// version that no longer reads that transcript) exits at once,
+    /// so the worktree's other conversations and then a fresh
+    /// session are tried rather than leaving a dead pane behind.
+    @discardableResult
+    public func resumePast(_ past: TranscriptSession, worktree: Worktree) async throws -> String {
+        let sessionName = SessionName.make(
+            repository: worktree.repositoryName,
+            branch: worktree.branch,
+            agent: past.agent,
+        )
+        let agentRunner = runner(for: past.agent)
+        var commands = [agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: "")]
+        commands += resumeCommands(
+            sessionName: sessionName,
+            agent: past.agent,
+            worktreePath: worktree.path,
+        ).filter { commands.contains($0) == false }
+        try await start(sessionName: sessionName, directory: worktree.path, trying: commands)
+        remember(sessionName: sessionName, worktreePath: worktree.path, resumeID: past.resumeID)
+        ConversationBackup(paths: paths).store(past, worktree: worktree)
+        return sessionName
+    }
+
+    /// Creates a fresh worktree and branch and resumes a past
+    /// conversation there. The transcript is copied into the new
+    /// working directory's transcript directory first, because agents
+    /// look sessions up by working directory.
+    public func resumeInNewWorktree(_ past: TranscriptSession, repository: Repository) async throws -> String {
+        let seed = past.title.isEmpty ? past.id : past.title
+        let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
+        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
+        let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
+        let agentRunner = runner(for: past.agent)
+        await progress("Copying the transcript into the new worktree")
+        copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)
+        try await startFresh(
+            sessionName: sessionName,
+            directory: worktreePath,
+            command: agentRunner.resumeCommand(resumeID: past.resumeID, extraArguments: ""),
+        )
+        remember(sessionName: sessionName, worktreePath: worktreePath, resumeID: past.resumeID)
+        await awaitReady(sessionName: sessionName)
+        return sessionName
+    }
+
     /// Starts a session under a name, trying each command in turn
     /// until one is still running, and killing whatever holds the
     /// name before each attempt. Throws when none of them stayed up.
@@ -46,6 +123,7 @@ extension SessionService {
     func awaitReady(sessionName: String) async {
         await progress("Waiting for the agent's interface to come up")
         let agents = AgentKind.allCases.map(\.rawValue)
+        var sawFinished = false
         for _ in 0 ..< Self.readyPolls {
             let panes = await (try? herdr.panes()) ?? []
             guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
@@ -53,7 +131,14 @@ extension SessionService {
             }
 
             let unrecognisable = pane.foregroundCommand.map { agents.contains($0) == false } ?? false
-            if pane.isFinished || pane.activity != nil || unrecognisable {
+            // One finished reading is not the truth: herdr reports a
+            // pane finished in the instant between its creation and
+            // the command's process registering, and returning on
+            // that flicker showed a live session as ended. Finished
+            // only counts when two consecutive readings agree.
+            let finished = pane.isFinished && sawFinished
+            sawFinished = pane.isFinished
+            if finished || pane.activity != nil || unrecognisable {
                 await progress(pane.activity == nil
                     ? "The pane is running `" + (pane.foregroundCommand ?? "nothing") + "`; nothing more to wait for"
                     : "The agent's interface is up")
@@ -89,24 +174,27 @@ extension SessionService {
     /// while the window is being used.
     @concurrent
     func backUpRunningConversations(_ groups: [RepositoryGroup]) async {
-        var metadata = store.load()
-        var copied = false
+        let backedUpAt = store.load().conversationBackupAt
+        var copied = [String]()
         let now = Date()
         for item in groups.flatMap(\.items) where item.session?.status == .running {
-            let last = metadata.conversationBackupAt[item.worktree.path] ?? .distantPast
+            let last = backedUpAt[item.worktree.path] ?? .distantPast
             guard now.timeIntervalSince(last) >= Self.backupIntervalSeconds else {
                 continue
             }
 
             backUpConversation(of: item.worktree)
-            metadata.conversationBackupAt[item.worktree.path] = now
-            copied = true
+            copied.append(item.worktree.path)
         }
-        guard copied else {
+        guard copied.isEmpty == false else {
             return
         }
 
-        store.save(metadata)
+        store.update { metadata in
+            for path in copied {
+                metadata.conversationBackupAt[path] = now
+            }
+        }
     }
 
     /// The ways to continue a worktree's own agent, best first: the
@@ -181,5 +269,35 @@ extension SessionService {
             }
         }
         return true
+    }
+
+    /// Copies a transcript into the working directory's own
+    /// transcript directory, because agents look sessions up by
+    /// working directory; nothing to copy for one flat tree.
+    private func copyTranscript(
+        _ past: TranscriptSession,
+        intoWorktree worktreePath: String,
+        using agentRunner: any AgentRunner,
+    ) {
+        guard agentRunner.scopesTranscriptsByWorkingDirectory,
+              let directory = agentRunner.transcriptDirectory(
+                  workingDirectory: worktreePath,
+                  sandboxHome: paths.sandboxHome,
+              )
+        else {
+            return
+        }
+
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try? FileManager.default.copyItem(atPath: past.path, toPath: directory + "/" + past.resumeID + ".jsonl")
+    }
+
+    private func remember(sessionName: String, worktreePath: String, resumeID: String) {
+        store.update { metadata in
+            metadata.resumeIDs[sessionName] = resumeID
+            metadata.sessionsByWorktree[worktreePath] = sessionName
+            metadata.seenAt[worktreePath] = Date()
+            metadata.intentionallyClosed.removeAll { $0 == worktreePath }
+        }
     }
 }

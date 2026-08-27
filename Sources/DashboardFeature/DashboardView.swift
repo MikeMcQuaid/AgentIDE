@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -78,6 +77,10 @@ public struct DashboardView: View {
     /// worktree, which always confirms since it always forces).
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
+    /// The worktree whose stack is being looked over: a menu cannot
+    /// hold a popover, so the sidebar holds it.
+    @State private var pendingStack: WorktreeItem?
+
     private let model: DashboardModel
 
     @ViewBuilder private var foreignSection: some View {
@@ -141,8 +144,11 @@ public struct DashboardView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            if group.items.count > 1 {
-                Text("(" + String(group.items.count - 1) + ")")
+            // The main checkout is not a worktree, and neither is a
+            // directory of your own.
+            let worktrees = group.items.count { $0.worktree.isHostDirectory == false } - 1
+            if worktrees > 0 {
+                Text("(" + String(worktrees) + ")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .hoverHelp("Worktrees beyond the default branch")
@@ -170,7 +176,7 @@ public struct DashboardView: View {
             WorktreeRowView(
                 item: item,
                 pullRequest: model.pullRequest(for: item),
-                stackDepth: model.stackDepth(for: item),
+                standing: model.stackStanding(for: item),
             )
             // Deleting takes a moment; the row fades the instant the
             // click lands so the click visibly took.
@@ -189,6 +195,9 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
+        .popover(isPresented: stackBinding(for: item), arrowEdge: .trailing) {
+            StackPopover(item: item, model: model)
+        }
         .confirmationDialog(
             forceDeleteTitle(for: item),
             isPresented: forceDeleteBinding(for: item),
@@ -206,57 +215,17 @@ public struct DashboardView: View {
 
     @ViewBuilder
     private func contextActions(for item: WorktreeItem) -> some View {
-        refreshAction(for: item.worktree.repositoryPath)
-        Divider()
-        Button("Copy branch name") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.worktree.branch, forType: .string)
+        if item.worktree.isHostDirectory {
+            HostDirectoryActions(item: item, model: model)
+        } else {
+            WorktreeActions(
+                item: item,
+                model: model,
+                onCleanUp: { await cleanUpOrOffer(item) },
+                pendingForceDelete: $pendingForceDelete,
+                pendingStack: $pendingStack,
+            )
         }
-        .hoverHelp("Copy this worktree's branch name")
-        Button("Copy path") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.worktree.path, forType: .string)
-        }
-        .hoverHelp("Copy this worktree's full path")
-        Divider()
-        Button("Fetch") { Task { await model.fetch(item: item) } }
-            .hoverHelp("git fetch all remotes of this repository")
-        if item.worktree.path == item.worktree.repositoryPath {
-            Button("Fetch and Reset") { Task { await model.fetchAndReset(item: item) } }
-                .hoverHelp(
-                    "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
-                )
-        }
-        Divider()
-        Button("Mark as unread") { Task { await model.markUnread(item: item) } }
-            .hoverHelp("Show the unread dot until this worktree is next viewed")
-        // Cleanup is the merge-time tidy, offered by hand for merges
-        // the poll has not noticed yet or made outside GitHub; on the
-        // main checkout it only makes sense off the default branch.
-        if item.worktree.path != item.worktree.repositoryPath || model.isOffDefaultBranch(item) {
-            Button("Clean up after merge") { Task { await cleanUpOrOffer(item) } }
-                .hoverHelp(
-                    item.worktree.path == item.worktree.repositoryPath
-                        ? "Return to the default branch and safely delete this merged branch; "
-                        + "dirty checkouts are left alone"
-                        : "Remove this worktree once its branch is merged and clean; "
-                        + "anything that would lose work asks first",
-                )
-        }
-        if item.worktree.path != item.worktree.repositoryPath {
-            Divider()
-            Button("Delete worktree", role: .destructive) { pendingForceDelete = (item.worktree.path, nil) }
-                .hoverHelp("Force-deletes the worktree and branch after confirming what would be lost")
-        }
-    }
-
-    /// Refreshing by hand, offered on every row and repository
-    /// header: the poll waits minutes between asking about an
-    /// unselected branch, and GitHub state changes while it waits.
-    /// The right-clicked repository alone is asked about.
-    private func refreshAction(for repositoryPath: String) -> some View {
-        Button("Refresh") { Task { await model.refreshRepository(path: repositoryPath) } }
-            .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
     }
 
     /// One image per owner, cached on disk: every repository of an
@@ -264,6 +233,17 @@ public struct DashboardView: View {
     private func avatar(for repository: Repository) -> some View {
         OwnerAvatar(owner: repository.owner, size: Self.avatarSize)
             .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
+    }
+
+    private func stackBinding(for item: WorktreeItem) -> Binding<Bool> {
+        Binding(
+            get: { pendingStack?.id == item.id },
+            set: { shown in
+                if shown == false, pendingStack?.id == item.id {
+                    pendingStack = nil
+                }
+            },
+        )
     }
 
     private func forceDeleteBinding(for item: WorktreeItem) -> Binding<Bool> {

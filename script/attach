@@ -18,6 +18,8 @@ no_sessions() {
 # inside the sandbox where the herdr socket lives. The id is dug out
 # of the JSON listing with text tools because the sandbox guarantees
 # no JSON processor.
+# shellcheck disable=SC2016 # the payload expands in the shell it is
+# handed to, not in this one.
 ATTACH='
 if [[ -n "${1:-}" ]]; then
   id="$(herdr workspace list 2>/dev/null \

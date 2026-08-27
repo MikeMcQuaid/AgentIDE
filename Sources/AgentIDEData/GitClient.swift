@@ -102,51 +102,6 @@ public struct GitClient: Sendable {
         return results
     }
 
-    /// The repository's GitHub `owner/name`, parsed from the origin
-    /// remote, nil for non-GitHub or remoteless repositories.
-    public func fullName(of repository: Repository) async -> String? {
-        let result = try? await git(
-            ["remote", "get-url", "origin"],
-            in: repository.path,
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return nil
-        }
-
-        let url = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let range = url.range(of: "github.com") else {
-            return nil
-        }
-
-        let path = url[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: ":/"))
-        let components = path.split(separator: "/").map(String.init)
-        guard let owner = components.first, let repo = components.dropFirst().first else {
-            return nil
-        }
-
-        let name = repo.hasSuffix(".git") ? String(repo.dropLast(".git".count)) : repo
-        return owner + "/" + name
-    }
-
-    /// The base ref merges are judged against: the origin's default
-    /// branch when known, otherwise a local main or master.
-    public func defaultBaseRef(of repository: Repository) async -> String? {
-        let head = try? await git(
-            ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-            in: repository.path,
-            allowFailure: true,
-        )
-        if let head, head.succeeded {
-            return head.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        for candidate in ["main", "master"] where await branchExists(repository: repository, branch: candidate) {
-            return candidate
-        }
-        return nil
-    }
-
     /// How many commits the worktree is ahead of and behind a base
     /// ref, nil when the refs cannot be compared.
     public func aheadBehind(worktreePath: String, baseRef: String) async -> (ahead: Int, behind: Int)? {
@@ -191,9 +146,30 @@ public struct GitClient: Sendable {
         return result?.succeeded ?? false
     }
 
+    /// A tracked file's committed content, for files a working
+    /// copy does not hold: the Homebrew taps are sparse checkouts
+    /// carrying only their formulae, so what git knows is the only
+    /// way to read their pull request template.
+    public func trackedFile(worktreePath: String, path: String) async -> String? {
+        let result = try? await git(["show", "HEAD:" + path], in: worktreePath, allowFailure: true)
+        guard let result, result.succeeded else {
+            return nil
+        }
+
+        return result.standardOutput.isEmpty ? nil : result.standardOutput
+    }
+
     /// Whether the worktree has uncommitted changes.
+    /// Whether the worktree has uncommitted work: the one reading
+    /// that cannot be answered for a whole repository at once, since
+    /// it is about the directory rather than the branch. Renames are
+    /// not looked for: the answer is whether anything changed, and
+    /// pairing up what moved is work nobody here reads.
     public func isDirty(worktreePath: String) async -> Bool {
-        let output = try? await git(["status", "--porcelain"], in: worktreePath).standardOutput
+        let output = try? await git(
+            ["status", "--porcelain", "--no-renames"],
+            in: worktreePath,
+        ).standardOutput
         return output?.isEmpty == false
     }
 
@@ -231,23 +207,28 @@ public struct GitClient: Sendable {
 
     /// Fetches and prunes every remote.
     public func fetch(repositoryPath: String) async throws {
+        await RepositoryFacts.shared.forget(repositoryPath)
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 
-    /// Fetches origin and hard-resets the checkout to its default
-    /// branch, for main checkouts that should mirror the remote.
-    public func fetchAndReset(repositoryPath: String) async throws {
+    /// Fetches origin and hard-resets the checkout to a ref, for
+    /// main checkouts that should mirror the remote. The caller
+    /// resolves the ref: `origin/HEAD` is a symbolic name a clone
+    /// need never have been given, and resetting to one git cannot
+    /// resolve fails where naming the branch works.
+    public func fetchAndReset(repositoryPath: String, onto ref: String) async throws {
         try await git(["fetch", "origin"], in: repositoryPath)
-        try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
+        try await git(["reset", "--hard", ref], in: repositoryPath)
     }
 
-    /// Rebases the worktree onto a ref, re-signing every replayed
+    /// Rebases a branch onto a ref, re-signing every replayed
     /// commit; failure or conflict aborts the rebase so the worktree
     /// is left exactly as it was. The caller fetches first and picks
-    /// the ref.
-    public func rebaseSigned(worktreePath: String, onto ref: String) async throws {
+    /// the ref. The branch is named rather than left to whichever
+    /// the worktree holds, which is not always the one on screen.
+    public func rebaseSigned(worktreePath: String, branch: String, onto ref: String) async throws {
         do {
-            try await git(["rebase", "--force-rebase", "--gpg-sign", ref], in: worktreePath)
+            try await git(["rebase", "--force-rebase", "--gpg-sign", ref, branch], in: worktreePath)
         } catch {
             try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error
@@ -278,7 +259,12 @@ public struct GitClient: Sendable {
 
     /// The last commit's subject and body.
     public func lastCommitMessage(worktreePath: String) async throws -> String {
-        try await git(["log", "-1", "--format=%B"], in: worktreePath)
+        try await commitMessage(worktreePath: worktreePath, commit: "HEAD")
+    }
+
+    /// One commit's full message, named by anything git resolves.
+    public func commitMessage(worktreePath: String, commit: String) async throws -> String {
+        try await git(["log", "-1", "--format=%B", commit], in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -326,7 +312,10 @@ public struct GitClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
-        let argv = ["git"] + Self.hardening + arguments
+        // `--no-optional-locks` so a read never takes the index
+        // lock an agent's own git may be holding in the same
+        // worktree, and never writes a refreshed index of its own.
+        let argv = ["git", "--no-optional-locks"] + Self.hardening + arguments
         let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)

@@ -28,6 +28,10 @@ struct PromptCaptureRunner: AgentRunner {
         ["true"]
     }
 
+    var defaultEffort: String? {
+        nil
+    }
+
     /// `command cat` sidesteps whatever the interactive shell the
     /// pane runs has aliased `cat` to.
     func launchCommand(extraArguments: String, promptFile: String?) -> String {
@@ -41,7 +45,7 @@ struct PromptCaptureRunner: AgentRunner {
     }
 
     func transcriptDirectory(workingDirectory: String, sandboxHome: String) -> String? {
-        sandboxHome + "/transcripts/" + workingDirectory.replacing("/", with: "-")
+        sandboxHome + "/transcripts/" + ClaudeCodeRunner.projectDirectoryName(for: workingDirectory)
     }
 
     func optionArguments(model: String?, effort: String?) -> String {
@@ -75,11 +79,21 @@ struct SessionServiceIntegrationTests {
         )
         #expect(SessionName.isAgentIDE(name))
 
-        let overview = await world.service.overview()
-        let item = try #require(overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("do_the") })
-        #expect(item.session?.name == name)
-        #expect(item.session?.status == SessionStatus.running)
-        let worktreePath = item.worktree.path
+        // Polled, not read once: for the instant between the pane's
+        // shell starting and it running the command, herdr reports
+        // the shell as the foreground, which reads as finished. The
+        // fake agent is not one herdr recognises, so nothing else
+        // waits for it to settle.
+        var item: WorktreeItem?
+        let running = await TestSupport.poll {
+            let overview = await world.service.overview()
+            item = overview.groups.first?.items.first { $0.worktree.branch.hasPrefix("do_the") }
+            return item?.session?.status == SessionStatus.running
+        }
+        #expect(running)
+        let found = try #require(item)
+        #expect(found.session?.name == name)
+        let worktreePath = found.worktree.path
 
         let delivered = await TestSupport.poll {
             let prompt = try? String(contentsOfFile: worktreePath + "/agent-prompt.txt", encoding: .utf8)
@@ -318,6 +332,38 @@ struct RepositoryPageIntegrationTests {
         let ghost = try #require(sessions.first { $0.session.id == "ghost" })
         #expect(ghost.worktreePath == ghostPath)
         #expect(ghost.session.title == "ghost")
+    }
+
+    @Test
+    func `a worktree named with an underscore keeps its conversations resumable in place`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+
+        // Claude Code encodes the working directory by turning `/`,
+        // `.` and `_` into dashes, so `install_method` lands in a
+        // directory named `install-method`. Its conversation must
+        // still be attributed to the real worktree path, the one
+        // that exists, or Resume here has nothing to resume into.
+        let worktreePath = try await world.service.createWorktreePath(
+            repository: world.repository,
+            branch: "install_method",
+        )
+        // Encoded as the CLI itself encodes, through the one rule the
+        // service's runner shares; a hand-rolled copy here drifted
+        // from it over the dots in the scratch path.
+        let encoded = try #require(PromptCaptureRunner().transcriptDirectory(
+            workingDirectory: worktreePath,
+            sandboxHome: world.paths.sandboxHome,
+        ))
+        #expect(encoded.hasSuffix("-install-method"))
+        try FileManager.default.createDirectory(atPath: encoded, withIntermediateDirectories: true)
+        let transcript = #"{"type":"user","message":{"content":[{"type":"text","text":"underscored"}]}}"# + "\n"
+        try transcript.write(toFile: encoded + "/underscored.jsonl", atomically: true, encoding: .utf8)
+
+        let sessions = await world.service.repositorySessions(for: world.repository)
+        let found = try #require(sessions.first { $0.session.id == "underscored" })
+        #expect(found.worktreePath == worktreePath)
+        #expect(FileManager.default.fileExists(atPath: found.worktreePath))
     }
 
     @Test

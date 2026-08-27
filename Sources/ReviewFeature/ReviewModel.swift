@@ -100,6 +100,25 @@ final class ReviewModel {
     /// on every reload.
     private(set) var hasUpstream = false
 
+    /// A stack entry this pane is showing instead of the worktree's
+    /// own diff: the branch and what it is built on. Nil is the
+    /// ordinary case, where the pane shows the branch that is
+    /// checked out and can be written to.
+    var stackTarget: (parent: String, branch: String)?
+
+    /// One commit from the listing, shown on its own: the same view
+    /// the last-commit scope gives, with its message read-only
+    /// because amending reaches the tip and nothing else.
+    var commitTarget: String?
+
+    /// Whether what is shown can only be read: a branch this
+    /// worktree does not hold, or a commit further back than the
+    /// last one. Either way rejecting lines or amending would have
+    /// to rewrite history that is not the tip in front of you.
+    var isReadOnly: Bool {
+        stackTarget != nil || commitTarget != nil
+    }
+
     /// The find bar's query; the hunks holding a match and which of
     /// them is showing are derived from it.
     var findQuery = "" {
@@ -137,6 +156,11 @@ final class ReviewModel {
     /// Loads the scope's diff.
     func reload() async {
         selections = [:]
+        if await loadedTarget() {
+            hasLoaded = true
+            return
+        }
+
         let currentBranch = await git.currentBranch(worktreePath: worktreePath)
         hasUpstream =
             if let currentBranch {
@@ -297,6 +321,62 @@ final class ReviewModel {
 
     /// The branch scope's commits and merge-base diff; commits load
     /// first so they list even when the diff fails to parse.
+    /// One stack entry's own changes, read-only: the commits it
+    /// adds to the branch below it.
+    private func loadStackEntry(parent: String, branch: String) async {
+        branchCommits = []
+        showsUncommitted = false
+        do {
+            files = try await DiffParser.parse(git.stackDiff(
+                worktreePath: worktreePath,
+                parent: parent,
+                branch: branch,
+                ignoringWhitespace: hidesWhitespace,
+            ))
+            // The entry's own tip commit, shown as the last-commit
+            // scope shows one, read-only: amending reaches the
+            // checked-out tip and nothing else.
+            commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: branch)
+            originalMessage = commitMessage
+        } catch {
+            report(error.localizedDescription)
+        }
+    }
+
+    /// One commit or one stack entry, when the pane has been pointed
+    /// at something other than the branch in front of it; false when
+    /// it has not, and the scope loads as usual.
+    private func loadedTarget() async -> Bool {
+        if let commitTarget {
+            await loadCommit(commitTarget)
+            return true
+        }
+        if let stackTarget {
+            await loadStackEntry(parent: stackTarget.parent, branch: stackTarget.branch)
+            return true
+        }
+
+        return false
+    }
+
+    /// One commit on its own: its diff and its message, neither of
+    /// which this pane will write back.
+    private func loadCommit(_ commit: String) async {
+        branchCommits = []
+        showsUncommitted = false
+        do {
+            files = try await DiffParser.parse(git.commitDiff(
+                worktreePath: worktreePath,
+                commit: commit,
+                ignoringWhitespace: hidesWhitespace,
+            ))
+            commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: commit)
+            originalMessage = commitMessage
+        } catch {
+            report(error.localizedDescription)
+        }
+    }
+
     private func loadBranch() async throws {
         branchCommits = []
         guard let baseRef = await baseRefProvider() else {

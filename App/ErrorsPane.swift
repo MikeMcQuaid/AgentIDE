@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
@@ -30,8 +31,6 @@ struct ErrorsPane: View {
 
     private static let padding: CGFloat = 8
     private static let entrySpacing: CGFloat = 10
-    private static let lineSpacing: CGFloat = 2
-    private static let markSpacing: CGFloat = 4
 
     private var log: ErrorLog = .shared
 
@@ -53,26 +52,55 @@ struct ErrorsPane: View {
         .defaultScrollAnchor(.bottom)
     }
 
+    /// One message as one paragraph: the time in front of it and the
+    /// text wrapping after, so a short message takes one line rather
+    /// than a line for its stamp and another for itself. Links are
+    /// live, and open where every other link in the app does.
     private func row(_ entry: ErrorLog.Entry) -> some View {
-        VStack(alignment: .leading, spacing: Self.lineSpacing) {
-            HStack(spacing: Self.markSpacing) {
-                if entry.isError {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("Error")
-                }
-                Text(entry.date, format: .dateTime.hour().minute().second())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        // Failures keep the monospaced command-output look; status
+        // notes read as prose.
+        let font: Font = entry.isError ? .callout.monospaced() : .callout
+        return (mark(entry) + stamp(entry.date) + Text(Self.linked(entry.message)).font(font))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The message with its web links made clickable.
+    private static func linked(_ message: String) -> AttributedString {
+        var text = AttributedString(message)
+        for link in MessageLinks.links(in: message) {
+            guard let lower = AttributedString.Index(link.range.lowerBound, within: text),
+                  let upper = AttributedString.Index(link.range.upperBound, within: text)
+            else {
+                continue
             }
-            // Failures keep the monospaced command-output look;
-            // status notes read as prose.
-            Text(entry.message)
-                .font(entry.isError ? .callout.monospaced() : .callout)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+            text[lower ..< upper].link = link.url
         }
+        return text
+    }
+
+    /// The failure glyph, in the text so the message wraps under
+    /// its own first line rather than beside a column of icon.
+    private func mark(_ entry: ErrorLog.Entry) -> Text {
+        guard entry.isError else {
+            return Text("")
+        }
+
+        // The glyph reads as part of the message rather than as an
+        // image of its own, so the label goes on the text.
+        // swiftlint:disable:next accessibility_label_for_image
+        return Text(Image(systemName: "exclamationmark.triangle.fill"))
+            .font(.caption)
+            .foregroundStyle(.red)
+            + Text(" ")
+    }
+
+    private func stamp(_ date: Date) -> Text {
+        Text(date, format: .dateTime.hour().minute().second())
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            + Text(" ")
     }
 
     private func copyAll() {

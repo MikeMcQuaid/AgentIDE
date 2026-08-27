@@ -1,0 +1,105 @@
+import AgentIDEDomain
+import TerminalUI
+
+public extension DashboardModel {
+    /// Lists a directory of your own under the repository whose menu
+    /// asked for it, and shows it at once.
+    func addHostDirectory(_ path: String, to repository: Repository) async {
+        service.addHostDirectory(path, to: repository)
+        await refresh()
+    }
+
+    /// Puts a directory of your own on its default branch and
+    /// brings it level with origin, which is what most of them are
+    /// for between pieces of work.
+    func checkoutAndPullDefault(_ item: WorktreeItem) async {
+        do {
+            try await service.checkoutAndPullDefault(
+                worktreePath: item.worktree.path,
+                repository: Repository(
+                    name: item.worktree.repositoryName,
+                    path: item.worktree.path,
+                ),
+            )
+            ErrorLog.shared.note("Checked out and pulled the default branch in \(item.worktree.path).")
+            // The row says the new branch at once: a refresh reads
+            // every repository and worktree first, which is seconds
+            // of the row still claiming the branch just left.
+            await rename(item, to: service.currentBranch(worktreePath: item.worktree.path))
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Fetches a directory of your own; its own remotes, not the
+    /// repository it is listed under.
+    func fetchHostDirectory(_ item: WorktreeItem) async {
+        do {
+            try await service.fetch(repository: Repository(
+                name: item.worktree.repositoryName,
+                path: item.worktree.path,
+            ))
+            ErrorLog.shared.note("Fetched \(item.worktree.path).")
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// Puts a new branch name on a row in place, so the sidebar
+    /// keeps up with what just happened.
+    private func rename(_ item: WorktreeItem, to branch: String?) {
+        guard let branch else {
+            return
+        }
+
+        for group in groups.indices {
+            for row in groups[group].items.indices {
+                guard groups[group].items[row].worktree.path == item.worktree.path else {
+                    continue
+                }
+
+                groups[group].items[row] = groups[group].items[row].renamed(branch: branch)
+            }
+        }
+    }
+
+    /// Cuts a branch on top of a worktree's own, in that worktree:
+    /// how a stack grows without a second checkout.
+    func stackBranch(named name: String, on item: WorktreeItem) async {
+        do {
+            try await service.stackBranch(named: name, on: item.worktree)
+            ErrorLog.shared.note("Stacked \(name) on \(item.worktree.branch).")
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
+    /// The stack this worktree's branch is inferred to belong to,
+    /// asked for fresh: branches move under the app all the time.
+    func inferredStack(for item: WorktreeItem) async -> BranchStack {
+        await service.stack(for: item.worktree)
+    }
+
+    /// The branches this worktree's stack has been told to ignore.
+    func excludedStackBranches(for item: WorktreeItem) -> [String] {
+        service.excludedStackBranches(worktreePath: item.worktree.path)
+    }
+
+    /// Takes a branch out of the inferred stack, or puts it back;
+    /// git is not touched either way.
+    func setStackExclusion(branch: String, excluded: Bool, for item: WorktreeItem) {
+        service.setStackExclusion(branch: branch, excluded: excluded, worktreePath: item.worktree.path)
+    }
+
+    /// Stops listing one; nothing on disk is touched.
+    func forgetHostDirectory(_ item: WorktreeItem) async {
+        if selection?.id == item.id {
+            selection = nil
+        }
+        service.forgetHostDirectory(item.worktree.path, from: item.worktree.repositoryPath)
+        await refresh()
+    }
+}

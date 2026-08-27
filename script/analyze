@@ -30,12 +30,11 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
-  args+=(-skipPackagePluginValidation)
-  periphery_build_args=(-- -skipPackagePluginValidation)
-else
-  periphery_build_args=()
-fi
+# Package plugins are trusted everywhere, as in script/build: only
+# the Xcode app can show the trust prompt a non-interactive build
+# would otherwise fail on.
+args+=(-skipPackagePluginValidation)
+periphery_build_args=(-- -skipPackagePluginValidation)
 
 # A failed build must never be analysed: SwiftLint and periphery
 # both read what the build produced, so a broken or stale build
@@ -45,7 +44,13 @@ fi
 # like a compile error, so one retry separates the flake from a
 # genuine failure before giving up.
 build() {
-  xcodebuild "${args[@]}" clean build >"$log" 2>&1
+  if [[ -n "${SV_SESSION_ID:-}" ]]; then
+    # `xcodebuild` cannot run here at all: see script/build.
+    swift package clean
+    swift build --disable-sandbox -v >"$log" 2>&1
+  else
+    xcodebuild "${args[@]}" clean build >"$log" 2>&1
+  fi
 }
 
 if ! build; then
@@ -56,24 +61,27 @@ if ! build; then
     exit 1
   fi
 fi
+# Neither analysis pass can run inside the sandbox, so the build
+# above is all it offers: every target compiled, `App` included.
+# SwiftLint's analyser replays the compiler for each file, and a
+# `swift build` log leaves it without cursor information for most of
+# them, which it reports as a confident zero having read nothing;
+# periphery's own build cannot load the manifest, since that too is
+# compiled under a `sandbox-exec` that cannot nest. Both work on the
+# host, which is where this belongs before a pull request.
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  echo "sandboxed: every target compiled, and that is all this can check here" >&2
+  echo "SwiftLint's analyser and periphery both need the host: run it there" >&2
+  echo "before opening or updating a pull request" >&2
+  exit 0
+fi
+
 # Both passes always run, and the script fails at the end if either
 # did: SwiftLint's analyzer trips over the beta's macro plugin server
 # often enough that aborting on it kept periphery from ever running
 # here, so CI found dead code this gate had silently skipped.
 failed=0
-if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # The sandbox's SourceKit misreads one import as unused; the
-  # baseline swallows exactly that known false positive so real
-  # findings still fail, while the host and CI stay strict with no
-  # baseline at all. The template carries no absolute paths, so it
-  # works for any sandbox user's checkout.
-  baseline=".build/swiftlint-analyze-baseline.json"
-  sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
-    .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
-  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline" || failed=1
-else
-  swiftlint analyze --compiler-log-path "$log" --strict || failed=1
-fi
+swiftlint analyze --compiler-log-path "$log" --strict || failed=1
 
 # The project is scanned through the app scheme because periphery's
 # SPM mode does not find an index store under the current build
@@ -83,24 +91,6 @@ fi
 # report dependency output and required module imports as unused.
 if ! command -v periphery &>/dev/null; then
   echo "skipping periphery: not installed (add it via the Brewfile)" >&2
-elif [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # periphery re-drives xcodebuild, whose package resolution cannot
-  # nest inside sandbox-exec; these user defaults turn off SPM's own
-  # manifest sandbox for this already sandboxed user, and the scan
-  # reuses the index store the build above just wrote instead of
-  # building again.
-  defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES
-  defaults write com.apple.dt.Xcode IDEPackageSupportDisablePackageSandbox -bool YES
-  periphery scan \
-    --project AgentIDE.xcodeproj \
-    --schemes AgentIDEApp \
-    --skip-build \
-    --index-store-path .DerivedData/Index.noindex/DataStore \
-    --report-exclude '**/.DerivedData/**' '**/BuildToolPluginIntermediates/**' \
-    --retain-unused-imported-modules SwiftTerm \
-    --strict \
-    --disable-update-check \
-    "${periphery_build_args[@]}" || failed=1
 else
   periphery scan \
     --project AgentIDE.xcodeproj \

@@ -31,6 +31,12 @@ struct RootView: View {
     @AppStorage("showsUtilityPane")
     var showsUtilityPane = true
 
+    /// Pane widths, persisted so the layout restores on relaunch.
+    @AppStorage("sidebarWidth")
+    var sidebarWidth = 300.0
+    @AppStorage("utilityPaneWidth")
+    var utilityPaneWidth = 480.0
+
     /// The worktree whose conversation is being resumed, so its pane
     /// shows the resume's progress rather than a terminal bound to
     /// the pane the resume is replacing; internal and settable
@@ -111,6 +117,7 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator())
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fitPanes(to: $0) }
+        .onChange(of: resizePanesRequest) { evenPanes(in: windowWidth) }
         .sheet(isPresented: sessionManagerBinding) { sessionManager }
         .task {
             FlavourIcon.apply()
@@ -231,6 +238,25 @@ struct RootView: View {
         runningShells.remove(path)
     }
 
+    /// Narrows the panes to what the window can hold. The widths
+    /// are written back, so the dividers keep dragging from where
+    /// the panes actually are.
+    func fitPanes(to width: CGFloat) {
+        windowWidth = width
+        let layout = PaneLayout(
+            width: width,
+            sidebar: sidebarWidth,
+            utility: utilityPaneWidth,
+            showsUtility: showsUtilityPane,
+        )
+        if layout.sidebar != sidebarWidth {
+            sidebarWidth = layout.sidebar
+        }
+        if layout.utility != utilityPaneWidth {
+            utilityPaneWidth = layout.utility
+        }
+    }
+
     // MARK: Private
 
     /// The selected conversation's worktree on the repository page,
@@ -261,12 +287,14 @@ struct RootView: View {
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
 
+    @AppStorage("resizePanesRequest")
+    private var resizePanesRequest = 0
+
     /// The push and rebase actions' immediate-refresh signal.
     @AppStorage("dashboardRefreshRequest")
     private var dashboardRefreshRequest = 0
 
-    /// Worktrees whose browser has been opened; it stays mounted so
-    /// its page survives tab switches.
+    /// Worktrees whose browser has been opened, kept mounted.
     @State private var visitedBrowsers: Set<String> = []
 
     /// The files commands are waiting on, which take the utility
@@ -284,13 +312,6 @@ struct RootView: View {
     @AppStorage("worktreeTabs")
     private var worktreeTabs = ""
     @State private var rememberedTabs: [String: String] = [:]
-
-    /// Pane widths, persisted so the layout restores on relaunch;
-    /// the dividers write them directly.
-    @AppStorage("sidebarWidth")
-    private var sidebarWidth = 300.0
-    @AppStorage("utilityPaneWidth")
-    private var utilityPaneWidth = 480.0
 
     /// What the window is now, which the panes are fitted to.
     @State private var windowWidth: CGFloat = 0
@@ -374,25 +395,6 @@ struct RootView: View {
                 .map { $0.key + "\t" + $0.value }
                 .sorted()
                 .joined(separator: "\n")
-        }
-    }
-
-    /// Narrows the panes to what the window can hold. The widths
-    /// are written back, so the dividers keep dragging from where
-    /// the panes actually are.
-    private func fitPanes(to width: CGFloat) {
-        windowWidth = width
-        let layout = PaneLayout(
-            width: width,
-            sidebar: sidebarWidth,
-            utility: utilityPaneWidth,
-            showsUtility: showsUtilityPane,
-        )
-        if layout.sidebar != sidebarWidth {
-            sidebarWidth = layout.sidebar
-        }
-        if layout.utility != utilityPaneWidth {
-            utilityPaneWidth = layout.utility
         }
     }
 }

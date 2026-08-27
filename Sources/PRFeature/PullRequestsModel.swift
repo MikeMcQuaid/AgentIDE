@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import Observation
 import TerminalUI
 
@@ -20,6 +21,8 @@ final class PullRequestsModel {
     init(
         repository: Repository,
         branch: String?,
+        worktreePath: String?,
+        defaultBranch: String?,
         items: [WorktreeItem],
         github: GitHubClient,
         service: SessionService,
@@ -27,33 +30,73 @@ final class PullRequestsModel {
     ) {
         self.repository = repository
         self.branch = branch
+        self.worktreePath = worktreePath
+        self.defaultBranch = defaultBranch
         self.items = items
         self.github = github
         self.store = store
+        let gate = PullRequestStore(github: github, store: store)
+        pullRequests = gate
         fetchList = { scope, limit in
-            try await github.pullRequests(repositoryPath: repository.path, scope: scope, limit: limit)
+            // The tab in front of you refreshes at the floor; a tab
+            // kept mounted behind another worktree's asks GitHub far
+            // less often, like the sidebar's rows.
+            let isSelected = UserDefaults.standard.string(forKey: "selectedWorktreePath") == worktreePath
+            return try await gate.listing(
+                repositoryPath: repository.path,
+                scope: scope,
+                limit: limit,
+                interval: isSelected ? PullRequestStore.minimumInterval : PullRequestStore.backgroundInterval,
+            )
         }
         fetchSummary = { number in
-            try await github.pullRequestSummary(repositoryPath: repository.path, number: number)
+            try await gate.summary(repositoryPath: repository.path, number: number)
         }
         fetchHasMergeQueue = {
-            await github.hasMergeQueue(repositoryPath: repository.path)
+            await gate.hasMergeQueue(repositoryPath: repository.path)
         }
         fetchThreads = { number in
-            let answer = await github.conversationThreads(repositoryPath: repository.path, number: number)
-            if let failure = answer.graphQLFailure {
+            let answer = try? await gate.conversation(
+                repositoryPath: repository.path,
+                number: number,
+                seededBody: nil,
+            )
+            if let failure = answer?.graphQLFailure {
                 ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
             }
-            return answer.threads
+            return answer?.threads ?? []
         }
         performCreate = { worktree, title, body in
             try await service.createPullRequest(worktree: worktree, title: title, body: body)
         }
-        fetchTemplate = { path in
-            GitHubClient.pullRequestTemplate(in: path)
+        performLinkStack = { worktree in
+            try await service.linkStack(worktree: worktree)
         }
-        fetchCommitMessages = { worktree in
-            await service.commitMessages(worktree: worktree)
+        performMergeStack = { worktree, number in
+            try await service.mergeStack(worktree: worktree, number: number)
+        }
+        // On disk first, so an edited template is the one offered,
+        // then out of git: a sparse checkout carries the tracked
+        // template without materialising it, which is how the
+        // Homebrew taps look.
+        fetchTemplate = { path in
+            if let onDisk = GitHubClient.pullRequestTemplate(in: path) {
+                return onDisk
+            }
+
+            for candidate in GitHubClient.templatePaths {
+                if let tracked = await service.trackedFile(worktreePath: path, path: candidate) {
+                    return tracked
+                }
+            }
+            return nil
+        }
+        fetchCommitMessages = { worktree, range in
+            await service.commitMessages(worktree: worktree, range: range)
+        }
+        launchChoices = { agent in
+            let choices = service.launchChoices(for: agent)
+            return (choices.models, service.defaultEffort(for: agent))
         }
         generateDescription = { commits in
             await service.draftPullRequestDescription(fromCommits: commits)
@@ -62,6 +105,7 @@ final class PullRequestsModel {
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
         }
         performMergeChange = { summary in
+            defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
             } else if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
@@ -96,10 +140,14 @@ final class PullRequestsModel {
         performRebase = { worktree in
             try await service.rebaseSigned(worktree: worktree)
         }
-        checkTipSigned = { path in
-            await service.isTipSigned(worktreePath: path)
+        checkTipSigned = { worktree in
+            await service.isTipSigned(worktree: worktree)
         }
         currentBranch = branch
+        wireStack(service: service)
+        // Painted before anything is asked for, so a tab switched
+        // away from and back to opens on the rows it had.
+        paintCachedListing()
     }
 
     // swiftlint:enable function_body_length
@@ -113,13 +161,20 @@ final class PullRequestsModel {
     let repository: Repository
     let branch: String?
 
+    /// The worktree the tab is for, whatever branch it holds now.
+    let worktreePath: String?
+
     /// The conversation pane fetches its own details and caches.
     let github: GitHubClient
+
+    /// Every pull request question the tab asks goes through here,
+    /// which is also where the app keeps when it last asked.
+    let pullRequests: PullRequestStore
     let store: MetadataStore
 
     /// The branch actually checked out in the worktree, refreshed on
     /// reload; agents sometimes switch branches inside a worktree.
-    private(set) var currentBranch: String?
+    var currentBranch: String?
 
     /// True after an in-app push succeeds, dimming Push until the
     /// next item refresh proves new commits. Written only by the
@@ -128,12 +183,13 @@ final class PullRequestsModel {
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.
-    private(set) var rebaseNeed: SessionService.RebaseNeed = .nothing
+    /// Set only by the actions extension's fact refresh.
+    var rebaseNeed: SessionService.RebaseNeed = .nothing
 
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
     /// Rebase on origin signs the branch.
-    private(set) var isTipSigned = true
+    var isTipSigned = true
 
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
@@ -164,7 +220,7 @@ final class PullRequestsModel {
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
-    private(set) var hasTemplate = false
+    var hasTemplate = false
 
     /// Test seams: the live client and service by default, fakes in
     /// tests.
@@ -173,8 +229,29 @@ final class PullRequestsModel {
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
     var performCreate: (Worktree, String, String) async throws -> String
-    var fetchTemplate: (String) -> String?
-    var fetchCommitMessages: (Worktree) async -> [String]
+
+    /// Tells GitHub the stack's open pull requests are a stack; run
+    /// whenever one opens, since a stack is built one at a time.
+    var performLinkStack: (Worktree) async throws -> Void
+
+    /// Merges a stacked pull request and every one below it.
+    var performMergeStack: (Worktree, Int) async throws -> Void = { _, _ in
+        // Replaced by the initialiser.
+    }
+
+    /// The picker's models and the effort a launch without a flag
+    /// runs at, for a disclosure of a session started on defaults.
+    var launchChoices: (AgentKind) -> (models: [String], defaultEffort: String?) = { _ in ([], nil) }
+    /// The repository's default branch, which has no pull request
+    /// of its own to look for.
+    let defaultBranch: String?
+
+    /// Everything about the stack this branch belongs to: what it
+    /// is, and the work it can be asked to do.
+    var stacking: StackWork = .init()
+
+    var fetchTemplate: (String) async -> String?
+    var fetchCommitMessages: (Worktree, String?) async -> [String]
     var generateDescription: ([String]) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
@@ -183,7 +260,13 @@ final class PullRequestsModel {
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> Void
-    var checkTipSigned: (String) async -> Bool
+    var checkTipSigned: (Worktree) async -> Bool
+
+    /// The visible page. Every scope asks GitHub for one small
+    /// listing and no more, so paging walks what is already here
+    /// rather than fetching further into a repository with thousands
+    /// of open pull requests.
+    var page = 0
 
     /// The pull request creation form's fields; the template loads
     /// from the repository on reload when the form shows.
@@ -208,81 +291,8 @@ final class PullRequestsModel {
         }
     }
 
-    /// The visible page; visiting the lookahead page refetches with
-    /// a higher limit. The guards keep `reload`'s own `page = 0`
-    /// reset and a fresh model (both counts zero) from spawning a
-    /// second concurrent reload.
-    var page = 0 {
-        didSet {
-            guard page != oldValue,
-                  fetchedLimit > 0,
-                  summaries.count == fetchedLimit,
-                  (page + 1) * PullRequestListView.pageSize >= summaries.count
-            else {
-                return
-            }
-
-            Task { await reload(extending: true) }
-        }
-    }
-
-    /// Push makes sense with unpushed commits that this tab has not
-    /// already pushed and a GPG-signed tip; nil upstream means
-    /// nothing was ever pushed.
-    var canPush: Bool {
-        guard let item = branchItem, isPushed == false, isTipSigned else {
-            return false
-        }
-
-        return (item.aheadOfUpstream ?? 1) > 0
-    }
-
-    /// Why Push is in its current state, for the button's hover:
-    /// with nothing to push that is the whole story, and signing
-    /// only matters once commits are waiting.
-    var pushHelp: String {
-        guard let item = branchItem, isPushed == false, (item.aheadOfUpstream ?? 1) > 0 else {
-            return "Everything is already pushed"
-        }
-        guard isTipSigned else {
-            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
-        }
-
-        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
-    }
-
-    /// The rebase button's label names exactly what it would do.
-    var rebaseTitle: String {
-        switch rebaseNeed {
-        case .sign:
-            "Sign commits"
-
-        case .rebaseAndSign:
-            "Rebase and sign"
-
-        case .nothing,
-             .rebase:
-            "Rebase on origin"
-        }
-    }
-
-    /// Rebase only lights up when it would actually change
-    /// something: move the base, sign commits, or both.
-    var canRebase: Bool {
-        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
-    }
-
-    /// The branch the tab lists and compares against: the checked
-    /// out one when known, the worktree's recorded one otherwise.
-    var listedBranch: String? {
-        currentBranch ?? branch
-    }
-
-    var cacheKey: String {
-        repository.path + "#" + String(describing: scope) + "#" + (listedBranch ?? "")
-    }
-
-    /// Where a branch's draft is stored, nil without a branch.
+    /// The merge queue answer for the repository, which decides
+    /// whether the merge action queues or merges.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
     }
@@ -291,28 +301,37 @@ final class PullRequestsModel {
     /// kept selection is re-selected once the fetch answers, and a
     /// single result opens its conversation directly. Extending
     /// keeps the current page and raises the fetch limit.
-    func reload(keepingSelection: Bool = false, extending: Bool = false) async {
+    /// `refreshingFacts` re-reads what the worktree itself says:
+    /// its signing, its rebase need, its template and its stack.
+    /// Moving up and down a stack leaves all of that alone, since
+    /// every entry shares one worktree, and asking git again is
+    /// what made the move feel like a load rather than a click.
+    func reload(keepingSelection: Bool = false, refreshingFacts: Bool = true) async {
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
-        if let worktree = branchItem?.worktree {
-            isTipSigned = await checkTipSigned(worktree.path)
-            rebaseNeed = await fetchRebaseNeed(worktree)
-            let template = fetchTemplate(worktree.path)
-            hasTemplate = template != nil
-            loadDraft()
-            originalTemplate = template ?? ""
-            if prTemplate.isEmpty {
-                prTemplate = originalTemplate
-            }
-            await prefillFromSingleCommit(worktree)
-            if let live = await fetchCurrentBranch(worktree.path) {
-                currentBranch = live
-            }
-        }
-        if extending == false {
-            page = 0
+        // The cache paints before any of the reading: the listing
+        // this branch had last time is on screen at once, and the
+        // fetch replaces it in place.
+        page = 0
+        if keepingSelection == false {
             selected = nil
-            paintCachedListing()
+        }
+        paintCachedListing()
+        // Selected from the cache, not after the fetch: a branch
+        // with one pull request opens it the moment the tab does,
+        // and clicking between worktrees paints what each had.
+        if selected == nil, summaries.count == 1, let only = summaries.first {
+            select(only)
+        }
+        loadDraft()
+        if let worktree = branchItem?.worktree {
+            if refreshingFacts {
+                await refreshWorktreeFacts(worktree)
+            } else {
+                // An entry switch keeps the worktree's facts but
+                // fills the form from this entry's own commits.
+                await prefillFromSingleCommit(worktree)
+            }
         }
         defer {
             isLoading = false
@@ -323,50 +342,35 @@ final class PullRequestsModel {
         // scope's key.
         let requested = cacheKey
         do {
-            let limit = (page + Self.pageLookahead) * PullRequestListView.pageSize
-            let fetched = try await fetchList(scope.listScope(branch: listedBranch), limit)
+            let limit = GitHubClient.listLimit
+            let fetched = try await listing(limit: limit)
             guard Task.isCancelled == false, requested == cacheKey else {
                 return
             }
 
-            summaries = fetched
+            summaries = Self.worthShowing(fetched)
             fetchedLimit = limit
-            var metadata = store.load()
-            metadata.pullRequestListsCache[requested] = CachedPullRequestList(summaries: fetched)
-            store.save(metadata)
-            if extending == false {
-                let chosen = fetched.first { $0.number == previous }
-                    ?? (fetched.count == 1 ? fetched.first : nil)
-                if let chosen {
-                    select(chosen)
-                }
+            pullRequests.rememberListing(
+                repositoryPath: repository.path,
+                scope: scope.listScope(branch: listedBranch),
+                summaries: fetched,
+            )
+            // A branch with one live pull request opens it: there
+            // is nothing else the list could be for.
+            let chosen = summaries.first { $0.number == previous }
+                ?? (summaries.count == 1 ? summaries.first : nil)
+            if let chosen {
+                select(chosen)
             }
             ServiceStatus.shared.recordSuccess()
+            prefetchStack()
         } catch {
             ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)
         }
     }
 
-    /// Refreshes one pull request's header wherever it shows, so
-    /// actions like resolving conversations reflect immediately in
-    /// the selected conversation and its listed row.
-    func refreshSummary(_ number: Int) async {
-        guard let full = try? await fetchSummary(number) else {
-            return
-        }
-
-        cacheEnriched(full)
-        if selected?.number == number {
-            selected = full
-        }
-        if let index = summaries.firstIndex(where: { $0.number == number }) {
-            summaries[index] = full
-        }
-    }
-
     // MARK: Private
 
-    /// Fetches stay one page ahead of the visible one, so the pager
-    /// knows whether a next page exists.
-    private static let pageLookahead = 2
+    // Fetches stay one page ahead of the visible one, so the pager
+    // knows whether a next page exists.
 }

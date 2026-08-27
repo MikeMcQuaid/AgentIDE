@@ -1,7 +1,5 @@
 import AgentIDEDomain
 import Foundation
-import PRFeature
-import ReviewFeature
 import SessionFeature
 import SwiftUI
 import TerminalUI
@@ -61,7 +59,7 @@ extension RootView {
             // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip()
+                    UtilityTabStrip(hiding: item.worktree.isHostDirectory ? [.editor] : [])
                 }
             }
             Spacer(minLength: 0)
@@ -123,6 +121,15 @@ extension RootView {
         .padding(.top, Self.toggleRowHeight)
     }
 
+    /// The repository's default branch, which has no pull request
+    /// of its own to go looking for.
+    func defaultBranch(of item: WorktreeItem) -> String? {
+        dependencies.dashboard
+            .groups
+            .first { $0.repository.path == item.worktree.repositoryPath }?
+            .defaultBranch
+    }
+
     func repository(of item: WorktreeItem) -> Repository {
         Repository(
             name: item.worktree.repositoryName,
@@ -142,23 +149,32 @@ extension RootView {
         defer {
             resumingWorktree = nil
         }
-        await dependencies.dashboard.refresh()
-        let fresh = dependencies.dashboard.groups.flatMap(\.items).first { $0.id == item.id } ?? item
-        guard fresh.session == nil else {
+        let context = item.worktree.path
+        dependencies.dashboard.launchProgress.begin("Resuming")
+        // The item on screen is checked against herdr alone: a full
+        // refresh reads every worktree's git state too, which is
+        // seconds on a wide sidebar, to answer one yes-or-no.
+        let alive = await PerformanceLog.time(.process, "resume: is a session already live", context: context) {
+            await dependencies.service.hasLiveSession(worktreePath: item.worktree.path)
+        }
+        guard alive == false else {
             return
         }
 
-        dependencies.dashboard.launchProgress.begin("Resuming")
         do {
-            if let past = fresh.pastSessions.first {
-                _ = try await dependencies.service.resumePast(past, worktree: fresh.worktree)
-            } else {
-                try await dependencies.service.resumeWorktree(fresh.worktree)
+            try await PerformanceLog.time(.process, "resume: launch", context: context) {
+                if let past = item.pastSessions.first {
+                    _ = try await dependencies.service.resumePast(past, worktree: item.worktree)
+                } else {
+                    try await dependencies.service.resumeWorktree(item.worktree)
+                }
             }
         } catch {
             dependencies.dashboard.report(error.localizedDescription)
         }
-        await sessionStarted(in: fresh.worktree.path)
+        await PerformanceLog.time(.process, "resume: list until running", context: context) {
+            await sessionStarted(in: item.worktree.path)
+        }
     }
 
     /// The listing comes first: clearing the marker before it
@@ -217,7 +233,18 @@ extension RootView {
     /// this OS.
     @ViewBuilder
     func sessionStrip(for item: WorktreeItem) -> some View {
-        if let session = item.session {
+        if item.worktree.isHostDirectory {
+            HStack(spacing: Self.stripSpacing) {
+                Label(item.worktree.path, systemImage: "laptopcomputer")
+                    .font(.callout)
+                    .padding(.horizontal, Self.tabHorizontalPadding)
+                    .padding(.vertical, Self.tabVerticalPadding)
+                Spacer(minLength: 0)
+            }
+            .padding(Self.stripSpacing)
+            .hoverHelp("A directory of your own: this shell runs as you, and no agent runs here")
+            Divider()
+        } else if let session = item.session {
             HStack(spacing: Self.stripSpacing) {
                 Text(sessionTitle(for: session))
                     .font(.callout)
@@ -232,23 +259,12 @@ extension RootView {
         }
     }
 
-    /// Parses the persisted path-tab lines; values are tab names
-    /// (unknown ones, including this store's old integer form, fall
-    /// back to the default tab when read).
-    static func decodeTabs(_ stored: String) -> [String: String] {
-        var tabs = [String: String]()
-        for line in stored.split(separator: "\n") {
-            let parts = line.split(separator: "\t")
-            if let path = parts.first, let name = parts.last, path != name {
-                tabs[String(path)] = String(name)
-            }
-        }
-        return tabs
-    }
-
     // MARK: Private
 
     static let stripSpacing: CGFloat = 4
+
+    /// What keeps an agent's output off the pane's edges.
+    static let terminalInset: CGFloat = 6
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
 
@@ -270,98 +286,5 @@ extension RootView {
         dependencies.dashboard.forgetSession(at: item.worktree.path)
         await dependencies.service.closeSession(sessionName: session.name, worktree: item.worktree)
         await dependencies.dashboard.refresh()
-    }
-}
-
-// MARK: Utility tab content
-
-extension RootView {
-    /// The agent terminal: copies are prose, so multi-line copies
-    /// reflow for pasting into chat and pull request bodies.
-    func agentTerminal(for session: AgentSession, isActive: Bool) -> TerminalPaneView {
-        TerminalPaneView(
-            command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
-            reflowsCopies: true,
-            isActive: isActive,
-        )
-    }
-
-    /// The host shell terminal, a plain local shell on the pane's
-    /// own PTY: no server to wedge and nothing left behind when the
-    /// app quits. Copies stay verbatim for code. The pane stays
-    /// mounted behind other tabs, worktrees and pages, so it reports
-    /// whether it is the visible one and yields keyboard focus
-    /// otherwise.
-    func shellTerminal(
-        at path: String,
-        onExit: @escaping @MainActor () -> Void,
-        isActive: Bool,
-    ) -> TerminalPaneView {
-        TerminalPaneView(
-            shellIn: path,
-            environment: dependencies.service.shellEnvironment(),
-            isActive: isActive,
-            onProcessTerminated: onExit,
-        )
-    }
-
-    /// The worktree the review surfaces describe: on the repository
-    /// page, the conversation selected in the list wins, so clicking
-    /// around conversations retargets Review and PRs.
-    func reviewTarget(for item: WorktreeItem, conversationPath: String?) -> WorktreeItem {
-        guard item.worktree.path == item.worktree.repositoryPath,
-              let path = conversationPath,
-              let match = repositoryItems(for: item).first(where: { $0.worktree.path == path })
-        else {
-            return item
-        }
-
-        return match
-    }
-
-    /// The non-terminal utility tabs' content.
-    @ViewBuilder
-    func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
-        let target = reviewTarget(for: item, conversationPath: conversationPath)
-        switch utilityTab {
-        // Both keep their own always-mounted layers, so the
-        // switched content has nothing to show for them.
-        case .browser,
-             .shell:
-            EmptyView()
-
-        case .review:
-            ReviewView(
-                worktree: target.worktree,
-                git: dependencies.git,
-                github: dependencies.github,
-                service: dependencies.service,
-            )
-
-        case .editor:
-            EditorPane(
-                worktreePath: item.worktree.path,
-                service: dependencies.service,
-                // The closure stays a non-final argument: the
-                // formatter rewrites a trailing one after a
-                // multiline call.
-                onFinishedWaiting: { finishedWaitingEdit() },
-                waitingEdit: waitingEdit(in: item.worktree.path),
-            )
-
-        case .pullRequests:
-            PullRequestsView(
-                repository: Repository(name: target.worktree.repositoryName, path: target.worktree.repositoryPath),
-                items: repositoryItems(for: item),
-                github: dependencies.github,
-                service: dependencies.service,
-                store: dependencies.store,
-                branch: target.worktree.branch,
-                isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
-            )
-
-        case .errors:
-            ErrorsPane()
-        }
     }
 }

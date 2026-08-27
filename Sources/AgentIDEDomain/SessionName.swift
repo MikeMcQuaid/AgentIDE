@@ -27,6 +27,21 @@ public enum SessionName {
             .map(String.init)
     }
 
+    /// The branch slug a session name embeds, nil for foreign names.
+    /// The name's shape is `prefix--repository--branch--agent`, so
+    /// the branch is everything between the repository and the agent.
+    public static func branchSlug(of sessionName: String) -> String? {
+        guard isAgentIDE(sessionName) else {
+            return nil
+        }
+
+        return sessionName
+            .split(separator: separator, omittingEmptySubsequences: false)
+            .dropFirst(branchSegment)
+            .dropLast()
+            .joined(separator: String(separator))
+    }
+
     /// Whether a workspace label was created by AgentIDE; anything
     /// else on the server is treated as foreign. The whole documented
     /// shape is validated, not just the prefix.
@@ -62,6 +77,10 @@ public enum SessionName {
     }
 
     // MARK: Private
+
+    /// Where the branch begins in the name: after the prefix and
+    /// the repository.
+    private static let branchSegment = 2
 
     private static let separator = "--"
     private static let componentCount = 4

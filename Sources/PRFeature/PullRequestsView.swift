@@ -19,6 +19,8 @@ public struct PullRequestsView: View {
         service: SessionService,
         store: MetadataStore,
         branch: String? = nil,
+        worktreePath: String? = nil,
+        defaultBranch: String? = nil,
         isMainCheckout: Bool = false,
     ) {
         self.items = items
@@ -28,6 +30,8 @@ public struct PullRequestsView: View {
             PullRequestsModel(
                 repository: repository,
                 branch: branch,
+                worktreePath: worktreePath,
+                defaultBranch: defaultBranch,
                 items: items,
                 github: github,
                 service: service,
@@ -50,6 +54,17 @@ public struct PullRequestsView: View {
             }
             .padding(.trailing, Self.headerPadding)
             Divider()
+            // Shown only by a stack, so a lone branch's tab is the
+            // one it always was.
+            if model.stack.isStacked {
+                BranchStackStrip(
+                    stack: model.stack,
+                    selected: model.listedBranch ?? "",
+                    isEnabled: { model.canList($0) },
+                    onSelect: { model.show(branch: $0) },
+                )
+                Divider()
+            }
             if let selected = model.selected {
                 conversation(for: selected)
             } else if model.needsCreateForm {
@@ -125,7 +140,7 @@ public struct PullRequestsView: View {
     private var listView: some View {
         PullRequestListView(
             summaries: model.summaries,
-            isLoading: model.isLoading || model.hasLoaded == false,
+            isLoading: model.isLoading,
             hasMore: model.hasMore,
             stackDepth: { model.stackDepth(for: $0) },
             onSelect: { model.select($0) },

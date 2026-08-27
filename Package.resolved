@@ -1,5 +1,5 @@
 {
-  "originHash" : "4827c0b5b8e4f9abcda4bf2224c4560a3d94a4c34a1c0cf44e3edbfe5524922c",
+  "originHash" : "7a75054dabc1ff5c5e1a1664cceeea458fa550c9b02333907a18ae57ab77cb98",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -65,12 +65,84 @@
       }
     },
     {
+      "identity" : "tree-sitter-c",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-c",
+      "state" : {
+        "revision" : "ec69f91b23dd8630d68710b911d77127146ff7ef",
+        "version" : "0.23.6"
+      }
+    },
+    {
+      "identity" : "tree-sitter-cpp",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-cpp",
+      "state" : {
+        "revision" : "f41e1a044c8a84ea9fa8577fdd2eab92ec96de02",
+        "version" : "0.23.4"
+      }
+    },
+    {
+      "identity" : "tree-sitter-css",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-css",
+      "state" : {
+        "revision" : "c0d581e32d183a536731ed6c3a72758b27e20411",
+        "version" : "0.23.2"
+      }
+    },
+    {
+      "identity" : "tree-sitter-embedded-template",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-embedded-template",
+      "state" : {
+        "revision" : "332262529bc51abf5746317b2255ccc2fff778f8",
+        "version" : "0.23.2"
+      }
+    },
+    {
+      "identity" : "tree-sitter-go",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-go",
+      "state" : {
+        "revision" : "3c3775faa968158a8b4ac190a7fda867fd5fb748",
+        "version" : "0.23.4"
+      }
+    },
+    {
+      "identity" : "tree-sitter-html",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-html",
+      "state" : {
+        "revision" : "5a5ca8551a179998360b4a4ca2c0f366a35acc03",
+        "version" : "0.23.2"
+      }
+    },
+    {
+      "identity" : "tree-sitter-java",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-java",
+      "state" : {
+        "revision" : "94703d5a6bed02b98e438d7cad1136c01a60ba2c",
+        "version" : "0.23.5"
+      }
+    },
+    {
       "identity" : "tree-sitter-json",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tree-sitter/tree-sitter-json",
       "state" : {
         "revision" : "ee35a6ebefcef0c5c416c0d1ccec7370cfca5a24",
         "version" : "0.24.8"
+      }
+    },
+    {
+      "identity" : "tree-sitter-php",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-php",
+      "state" : {
+        "revision" : "f7cf7348737d8cff1b13407a0bfedce02ee7b046",
+        "version" : "0.23.12"
       }
     },
     {
@@ -83,12 +155,30 @@
       }
     },
     {
+      "identity" : "tree-sitter-regex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-regex",
+      "state" : {
+        "revision" : "4470c59041416e8a2a9fa343595ca28ed91f38b8",
+        "version" : "0.24.3"
+      }
+    },
+    {
       "identity" : "tree-sitter-ruby",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tree-sitter/tree-sitter-ruby",
       "state" : {
         "revision" : "71bd32fb7607035768799732addba884a37a6210",
         "version" : "0.23.1"
+      }
+    },
+    {
+      "identity" : "tree-sitter-rust",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-rust",
+      "state" : {
+        "revision" : "3d087c3df25286140393ddecc339208fae107149",
+        "version" : "0.23.3"
       }
     },
     {

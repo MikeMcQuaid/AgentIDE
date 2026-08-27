@@ -20,8 +20,8 @@ ARGS=(
   -jobs "${JOBS}"
 )
 
-# The About panel's build number counts the default branch's
-# commits, so numbers are comparable across feature branches.
+# The version counts the default branch's commits, so numbers are
+# comparable across feature branches: the app is 0.1.<count>.
 BUILD_NUMBER="$(
   git rev-list --count origin/main 2>/dev/null ||
     git rev-list --count main 2>/dev/null ||
@@ -46,9 +46,24 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
 fi
 
-if [[ -n "${SV_SESSION_ID:-}" || "${CI:-}" == true ]]; then
-  ARGS+=(-skipPackagePluginValidation)
+# Inside the sandbox this is the whole build: Xcode runs SwiftTerm's
+# build tool plugin under `sandbox-exec`, which cannot nest, so
+# `xcodebuild` cannot get past it here however its flags are set.
+# `swift build` runs the same plugin unsandboxed and compiles every
+# target, `App` included, through the `AgentIDEAppSources` target
+# that exists for exactly this. What it cannot make is the bundle:
+# the app itself is built on the host and by CI.
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  echo "sandboxed: building every target with swift build" >&2
+  echo "the app bundle itself is the host's and CI's to build" >&2
+  exec swift build --disable-sandbox
 fi
+
+# Package plugins are trusted everywhere: SwiftTerm 1.19 ships a
+# build-tool plugin, and a non-interactive xcodebuild fails on an
+# untrusted one where the Xcode app would have asked. The prompt is
+# the app's alone, so the flag is the only answer from a script.
+ARGS+=(-skipPackagePluginValidation)
 
 xcodebuild "${ARGS[@]}" "${ACTIONS[@]}"
 

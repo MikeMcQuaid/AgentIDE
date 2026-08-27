@@ -163,7 +163,12 @@ bare exit code.
   `key=value` lines because the sandbox has no JSON tool, written by
   whichever surface starts a session and merged rather than replaced by
   both, with the app publishing what only it can know (the repositories,
-  and each agent's discovered models and efforts) on every poll. The model
+  and each agent's discovered models and efforts) on every poll. The
+  discovered models are asked of every CLI at once after the first
+  reading and kept in the metadata store under the CLI's version, read
+  from the host in milliseconds, so they are asked for again only when
+  the CLI has changed: `claude models` is a twenty-second sandbox launch,
+  which no relaunch should wait on. The model
   and effort are kept under their agent's name, since the form keeps one
   pair and Codex's model means nothing to Claude. An
   answer that is neither a number nor a name is asked again rather than
@@ -272,7 +277,14 @@ Two visually unmistakable terminal flavours:
   panes section above describes, and the tab bar's Close shell ends
   one instantly. Both
   terminals share one theme (black on white in light mode, white on
-  black in dark). Copies from the agent pane are reflowed for pasting
+  black in dark), with one deliberate exception: an agent pane is
+  pinned to the appearance its session was launched under, recorded
+  in the metadata at launch. Agent TUIs read the terminal's colours
+  once at startup (OSC 10/11) and style their own chrome for them
+  forever, so a pane that re-themed on a macOS appearance switch
+  left the composer white on white; the pinned palette keeps the
+  answer the agent cached true for the session's whole life,
+  relaunches of the app included. Copies from the agent pane are reflowed for pasting
   into prose, block by block rather than by the copy as a whole: a
   paragraph loses the terminal's hard wraps, while a run of lines that
   opens like a command keeps every one of them, so an answer that
@@ -465,14 +477,18 @@ Sendable` and `nonisolated(unsafe)` are banned.
    step log the service and the herdr client report into: the branch
    name, the worktree, the prompt file, the server check, the workspace,
    the command submitted and what is being waited on) under a clock of
-   the launch's elapsed time ticking every second and a dot a second on
-   the newest step, so a step that reports nothing while it waits still
-   shows the app working, the whole block pinned near the top of the pane
-   so it grows downwards rather than shifting every line each time a step
-   arrives; the version probe runs beside the naming and the worktree,
-   since it costs a sandbox launch of its own and only has to be finished
-   before the agent starts, and a kill that closed nothing skips the
-   listing that would confirm it. So a slow step names
+   the launch's elapsed time and a dot a second on the newest step, so a
+   step that reports nothing while it waits still shows the app working,
+   the whole block pinned near the top of the pane so it grows downwards
+   rather than shifting every line each time a step arrives. It is drawn
+   ticking every second, which is what every waiting pane looks like; the version probe runs beside the naming and the worktree
+   and asks the host's own copy of the CLI (Homebrew's prefix is one
+   place for both users), since a sandbox launch wraps a sudo, an
+   environment scrub and a sandbox-exec around one line of output; a
+   resume does not ask at all, the first launch having recorded the
+   answer. A kill that closed nothing skips the listing that would
+   confirm it, and a resume checks for a live session with one pane
+   listing rather than a whole overview. So a slow step names
    itself rather than showing a blank pane; resuming narrates the same
    way, one line per command tried. The narration stays until herdr
    detects the agent's interface (`awaitReady`, bounded at a minute), so
@@ -565,13 +581,23 @@ Sendable` and `nonisolated(unsafe)` are banned.
    uncommitted changes when there are any) and the whole branch against
    its merge base: the open pull request's base branch when one exists,
    otherwise the default branch. Per-line rejection and message
-   amendment apply only to the last commit scope.
+   amendment apply only to the last commit scope. In the multi-commit
+   scopes each line of the commit listing links to that commit alone
+   (`git show`), which the pane then reviews with its message shown
+   read-only: only the tip can be amended, and a listing that stayed
+   one text block keeps selection running across its lines.
 2. Generated files are hidden by default via
    `git check-attr linguist-generated` plus heuristics (lockfiles and
    per-repository generated globs), one click to reveal.
-3. Rendering highlights with tree-sitter grammars (Swift, Ruby and Bash
-   today; JavaScript, TypeScript, Markdown, JSON and YAML as the review
-   slice deepens, alongside the move to STTextView), with line numbers
+3. Rendering highlights with tree-sitter grammars (Swift, Ruby, Bash,
+   Python, JSON, TypeScript and JavaScript, C, C++, Go, Rust, Java, PHP,
+   HTML, CSS, regular expressions and ERB), a word list for the formats
+   worth no grammar (YAML, Markdown, Dockerfile, git's own editable files
+   and a keys-and-sections mode covering `.gitconfig`, `.ini`, `.toml`,
+   `.env` and their kin), and for anything else that is text a generic
+   pass finding strings, numbers and whichever comment introducer the
+   line opens with, so no file reads as dead; pictures and archives are
+   left alone. With line numbers
    and visible whitespace in both the diff (tabs and trailing whitespace
    carry a background tint, so copied diff text stays character-exact)
    and the editor (substitute glyphs). Diff lines wrap to the pane's
@@ -718,14 +744,71 @@ shim rather than a protocol:
    outage the poll is riding out; one repository rather than all of
    them, since asking about everything is how a rate limit
    arrives.
-3. Poll cadence is tiered by attention and cached per branch: the selected
-   worktree refreshes most often, then its repository's other worktrees,
-   then other expanded repositories; repositories collapsed in the sidebar
-   poll rarely. Selecting a worktree jumps its branch to the front, and a
-   failed poll keeps the cached answer. Listings, conversations, enriched
-   headers and review threads all persist in the metadata store and paint
-   from it instantly, on pane switches and across restarts, before the
-   fetch refreshes them.
+3. Every pull request question the app asks goes through one gate,
+   `PullRequestStore`, which owns both the answers and the moments they
+   arrived: listings, enriched headers, conversations, review threads,
+   merge queues. A branch's listing, the question the sidebar asks
+   most, goes through REST rather than `gh pr list`'s GraphQL, because
+   REST answers carry entity tags: the last one travels back as
+   `If-None-Match`, GitHub answers an unchanged listing with a 304 that
+   costs no rate limit and no body, and the cache stands. A tag is only
+   ever sent while the listing it stamped is still cached, and is
+   dropped with it: the caches are capped and age out, the tags do not,
+   and a 304 answering for a listing the app no longer holds reported a
+   branch as having no pull request at all for as long as GitHub's own
+   answer stayed the same. The other
+   scopes stay GraphQL, which has no tags, and the merge queues of every
+   repository are one aliased GraphQL query a minute rather than one
+   each. The pull request tab polls by
+   attention like the sidebar does: the worktree in front of you at the
+   minute floor, one kept mounted behind another every five minutes. One pull request is never asked about twice inside a
+   minute however much is clicked, and because the timers live in the
+   metadata file beside the answers, quitting and relaunching does not
+   restart the asking. Acting on a pull request (merging, queueing,
+   pushing, resolving a thread) clears its stamp so the truth shows at
+   once; looking never does. On top of that floor the poll's cadence is
+   tiered by attention: the selected worktree refreshes most often, then
+   its repository's other worktrees, then other expanded repositories;
+   repositories collapsed in the sidebar poll rarely, and a failed poll
+   keeps the cached answer. A pull request in flight jumps every tier:
+   checks still running will pass or fail, and a queued one will merge
+   or leave the queue within the hour, so both are asked about every
+   half minute, the one question allowed under the minute floor. The
+   store remembers when a pull request's checks were first seen running;
+   past an hour the row goes back to its tier, since a run that long is
+   a stalled check or GitHub down, and an outage must not be polled at
+   twice a minute. The
+   branch listing (conditional REST) carries no checks, review or
+   mergeability, so each open pull request's state comes from the
+   one-pull-request query on its own stamp, which is also what keeps
+   the sidebar's icons true between selections. The sidebar's git reading is tiered the same
+   way: the selected repository's worktrees are read every tick, an
+   idle repository's every half minute, its rows kept between readings
+   with only their sessions brought up to date from the pane listing
+   already in hand (`GitReadScope`), since twenty-nine repositories at
+   four git calls per worktree every five seconds was most of everything
+   the app did. What is left of those four is one: a repository's
+   branches all answer at once through `git for-each-ref` with
+   `%(ahead-behind:)`, `%(upstream:track)` and `%(committerdate:unix)`,
+   nine milliseconds for a repository against three processes per
+   worktree, and only a worktree on a detached head asks about itself.
+   Uncommitted work stays the one question a worktree answers alone.
+   Every read passes `--no-optional-locks`, so nothing the app asks
+   waits on the index lock an agent's own git is holding. A repository's full name comes from its remote's URL, a
+   local read, never from `gh repo view`, which was a network round trip
+   per repository per poll; that name and the branch merges are judged
+   against are read once and remembered until a fetch, since only a
+   rename or a change of default branch moves either and reading them
+   again per row per poll was thousands of shell-outs an hour. Everything the store holds paints instantly,
+   on pane switches and across restarts, before any fetch refreshes it,
+   and a branch whose cache holds one pull request opens that one there
+   and then: selecting only once the fetch answered made every move
+   between worktrees wait on GitHub for what was already in hand.
+   A listed pull request and its opened conversation share one header
+   view, padding, height and browser button included, with the back
+   chevron merely dimmed in the list, so opening and closing one moves
+   no text; the entries of a stack are warmed as soon as one of them
+   loads, so moving between its pull requests is a paint, never a load.
 4. Native versus shell: polling, dashboards and review threads are native
    URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
    shell out as the host user.
@@ -762,10 +845,140 @@ shim rather than a protocol:
    until the continuations are joined back on. A repository without a
    template shows no template field, and with one the generate button
    also completes the template from the commits.
-6. The listing and the footer act on the branch actually checked out in the
+6. Stacked branches live in one worktree, and the stack is derived rather
+   than recorded: the branches sharing a fork point beyond the default
+   branch, ordered by where each forks and how far it has come; two
+   branches at one commit are one entry, the checked-out name standing
+   for the pair, since that is a rename that left its old name behind
+   or a branch cut by mistake, and a restack must not replay the same
+   commits twice. What the
+   default branch has done since is beside the point: demanding that it
+   still be every branch's ancestor threw away each stack cut before the
+   last few merges landed, which is the one case a restack exists for. Reading a stack needs no checkout
+   (`git diff parent...branch`), so the strip retargets the panes and
+   leaves the worktree where it is, and an entry that is not checked out
+   reviews read-only. Restacking records every tip first, then rebases
+   bottom up with `--onto <parent> <the parent's recorded tip>` so only a
+   branch's own commits replay, signing each; a branch already on its
+   parent is skipped rather than rewritten, since renaming commits for
+   nothing is its own damage. The three stack actions sit where a lone
+   branch's Rebase and Push sit, in the footer's left, icon-only with
+   their words in the hover help, and dim when they would do nothing:
+   nothing out of place, or nothing the remote lacks. Moving between a
+   stack's entries asks git nothing at all, since every entry shares one
+   worktree: the listing paints from the cache and every entry's listing
+   is fetched in the background as soon as one of them loads, so the
+   strip moves like a tab switch rather than a load. A
+   stacked branch's pull request opens against the branch below it, which
+   is one `--base` flag. Both ends are always named, and the types
+   require it: `gh` left to work either out takes whatever the
+   worktree has checked out as the head, which in a stack is rarely
+   the entry being looked at, and infers a base from the remote. The
+   base is the branch below, or the default branch as git has it,
+   or, for a clone whose remote was never given a head, as GitHub
+   itself has it. Every shelled command names what it acts on for the
+   same reason: a rebase names its branch, a reset names the ref.
+   Only an entry opening against another branch is stacked work: the
+   bottom of a stack opens against the default branch exactly
+   as a lone branch does, and keeps the lone branch's Rebase and Push
+   rather than the stack's three buttons, however many branches sit
+   above it. Push acts on the entry in view, so it is that branch's
+   commits that are counted and that branch's tip whose signature is
+   checked; Rebase moves the branch the worktree holds, so it dims for
+   an entry being read without being checked out; its form fills from the entry's own span
+   (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, the
+   symbolic `origin/HEAD` resolved through the same default-base lookup
+   the sidebar uses, since a worktree whose remote never had its head
+   set cannot resolve it and git then listed the branch back to the root,
+   every merged pull request included, and the span starts at the
+   branch's merge-base with that remote default, since a local `main`
+   left behind it dragged its missing commits in; merge commits never
+   count. The entry in view is one per worktree, on the `@AppStorage`
+   bus (`StackSelection`), so the review and pull request tabs keep the
+   same branch, opening on the first entry that could have a pull
+   request rather than the top, which often cannot yet. Read-only text
+   (a stack entry's commit message, a blocked form) is never
+   `.disabled`, which takes selection with editing: its binding drops
+   writes and the view dims, so it can always be copied. And
+   cannot be listed at all while any branch below it is not on the
+   remote or has no open pull request, since a pull request cannot
+   target a base GitHub has no pull request for: the strip keeps those entries out of reach in the pull request
+   tab (the review strip still shows them), and the first unpushed entry
+   lists so it can be pushed and opened from its own form. A disclosure for a session launched on the pickers' defaults
+   names those defaults, the runner's first model and its default
+   effort, since a default launch writes no flags to read back. Inference cannot tell a branch that belongs to
+   the work in hand from an old one that merely shares a fork point, so
+   the sidebar's Stack popover lists what it found and drops any branch
+   named there from the stack, remembered per worktree in the metadata
+   store and applied wherever a stack is derived. The checked-out branch
+   is never droppable, being the one branch the worktree undeniably
+   holds. The popover also cuts a new branch on top, which is how a
+   stack grows. A stack's pull requests are opened one at a time, from
+   the same form and with the same review as any other, and each one
+   links what is open: `gh stack link` with every open pull request's
+   number bottom-up, GitHub's own extension, whenever one opens. That
+   is what makes them a stack on GitHub rather than pull requests that
+   happen to chain, and a pull request opened into a branch GitHub has
+   not been told about otherwise shows its own "this can be stacked"
+   notice instead. The numbers are asked of GitHub directly, since a
+   minute-old cache does not know about the pull request just opened,
+   and linking adds to a stack it already knows without ever removing
+   from one, so repeating it is safe. Only that step is
+   GitHub-specific, and it keeps no local tracking of its own, so what
+   a stack is here stays derived from ancestry and nothing else. A
+   stacked entry's merge action is the stack's: one word, and
+   `gh stack merge <number> --yes --merge-method <method>`, which
+   merges that pull request and every one below it in one
+   all-or-nothing operation, or puts them in the queue where the base
+   branch has one. It links the stack first, which is idempotent and
+   covers a bottom pull request opened anywhere else, so nothing
+   GitHub does not hold as a stack can be merged as one, and a link
+   that fails takes the merge with it. Merging one out of order would
+   land its parent's commits under another pull request's name, so
+   the button also waits for the whole chain below it to be open and
+   ready: every pull request below mergeable, its checks green and
+   its review approved wherever one is required, read from the
+   enriched summaries the stack's prefetch warms, since a stack
+   merges all at once and one that is not ready would take the rest
+   with it. What makes them a stack at all is every branch's pull
+   request being based on the branch below, read from the listings
+   the tab has already cached. That reading is derived rather than asked, because
+   `gh stack view` knows only stacks it created and tracked locally
+   and calls a linked one "not part of a stack" while GitHub itself
+   shows it as one. The sidebar says where a row stands in its
+   stack (`2/3`) from the pull request chain the app knows: the poll's
+   per-branch answers plus every listing the shared store has cached,
+   since a stack's other branches have no worktree and their pull
+   requests only arrive through the tab. It names
+   what it is built on and how much rides on it. That chain says nothing
+   until the pull requests are open and based on each other, which is
+   every stack before its pull requests are open, so a chain of one
+   falls back to
+   the stack derived from the worktree itself (persisted with the
+   sidebar snapshot and fresh for one interval on launch, since
+   deriving every one was a hundred `merge-base` calls in the first
+   second of every start), a few worktrees per
+   refresh on a minute's rota to keep the git calls off the poll's
+   critical path. A failure resets what moved, returns to the
+   branch it started on and reports which branch conflicted. Pushing goes
+   bottom up so a base is on the remote before the branch pointing at it.
+7. The listing and the footer act on the branch actually checked out in the
    worktree, asked of git on each reload, because agents sometimes switch
-   branches inside a worktree.
-7. Each pull request row offers the last mile as small actions: copy the
+   branches inside a worktree. Every scope asks GitHub for ten pull
+   requests and no more, and the default branch is not asked about at all:
+   a repository with thousands open (the Homebrew taps) spent seconds on
+   every reload to answer questions the branch itself already answers. The
+   template is read from the working copy and, failing that, from git: the
+   taps are sparse checkouts that track a template without materialising
+   it, which is why their form had no template box. The AI disclosure
+   button writes the harness with the model and effort the session was
+   started with, worded as the pickers word them, followed by local review
+   and testing, into the template's own AI section, ticking that section's
+   box and replacing any sentence it wrote before, and into the body when
+   the template has no such section. Ticking every box writes it too,
+   into the template only: a ticked AI box with nothing under it is the
+   one lie that button could tell.
+8. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
    agent, jump to the one failing check or, when several fail, the
    checks page (copying failed step logs through `gh run view` proved
@@ -846,7 +1059,42 @@ shim rather than a protocol:
 3. Canonical transcripts in the sandbox home are never deleted and the
    metadata store keeps the session names it recorded per worktree path,
    so every conversation stays attributed to its repository.
-4. The repository page, the main checkout's permanent sidebar entry, lists
+4. The window opens where and how it was left: the autosaved frame is
+   applied rather than merely named, on the display it was closed on
+   (remembered by that display's own identity, since numbers move), and
+   fullscreen again when it was closed fullscreen, toggled only once the
+   frame is placed. With nothing saved, or a saved frame too small for
+   three panes, it fills whichever screen it lands on less a margin,
+   rather than a fixed size that is too big for a laptop or too small for
+   a desk.
+5. The window opens on what the last run knew. The sidebar, its
+   repositories, their worktrees, each row's branch, uncommitted state and
+   commit counts, the default branch and the selected worktree all come
+   from the metadata store before anything is read, so the frame is
+   furnished rather than empty; the listings, conversations, enriched pull
+   request headers and review threads paint from their own caches the same
+   way, in their models' initialisers rather than on a first reload, and
+   the review, editor and pull request surfaces stay mounted while the
+   utility tabs switch, so returning to one costs nothing. Only what herdr owns arrives late, and a row the cache says had an
+   agent running waits for herdr rather than claiming its session ended.
+6. Directories of your own are listed under a repository and marked as
+   such (`Worktree.isHostDirectory`), which is what the sidebar row, the
+   pane and the menus all branch on: a laptop icon with the path where a
+   branch would be and the branch below it, in the same face and size as
+   any other row; the editor in the pane an agent would have taken, hidden
+   from the utility pane so there is one editor with one set of shortcuts
+   wherever it shows; no session strip controls; and a menu offering only
+   Copy path, Forget (which touches no file), Fetch, and Checkout and pull
+   default branch, which fast-forwards only, so a diverged local branch
+   stops rather than being merged behind your back. The app publishes the list
+   as `agentide/host-directories`, so `agentide .` from inside one selects
+   it the way it selects a worktree. They are kept in the metadata store
+   per repository, since they are configuration rather than anything
+   derivable. Every launch passes
+   through one function, which refuses a path outside the shared
+   workspace: the sandbox user can often read such a directory, and must
+   never be given a reason to write to one.
+7. The repository page, the main checkout's permanent sidebar entry, lists
    every conversation attributable to the repository, from live and
    deleted worktrees alike, resumes any of them into a fresh worktree and
    starts a fresh session on the default branch in the checkout itself,
@@ -971,11 +1219,41 @@ can neither read nor corrupt it. Deleting it loses only unread state, prompt
 history, settings and the attribution of conversations to worktrees that no
 longer exist; everything else re-derives from the system (P1).
 
+Every change to it goes through `MetadataStore.update`, which loads,
+changes and saves under one lock. The file is written whole, so loading
+it, changing a copy and saving that copy back kept only the last
+writer's version: a poll that read the file before a slow request and
+saved it afterwards silently erased whatever the launch, the draft or
+another poll had written in between, which is how a branch's cached pull
+requests and a worktree's recorded session went missing while the app
+was busy.
+
 Repository icons are GitHub owner avatars, cached one per owner (not per
 repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a
 sidebar of many repositories under a few owners fetches a few times and a
 GitHub outage leaves the icons showing. A failed fetch is silent: the icon
 is decoration and the messages pane is for what the user can act on.
+
+The one file the app writes outside its own support directory is the
+performance log, and only when asked for: with `AGENTIDE_PERFORMANCE_LOG`
+set, or the `performance-log` marker file `script/performance-log on`
+creates (and `off` removes; off by default), every process the app
+runs, every `gh` call and every cache hit or miss of the pull request
+store is appended as one line to
+`/Users/Shared/sv-<user>/tmp/agentide/performance.log`, a directory both
+users can read since either may be the one reading it back. The gate is
+off by default, so a build by anyone else writes nothing anywhere, and
+`script/test` points the log into the test scratch, since the tests run
+every process the app does and once wrote thousands of scratch lines
+into the real one. Lines older than a day are swept on the next write,
+and once the file passes a hundred megabytes its oldest half goes at
+once, since a day of heavy use fills that much between sweeps. The
+metadata store's dated caches (listings, headers, conversations,
+threads) age out at a week on every save, beside their count caps, and
+a listing's entity tag is dropped with the listing it stamped. Logging and caching are
+otherwise the host user's: the metadata store and the avatars live in the
+host's Application Support, and the sandbox user writes no cache of its
+own.
 
 ## Security model
 
@@ -1028,7 +1306,7 @@ official language or project organisation.
 | GRDB | metadata store | planned; a JSON file serves today |
 | STTextView | diff and editor text surface | TextKit 2; planned |
 | swift-tree-sitter | syntax highlighting runtime | official-organisation exception |
-| tree-sitter-* grammars | syntax highlighting | official organisation except Swift, as below |
+| tree-sitter-* grammars (ruby, bash, python, json, typescript, c, cpp, go, rust, java, php, html, css, regex, embedded-template) | syntax highlighting | official organisation, each pinned to the latest ABI 14 release the runtime accepts, except Swift, as below |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
 | swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 

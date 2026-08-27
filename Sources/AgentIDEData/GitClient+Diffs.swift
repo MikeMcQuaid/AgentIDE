@@ -32,10 +32,34 @@ public extension GitClient {
         return diff
     }
 
+    /// One commit's own diff, named by anything git resolves.
+    func commitDiff(worktreePath: String, commit: String, ignoringWhitespace: Bool = false) async throws -> String {
+        try await git(
+            ["show", "--format=", "--patch"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + [commit],
+            in: worktreePath,
+        ).standardOutput
+    }
+
     /// The last commit's diff.
     func lastCommitDiff(worktreePath: String, ignoringWhitespace: Bool = false) async throws -> String {
+        try await commitDiff(
+            worktreePath: worktreePath,
+            commit: "HEAD",
+            ignoringWhitespace: ignoringWhitespace,
+        )
+    }
+
+    /// One branch's own changes against another, which is what a
+    /// stack's entry shows: three dots, so what the parent already
+    /// carries never appears in the child's diff.
+    func stackDiff(
+        worktreePath: String,
+        parent: String,
+        branch: String,
+        ignoringWhitespace: Bool = false,
+    ) async throws -> String {
         try await git(
-            ["show", "--format=", "--patch"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + ["HEAD"],
+            ["diff"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + [parent + "..." + branch],
             in: worktreePath,
         ).standardOutput
     }

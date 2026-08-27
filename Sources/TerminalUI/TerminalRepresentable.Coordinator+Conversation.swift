@@ -66,16 +66,34 @@ extension TerminalRepresentable.Coordinator {
             let detail = [reason, diagnostics.isEmpty ? nil : diagnostics]
                 .compactMap(\.self)
                 .joined(separator: "; ")
-            if detail.isEmpty == false || sawFrames == false {
+            // A terminal that ended because its session was closed or
+            // its worktree went is not news: the pane is about to
+            // leave the screen. Only an attach that never drew, or a
+            // client that said something went wrong, is an error.
+            let expected = Self.isExpectedExit(reason)
+            if (detail.isEmpty == false && expected == false) || sawFrames == false {
                 let message = detail.isEmpty ? "the herdr client exited before attaching" : detail
                 ErrorLog.shared.report("Terminal: " + message)
                 self?.view?.feed(text: "\r\n[herdr client exited: " + message + "]\r\n")
+            } else if let reason, expected {
+                ErrorLog.shared.note("Terminal: " + reason)
             }
             callback?()
         }
     }
 
     // MARK: Private
+
+    /// Whether the client's reason for ending is the terminal simply
+    /// being gone: herdr words a closed target as the session having
+    /// exited, which is what closing it asked for.
+    private static func isExpectedExit(_ reason: String?) -> Bool {
+        guard let reason else {
+            return true
+        }
+
+        return reason.contains(" exited") || reason.contains("not found")
+    }
 
     /// The deadline fired before any frame. A slow sudo or sandbox
     /// launch renders late rather than never, so this only reports;

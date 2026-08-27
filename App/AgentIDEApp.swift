@@ -35,6 +35,7 @@ struct AgentIDEApp: App {
             RootView(dependencies: dependencies)
                 .environment(\.openURL, LinkOpener.action)
         }
+
         // Content over chrome: no title bar, compact toolbar.
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)

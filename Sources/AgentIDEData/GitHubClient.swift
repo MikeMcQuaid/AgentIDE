@@ -23,24 +23,29 @@ public struct GitHubClient: Sendable {
         case open
     }
 
-    /// The `gh pr list` page size, public so it can default the
-    /// public listing's limit. The branch scope filters server-side
-    /// so one page is plenty, and the pull request tab raises the
-    /// limit as later pages are visited.
-    public static let listLimit = 25
+    /// How many pull requests any one listing asks for. Kept small
+    /// deliberately: a repository with thousands open (homebrew-core,
+    /// homebrew-cask) made every scope's query slow enough to feel
+    /// broken, and the tab is for what is in front of you, not an
+    /// archive.
+    public static let listLimit = 10
+
+    /// Where a pull request template lives, in the order GitHub
+    /// itself looks.
+    public static let templatePaths = [
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/pull_request_template.md",
+        "PULL_REQUEST_TEMPLATE.md",
+        "docs/PULL_REQUEST_TEMPLATE.md",
+    ]
 
     /// The repository's pull request template file content, nil
     /// without one.
     public static func pullRequestTemplate(in worktreePath: String) -> String? {
-        [
-            ".github/PULL_REQUEST_TEMPLATE.md",
-            ".github/pull_request_template.md",
-            "PULL_REQUEST_TEMPLATE.md",
-            "docs/PULL_REQUEST_TEMPLATE.md",
-        ]
-        .map { worktreePath + "/" + $0 }
-        .first { FileManager.default.fileExists(atPath: $0) }
-        .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+        templatePaths
+            .map { worktreePath + "/" + $0 }
+            .first { FileManager.default.fileExists(atPath: $0) }
+            .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
     }
 
     /// The repository's pull requests for a scope, with dashboard
@@ -102,12 +107,11 @@ public struct GitHubClient: Sendable {
     /// every lookup die on an unknown flag, which read downstream as
     /// a missing origin.
     public func fullName(repositoryPath: String) async -> String? {
-        let result = try? await gh(
-            ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
-            in: repositoryPath,
-        )
-        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return name.isEmpty ? nil : name
+        // The remote's URL names the repository, and reading it is a
+        // local git call; asking GitHub the same was one network
+        // round trip per repository per poll.
+        let name = URL(fileURLWithPath: repositoryPath).lastPathComponent
+        return await GitClient(runner: runner).fullName(of: Repository(name: name, path: repositoryPath))
     }
 
     /// Opens a pull request from the worktree's branch; returns its
@@ -116,7 +120,8 @@ public struct GitHubClient: Sendable {
         worktreePath: String,
         title: String,
         body: String,
-        head: String? = nil,
+        head: String,
+        base: String,
     ) async throws -> String {
         let bodyFile = FileManager.default
             .temporaryDirectory
@@ -128,7 +133,7 @@ public struct GitHubClient: Sendable {
         // since the pull request belongs to the repository it is
         // opened against, not the one holding the branch.
         let arguments = ["pr", "create", "--title", title, "--body-file", bodyFile]
-            + (head.map { ["--head", $0] } ?? [])
+            + ["--head", head, "--base", base]
         return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -152,6 +157,18 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "merge", String(number), flag], in: repositoryPath)
     }
 
+    /// The repository's default branch as GitHub itself has it,
+    /// for the rare clone whose remote was never given a head and
+    /// which has no local main or master to fall back on.
+    public func defaultBranch(repositoryPath: String) async -> String? {
+        let result = try? await gh(
+            ["repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"],
+            in: repositoryPath,
+        )
+        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? nil : name
+    }
+
     /// The method flag `gh pr merge` needs when not interactive
     /// (it refuses to run with none), from the repository's allowed
     /// methods; hardcoding one broke on repositories disallowing it. Settings rarely change, so
@@ -171,6 +188,11 @@ public struct GitHubClient: Sendable {
 
     // MARK: Internal
 
+    /// How many words of a `gh` call name it in the performance log:
+    /// `pr list`, `pr view`, never the arguments after.
+    static let loggedWords = 2
+
+    /// A remembered answer, including the answer that there is none.
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
     static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"
@@ -251,7 +273,15 @@ public struct GitHubClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
-        let result = try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        // `gh` is the app's network: the process funnel already
+        // times it, and this line says which calls were GitHub's.
+        let result = try await PerformanceLog.time(
+            .network,
+            "gh " + arguments.prefix(Self.loggedWords).joined(separator: " "),
+            context: directory ?? "",
+        ) {
+            try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        }
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "gh " + arguments.joined(separator: " "), result: result)
         }

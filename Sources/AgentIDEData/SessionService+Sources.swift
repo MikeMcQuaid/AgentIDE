@@ -182,7 +182,11 @@ public extension SessionService {
     /// Fetches origin and hard-resets the main checkout to its
     /// default branch.
     func fetchAndReset(repository: Repository) async throws {
-        try await git.fetchAndReset(repositoryPath: repository.path)
+        guard let ref = await git.defaultBaseRef(of: repository) else {
+            throw SessionServiceError("\(repository.name) has no default branch to reset to.")
+        }
+
+        try await git.fetchAndReset(repositoryPath: repository.path, onto: ref)
     }
 
     /// Fetches, then rebases the worktree onto the signed-rebase
@@ -194,7 +198,7 @@ public extension SessionService {
         try await git.fetch(repositoryPath: worktree.path)
         let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
-        try await git.rebaseSigned(worktreePath: worktree.path, onto: target)
+        try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
     }
 
     /// What a signed rebase would actually change, so the button
@@ -279,7 +283,7 @@ public extension SessionService {
 
     /// The repository's open pull requests, for the PR source picker.
     func openPullRequests(repository: Repository) async throws -> [PullRequestSummary] {
-        try await github.pullRequests(repositoryPath: repository.path, scope: .open)
+        try await pullRequests.listing(repositoryPath: repository.path, scope: .open)
     }
 
     /// The user's login and organisations, for the repository
@@ -334,7 +338,7 @@ public extension SessionService {
     /// repository's default branch.
     func reviewBase(for worktree: Worktree) async -> String? {
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
-        let summaries = try? await github.pullRequests(
+        let summaries = try? await pullRequests.listing(
             repositoryPath: worktree.repositoryPath,
             scope: .branch(worktree.branch),
         )

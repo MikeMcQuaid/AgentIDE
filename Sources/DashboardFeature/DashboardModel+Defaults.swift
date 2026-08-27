@@ -16,6 +16,11 @@ extension DashboardModel {
             values.append((agent.rawValue + "-efforts", choices.efforts.joined(separator: " ")))
         }
         service.publishSessionChoices(values)
+        // Paths, one per line, since a path can hold anything a
+        // `key=value` line cannot.
+        service.publishHostDirectories(
+            groups.flatMap(\.items).filter(\.worktree.isHostDirectory).map(\.worktree.path),
+        )
     }
 
     /// Remembers what a session was just started with, so the next

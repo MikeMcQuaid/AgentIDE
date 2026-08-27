@@ -26,6 +26,20 @@ public struct MetadataStore: Sendable {
         return (try? decoder.decode(AppMetadata.self, from: data)) ?? AppMetadata()
     }
 
+    /// Changes the metadata in one step: loads, changes and saves
+    /// under a lock, so two writers cannot each save a copy loaded
+    /// before the other wrote. Loading, changing and saving as
+    /// three steps lost whichever change was written first, which
+    /// is how a branch's cached pull requests, and the session
+    /// recorded for a worktree, went missing while the app was busy.
+    public func update(_ change: (inout AppMetadata) -> Void) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        var metadata = load()
+        change(&metadata)
+        save(metadata)
+    }
+
     /// Saves the metadata, creating parent directories as needed;
     /// the caches are capped first so the file never grows forever.
     public func save(_ metadata: AppMetadata) {
@@ -47,6 +61,10 @@ public struct MetadataStore: Sendable {
     }
 
     // MARK: Private
+
+    /// Serialises every `update`. The file is one app's, so a lock
+    /// in the process is all the exclusion it needs.
+    private static let lock: NSLock = .init()
 
     private let file: String
 }

@@ -31,12 +31,19 @@ struct PullRequestListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List(pageSummaries) { summary in
-                row(summary)
+            // Plain rows, not a List: its inset and separator made
+            // a row sit a few points off the header it turns into.
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(pageSummaries) { summary in
+                        row(summary)
+                        Divider()
+                    }
+                }
             }
             .overlay {
                 if isLoading, summaries.isEmpty {
-                    LaunchProgressView("Loading pull requests…", waitingOn: "GitHub's listing for each branch")
+                    LaunchProgressView(spinner: "Loading pull requests…")
                 } else if summaries.isEmpty {
                     ContentUnavailableView("No pull requests", systemImage: "arrow.triangle.pull")
                 }
@@ -82,10 +89,14 @@ struct PullRequestListView: View {
     /// The conversation header's own look, without its actions; a
     /// click anywhere outside the inner links opens the conversation.
     private func row(_ summary: PullRequestSummary) -> some View {
-        PullRequestRowView(
+        // The conversation's own header, back chevron and all: the
+        // chevron is dimmed rather than absent so the title starts
+        // at the same x, and the browser button stays, since a row
+        // is a pull request whether or not it is open.
+        PullRequestHeaderRow(
             summary: summary,
             stackDepth: stackDepth(summary),
-            showsActions: false,
+            onBack: nil,
             onCopyComments: noAction,
             onOpenChecks: noAction,
         )
@@ -111,10 +122,25 @@ struct PullRequestFooterView: View {
 
     @Bindable var model: PullRequestsModel
 
+    /// The cross-module signal that switches the utility pane's tab.
+    @AppStorage(UtilityTabTarget.key)
+    var utilityTab = ""
+
+    /// Sidebar-style: how far the branch sits behind its base.
+    var rebaseCount: String {
+        let behind = model.branchItem?.behindDefault ?? 0
+        return behind > 0 ? "\u{2193}" + String(behind) : ""
+    }
+
+    var rebaseHelp: String {
+        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
+            + "own origin ref when that is fully signed and only new commits need signatures, "
+            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+    }
+
     var body: some View {
         HStack {
-            rebaseButton
-            pushButton
+            branchActions
             if let selected = model.selected {
                 copyButtons(for: selected)
             }
@@ -129,7 +155,9 @@ struct PullRequestFooterView: View {
             if model.needsCreateForm {
                 openButton
             }
-            if let mergeTitle = model.mergeActionTitle {
+            if model.isStackedEntry {
+                mergeStackButton
+            } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
                     await model.performMergeAction()
                 }
@@ -143,33 +171,7 @@ struct PullRequestFooterView: View {
         .background(.bar)
     }
 
-    // MARK: Private
-
-    private static let padding: CGFloat = 8
-
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage(UtilityTabTarget.key)
-    private var utilityTab = ""
-
-    /// Sidebar-style: how far the branch sits behind its base.
-    private var rebaseCount: String {
-        let behind = model.branchItem?.behindDefault ?? 0
-        return behind > 0 ? "\u{2193}" + String(behind) : ""
-    }
-
-    /// Sidebar-style: how many commits a push would send.
-    private var pushCount: String {
-        let ahead = model.branchItem?.aheadOfUpstream ?? 0
-        return ahead > 0 ? String(ahead) : ""
-    }
-
-    private var rebaseHelp: String {
-        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
-            + "own origin ref when that is fully signed and only new commits need signatures, "
-            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
-    }
-
-    private var rebaseButton: some View {
+    var rebaseButton: some View {
         BusyButton(
             rebaseCount,
             busy: "Rebasing",
@@ -184,7 +186,7 @@ struct PullRequestFooterView: View {
         .hoverHelp(rebaseHelp)
     }
 
-    private var pushButton: some View {
+    var pushButton: some View {
         BusyButton(
             pushCount,
             busy: "Pushing",
@@ -200,6 +202,16 @@ struct PullRequestFooterView: View {
         .hoverHelp(model.pushHelp)
     }
 
+    // MARK: Private
+
+    private static let padding: CGFloat = 8
+
+    /// Sidebar-style: how many commits a push would send.
+    private var pushCount: String {
+        let ahead = model.branchItem?.aheadOfUpstream ?? 0
+        return ahead > 0 ? String(ahead) : ""
+    }
+
     private var openButton: some View {
         BusyButton(
             "Open PR",
@@ -213,7 +225,8 @@ struct PullRequestFooterView: View {
             // with its placeholders intact helps nobody.
             disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
                 || model.isFullyPushed == false
-                || model.templateUnedited,
+                || model.templateUnedited
+                || model.unpushedBelow != nil,
         ) {
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -221,9 +234,10 @@ struct PullRequestFooterView: View {
         }
         .keyboardShortcut(.return, modifiers: .command)
         .hoverHelp(
-            model.templateUnedited
-                ? "Fill in the template before opening: it still reads as the repository wrote it"
-                : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed",
+            model.unpushedBelow.map { "Push and open `" + $0 + "` below this one first" }
+                ?? (model.templateUnedited
+                    ? "Fill in the template before opening: it still reads as the repository wrote it"
+                    : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed"),
         )
     }
 

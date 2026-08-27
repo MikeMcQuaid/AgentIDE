@@ -12,6 +12,13 @@ struct AppCommands: Commands {
     let dashboard: DashboardModel
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            // The version already ends in the build number, so the
+            // panel's own build field would say it twice.
+            Button("About AgentIDE") {
+                NSApplication.shared.orderFrontStandardAboutPanel(options: [.version: ""])
+            }
+        }
         CommandGroup(after: .appSettings) {
             completionSoundMenu
         }
@@ -60,6 +67,8 @@ struct AppCommands: Commands {
                 Button(tab.title) { show(tab) }
                     .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
             }
+            Button("Resize Panes") { resizePanesRequest += 1 }
+                .keyboardShortcut("0", modifiers: .command)
             Divider()
             Button("Find File") { openFinder(searchingContents: false) }
                 .keyboardShortcut("t", modifiers: .command)
@@ -78,6 +87,11 @@ struct AppCommands: Commands {
     private var finderSearchesContents = false
     @AppStorage("finderFocusRequest")
     private var finderFocusRequest = 0
+
+    /// Cmd-0's counter: the window narrows the sidebar to what its
+    /// rows need and splits the rest evenly.
+    @AppStorage("resizePanesRequest")
+    private var resizePanesRequest = 0
 
     /// Cmd-K's counter: the active shell pane clears once per raise;
     /// agent panes ignore it.

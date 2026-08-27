@@ -1,4 +1,5 @@
 import AgentIDEData
+import AgentIDEDomain
 import Foundation
 @testable import PRFeature
 import Testing
@@ -16,16 +17,23 @@ extension PullRequestsModelTests {
         // looking at is worth knowing.
         #expect(model.status == "Pushed.")
 
-        // A branch in a fork names itself for the pull request; one
-        // in the repository does not.
+        // A branch in a fork names its owner too; either way the
+        // branch is named, since `gh pr create` left to itself opens
+        // a pull request for whatever happens to be checked out.
         #expect(PushDestination.fork(owner: "MikeMcQuaid").head(branch: "feature") == "MikeMcQuaid:feature")
-        #expect(PushDestination.origin.head(branch: "feature") == nil)
+        #expect(PushDestination.origin.head(branch: "feature") == "feature")
     }
 
     @Test
     func `the checked-out branch drives listing and actions`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "switched" }
+        // The service derives a stack around the branch git says is
+        // checked out, not the one the sidebar last cached, so an
+        // agent switching branches under the app is seen here too.
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["switched"], checkedOut: "switched")
+        }
         var listed: GitHubClient.ListScope?
         model.fetchList = { scope, _ in
             listed = scope
@@ -59,7 +67,7 @@ extension PullRequestsModelTests {
         model.prBody = "Why it matters"
         model.prTemplate = "- [x] Tested"
         // The commit would otherwise fill a form it thinks is empty.
-        model.fetchCommitMessages = { _ in ["Some commit\n\nIts body"] }
+        model.fetchCommitMessages = { _, _ in ["Some commit\n\nIts body"] }
 
         // Push and rebase both reload the form underneath the user.
         #expect(await model.push())

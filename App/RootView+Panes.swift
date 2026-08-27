@@ -14,7 +14,12 @@ extension RootView {
     /// a worktree with nothing to list offers the new session form.
     @ViewBuilder
     func primary(for item: WorktreeItem) -> some View {
-        if item.isPlaceholder {
+        if item.worktree.isHostDirectory {
+            // The editor takes the pane an agent would have, and
+            // leaves the utility pane, so it is one editor with one
+            // set of shortcuts wherever it shows.
+            editorPane(for: item)
+        } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
                 "Creating the worktree and starting the agent…",
@@ -25,8 +30,13 @@ extension RootView {
             // the resume kills, and a terminal left attached to it
             // reported the pane gone.
             LaunchProgressView("Resuming the conversation…", progress: dependencies.dashboard.launchProgress)
+        } else if dependencies.dashboard.isAwaitingSession(item) {
+            // The row had an agent when the app last looked and
+            // herdr has not answered yet: waiting is honest, where
+            // the conversations page would claim the session ended.
+            LaunchProgressView("Attaching to the agent…", waitingOn: "herdr to answer")
         } else if let session = item.session {
-            agentTerminal(for: session, isActive: isCovered == false)
+            agentTerminal(for: session, at: item.worktree.path, isActive: isCovered == false)
                 .id(session.name)
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged
@@ -83,6 +93,21 @@ extension RootView {
         .ignoresSafeArea(.container, edges: .top)
     }
 
+    /// Narrows the sidebar to the least its rows need and splits
+    /// what is left evenly between the panes that do the work, which
+    /// is the layout worth going back to when dragging has left them
+    /// lopsided.
+    func evenPanes(in windowWidth: CGFloat) {
+        sidebarWidth = PaneLayout.sidebarComfortable
+        guard showsUtility, windowWidth > 0 else {
+            return
+        }
+
+        let share = (windowWidth - sidebarWidth) * PaneLayout.utilityShare
+        utilityPaneWidth = min(max(share, PaneLayout.utilityRange.lowerBound), PaneLayout.utilityRange.upperBound)
+        fitPanes(to: windowWidth)
+    }
+
     /// What the detail shows with nothing selected: the first
     /// reading's progress until it lands, then the invitation.
     @ViewBuilder var unselectedDetail: some View {
@@ -98,6 +123,20 @@ extension RootView {
                 description: Text("Pick a worktree on the left or create a session."),
             )
         }
+    }
+
+    /// Parses the persisted path-tab lines; values are tab names
+    /// (unknown ones, including this store's old integer form, fall
+    /// back to the default tab when read).
+    static func decodeTabs(_ stored: String) -> [String: String] {
+        var tabs = [String: String]()
+        for line in stored.split(separator: "\n") {
+            let parts = line.split(separator: "\t")
+            if let path = parts.first, let name = parts.last, path != name {
+                tabs[String(path)] = String(name)
+            }
+        }
+        return tabs
     }
 
     /// A running shell stays mounted whichever tab, worktree or page

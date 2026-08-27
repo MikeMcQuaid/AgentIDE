@@ -12,19 +12,29 @@ struct PullRequestCreateForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("No open pull request for this branch")
-                .font(.subheadline.weight(.semibold))
-            TextField("Title", text: $model.prTitle)
+            HStack {
+                Text("No open pull request for this branch")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                generateButton
+                resetButton
+            }
+            if let below = model.unpushedBelow {
+                Text("Waiting on `" + below + "` below it to be pushed and opened first")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
                 .textFieldStyle(.roundedBorder)
-                .disabled(isGenerating)
-                .overlay(alignment: .trailing) { generateButton.padding(.trailing, Self.overlayPadding) }
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
             Text("Body").font(.caption).foregroundStyle(.secondary)
-            TextEditor(text: $model.prBody)
+            TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
                 .font(.body)
                 .frame(minHeight: Self.bodyMinimumHeight)
-                .border(.separator)
-                .disabled(isGenerating)
+                .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+                .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The description in your own words; the template below is appended after it")
             templateSection
         }
@@ -36,8 +46,7 @@ struct PullRequestCreateForm: View {
 
     private static let spacing: CGFloat = 8
 
-    private static let overlayPadding: CGFloat = 4
-
+    private static let fieldCorner: CGFloat = 6
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
 
@@ -45,9 +54,45 @@ struct PullRequestCreateForm: View {
     /// typing it would then overwrite.
     @State private var isGenerating = false
 
+    /// Whether Reset is asking before throwing typed text away.
+    @State private var isConfirmingReset = false
+
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
+
+    /// Whether a branch below this one is not on the remote yet:
+    /// nothing here can be opened until it is, so nothing is typed
+    /// into a form that cannot be sent.
+    private var isBlocked: Bool {
+        model.unpushedBelow != nil
+    }
+
+    /// Back to what the commits say. Typed text asks first; blank
+    /// fields reset without a word.
+    private var resetButton: some View {
+        Button {
+            if Self.hasText(model.prTitle) || Self.hasText(model.prBody) {
+                isConfirmingReset = true
+            } else {
+                Task { await model.resetToCommits() }
+            }
+        } label: {
+            Image(systemName: "arrow.counterclockwise")
+                .accessibilityLabel("Reset to the commit message")
+        }
+        .buttonStyle(.borderless)
+        .disabled(isGenerating || isBlocked)
+        .hoverHelp("Replace the title and body with what the branch's commits say")
+        .confirmationDialog(
+            "Replace what you typed with the commit message?",
+            isPresented: $isConfirmingReset,
+            titleVisibility: .visible,
+        ) {
+            Button("Reset", role: .destructive) { Task { await model.resetToCommits() } }
+            Button("Cancel", role: .cancel) { isConfirmingReset = false }
+        }
+    }
 
     /// The repository's template with its tick-all shortcut.
     @ViewBuilder private var templateSection: some View {
@@ -55,17 +100,34 @@ struct PullRequestCreateForm: View {
             HStack {
                 Text("Template").font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                // Always beside the tick-all button, which claims
+                // the same box: a button that comes and goes with
+                // what the app happens to know is a button nobody
+                // learns to look for.
+                Button("Disclose AI", systemImage: "sparkles.rectangle.stack") {
+                    model.insertAIDisclosure()
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(isGenerating || model.hasAIDisclosure == false)
+                .hoverHelp(
+                    model.hasAIDisclosure
+                        ? "Name the harness and model that wrote this branch, and that you reviewed and "
+                        + "tested it, in the template's AI section"
+                        : "No agent session is recorded for this branch to name",
+                )
                 Button("Tick every box", systemImage: "checklist") { model.tickTemplateBoxes() }
                     .buttonStyle(.glass)
                     .controlSize(.small)
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
-                    .hoverHelp("Tick every unticked checkbox in the template")
+                    .hoverHelp("Tick every unticked checkbox, and disclose the agent where the template asks")
             }
-            TextEditor(text: $model.prTemplate)
+            TextEditor(text: $model.prTemplate.readOnly(isGenerating || isBlocked))
                 .font(.body.monospaced())
                 .frame(minHeight: Self.templateMinimumHeight)
-                .border(.separator)
-                .disabled(isGenerating)
+                .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+                .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
+                .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The repository's pull request template, editable; appended below the body")
         }
     }

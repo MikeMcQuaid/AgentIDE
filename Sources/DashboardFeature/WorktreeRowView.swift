@@ -9,41 +9,22 @@ struct WorktreeRowView: View {
 
     let item: WorktreeItem
     let pullRequest: PullRequestSummary?
-    let stackDepth: Int
+    /// Where this branch sits in its stack, how tall the stack is,
+    /// and what it is built on.
+    let standing: StackStanding
 
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
             leadingIcon
                 .padding(.top, Self.iconDrop)
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: Self.spacing) {
-                    Text(item.worktree.branch).lineLimit(1)
-                    // The dot sits at the row's edge, where a column
-                    // of them reads at a glance, rather than tight
-                    // against branch names of every length.
-                    Spacer(minLength: Self.spacing)
-                    if item.hasUnread {
-                        Circle()
-                            .fill(.tint)
-                            .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
-                            .hoverHelp("Unseen agent output")
-                    }
-                }
-                HStack(spacing: Self.spacing) {
-                    if let agent = item.session?.agent {
-                        Text(agent.displayName)
-                    }
-                    pullRequestBadge
-                    // The counts come after what the pull request is
-                    // doing: its state is the news, they are detail.
-                    Text(counts)
-                        .hoverHelp(countsExplanation)
-                    Spacer(minLength: 0)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                titleLine
+                detailLine
             }
         }
+        // A row never wraps: what does not fit runs under the
+        // sidebar's edge and is hidden there.
+        .clipped()
     }
 
     // MARK: Private
@@ -72,10 +53,20 @@ struct WorktreeRowView: View {
         // Something has to say the row is not just quiet but idle,
         // and only when nothing else on the line does.
         if parts.isEmpty {
-            return item.session == nil ? "idle" : ""
+            return item.session == nil && item.worktree.isHostDirectory == false ? "idle" : ""
         }
 
         return parts.joined(separator: " ")
+    }
+
+    /// What the stack marker says on hover: where this branch is,
+    /// what it is built on, and how much rides on it.
+    private var stackHelp: String {
+        let above = standing.above
+        let riding = above == 1 ? "1 pull request builds on it" : "\(above) pull requests build on it"
+        return "Stacked: number \(standing.position) of \(standing.height)"
+            + (standing.base.map { ", based on " + $0 } ?? "")
+            + (above > 0 ? ", and " + riding : "")
     }
 
     private var countsExplanation: String {
@@ -95,8 +86,80 @@ struct WorktreeRowView: View {
     /// else leads with what is running, or with the branch itself,
     /// green on a repository's own checkout since that branch is
     /// where merged work lands rather than something to open.
+    /// A directory of your own is named by where it is, since its
+    /// branch is not why it is listed.
+    private var title: String {
+        guard item.worktree.isHostDirectory else {
+            return item.worktree.branch
+        }
+
+        return item.worktree.path.replacing(
+            NSHomeDirectory() + "/",
+            with: "~/",
+        )
+    }
+
+    /// The name of the thing, with the unread dot at the row's
+    /// edge, where a column of them reads at a glance rather than
+    /// tight against branch names of every length.
+    private var titleLine: some View {
+        HStack(spacing: Self.spacing) {
+            Text(title)
+                .lineLimit(1)
+            Spacer(minLength: Self.spacing)
+            if item.hasUnread {
+                Circle()
+                    .fill(.tint)
+                    .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
+                    .hoverHelp("Unseen agent output")
+            }
+        }
+    }
+
+    /// What it is doing, under its name. The counts come after what
+    /// the pull request is doing: its state is the news, they are
+    /// detail.
+    @ViewBuilder private var detailLine: some View {
+        if item.worktree.isHostDirectory {
+            HStack(spacing: Self.spacing) {
+                Text(item.worktree.branch)
+                    .lineLimit(1)
+                Text(counts)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .hoverHelp(countsExplanation)
+                Spacer(minLength: 0)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+            worktreeDetailLine
+        }
+    }
+
+    private var worktreeDetailLine: some View {
+        HStack(spacing: Self.spacing) {
+            if let agent = item.session?.agent {
+                Text(agent.displayName)
+            }
+            pullRequestBadge
+            Text(counts)
+                .lineLimit(1)
+                .fixedSize()
+                .hoverHelp(countsExplanation)
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
     @ViewBuilder private var leadingIcon: some View {
-        if let pullRequest {
+        if item.worktree.isHostDirectory {
+            // Sized and coloured as the branch and state icons are,
+            // so every row's text starts at the same place.
+            Octicon("laptopcomputer", colour: .green)
+                .hoverHelp("On your Mac, outside the sandbox")
+        } else if let pullRequest {
             Octicon(
                 ChecksStyle.stateOcticonName(
                     state: pullRequest.state,
@@ -164,12 +227,17 @@ struct WorktreeRowView: View {
                     Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
                         .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
                 }
-                if stackDepth > 1 {
+                if standing.isStacked {
                     Octicon("octicon-stack", colour: .secondary)
-                        .hoverHelp("Stacked: \(stackDepth) pull requests based on each other")
-                    Text(String(stackDepth))
+                        .hoverHelp(stackHelp)
+                    Text(String(standing.position) + "/" + String(standing.height))
+                        .hoverHelp(stackHelp)
                 }
             }
+            // Badges keep their width: squeezed, the number and the
+            // stack marker broke into a column of digits.
+            .lineLimit(1)
+            .fixedSize()
         }
     }
 

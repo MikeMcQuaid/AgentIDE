@@ -28,6 +28,36 @@ struct GitHubClientTests {
     }
 
     @Test
+    func `rest pull rows decode into light summaries`() {
+        let json = """
+        [{"number": 7, "title": "Work", "html_url": "https://example.com/7", "head": {"ref": "work"},
+          "base": {"ref": "main"}, "state": "open", "draft": false, "user": {"login": "mike"}, "body": ""}]
+        """
+        let summaries = GitHubClient.summaries(fromRESTJSON: json)
+        #expect(summaries.map(\.number) == [7])
+        #expect(summaries.first?.headBranch == "work")
+        #expect(summaries.first?.state == "OPEN")
+        #expect(summaries.first?.author == "mike")
+
+        let (headers, body) = GitHubClient.splitHeaders("HTTP/2.0 200 OK\netag: \"t\"\n\n[]")
+        #expect(headers == ["HTTP/2.0 200 OK", "etag: \"t\""])
+        #expect(body == "[]")
+    }
+
+    @Test
+    func `merge queues decode per alias from one batched answer`() {
+        let json = """
+        {"data": {"r0": {"mergeQueue": {"entries": {"nodes": [{"pullRequest": {"number": 4}}]}}},
+                  "r1": {"mergeQueue": null},
+                  "r2": null}}
+        """
+        let queued = GitHubClient.queuedNumbers(fromAliasedJSON: json)
+        #expect(queued["r0"] == [4])
+        #expect(queued["r1"]?.isEmpty == true)
+        #expect(queued["r2"]?.isEmpty == true)
+    }
+
+    @Test
     func `merge flags follow the repository's allowed methods`() {
         // A merge commit wins whenever it is allowed.
         let all = #"{"mergeCommitAllowed":true,"rebaseMergeAllowed":true,"squashMergeAllowed":true}"#
@@ -78,14 +108,14 @@ struct GitHubClientTests {
           {"pullRequest": {"number": 12}}, {"pullRequest": {"number": 15}}
         ]}}}}}
         """
-        #expect(GitHubClient.queuedNumbers(fromJSON: json) == [12, 15])
+        #expect(GitHubClient.queuedNumbers(fromAliasedJSON: json)["repository"] == [12, 15])
     }
 
     @Test
     func `a repository without a merge queue has nothing queued`() {
         let json = #"{"data": {"repository": {"mergeQueue": null}}}"#
-        #expect(GitHubClient.queuedNumbers(fromJSON: json).isEmpty)
-        #expect(GitHubClient.queuedNumbers(fromJSON: "").isEmpty)
+        #expect(GitHubClient.queuedNumbers(fromAliasedJSON: json)["repository"]?.isEmpty == true)
+        #expect(GitHubClient.queuedNumbers(fromAliasedJSON: "").isEmpty)
     }
 
     @Test

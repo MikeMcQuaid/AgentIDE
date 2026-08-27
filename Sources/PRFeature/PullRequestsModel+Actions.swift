@@ -7,6 +7,42 @@ import TerminalUI
 /// The footer's branch actions, split from the model body for
 /// length.
 extension PullRequestsModel {
+    /// What the worktree itself says: its stack, signing, rebase
+    /// need, template and checked-out branch. Skipped when moving
+    /// between a stack's entries, which share all of it.
+    func refreshWorktreeFacts(_ worktree: Worktree) async {
+        await loadStack()
+        isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
+        rebaseNeed = await fetchRebaseNeed(worktree)
+        let template = await fetchTemplate(worktree.path)
+        hasTemplate = template != nil
+        originalTemplate = template ?? ""
+        if prTemplate.isEmpty {
+            prTemplate = originalTemplate
+        }
+        await prefillFromSingleCommit(worktree)
+        if let live = await fetchCurrentBranch(worktree.path) {
+            currentBranch = live
+        }
+    }
+
+    /// Refreshes one pull request's header wherever it shows, so
+    /// actions like resolving conversations reflect immediately in
+    /// the selected conversation and its listed row.
+    func refreshSummary(_ number: Int) async {
+        guard let full = try? await fetchSummary(number) else {
+            return
+        }
+
+        cacheEnriched(full)
+        if selected?.number == number {
+            selected = full
+        }
+        if let index = summaries.firstIndex(where: { $0.number == number }) {
+            summaries[index] = full
+        }
+    }
+
     /// Shows a status in the footer and keeps it in the messages
     /// pane, where a line that scrolls past can still be read.
     /// `detail` is what the messages pane keeps when the footer's
@@ -15,25 +51,6 @@ extension PullRequestsModel {
     func setStatus(_ message: String, detail: String? = nil) {
         status = message
         ErrorLog.shared.note(detail ?? message)
-    }
-
-    /// The branch item's worktree with the checked-out branch
-    /// substituted, so pushes and pull requests act on what is
-    /// actually checked out.
-    var actionWorktree: Worktree? {
-        guard let item = branchItem else {
-            return nil
-        }
-        guard let currentBranch, currentBranch != item.worktree.branch else {
-            return item.worktree
-        }
-
-        return Worktree(
-            repositoryName: item.worktree.repositoryName,
-            repositoryPath: item.worktree.repositoryPath,
-            branch: currentBranch,
-            path: item.worktree.path,
-        )
     }
 
     /// Copies every unresolved review conversation to the
@@ -58,7 +75,8 @@ extension PullRequestsModel {
     /// instantly, then refreshes it; the open scope's light rows
     /// gain their status icons here.
     func select(_ summary: PullRequestSummary) {
-        selected = store.load().enrichedSummaryCache[enrichedKey(summary.number)]?.summary ?? summary
+        selected = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
+            ?? summary
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
@@ -73,14 +91,7 @@ extension PullRequestsModel {
     /// Caches one enriched summary, so reopening the conversation
     /// or restarting the app paints its header instantly.
     func cacheEnriched(_ summary: PullRequestSummary) {
-        var metadata = store.load()
-        metadata.enrichedSummaryCache[enrichedKey(summary.number)] = CachedSummary(summary: summary)
-        store.save(metadata)
-    }
-
-    /// The enriched summary cache key for one pull request.
-    func enrichedKey(_ number: Int) -> String {
-        repository.path + "#" + String(number)
+        pullRequests.rememberSummary(repositoryPath: repository.path, summary: summary)
     }
 
     /// The stack size, following base branches that are other listed
@@ -103,27 +114,6 @@ extension PullRequestsModel {
         isPushed || branchItem?.aheadOfUpstream == 0
     }
 
-    /// A one-commit branch is its own description: the form
-    /// defaults to that commit, no model involved. Blank is blank
-    /// however it got that way, whitespace included, so a saved
-    /// draft holding nothing is no reason to leave the form empty.
-    func prefillFromSingleCommit(_ worktree: Worktree) async {
-        guard Self.isBlank(prTitle), Self.isBlank(prBody) else {
-            return
-        }
-
-        let commits = await fetchCommitMessages(worktree)
-        if commits.count == 1, let only = commits.first {
-            apply(description: Self.description(splitFromMessage: only))
-        }
-    }
-
-    /// Whether a field holds nothing to lose: empty, or whitespace
-    /// alone.
-    static func isBlank(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     /// Fills the form's blank fields from the branch's commits: the
     /// one commit's own message when there is only one, otherwise a
     /// draft from the on-device model; false opens the errors
@@ -133,7 +123,7 @@ extension PullRequestsModel {
             return false
         }
 
-        let commits = await fetchCommitMessages(worktree)
+        let commits = await fetchCommitMessages(worktree, listedRange)
         guard commits.isEmpty == false else {
             ErrorLog.shared.report("No commits beyond origin/HEAD to describe.")
             return false
@@ -160,16 +150,6 @@ extension PullRequestsModel {
         return true
     }
 
-    /// Fills only the blank fields, so typed text always wins.
-    func apply(description: (title: String, body: String)) {
-        if Self.isBlank(prTitle) {
-            prTitle = description.title
-        }
-        if Self.isBlank(prBody) {
-            prBody = description.body
-        }
-    }
-
     /// What a push is reported as, which depends on where it went:
     /// a branch that went to a fork is worth saying so about, since
     /// it is not in the repository being looked at.
@@ -181,23 +161,12 @@ extension PullRequestsModel {
         return "Pushed " + branch + " to " + owner + "'s fork, since this repository is not yours to push to."
     }
 
-    /// Splits one commit message into the form's title and body.
-    /// The body comes back unwrapped: commit messages are wrapped by
-    /// hand to a narrow column, and a pull request reflows its own
-    /// text, so the hand-wrapping reads as broken bullets there.
-    static func description(splitFromMessage message: String) -> (title: String, body: String) {
-        let lines = message.split(separator: "\n", omittingEmptySubsequences: false)
-        let title = lines.first.map(String.init) ?? ""
-        let body = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return (title, Wrapping.unwrapped(body))
-    }
-
     /// Opens the pull request from the form's title and body, with
     /// the template appended below the body after an empty line;
     /// false opens the errors surface. The button dims until the
     /// branch is pushed, so nothing pushes implicitly here.
     func createPullRequest() async -> Bool {
-        guard let worktree = actionWorktree else {
+        guard let worktree = listedWorktree else {
             return false
         }
 
@@ -212,6 +181,15 @@ extension PullRequestsModel {
         do {
             let url = try await performCreate(worktree, title, body)
             ErrorLog.shared.note("Opened pull request " + url)
+            // A stack is built one pull request at a time: each one
+            // links what is open into the stack, and failing to link
+            // never takes the pull request that opened with it.
+            do {
+                try await performLinkStack(worktree)
+            } catch {
+                ErrorLog.shared.report("Stacking on GitHub failed: " + error.localizedDescription)
+            }
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             prTitle = ""
             prBody = ""
             Self.requestSidebarRefresh()
@@ -227,12 +205,13 @@ extension PullRequestsModel {
     /// Pushes the checked-out branch; false means the push failed
     /// and the errors tab should open with the cause.
     func push() async -> Bool {
-        guard let worktree = actionWorktree else {
+        guard let worktree = listedWorktree else {
             return true
         }
 
         do {
             let destination = try await performPush(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
             isPushed = true
             setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
@@ -296,6 +275,32 @@ extension PullRequestsModel {
 
         default:
             "Enabling automerge"
+        }
+    }
+
+    /// Merges a stacked pull request together with every one below
+    /// it, in order; false opens the errors surface. GitHub decides
+    /// how each is merged, so the button says only that it merges.
+    func mergeStack() async -> Bool {
+        guard let worktree = listedWorktree, let number = selected?.number else {
+            return false
+        }
+
+        do {
+            // Linked first, and only then merged: a chain of pull
+            // requests GitHub does not hold as a stack must not be
+            // merged as one, and linking is idempotent, so this
+            // covers a bottom pull request opened anywhere else.
+            // A link that fails takes the merge with it.
+            try await performLinkStack(worktree)
+            try await performMergeStack(worktree, number)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
+            setStatus("Merging the stack.")
+            await reload(keepingSelection: true)
+            return true
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+            return false
         }
     }
 

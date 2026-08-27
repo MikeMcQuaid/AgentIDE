@@ -36,6 +36,27 @@ struct MetadataStoreTests {
     }
 
     @Test
+    func `changes made at the same moment are all kept`() async throws {
+        let root = try TestSupport.temporaryDirectory("store-update")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Loading, changing and saving as three steps kept only the
+        // last writer's copy: everything saved while it held its own
+        // was overwritten, which is how a branch's cached pull
+        // requests and a worktree's recorded session went missing.
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0 ..< 20 {
+                group.addTask {
+                    store.update { $0.prompts["session-" + String(index)] = "prompt" }
+                }
+            }
+        }
+
+        #expect(store.load().prompts.count == 20)
+    }
+
+    @Test
     func `decoding tolerates files written before new fields existed`() throws {
         let root = try TestSupport.temporaryDirectory("store-old")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -54,15 +75,33 @@ struct MetadataStoreTests {
         defer { try? FileManager.default.removeItem(atPath: root) }
         let store = MetadataStore(file: root + "/state.json")
 
+        // Stamped a second apart ending now, so every entry is well
+        // inside the week the age sweep keeps and only the count
+        // caps decide; one entry a week and a bit old proves the
+        // sweep takes it whatever the count.
+        let now = Date()
         var metadata = AppMetadata()
         for age in 0 ... 80 {
             metadata.conversationCache["conversation-\(age)"] =
-                CachedConversation(savedAt: Date(timeIntervalSince1970: TimeInterval(age)))
+                CachedConversation(savedAt: now.addingTimeInterval(TimeInterval(age - 80)))
         }
         for age in 0 ... 40 {
             metadata.pullRequestListsCache["listing-\(age)"] =
-                CachedPullRequestList(summaries: [], savedAt: Date(timeIntervalSince1970: TimeInterval(age)))
+                CachedPullRequestList(summaries: [], savedAt: now.addingTimeInterval(TimeInterval(age - 40)))
         }
+        metadata.enrichedSummaryCache["ancient"] =
+            CachedSummary(
+                summary: PullRequestSummary(
+                    number: 1,
+                    title: "old",
+                    url: "",
+                    headBranch: "old",
+                    mergeable: "",
+                    reviewDecision: "",
+                    checks: "",
+                ),
+                savedAt: now.addingTimeInterval(-700_000),
+            )
         store.save(metadata)
 
         let loaded = store.load()
@@ -72,6 +111,7 @@ struct MetadataStoreTests {
         #expect(loaded.pullRequestListsCache.count == 40)
         #expect(loaded.pullRequestListsCache["listing-0"] == nil)
         #expect(loaded.pullRequestListsCache["listing-40"] != nil)
+        #expect(loaded.enrichedSummaryCache["ancient"] == nil)
     }
 
     @Test

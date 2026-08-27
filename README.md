@@ -40,8 +40,9 @@ before shipping.
   sandbox share one checkout with nothing to keep in sync)
 - **Creates** a worktree and branch from a typed problem statement or an existing
   issue or pull request, narrating each step and the command it is waiting
-  on with a clock that ticks every second, a step that waits marking each
-  second it waits, and staying on that page until
+  on as a terminal writing itself out, a character at a time on a dark
+  panel with a blinking cursor and a clock, and staying on that page
+  until
   the agent's interface is up, the same when a conversation resumes (so
   starting work is one prompt, not a git ritual, a slow step is never a
   blank pane and the pane never appears before the agent does)
@@ -58,12 +59,28 @@ before shipping.
   input or finished straight from `herdr`'s own agent detection, including
   sessions started outside AgentIDE (so one window tells you who needs
   attention)
+- **Lists** directories of your own under a repository, `/opt/homebrew`
+  under brew or your dotfiles under theirs: a laptop icon and the path
+  where a branch would be, its checked-out branch below, the editor in the
+  pane an agent would have taken, and the diff, browser, shell and pull
+  requests where they always are, with the same ahead, behind, unpushed
+  and uncommitted marks every row carries, and a menu to fetch or to check
+  out and fast-forward the default branch; `agentide .` from inside one
+  selects it (so the places you work on by hand live beside the ones
+  agents work on, and no agent ever runs in them)
 - **Groups** worktrees by repository, showing unread terminal and agent activity
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to
   revisit, with a right-click Refresh that asks GitHub about that
   repository's branches at once (so you always know where you are
   needed)
+- **Watches** what is about to change: a pull request whose checks are
+  still running, or that is sitting in the merge queue, is asked about
+  every half minute whatever its row's place in the sidebar, until
+  checks have been running a full hour, which is a stalled run or
+  GitHub itself rather than a result on its way (so the amber dot
+  turns green or red, and a queued pull request merges, about as soon
+  as GitHub knows, and an outage does not cost two calls a minute)
 - **Says** what a branch is doing in GitHub's own icons: green for an open
   pull request or a repository's own branch, purple once merged, orange
   while it actually sits in the merge queue, grey for a draft; then its
@@ -78,11 +95,13 @@ before shipping.
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel
   costs no session survival)
-- **Reflows** multi-line copies from agent terminals: indentation, gutter
-  marks and hard line breaks go while paragraphs and lists survive, but a
-  block that reads as commands or code keeps every line exactly, and
-  Option-drag copies a rectangle (so answers paste cleanly into chat,
-  notes and pull request bodies, and a copied script still runs)
+- **Reflows** multi-line copies from agent terminals only where the
+  lines prove they are prose, by their capitals and sentence punctuation:
+  those lose their indentation, gutter marks and hard line breaks while
+  paragraphs and lists survive, and every other line is kept exactly as
+  copied, since a command wrongly joined is broken and a sentence left
+  wrapped is merely untidy; Option-drag copies a rectangle (so a copied
+  script always still runs, and answers still paste cleanly into chat)
 - **Commits** work the agent forgot to commit, clearly authored as such (so
   nothing is stranded in a worktree and review still sees everything)
 - **Lets** you SSH into every session from an iOS SSH client, with
@@ -100,15 +119,30 @@ before shipping.
 
 ### 🔍 Review
 
+- **Takes** a pasted file or screenshot the way it takes a dropped one:
+  staged into the shared workspace, where the sandbox can read it, and
+  its path typed into the agent (so Cmd-V after Cmd-Shift-4 is enough)
 - **Presents** the agent's conversation beside a pull-request-style review of its
-  diff, syntax highlighted with per-file and total diffstats, generated files
+  diff, syntax highlighted through tree-sitter for sixteen languages and a
+  word list for the rest, with keys-and-sections files (`.gitconfig`,
+  `.ini`, `.toml`, `.env`) understood as such and anything else still
+  finding its strings, numbers and comments, with per-file and total diffstats, generated files
   hidden, a whitespace-only-change toggle and the open pull request's
   conversations inline under their files, resolvable in place (so you review
   what matters the way you would on GitHub)
+- **Opens** any commit under review on its own: click a line of the
+  commit listing and the pane shows that commit's diff and message, the
+  way the last commit reads, only read-only since amending reaches the
+  tip and nothing else (so a branch of ten commits reviews commit by
+  commit without leaving the pane)
 - **Rejects** individual lines to amend the commit, edits commit messages and
   edits files directly in a built-in syntax-highlighted editor, with a
   Markdown file rendering inline at the press of its own button (so small
   fixes and reading what the agent wrote need no other app)
+- **Follows** the page in its embedded browser: click a link or land on
+  a redirect and the address bar says where you are, and that is the
+  address the worktree remembers (so the bar is never a lie about the
+  page under it)
 - **Previews** web pages and rendered Markdown in an embedded browser and opens an
   embedded terminal running as your own user (so you can verify behaviour and
   use `git`, `gh` and other CLI tools without leaving the window)
@@ -132,6 +166,40 @@ before shipping.
 
 ### 🚢 Ship
 
+- **Stacks** branches in one worktree: a sidebar popover shows which
+  branches it reckons are stacked there, drops any that are nothing to do
+  with the work in hand and cuts a new branch on top of the one you are
+  on, the review and pull request tabs show the stack
+  as `main ← lower ← upper` with each entry's own diff a click away, and
+  the sidebar says where a branch stands in its stack, from git before
+  its pull requests are open and from them afterwards, each opening
+  against the branch below it (the bottom one against the default
+  branch, with the lone branch's buttons and behaviour, however many
+  sit above it) with a form filled from that entry's own
+  commits (one commit's message, or the first subject over the rest
+  listed, counted from where the branch forked off the remote's default
+  branch), entries above a branch not yet pushed and opened out of
+  reach in the pull request tab (they still review, and every name in
+  the strip copies from its menu), the review and pull request tabs
+  keeping the same entry in view and opening on the first that could
+  have a pull request, read-only text everywhere still selectable,
+  the stack's own Rebase and Push standing exactly where a lone
+  branch's do, putting every branch back on the one below it and
+  pushing them bottom up, signing every commit they replay and leaving
+  alone any branch already where it belongs, and each pull request
+  opened one at a time telling GitHub the stack it belongs to (so a
+  stack is one checkout, one session and no bookkeeping, and a branch
+  on its own looks exactly as it always did)
+- **Remembers** every answer GitHub gives about a pull request, with
+  when it arrived and the entity tag it came with, in one shared store:
+  no pull request is asked about twice inside a minute however much you
+  click around, relaunching the app included, a branch's listing is
+  asked for conditionally so an unchanged answer costs no rate limit at
+  all, the worktree in front of you refreshes far more often than the
+  ones behind it, and acting on one (merging, pushing, resolving) is
+  what refreshes it at once, and every repository's merge queue is one
+  query rather than one each (so the tabs paint instantly and the rate
+  limit is spent on questions whose answers could actually have changed)
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
@@ -143,6 +211,18 @@ before shipping.
   creating it and its remote the first time and opening the pull request from
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
+- **Fills** a pull request's title and body from the branch's commits,
+  drafts them with the on-device model at the press of the sparkles
+  button, and resets them to the commit message from the button beside
+  it, asking first when something is typed (so the form is never stuck
+  on a draft you no longer want)
+- **Discloses** the agent that wrote a branch in one click, and whenever
+  you tick every box: the harness with the model and effort it ran at,
+  the pickers' defaults when the launch named none, worded as the
+  pickers word them, followed by local review and testing,
+  written into the template's own AI section where there is one (so an
+  honest disclosure is not a thing you retype, and ticking that box never
+  leaves the section empty)
 - **Copies** unresolved review comments straight into a prompt, jumps to
   the failing check (or the checks page when several fail), resolves
   conversations one by one, resolves merge conflicts and enables
@@ -180,8 +260,10 @@ before shipping.
 - **Fits** itself to whatever display it is on: unplugging the monitor a
   fullscreen window is on drops it back onto the screen that is left, at a
   size that screen can show, with the panes narrowed to match, and a
-  fullscreen window sent to another monitor lays itself out again for it
-  (so a window is never stranded larger than the display under it)
+  fullscreen window sent to another monitor lays itself out again for it,
+  and the panes give way far enough that the window shrinks to the size
+  a small screen has room for (so a window is never stranded larger than
+  the display under it)
 - **Keeps** every running shell alive while you move around the app and
   keeps a worktree listed until it is really gone, rebases and failed
   listings included (so only closing a shell or destroying its worktree
@@ -189,11 +271,33 @@ before shipping.
 - **Defers** idle sleep while agents or shells run and resumes sessions the
   sleep killed when the Mac wakes (so a long response survives you
   walking away; closing the lid still sleeps)
+- **Waits** in proportion: a wait under half a second shows nothing,
+  one under a few seconds a spinner, and only a wait that can run long
+  narrates its steps
 - **Waits** out loud: any pane whose data takes a moment, the first
   reading of your worktrees, a diff, a pull request list or the session
   manager, shows what it is waiting on with a clock ticking every second,
   then snaps to the finished view (so an empty state is only ever shown
   once it has been proven empty, never while the answer is still coming)
+- **Keeps** every sidebar row on its two lines: nothing wraps, a row
+  too long for the sidebar runs under its edge and is hidden there,
+  and the sidebar cannot be dragged narrower than a full row (so a
+  branch name is a name and a pull request number is a number, never
+  a column of digits)
+- **Reads** the whole sidebar in parallel: every repository at once,
+  every worktree within one at once and each worktree's handful of
+  git questions at once, on a machine built for exactly that, and
+  asks git about the selected repository every tick but an idle one
+  only every half minute, keeping its rows meanwhile (so a wide
+  sidebar refreshes in the time its slowest worktree takes, and
+  twenty-nine repositories nothing is happening in cost nothing)
+- **Times** every process it runs, every GitHub call and every cache
+  hit or miss into a plain performance log, but only when asked:
+  `script/performance-log on` (off by default and off again with
+  `off`; `AGENTIDE_PERFORMANCE_LOG` in the environment does the same),
+  the log living in `/Users/Shared/sv-<user>/tmp/agentide` so both
+  users can read it, and lines older than a week are swept (so a slow resume can be read back rather than guessed at,
+  and a build of the app by anyone else writes nothing anywhere)
 - **Collects** every failure and status message into a Messages utility tab
   that is always there, and shows failures inline on screens without the
   utility pane (so nothing is lost to a status line that scrolled past or

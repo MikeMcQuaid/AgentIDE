@@ -66,67 +66,6 @@ public struct SessionService: Sendable {
         git.repositories(under: paths.repositoriesDirectory)
     }
 
-    /// The full dashboard state: every repository's worktrees joined
-    /// with their sessions, plus foreign sessions.
-    public func overview() async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
-        let panes = await (try? herdr.panes()) ?? []
-        let activity = spool.activity()
-        let metadata = store.load()
-        var groups = [RepositoryGroup]()
-        for repository in repositories() {
-            let named = await Repository(
-                name: repository.name,
-                path: repository.path,
-                fullName: git.fullName(of: repository),
-            )
-            let baseRef = await git.defaultBaseRef(of: repository)
-            let worktrees = await (try? git.worktrees(of: repository)) ?? []
-            // The main checkout always appears, so repositories show
-            // with no worktrees and orphaned conversations stay
-            // reachable.
-            let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
-            var items = [WorktreeItem]()
-            var seenPaths = Set<String>()
-            for worktree in [mainCheckout] + worktrees where seenPaths.insert(worktree.path).inserted {
-                await items.append(item(
-                    worktree: worktree,
-                    baseRef: baseRef,
-                    panes: panes,
-                    activity: activity,
-                    metadata: metadata,
-                ))
-            }
-            // The main checkout stays pinned first; worktrees order by
-            // recency of their own work.
-            let sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
-            groups.append(RepositoryGroup(
-                repository: named,
-                items: sorted,
-                defaultBranch: baseRef.map(Self.branchName(fromBaseRef:)),
-            ))
-        }
-        // Repositories order by their worktrees' activity; the main
-        // checkout's own churn deliberately does not count, except
-        // while a session runs there, so resuming on the repository
-        // page bumps its repository to the top like a worktree does.
-        groups.sort { first, second in
-            let firstActivity = Self.repositoryActivity(of: first)
-            let secondActivity = Self.repositoryActivity(of: second)
-            return firstActivity == secondActivity
-                ? first.repository.name < second.repository.name
-                : firstActivity > secondActivity
-        }
-        let foreign = panes
-            .filter { SessionName.isAgentIDE($0.sessionName) == false }
-            .map(Self.foreignSession(of:))
-        // The poll is the only thing running while a session is, so
-        // it is what keeps the conversation copies current; the
-        // schedule inside means this costs a dictionary lookup on
-        // almost every tick.
-        await backUpRunningConversations(groups)
-        return (groups, foreign)
-    }
-
     /// Creates a worktree and branch for a prompt and starts the
     /// agent in herdr with the picked model, effort and the prompt
     /// as its initial message. Returns the session name.
@@ -180,6 +119,7 @@ public struct SessionService: Sendable {
     let git: GitClient
     let herdr: HerdrClient
     let github: GitHubClient
+
     let transcripts: TranscriptReader
     let spool: EventSpool
     let store: MetadataStore
@@ -213,9 +153,9 @@ public struct SessionService: Sendable {
             return
         }
 
-        var metadata = store.load()
-        metadata.resumeIDs[sessionName] = transcripts.resumeID(of: transcript)
-        store.save(metadata)
+        store.update { metadata in
+            metadata.resumeIDs[sessionName] = transcripts.resumeID(of: transcript)
+        }
     }
 
     /// Launches an agent in a prepared worktree slot: symlink, prompt
@@ -227,6 +167,8 @@ public struct SessionService: Sendable {
         slot: WorktreeSlot,
         probed version: String? = nil,
     ) async throws -> String {
+        try requireSandboxWorkspace(slot.path)
+
         let sessionName = SessionName.make(repository: slot.repository.name, branch: slot.branch, agent: agent)
         let arguments = runner(for: agent).optionArguments(model: options.model, effort: options.effort)
         await progress("Writing the prompt file")
@@ -245,13 +187,13 @@ public struct SessionService: Sendable {
         )
 
         await progress("Recording the session `" + sessionName + "`")
-        var metadata = store.load()
-        metadata.prompts[sessionName] = prompt
-        metadata.arguments[sessionName] = arguments
-        metadata.seenAt[slot.path] = Date()
-        metadata.sessionsByWorktree[slot.path] = sessionName
-        metadata.intentionallyClosed.removeAll { $0 == slot.path }
-        store.save(metadata)
+        store.update { metadata in
+            metadata.prompts[sessionName] = prompt
+            metadata.arguments[sessionName] = arguments
+            metadata.seenAt[slot.path] = Date()
+            metadata.sessionsByWorktree[slot.path] = sessionName
+            metadata.intentionallyClosed.removeAll { $0 == slot.path }
+        }
         await awaitReady(sessionName: sessionName)
         return sessionName
     }
@@ -272,97 +214,4 @@ public struct SessionService: Sendable {
     }
 
     // MARK: Private
-
-    /// A pane AgentIDE did not create, shown rather than hidden.
-    private static func foreignSession(of pane: HerdrPane) -> AgentSession {
-        AgentSession(
-            name: pane.sessionName,
-            agent: nil,
-            status: pane.isFinished ? .finished : .running,
-            workingDirectory: pane.currentPath,
-            paneID: pane.paneID,
-            activity: pane.activity,
-        )
-    }
-
-    /// The repository's own checkout as a worktree: its branch is
-    /// whatever is actually checked out, so a feature branch in the
-    /// main checkout still matches its pull request in the listing.
-    private func mainCheckout(of repository: Repository, baseRef: String?) async -> Worktree {
-        await Worktree(
-            repositoryName: repository.name,
-            repositoryPath: repository.path,
-            branch: git.currentBranch(worktreePath: repository.path)
-                ?? baseRef.map(Self.branchName(fromBaseRef:)) ?? "main",
-            path: repository.path,
-        )
-    }
-
-    private func item(
-        worktree: Worktree,
-        baseRef: String?,
-        panes: [HerdrPane],
-        activity: [String: Date],
-        metadata: AppMetadata,
-    ) async -> WorktreeItem {
-        // Matched by the recorded session name first: the pane's
-        // current path drifts when the agent changes directory,
-        // which made live sessions vanish from the UI.
-        let recorded = metadata.sessionsByWorktree[worktree.path]
-        let pane = panes.first { pane in
-            SessionName.isAgentIDE(pane.sessionName)
-                && (pane.sessionName == recorded || pane.currentPath == worktree.path)
-        }
-        let session = pane.map { pane in
-            AgentSession(
-                name: pane.sessionName,
-                agent: agentKind(of: pane.sessionName),
-                status: pane.isFinished ? .finished : .running,
-                workingDirectory: pane.currentPath,
-                paneID: pane.paneID,
-                activity: pane.activity,
-                version: metadata.agentVersions[pane.sessionName],
-            )
-        }
-        let past = pastSessions(of: worktree, liveSession: session)
-
-        // Unread is any agent activity since the worktree was last
-        // viewed: the event spool and transcript modification count;
-        // herdr keeps no output clock, and the spool and transcripts
-        // already cover every agent message.
-        var lastEvent = Date.distantPast
-        if let session, let spooled = activity[session.name] {
-            lastEvent = spooled
-        }
-        if let newest = past.first {
-            lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
-        }
-        let seen = metadata.seenAt[worktree.path]
-            ?? session.flatMap { metadata.lastSeen[$0.name] }
-            ?? startedAt
-        let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
-
-        var counts: (ahead: Int, behind: Int)?
-        if let baseRef {
-            counts = await git.aheadBehind(worktreePath: worktree.path, baseRef: baseRef)
-        }
-        let dirty = await git.isDirty(worktreePath: worktree.path)
-        var lastActivity = await git.lastCommitDate(worktreePath: worktree.path)
-        if let session, session.status == .running || dirty {
-            // A live session or uncommitted edits mean work right now.
-            lastActivity = Int(Date().timeIntervalSince1970)
-        }
-        lastActivity = max(lastActivity, Int(lastEvent.timeIntervalSince1970))
-        return await WorktreeItem(
-            worktree: worktree,
-            session: session,
-            isDirty: dirty,
-            aheadOfUpstream: git.aheadOfUpstream(worktreePath: worktree.path),
-            hasUnread: unread,
-            pastSessions: past,
-            aheadOfDefault: counts?.ahead,
-            behindDefault: counts?.behind,
-            lastActivityAt: lastActivity,
-        )
-    }
 }

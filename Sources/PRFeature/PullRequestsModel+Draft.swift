@@ -5,10 +5,15 @@ import AgentIDEDomain
 /// from the model body for length: a branch's unfinished title, body
 /// and template survive leaving the tab and quitting the app.
 extension PullRequestsModel {
-    /// The worktree item this tab acts on: the one checked out on
-    /// the branch the tab lists.
+    /// The worktree this tab is for. Found by path first: a
+    /// worktree's branch changes under the app whenever an agent or
+    /// a restack checks another one out, and matching on the name
+    /// the sidebar last cached then found nothing at all, which
+    /// took the footer's actions and the whole stack with it.
     var branchItem: WorktreeItem? {
-        items.first { $0.worktree.branch == branch }
+        items.first { $0.worktree.path == worktreePath }
+            ?? items.first { $0.worktree.branch == branch }
+            ?? items.first { $0.worktree.branch == currentBranch }
     }
 
     /// Whether the list pane shows the creation form instead: the
@@ -29,13 +34,25 @@ extension PullRequestsModel {
     /// so returning to the tab shows it instantly rather than a
     /// loading state.
     func paintCachedListing() {
-        guard let cached = store.load().pullRequestListsCache[cacheKey]?.summaries else {
+        guard let cached = pullRequests.cachedListing(
+            repositoryPath: repository.path,
+            scope: scope.listScope(branch: listedBranch),
+        ) else {
             summaries = []
             return
         }
 
-        summaries = cached
+        summaries = Self.worthShowing(cached)
         hasLoaded = true
+    }
+
+    /// What a branch's listing shows: once anything is open, the
+    /// closed and merged ones are history and only get in the way of
+    /// the one that is live. Everything is shown when nothing is
+    /// open, so a branch whose pull request was closed still says so.
+    static func worthShowing(_ summaries: [PullRequestSummary]) -> [PullRequestSummary] {
+        let open = summaries.filter { $0.state == "OPEN" }
+        return open.isEmpty ? summaries : open
     }
 
     /// Where a branch's draft is stored, nil without a branch.
@@ -52,11 +69,15 @@ extension PullRequestsModel {
     }
 
     /// Ticks every unticked markdown checkbox in the template, the
-    /// one thing every template review does by hand.
+    /// one thing every template review does by hand. A ticked AI
+    /// box claims a disclosure below it, so one is written: ticking
+    /// that box and leaving the section empty would be the one lie
+    /// this button could tell.
     func tickTemplateBoxes() {
         prTemplate = prTemplate
             .replacing("- [ ]", with: "- [x]")
             .replacing("* [ ]", with: "* [x]")
+        discloseInTemplate()
     }
 
     /// Saves the drafted title, body and template for this branch as
@@ -67,13 +88,13 @@ extension PullRequestsModel {
             return
         }
 
-        var metadata = store.load()
-        metadata.pullRequestDrafts[key] = PullRequestFormDraft(
-            title: prTitle,
-            body: prBody,
-            template: prTemplate,
-        )
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestDrafts[key] = PullRequestFormDraft(
+                title: prTitle,
+                body: prBody,
+                template: prTemplate,
+            )
+        }
     }
 
     /// Restores a saved draft into whatever is still empty. Only
@@ -109,9 +130,9 @@ extension PullRequestsModel {
             return
         }
 
-        var metadata = store.load()
-        metadata.pullRequestDrafts.removeValue(forKey: key)
-        store.save(metadata)
+        store.update { metadata in
+            metadata.pullRequestDrafts.removeValue(forKey: key)
+        }
         loadingDraft = true
         prTitle = ""
         prBody = ""

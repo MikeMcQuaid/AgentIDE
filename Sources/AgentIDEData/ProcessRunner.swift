@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 // MARK: - ProcessResult
@@ -128,18 +129,69 @@ public struct FoundationProcessRunner: ProcessRunner {
         workingDirectory: String?,
         environment: [String: String],
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global().async {
-                do {
-                    try continuation.resume(returning: Self.runBlocking(arguments, workingDirectory, environment))
-                } catch {
-                    continuation.resume(throwing: error)
+        // Every process the app runs passes through here, so this is
+        // where each one's cost is recorded: the command's first
+        // words name it, the directory says what it was about.
+        try await PerformanceLog.time(
+            .process,
+            Self.name(of: arguments),
+            context: workingDirectory ?? "",
+        ) {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global().async {
+                    do {
+                        try continuation.resume(
+                            returning: Self.runBlocking(arguments, workingDirectory, environment),
+                        )
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
         }
     }
 
     // MARK: Private
+
+    /// How many words of a command name it in the log: enough for
+    /// `git rev-list --count` or `gh pr list` without the arguments
+    /// that make every line unique. Git's `-c key=value` hardening
+    /// pairs are skipped, or every git call read the same.
+    private static let namedWords = 3
+
+    private static func name(of arguments: [String]) -> String {
+        // A sandbox launch reads as `sudo --login --set-home` whatever
+        // it runs; its own label, in the environment it sets, is the
+        // name worth logging.
+        let label = arguments.first == "sudo" ? arguments.first { $0.hasPrefix("AGENTIDE_SESSION=") } : nil
+        if let label {
+            return "sandbox " + label.dropFirst("AGENTIDE_SESSION=".count)
+        }
+        var words = [String]()
+        var skipNext = false
+        for word in arguments {
+            if skipNext {
+                skipNext = false
+                continue
+            }
+            if word == "-c" {
+                skipNext = true
+                continue
+            }
+            // A flag before the subcommand says nothing about what
+            // was run: without this every git call in the log read
+            // `git --no-optional-locks` and the subcommand was lost.
+            // A flag after it, like `rev-list --count`, is kept.
+            if word.hasPrefix("--"), words.count == 1 {
+                continue
+            }
+            words.append(word)
+            if words.count == namedWords {
+                break
+            }
+        }
+        return words.joined(separator: " ")
+    }
 
     private static func runBlocking(
         _ arguments: [String],

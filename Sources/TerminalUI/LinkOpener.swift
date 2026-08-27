@@ -113,6 +113,20 @@ public enum LinkOpener {
 public enum FileOpener {
     // MARK: Public
 
+    /// Shows a file that belongs to no worktree in whichever one is
+    /// on screen: `agentide` can be handed anything readable, and
+    /// refusing it would be less useful than showing it.
+    @preconcurrency
+    @MainActor
+    public static func open(absolutePath: String, line: Int?, worktreePath: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(absolutePath, forKey: "editorFilePath")
+        defaults.set(line ?? 0, forKey: "editorFileLine")
+        defaults.set(worktreePath, forKey: "editorFileWorktree")
+        defaults.set(defaults.integer(forKey: "editorFileRequest") + 1, forKey: "editorFileRequest")
+        defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
+    }
+
     /// Routes a worktree-relative file by the command key. Paths
     /// that resolve outside the worktree are refused: a hostile
     /// repository could put `../` segments in a diff path.

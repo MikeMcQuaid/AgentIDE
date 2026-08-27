@@ -10,11 +10,16 @@ public enum PushDestination: Hashable, Sendable {
 
     // MARK: Public
 
-    /// What `gh pr create` needs to name the branch when it lives in
-    /// a fork, nil when the branch is where the pull request is.
-    public func head(branch: String) -> String? {
+    /// How `gh pr create` must name the branch: `owner:branch` when
+    /// it lives in a fork, since the pull request belongs to the
+    /// repository it is opened against rather than the one holding
+    /// the branch, and the plain name otherwise. Never nil: left to
+    /// itself `gh` opens a pull request for whatever is checked out,
+    /// which in a stack of branches in one worktree is rarely the
+    /// branch being looked at.
+    public func head(branch: String) -> String {
         guard case let .fork(owner) = self else {
-            return nil
+            return branch
         }
 
         return owner + ":" + branch
@@ -48,12 +53,25 @@ public struct MergeCleanupReport: Sendable {
 /// Pushing branches, drafting and opening pull requests, and
 /// tidying up after a merge.
 public extension SessionService {
+    /// Every pull request question goes through here, which holds
+    /// the answers and when each was last asked for.
+    internal var pullRequests: PullRequestStore {
+        PullRequestStore(github: github, store: store)
+    }
+
+    /// The same store, for the feature modules: a view asking about
+    /// a pull request must go through the app's one gate, not build
+    /// a query of its own.
+    var pullRequestReads: PullRequestStore {
+        pullRequests
+    }
+
     /// Pushes the branch to origin without opening anything. An
     /// unsigned tip refuses: every pushed commit must be GPG signed
     /// (a local hook enforces the same), and Rebase on origin is the
     /// signing path.
     func push(worktree: Worktree) async throws -> PushDestination {
-        guard await git.isCommitSigned(worktreePath: worktree.path) else {
+        guard await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) else {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )
@@ -75,12 +93,82 @@ public extension SessionService {
     /// request belongs to the repository it is opened against rather
     /// than the one holding the branch.
     func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
-        try await github.createPullRequest(
+        // The branch is the caller's, which is the entry whose form
+        // was filled in, never whatever the worktree has checked out.
+        // A branch opening against the branch below it is what makes
+        // GitHub show a stack, and the bottom of one opens against
+        // the default branch exactly as a lone branch does. Both ends
+        // are named: `gh` left to work either out for itself takes
+        // whatever is checked out as the head, which in a stack is
+        // rarely the branch being opened.
+        let stack = await stack(for: worktree)
+        let branch = worktree.branch
+        return try await github.createPullRequest(
             worktreePath: worktree.path,
             title: title,
             body: body,
-            head: pushDestination(worktree: worktree).head(branch: worktree.branch),
+            head: pushDestination(worktree: worktree).head(branch: branch),
+            base: base(for: branch, in: stack, of: worktree),
         )
+    }
+
+    /// Asks GitHub to show the stack's open pull requests as a
+    /// stack, bottom up, which is what makes them a stack there
+    /// rather than pull requests that happen to chain. Read fresh
+    /// rather than from the cache, which may be a minute behind the
+    /// pull request just opened. `gh stack link` adds to a stack it
+    /// already knows and never removes from one, so repeating it
+    /// whenever a pull request opens is safe, and two is the fewest
+    /// that make a stack.
+    func linkStack(worktree: Worktree) async throws {
+        let stack = await stack(for: worktree)
+        var numbers = [Int]()
+        for branch in stack.branches {
+            let listed = try? await github.pullRequests(
+                repositoryPath: worktree.repositoryPath,
+                scope: .branch(branch),
+            )
+            if let open = listed?.first(where: { $0.state == "OPEN" }) {
+                numbers.append(open.number)
+            }
+        }
+        guard numbers.count >= Self.linkableCount else {
+            return
+        }
+
+        try await github.linkStack(worktreePath: worktree.path, numbers: numbers)
+    }
+
+    /// The repository's default branch by name, nil when neither
+    /// the remote's head nor a local main or master says what it is.
+    func defaultBranchName(of repository: Repository) async -> String? {
+        await git.defaultBaseRef(of: repository).map(Self.branchName(fromBaseRef:))
+    }
+
+    /// What a pull request for this branch opens against: the branch
+    /// below it in its stack, else the repository's default branch,
+    /// read from git and, for a clone whose remote was never given a
+    /// head, from GitHub itself. Never left to `gh` to work out.
+    func base(for branch: String, in stack: BranchStack, of worktree: Worktree) async throws -> String {
+        let parent = stack.parent(of: branch)
+        if let parent, parent != stack.base {
+            return parent
+        }
+
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        if let local = await defaultBranchName(of: repository) {
+            return local
+        }
+        guard let asked = await github.defaultBranch(repositoryPath: worktree.path) else {
+            throw SessionServiceError(repository.name + " has no default branch to open against.")
+        }
+
+        return asked
+    }
+
+    /// Merges a stacked pull request and every one below it.
+    func mergeStack(worktree: Worktree, number: Int) async throws {
+        try await github.mergeStack(repositoryPath: worktree.repositoryPath, number: number)
     }
 
     /// Where this branch belongs: the repository itself when GitHub
@@ -97,8 +185,8 @@ public extension SessionService {
     }
 
     /// Whether the worktree's tip commit is GPG signed, gating Push.
-    func isTipSigned(worktreePath: String) async -> Bool {
-        await git.isCommitSigned(worktreePath: worktreePath)
+    func isTipSigned(worktree: Worktree) async -> Bool {
+        await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch)
     }
 
     /// The branch actually checked out in a worktree, nil when
@@ -109,8 +197,49 @@ public extension SessionService {
 
     /// The branch's full commit messages beyond origin/HEAD, oldest
     /// first, for drafting pull request descriptions.
-    func commitMessages(worktree: Worktree) async -> [String] {
-        await git.commitMessages(worktreePath: worktree.path, baseRef: "origin/HEAD")
+    /// The effort an agent runs at when no flag names one, for the
+    /// disclosure of a session started on the picker's defaults.
+    func defaultEffort(for agent: AgentKind) -> String? {
+        runner(for: agent).defaultEffort
+    }
+
+    /// The commits a pull request would carry: `range` names a stack
+    /// entry's own span (`parent..branch`), nil the checked-out
+    /// branch against the default.
+    func commitMessages(worktree: Worktree, range: String? = nil) async -> [String] {
+        // `origin/HEAD` names the default branch symbolically; a
+        // worktree whose remote never had its head set cannot
+        // resolve it, and git then listed the branch back to the
+        // root, every merged pull request included. The resolved
+        // default base stands in for it.
+        var span = range ?? "origin/HEAD..HEAD"
+        if span.hasPrefix("origin/HEAD..") {
+            // From where the branch forked off the remote's default
+            // branch, not from a local `main` that may sit commits
+            // behind it and drag every one of them into the list.
+            let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+            let branch = String(span.dropFirst("origin/HEAD..".count))
+            // `origin/HEAD` itself when the worktree resolves it,
+            // then the remote's default branch; never a bare local
+            // name, which may sit commits behind the remote and drag
+            // its missing history into the branch's own span.
+            var fork = await git.mergeBase("origin/HEAD", branch, worktreePath: worktree.path)
+            let name = await defaultBranchName(of: repository) ?? "main"
+            if fork == nil {
+                fork = await git.mergeBase("origin/" + name, branch, worktreePath: worktree.path)
+            }
+            if fork == nil {
+                // No remote at all: the local default branch is the
+                // only base there is, and the honest one.
+                fork = await git.mergeBase(name, branch, worktreePath: worktree.path)
+            }
+            guard let fork else {
+                return []
+            }
+
+            span = fork + ".." + branch
+        }
+        return await git.commitMessages(worktreePath: worktree.path, range: span)
     }
 
     /// A pull request title and body drafted by the on-device model,
@@ -194,7 +323,7 @@ public extension SessionService {
                 try await git.resetHard(worktreePath: worktreePath, ref: upstream)
                 report.notes.append("Pulled \(branch) up to \(upstream).")
             } else {
-                try await git.rebaseSigned(worktreePath: worktreePath, onto: upstream)
+                try await git.rebaseSigned(worktreePath: worktreePath, branch: branch, onto: upstream)
                 report.notes.append("Rebased \(counts.ahead) local commits onto \(upstream).")
             }
         } catch {

@@ -7,6 +7,9 @@ import TerminalUI
 struct ReviewFooterView: View {
     // MARK: Internal
 
+    /// Internal so the commit listing's own file shares it.
+    static let footerPadding: CGFloat = 8
+
     @Bindable var model: ReviewModel
 
     /// Commits everything the agent left uncommitted.
@@ -45,7 +48,6 @@ struct ReviewFooterView: View {
 
     // MARK: Private
 
-    private static let footerPadding: CGFloat = 8
     private static let commitListSpacing: CGFloat = 4
     /// git's conventional commit message widths.
     private static let subjectLimit = 50
@@ -53,6 +55,7 @@ struct ReviewFooterView: View {
 
     private static let messageHeightRange: ClosedRange<Double> = 90 ... 600
     private static let fieldInset: CGFloat = 5
+    private static let fieldCorner: CGFloat = 6
     private static let resizeHandleHeight: CGFloat = 7
 
     /// The cross-module signal that switches the utility pane's tab.
@@ -64,20 +67,6 @@ struct ReviewFooterView: View {
     @AppStorage("reviewMessageHeight")
     private var messageHeight = 150.0
     @State private var messageDragBase: Double?
-
-    /// The commit listing coloured like git log: hashes orange,
-    /// subjects bold and the trailing ref decorations green, all in
-    /// one attributed block so selection still spans lines.
-    private var styledCommits: AttributedString {
-        var whole = AttributedString()
-        for (index, line) in model.branchCommits.enumerated() {
-            if index > 0 {
-                whole += AttributedString("\n")
-            }
-            whole += Self.styledCommitLine(line)
-        }
-        return whole
-    }
 
     private var subjectBinding: Binding<String> {
         Binding(
@@ -181,7 +170,13 @@ struct ReviewFooterView: View {
     /// Last commit scope edits the message; the multi-commit scopes
     /// list every commit under review instead.
     @ViewBuilder private var content: some View {
-        if model.scope == .branch || model.scope == .upstream {
+        if model.commitTarget != nil {
+            VStack(alignment: .leading, spacing: Self.footerPadding) {
+                singleCommitHeader
+                messageEditor
+            }
+            .padding(Self.footerPadding)
+        } else if model.scope == .branch || model.scope == .upstream {
             VStack(alignment: .leading, spacing: Self.commitListSpacing) {
                 Text("Commits under review").font(.headline)
                 ScrollView(.vertical) {
@@ -210,6 +205,7 @@ struct ReviewFooterView: View {
                     }
                 }
                 .frame(height: messageHeight)
+                .environment(\.openURL, OpenURLAction { url in show(commit: url) })
             }
             .padding(Self.footerPadding)
         } else {
@@ -226,20 +222,23 @@ struct ReviewFooterView: View {
     /// on save.
     private var messageEditor: some View {
         VStack(spacing: 0) {
-            TextField("Subject", text: subjectBinding)
+            TextField("Subject", text: subjectBinding.readOnly(model.isReadOnly))
+                .readOnly(model.isReadOnly)
                 .textFieldStyle(.plain)
                 .font(.body.monospaced())
                 .padding(Self.fieldInset)
                 .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
                 .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
             Divider()
-            TextEditor(text: bodyBinding)
+            TextEditor(text: bodyBinding.readOnly(model.isReadOnly))
+                .readOnly(model.isReadOnly)
                 .font(.body.monospaced())
                 .frame(height: messageHeight)
                 .overlay(alignment: .topLeading) { columnRule(at: Self.bodyLimit, inset: Self.fieldInset) }
                 .hoverHelp("The commit body; git convention wraps lines at 72 characters")
         }
-        .border(.separator)
+        .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+        .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
     }
 
     /// Live counts against the conventional widths, red when over.
@@ -270,22 +269,5 @@ struct ReviewFooterView: View {
             .frame(width: 1)
             .offset(x: inset + width * CGFloat(limit))
             .allowsHitTesting(false)
-    }
-
-    private static func styledCommitLine(_ line: String) -> AttributedString {
-        let hashEnd = line.firstIndex(of: " ") ?? line.endIndex
-        var hash = AttributedString(String(line[..<hashEnd]))
-        hash.foregroundColor = .orange
-        var rest = String(line[hashEnd...])
-        var trailing = ""
-        if rest.hasSuffix(")"), let open = rest.range(of: " (", options: .backwards) {
-            trailing = String(rest[open.lowerBound...])
-            rest = String(rest[..<open.lowerBound])
-        }
-        var subject = AttributedString(rest)
-        subject.font = .caption.monospaced().weight(.semibold)
-        var decorations = AttributedString(trailing)
-        decorations.foregroundColor = .green
-        return hash + subject + decorations
     }
 }

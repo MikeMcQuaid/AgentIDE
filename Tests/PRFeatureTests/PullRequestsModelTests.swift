@@ -2,6 +2,7 @@ import AgentIDEData
 import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import Synchronization
 import Testing
 
 /// Exercises the pull request model's listing, pagination, caching
@@ -71,20 +72,38 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `visiting the lookahead page raises the fetch limit`() async {
+    func `every scope asks for one small listing and no more`() async {
         let model = makeModel()
-        model.fetchList = { _, limit in (1 ... limit).map { summary($0, head: "branch-\($0)") } }
-        await model.reload()
-        let first = model.fetchedLimit
-        #expect(first == 2 * PullRequestListView.pageSize)
-        #expect(model.hasMore)
-
-        model.page = 1
-        for _ in 0 ..< 200 where model.fetchedLimit == first {
-            try? await Task.sleep(for: .milliseconds(10))
+        let asked = Mutex([Int]())
+        model.fetchList = { _, limit in
+            asked.withLock { $0.append(limit) }
+            return (1 ... limit).map { summary($0, head: "branch-\($0)") }
         }
-        #expect(model.fetchedLimit == 3 * PullRequestListView.pageSize)
-        #expect(model.page == 1)
+        await model.reload()
+        #expect(model.fetchedLimit == GitHubClient.listLimit)
+
+        // Paging walks what is here rather than fetching further
+        // into a repository with thousands of open pull requests.
+        model.page = 1
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(asked.withLock { $0 } == [GitHubClient.listLimit])
+    }
+
+    @Test
+    func `the default branch is not searched for a pull request of its own`() async {
+        let model = makeModel()
+        let asked = Mutex(0)
+        model.fetchList = { _, _ in
+            asked.withLock { $0 += 1 }
+            return []
+        }
+        model.currentBranch = "main"
+        await model.reload()
+        #expect(asked.withLock { $0 } == 0)
+
+        model.currentBranch = "feature"
+        await model.reload()
+        #expect(asked.withLock { $0 } == 1)
     }
 
     @Test
@@ -206,7 +225,7 @@ struct PullRequestsModelTests {
     @Test
     func `generating fills blank fields and completes the template`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        model.fetchCommitMessages = { _ in ["First change\n\nWhy one.", "Second change"] }
+        model.fetchCommitMessages = { _, _ in ["First change\n\nWhy one.", "Second change"] }
         model.generateDescription = { _ in ("Drafted title", "Drafted body") }
         model.fillTemplate = { _, template in "filled: " + template }
         model.prTemplate = "- [ ] Checked"
@@ -217,7 +236,7 @@ struct PullRequestsModelTests {
 
         // Without a repository template nothing is invented.
         let bare = makeModel(items: [item(branch: "feature", ahead: 1)])
-        bare.fetchCommitMessages = { _ in ["Only change\n\nWhy."] }
+        bare.fetchCommitMessages = { _, _ in ["Only change\n\nWhy."] }
         bare.fillTemplate = { _, _ in "should never be asked" }
         #expect(await bare.generateDescription())
         #expect(bare.prTitle == "Only change")

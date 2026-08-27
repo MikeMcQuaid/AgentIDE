@@ -28,8 +28,7 @@ extension DashboardModel {
     /// repository rather than all of them, since asking about every
     /// branch everywhere is how a rate limit is reached.
     public func refreshRepository(path: String) async {
-        nextPullRequestFetch = nextPullRequestFetch.filter { $0.key.hasPrefix(path + "#") == false }
-        queuesFetchedAt.removeValue(forKey: path)
+        pullRequests.invalidateListings(repositoryPath: path)
         await refresh(forcing: path)
     }
 
@@ -38,21 +37,17 @@ extension DashboardModel {
     /// per-pull-request field can answer, and it runs on the poll
     /// rather than per row.
     func refreshMergeQueues() async {
-        for repository in groups.map(\.repository) where queuesDue(repository.path) {
-            queuedNumbers[repository.path] = await github.queuedNumbers(repositoryPath: repository.path)
-            queuesFetchedAt[repository.path] = Date()
+        // One query for every repository due, not one each.
+        // While anything is queued the queue is what is about to
+        // change, so it is asked about as often as the pull request.
+        let anythingQueued = branchPullRequests.values.contains { $0?.isQueued == true }
+        let answers = await pullRequests.queuedNumbers(
+            repositoryPaths: groups.map(\.repository.path),
+            interval: anythingQueued ? Self.inFlightInterval : Self.queueInterval,
+        )
+        for (path, numbers) in answers {
+            queuedNumbers[path] = numbers
         }
-    }
-
-    /// Whether a repository's queue is due another look: it changes
-    /// as pull requests merge, so it is asked for regularly, but far
-    /// less often than the branches themselves.
-    private func queuesDue(_ repositoryPath: String) -> Bool {
-        guard let fetched = queuesFetchedAt[repositoryPath] else {
-            return true
-        }
-
-        return Date().timeIntervalSince(fetched) >= Self.queueInterval
     }
 
     /// The summary as the sidebar shows it: queued from the
@@ -101,20 +96,34 @@ extension DashboardModel {
             let rows = group.items.filter { $0.worktree.path != group.repository.path || isOffDefaultBranch($0) }
             for item in rows {
                 let key = item.worktree.repositoryPath + "#" + item.worktree.branch
-                if let due = nextPullRequestFetch[key], due > Date() {
-                    continue
-                }
                 if ridesOutOutage, item.id != selection?.id {
                     continue
                 }
 
-                nextPullRequestFetch[key] = Date().addingTimeInterval(interval(for: item, collapsed: collapsed))
                 do {
-                    let summaries = try await github.pullRequests(
+                    // Nil means the store asked recently enough; the
+                    // row keeps what it is already showing.
+                    guard let summaries = try await pullRequests.listingIfDue(
                         repositoryPath: group.repository.path,
                         scope: .branch(item.worktree.branch),
-                    )
-                    let summary = Self.displayed(summaries)
+                        interval: interval(for: item, collapsed: collapsed),
+                    ) else {
+                        continue
+                    }
+
+                    // The listing says which pull request the branch has;
+                    // its checks, review and mergeability come from the
+                    // one-pull-request query, on its own stamp, since the
+                    // listing's conditional REST carries none of them.
+                    var summary = Self.displayed(summaries)
+                    if let open = summary, open.state == "OPEN" {
+                        let enriched = try? await pullRequests.summary(
+                            repositoryPath: group.repository.path,
+                            number: open.number,
+                            interval: interval(for: item, collapsed: collapsed),
+                        )
+                        summary = enriched ?? summary
+                    }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
                     persist(summary, key: key)
@@ -134,12 +143,10 @@ extension DashboardModel {
     /// base branches that are other cached pull requests' heads.
     /// 1 means unstacked.
     public func stackDepth(for item: WorktreeItem) -> Int {
-        let prefix = item.worktree.repositoryPath + "#"
         var byHead = [String: PullRequestSummary]()
-        let cached = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
         // Stacking is a question about open pull requests; a merged
         // one's base is history.
-        for summary in cached where summary.state == "OPEN" {
+        for summary in openPullRequests(in: item.worktree.repositoryPath) {
             byHead[summary.headBranch] = summary
         }
         guard var current = byHead[item.worktree.branch] else {
@@ -155,10 +162,93 @@ extension DashboardModel {
         return depth
     }
 
+    /// Where a worktree's branch sits in its stack and how tall that
+    /// stack is, so a row can say `2/3` rather than a bare count:
+    /// what is under a branch and what rides on it are different
+    /// questions, and both matter when deciding what to do next.
+    public func stackStanding(for item: WorktreeItem) -> StackStanding {
+        var byHead = [String: PullRequestSummary]()
+        var byBase = [String: PullRequestSummary]()
+        for summary in openPullRequests(in: item.worktree.repositoryPath) {
+            byHead[summary.headBranch] = summary
+            byBase[summary.baseBranch] = summary
+        }
+        // Nothing open on GitHub chains to this branch, which is
+        // the ordinary case before the pull requests exist; git
+        // knows what is stacked here either way.
+        guard let own = byHead[item.worktree.branch] else {
+            return derivedStanding(for: item) ?? StackStanding(position: 1, height: 1)
+        }
+
+        let position = stackDepth(for: item)
+        var height = position
+        var current = own
+        var seen = Set([current.headBranch])
+        while let next = byBase[current.headBranch], seen.insert(next.headBranch).inserted {
+            height += 1
+            current = next
+        }
+        // GitHub's chain only reaches as far as the pull requests
+        // that exist: a stack whose top is not pushed yet, or whose
+        // entries all still target the default branch, measures
+        // short or not at all. git sees the whole thing, so the
+        // taller answer wins.
+        let chained = StackStanding(position: position, height: height, base: own.baseBranch)
+        guard let derived = derivedStanding(for: item), derived.height > chained.height else {
+            return chained.isStacked
+                ? chained
+                : derivedStanding(for: item) ?? chained
+        }
+
+        return derived
+    }
+
     // MARK: Private
 
-    private static let selectedInterval: TimeInterval = 30
+    /// Every open pull request the app knows of in a repository:
+    /// the per-branch answers the poll keeps, plus every listing
+    /// the shared store has cached. A stack's other branches have
+    /// no worktree of their own, so their pull requests only ever
+    /// arrive through the tab's listings, and a chain walked over
+    /// the poll's answers alone stopped at the first of them.
+    private func openPullRequests(in repositoryPath: String) -> [PullRequestSummary] {
+        let prefix = repositoryPath + "#"
+        let polled = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
+        let listed = store.load()
+            .pullRequestListsCache
+            .filter { $0.key.hasPrefix("list#" + repositoryPath + "#") }
+            .flatMap(\.value.summaries)
+        var seen = Set<Int>()
+        return (polled + listed).filter { $0.state == "OPEN" && seen.insert($0.number).inserted }
+    }
+
+    private static let selectedInterval: TimeInterval = 60
     private static let queueInterval: TimeInterval = 60
+
+    /// How often a pull request with checks running or a place in
+    /// the queue is asked about: the store's floor is one minute,
+    /// so this asks as soon as it may.
+    private static let inFlightInterval: TimeInterval = 30
+
+    /// Checks running longer than this are a stalled run or GitHub
+    /// itself, not a result on its way, and the row goes back to
+    /// its tier rather than asking twice a minute for hours.
+    private static let pendingPatience: TimeInterval = 3_600
+
+    /// Whether a pull request is about to change: queued, or with
+    /// checks that started running less than an hour ago.
+    private func isInFlight(_ pullRequest: PullRequestSummary, in repositoryPath: String) -> Bool {
+        if pullRequest.isQueued {
+            return true
+        }
+        guard pullRequest.checks == "PENDING",
+              let pending = pullRequests.pendingFor(repositoryPath: repositoryPath, number: pullRequest.number)
+        else {
+            return false
+        }
+
+        return pending < Self.pendingPatience
+    }
 
     /// How long after merging or closing a pull request still speaks
     /// for a branch of the same name: thirty days.
@@ -190,12 +280,12 @@ extension DashboardModel {
         // the user to clean up or delete by hand.
         switch await cleanUp(item: item) {
         case .dirty:
-            ErrorLog.shared.report(
+            ErrorLog.shared.note(
                 "\(item.worktree.branch) merged but has uncommitted changes; left in place for you to review",
             )
 
         case .unmerged:
-            ErrorLog.shared.report(
+            ErrorLog.shared.note(
                 "\(item.worktree.branch) merged but has commits not on the base branch; left in place",
             )
 
@@ -254,16 +344,25 @@ extension DashboardModel {
     }
 
     private func persist(_ summary: PullRequestSummary?, key: String) {
-        var metadata = store.load()
-        if let summary {
-            metadata.pullRequestCache[key] = summary
-        } else {
-            metadata.pullRequestCache.removeValue(forKey: key)
+        store.update { metadata in
+            if let summary {
+                metadata.pullRequestCache[key] = summary
+            } else {
+                metadata.pullRequestCache.removeValue(forKey: key)
+            }
         }
-        store.save(metadata)
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {
+        // A pull request in flight is about to change: checks still
+        // running will pass or fail, and a queued one will merge or
+        // leave the queue within the hour. Those are asked about
+        // every half minute whatever their row's tier.
+        let pullRequest = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
+            .flatMap(\.self)
+        if let pullRequest, pullRequest.state == "OPEN", isInFlight(pullRequest, in: item.worktree.repositoryPath) {
+            return Self.inFlightInterval
+        }
         if collapsed.contains(item.worktree.repositoryPath) {
             return Self.collapsedInterval
         }

@@ -13,14 +13,27 @@ extension PullRequestsModelTests {
         items: [WorktreeItem] = [],
         metadataFile: String? = nil,
     ) -> PullRequestsModel {
+        // The entry a worktree was last looking at lives in the
+        // defaults, which every test in the process shares: without
+        // this, one test's `show(branch:)` chose the branch the next
+        // one opened on.
+        for item in items {
+            StackSelection.remember(nil, for: item.worktree.path)
+        }
         let model = makeBareModel(items: items, metadataFile: metadataFile)
         model.fetchList = { _, _ in [] }
         model.fetchSummary = { _ in nil }
         model.fetchHasMergeQueue = { false }
         model.fetchThreads = { _ in [] }
         model.performCreate = { _, _, _ in "" }
+        model.performLinkStack = { _ in
+            // Succeeds without side effects.
+        }
+        model.performMergeStack = { _, _ in
+            // Succeeds without side effects.
+        }
         model.fetchTemplate = { _ in nil }
-        model.fetchCommitMessages = { _ in [] }
+        model.fetchCommitMessages = { _, _ in [] }
         model.generateDescription = { _ in nil }
         model.fillTemplate = { _, _ in nil }
         model.performMergeChange = { _ in
@@ -71,6 +84,8 @@ extension PullRequestsModelTests {
         return PullRequestsModel(
             repository: Repository(name: "repo", path: "/repo"),
             branch: "feature",
+            worktreePath: nil,
+            defaultBranch: "main",
             items: items,
             github: GitHubClient(runner: runner),
             service: service,
@@ -83,21 +98,23 @@ extension PullRequestsModelTests {
         head: String,
         base: String = "main",
         state: String = "OPEN",
+        mergeable: String = "",
+        checks: String = "",
     ) -> PullRequestSummary {
         PullRequestSummary(
             number: number,
             title: "Title \(number)",
             url: "",
             headBranch: head,
-            mergeable: "",
+            mergeable: mergeable,
             reviewDecision: "",
-            checks: "",
+            checks: checks,
             baseBranch: base,
             state: state,
         )
     }
 
-    func item(branch: String, ahead: Int?) -> WorktreeItem {
+    func item(branch: String, ahead: Int?, session: AgentSession? = nil) -> WorktreeItem {
         WorktreeItem(
             worktree: Worktree(
                 repositoryName: "repo",
@@ -105,7 +122,7 @@ extension PullRequestsModelTests {
                 branch: branch,
                 path: "/worktrees/" + branch,
             ),
-            session: nil,
+            session: session,
             isDirty: false,
             aheadOfUpstream: ahead,
             hasUnread: false,

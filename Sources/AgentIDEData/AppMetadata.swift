@@ -19,6 +19,27 @@ public struct CachedWorktree: Codable, Hashable, Sendable {
 
     /// The worktree's canonical path.
     public var path = ""
+
+    /// Whether it is a directory of your own rather than a worktree.
+    public var isHostDirectory = false
+
+    /// What the row said last time: uncommitted work, the commit
+    /// counts, and whether a session was running in it, so the pane
+    /// knows to wait for herdr rather than showing conversations.
+    public var isDirty = false
+    public var aheadOfUpstream: Int?
+    public var aheadOfDefault: Int?
+    public var behindDefault: Int?
+    public var lastActivityAt = 0
+    public var hasSession = false
+
+    /// The stack the row's worktree held at the last reading: its
+    /// base, its branches bottom first and which was checked out.
+    /// Deriving one is a hundred git calls across a wide sidebar,
+    /// and every launch was doing all of them in its first second.
+    public var stackBase: String?
+    public var stackBranches: [String] = []
+    public var stackCheckedOut: String?
 }
 
 // MARK: - CachedRepository
@@ -40,6 +61,9 @@ public struct CachedRepository: Codable, Hashable, Sendable {
 
     /// The GitHub `owner/name`, when known.
     public var fullName: String?
+
+    /// The repository's default branch, when known.
+    public var defaultBranch: String?
 
     /// The checkout path.
     public var path = ""
@@ -98,9 +122,79 @@ public struct AppMetadata: Codable, Sendable {
             .decodeIfPresent([String].self, forKey: .intentionallyClosed) ?? []
         pullRequestDrafts = try container
             .decodeIfPresent([String: PullRequestFormDraft].self, forKey: .pullRequestDrafts) ?? [:]
+        hostDirectories = try container
+            .decodeIfPresent([String: [String]].self, forKey: .hostDirectories) ?? [:]
+        stackExclusions = try container
+            .decodeIfPresent([String: [String]].self, forKey: .stackExclusions) ?? [:]
+        fetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .fetchedAt) ?? [:]
+        queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
+        mergeQueueCapability = try container
+            .decodeIfPresent([String: Bool].self, forKey: .mergeQueueCapability) ?? [:]
+        // The newer ledgers decode as one value from the same
+        // decoder, which keeps this initialiser within its length.
+        let ledgers = try Ledgers(from: decoder)
+        discoveredModels = ledgers.discoveredModels
+        discoveredModelsVersion = ledgers.discoveredModelsVersion
+        etags = ledgers.etags
+        pendingSince = ledgers.pendingSince
+        terminalSchemes = ledgers.terminalSchemes
     }
 
     // MARK: Public
+
+    /// Directories of your own listed under a repository: paths on
+    /// the Mac that get a shell, an editor and a diff but never an
+    /// agent, keyed by the repository they are listed under.
+    public var hostDirectories: [String: [String]] = [:]
+
+    /// When each pull request question was last put to GitHub, by
+    /// the asking key. The whole app's timers, in one place and in
+    /// the file, so no amount of clicking or relaunching asks about
+    /// one pull request more than once a minute. See
+    /// `PullRequestStore`, which is the only thing that writes here.
+    public var fetchedAt: [String: Date] = [:]
+
+    /// Each repository's merge queue at its last listing, kept so a
+    /// relaunch shows the queue it knew rather than asking at once.
+    public var queuedCache: [String: [Int]] = [:]
+
+    /// Whether each repository merges through a queue at all.
+    public var mergeQueueCapability: [String: Bool] = [:]
+
+    /// The models each CLI last reported, by agent raw value, so the
+    /// pickers open on a relaunch with the real list while the CLI
+    /// is asked again in the background: asking took twenty seconds
+    /// of sandbox launch on every start.
+    public var discoveredModels: [String: [String]] = [:]
+
+    /// The CLI version each model list came from: a list is asked
+    /// for again only when the CLI has changed, since the answer
+    /// cannot have.
+    public var discoveredModelsVersion: [String: String] = [:]
+
+    /// The entity tag GitHub last answered each REST listing with,
+    /// by the listing's key. Sent back as `If-None-Match`, so a poll
+    /// that finds nothing changed is one round trip and no rate
+    /// limit, which is most polls.
+    public var etags: [String: String] = [:]
+
+    /// When each pull request's checks were first seen still running,
+    /// by summary key: one that has been pending an hour is more
+    /// likely a stalled check or GitHub itself than a run about to
+    /// finish, and stops being asked about every half minute.
+    public var pendingSince: [String: Date] = [:]
+
+    /// "dark" or "light" per worktree path: the appearance its agent
+    /// was launched under. Agent TUIs read the terminal's colours
+    /// once at startup and never again, so the pane must keep the
+    /// palette the agent believes in for the session's whole life.
+    public var terminalSchemes: [String: String] = [:]
+
+    /// Branches a worktree's stack should leave out, by worktree
+    /// path. The stack is inferred from ancestry, which cannot know
+    /// that an old branch sharing history is nothing to do with the
+    /// work in hand; this is where saying so is remembered.
+    public var stackExclusions: [String: [String]] = [:]
 
     /// When each session was last seen by the user, for unread state.
     public var lastSeen: [String: Date] = [:]
@@ -212,6 +306,24 @@ public struct AppMetadata: Codable, Sendable {
                 .prefix(Self.conversationCap)
             enrichedSummaryCache = Dictionary(uniqueKeysWithValues: Array(newest))
         }
+        // The ledger outlives every value it stamps, so it is
+        // trimmed by age rather than by count: a stamp older than
+        // the longest interval anything asks for can only say
+        // "ask again", which is what its absence says too.
+        let stale = Date().addingTimeInterval(-Self.stampLife)
+        fetchedAt = fetchedAt.filter { $0.value > stale }
+        // The dated caches age out at a week: a listing, header,
+        // conversation or thread set unread for that long is not
+        // worth the file it takes up.
+        let old = Date().addingTimeInterval(-Self.cacheLife)
+        pullRequestListsCache = pullRequestListsCache.filter { $0.value.savedAt > old }
+        // An entity tag outlives nothing: without the listing it
+        // stamped, sending it back asks GitHub to answer 304 for a
+        // listing the app cannot produce.
+        etags = etags.filter { pullRequestListsCache[$0.key] != nil }
+        conversationCache = conversationCache.filter { $0.value.savedAt > old }
+        enrichedSummaryCache = enrichedSummaryCache.filter { $0.value.savedAt > old }
+        threadsCache = threadsCache.filter { $0.value.savedAt > old }
         if threadsCache.count > Self.conversationCap {
             let newest = threadsCache
                 .sorted { $0.value.savedAt > $1.value.savedAt }
@@ -221,6 +333,38 @@ public struct AppMetadata: Codable, Sendable {
     }
 
     // MARK: Private
+
+    /// The newer ledgers of the metadata, each absent from an older
+    /// file and decoded tolerantly.
+    private struct Ledgers: Decodable {
+        // MARK: Lifecycle
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            discoveredModels = try container.decodeIfPresent([String: [String]].self, forKey: .discoveredModels) ?? [:]
+            discoveredModelsVersion = try container
+                .decodeIfPresent([String: String].self, forKey: .discoveredModelsVersion) ?? [:]
+            etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
+            pendingSince = try container.decodeIfPresent([String: Date].self, forKey: .pendingSince) ?? [:]
+            terminalSchemes = try container.decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
+        }
+
+        // MARK: Internal
+
+        var discoveredModels: [String: [String]] = [:]
+        var discoveredModelsVersion: [String: String] = [:]
+        var etags: [String: String] = [:]
+        var pendingSince: [String: Date] = [:]
+        var terminalSchemes: [String: String] = [:]
+    }
+
+    /// How long a fetch stamp is worth keeping: longer than the
+    /// slowest poll interval, short enough that the file does not
+    /// collect a line per pull request ever seen.
+    private static let stampLife: TimeInterval = 86_400
+
+    /// A week: how long a cached value is kept unread.
+    private static let cacheLife: TimeInterval = 604_800
 
     /// Enough for every recently visited conversation and listing
     /// without the file growing forever.
@@ -252,104 +396,4 @@ public struct PullRequestFormDraft: Codable, Sendable {
 
     /// The template as edited.
     public let template: String
-}
-
-// MARK: - CachedSummary
-
-/// One enriched pull request header, stamped so the cap can evict
-/// the oldest.
-public struct CachedSummary: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached header stamped now by default.
-    public init(summary: PullRequestSummary, savedAt: Date = Date()) {
-        self.summary = summary
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The enriched summary.
-    public let summary: PullRequestSummary
-
-    /// When the header was cached.
-    public let savedAt: Date
-}
-
-// MARK: - CachedThreads
-
-/// One conversation's review threads, stamped so the cap can evict
-/// the oldest.
-public struct CachedThreads: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates cached threads stamped now by default.
-    public init(threads: [ReviewThread], savedAt: Date = Date()) {
-        self.threads = threads
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The conversation threads.
-    public let threads: [ReviewThread]
-
-    /// When the threads were cached.
-    public let savedAt: Date
-}
-
-// MARK: - CachedPullRequestList
-
-/// One repository scope's cached pull request listing, stamped so
-/// the cap can evict the oldest.
-public struct CachedPullRequestList: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached listing stamped now by default.
-    public init(summaries: [PullRequestSummary], savedAt: Date = Date()) {
-        self.summaries = summaries
-        self.savedAt = savedAt
-    }
-
-    // MARK: Public
-
-    /// The listing as fetched.
-    public var summaries: [PullRequestSummary]
-
-    /// When the listing was cached, for eviction.
-    public var savedAt: Date
-}
-
-// MARK: - CachedConversation
-
-/// One pull request's cached body and feedback timeline.
-public struct CachedConversation: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a cached conversation stamped now by default.
-    public init(body: String = "", events: [ReviewComment] = [], savedAt: Date = Date()) {
-        self.body = body
-        self.events = events
-        self.savedAt = savedAt
-    }
-
-    /// Decodes tolerantly: entries cached before the stamp existed
-    /// count as oldest rather than failing the whole metadata load.
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
-        events = try container.decodeIfPresent([ReviewComment].self, forKey: .events) ?? []
-        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .distantPast
-    }
-
-    // MARK: Public
-
-    /// The pull request's description.
-    public var body: String
-
-    /// The reviews and comments, in fetched order.
-    public var events: [ReviewComment]
-
-    /// When the conversation was cached, for eviction.
-    public var savedAt: Date
 }

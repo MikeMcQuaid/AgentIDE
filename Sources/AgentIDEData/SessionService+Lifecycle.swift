@@ -110,6 +110,11 @@ public extension SessionService {
         try await git.fetch(repositoryPath: repository.path)
     }
 
+    /// A tracked file's committed content; see `GitClient`.
+    func trackedFile(worktreePath: String, path: String) async -> String? {
+        await git.trackedFile(worktreePath: worktreePath, path: path)
+    }
+
     /// Removes the symlink an earlier release kept beside a
     /// uuid-layout worktree; the canonical path is what git knows,
     /// so this is cosmetic cleanup of the old layout.
@@ -197,8 +202,17 @@ public extension SessionService {
         for path in worktrees.map(\.path) + recorded.sorted() where known.insert(path).inserted {
             candidates.append(path)
         }
+        // Decoding a transcript directory's name cannot tell a dash
+        // from the underscore or dot it replaced, so a discovered
+        // path that encodes the same as a known worktree is that
+        // worktree; only a genuinely unknown one becomes a candidate.
+        let encodedKnown = Set(candidates.compactMap(encodedTranscriptName))
         let discovered = transcriptWorktreePaths(under: worktreeContainers(of: candidates))
         for path in discovered where known.insert(path).inserted {
+            if let encoded = encodedTranscriptName(path), encodedKnown.contains(encoded) {
+                continue
+            }
+
             candidates.append(path)
         }
 
@@ -214,6 +228,15 @@ public extension SessionService {
     }
 
     // MARK: Internal
+
+    /// How Claude Code names a working directory's transcript
+    /// directory, for telling two spellings of one path apart.
+    internal func encodedTranscriptName(_ path: String) -> String? {
+        runners
+            .first(where: \.scopesTranscriptsByWorkingDirectory)?
+            .transcriptDirectory(workingDirectory: path, sandboxHome: paths.sandboxHome)
+            .map { URL(filePath: $0).lastPathComponent }
+    }
 
     /// The `worktrees/<repository>` directories the paths live
     /// under (an older release's `worktrees/<uuid>` ones included):

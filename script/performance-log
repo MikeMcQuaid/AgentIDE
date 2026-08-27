@@ -1,0 +1,34 @@
+#!/bin/bash
+# Switch the installed app's performance log on or off, or say which
+# it is: the log is off unless a marker file exists in the shared
+# temporary directory, which this script creates or removes. Takes
+# effect at the next timed call, no relaunch needed.
+set -euo pipefail
+
+user="${USER#sandvault-}"
+directory="/Users/Shared/sv-${user}/tmp/agentide"
+marker="${directory}/performance-log"
+log="${directory}/performance.log"
+
+case "${1:-status}" in
+  on)
+    mkdir -p "${directory}"
+    touch "${marker}"
+    echo "Performance logging on; lines land in ${log}"
+    ;;
+  off)
+    rm -f "${marker}"
+    echo "Performance logging off"
+    ;;
+  status)
+    if [[ -e "${marker}" ]]; then
+      echo "Performance logging is on (${log})"
+    else
+      echo "Performance logging is off"
+    fi
+    ;;
+  *)
+    echo "Usage: ${0} [on|off|status]" >&2
+    exit 1
+    ;;
+esac
