@@ -47,6 +47,28 @@ let package = Package(
         ),
     ],
     targets: [
+        // The app shell's own sources, as a plain target so they can
+        // be type-checked without Xcode. The app itself is still
+        // built from `project.yml`, which owns its bundle, its icon
+        // and the `bin` directory it ships; nothing here produces a
+        // runnable app. It exists because Xcode runs SwiftTerm's
+        // build tool plugin under `sandbox-exec`, which cannot nest,
+        // so inside the sandbox `swift build` is the only build
+        // there is, and this is how it reaches `App`.
+        .target(
+            name: "AgentIDEAppSources",
+            dependencies: [
+                "AgentIDEData",
+                "DashboardFeature",
+                "PRFeature",
+                "ReviewFeature",
+                "SessionFeature",
+                "TerminalUI",
+            ],
+            path: "App",
+            exclude: ["Assets.xcassets"],
+            swiftSettings: mainActorByDefault,
+        ),
         .target(
             name: "AgentIDEDomain",
             swiftSettings: approachableConcurrency,

@@ -44,7 +44,13 @@ periphery_build_args=(-- -skipPackagePluginValidation)
 # like a compile error, so one retry separates the flake from a
 # genuine failure before giving up.
 build() {
-  xcodebuild "${args[@]}" clean build >"$log" 2>&1
+  if [[ -n "${SV_SESSION_ID:-}" ]]; then
+    # `xcodebuild` cannot run here at all: see script/build.
+    swift package clean
+    swift build --disable-sandbox -v >"$log" 2>&1
+  else
+    xcodebuild "${args[@]}" clean build >"$log" 2>&1
+  fi
 }
 
 if ! build; then
@@ -55,50 +61,27 @@ if ! build; then
     exit 1
   fi
 fi
+# Neither analysis pass can run inside the sandbox, so the build
+# above is all it offers: every target compiled, `App` included.
+# SwiftLint's analyser replays the compiler for each file, and a
+# `swift build` log leaves it without cursor information for most of
+# them, which it reports as a confident zero having read nothing;
+# periphery's own build cannot load the manifest, since that too is
+# compiled under a `sandbox-exec` that cannot nest. Both work on the
+# host, which is where this belongs before a pull request.
+if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  echo "sandboxed: every target compiled, and that is all this can check here" >&2
+  echo "SwiftLint's analyser and periphery both need the host: run it there" >&2
+  echo "before opening or updating a pull request" >&2
+  exit 0
+fi
+
 # Both passes always run, and the script fails at the end if either
 # did: SwiftLint's analyzer trips over the beta's macro plugin server
 # often enough that aborting on it kept periphery from ever running
 # here, so CI found dead code this gate had silently skipped.
 failed=0
-if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # The sandbox's SourceKit misreads one import as unused; the
-  # baseline swallows exactly that known false positive so real
-  # findings still fail, while the host and CI stay strict with no
-  # baseline at all. The template carries no absolute paths, so it
-  # works for any sandbox user's checkout.
-  baseline=".build/swiftlint-analyze-baseline.json"
-  sed "s#__CHECKOUT__#$(pwd | sed 's#/#\\\\/#g')#g" \
-    .swiftlint-analyze-sandbox-baseline.template.json >"$baseline"
-  # A file whose macros must expand is left to the host and to CI.
-  # `sandbox-exec` does not nest, so the plugin server that expands
-  # `@State` and `@Observable` is denied its own sandbox and the
-  # compiler waits out a timeout for every one of them: a view with
-  # nineteen took seven minutes on its own, against a quarter of a
-  # second for a file with none. What they report here would be read
-  # off code the compiler never finished expanding anyway.
-  macros='^[[:space:]]*@(State|StateObject|Observable|ObservedObject'
-  macros+='|Environment|EnvironmentObject|AppStorage|Bindable|FocusState'
-  macros+='|Previewable|Query|Model)\b'
-  analysable=()
-  skipped=0
-  while IFS= read -r file; do
-    # Its own stdin, or it eats the list the loop is reading.
-    if grep -qE "${macros}" "${file}" </dev/null; then
-      skipped=$((skipped + 1))
-    else
-      analysable+=("${file}")
-    fi
-    # Absolute paths, to match what the build log records: relative
-    # ones match nothing in it, and the analyser then reports a
-    # confident zero violations having read no file at all.
-  done < <(find "${PWD}/App" "${PWD}/Sources" -name '*.swift' -type f | sort)
-  swiftlint analyze --compiler-log-path "$log" --strict --baseline "$baseline" \
-    "${analysable[@]}" || failed=1
-  echo "skipped ${skipped} files whose macros cannot expand inside the sandbox" >&2
-  echo "run script/analyze on the host before opening a pull request" >&2
-else
-  swiftlint analyze --compiler-log-path "$log" --strict || failed=1
-fi
+swiftlint analyze --compiler-log-path "$log" --strict || failed=1
 
 # The project is scanned through the app scheme because periphery's
 # SPM mode does not find an index store under the current build
@@ -108,24 +91,6 @@ fi
 # report dependency output and required module imports as unused.
 if ! command -v periphery &>/dev/null; then
   echo "skipping periphery: not installed (add it via the Brewfile)" >&2
-elif [[ -n "${SV_SESSION_ID:-}" ]]; then
-  # periphery re-drives xcodebuild, whose package resolution cannot
-  # nest inside sandbox-exec; these user defaults turn off SPM's own
-  # manifest sandbox for this already sandboxed user, and the scan
-  # reuses the index store the build above just wrote instead of
-  # building again.
-  defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES
-  defaults write com.apple.dt.Xcode IDEPackageSupportDisablePackageSandbox -bool YES
-  periphery scan \
-    --project AgentIDE.xcodeproj \
-    --schemes AgentIDEApp \
-    --skip-build \
-    --index-store-path .DerivedData/Index.noindex/DataStore \
-    --report-exclude '**/.DerivedData/**' '**/BuildToolPluginIntermediates/**' \
-    --retain-unused-imported-modules SwiftTerm \
-    --strict \
-    --disable-update-check \
-    "${periphery_build_args[@]}" || failed=1
 else
   periphery scan \
     --project AgentIDE.xcodeproj \

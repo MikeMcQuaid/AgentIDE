@@ -38,7 +38,9 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `AGENTS.md`: this file; `CLAUDE.md` is a symlink to it
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
-  (the generated `.xcodeproj` stays gitignored)
+  (the generated `.xcodeproj` stays gitignored). `Package.swift`
+  also carries these sources as `AgentIDEAppSources`, which builds
+  no bundle and exists only so `swift build` type-checks them
 - `bin/`: the `agentide` command shipped inside the app bundle: the
   editor shim a shell pane puts on its `PATH` (waiting only with
   `--wait`, and taking a directory anywhere inside a worktree or
@@ -158,19 +160,21 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   a non-interactive `xcodebuild` met an untrusted package plugin
   (SwiftTerm 1.19 ships one); only the Xcode app can show the trust
   prompt, so every script passes `-skipPackagePluginValidation`.
-- `CustomTask Generate SwiftTerm build information` failing, with
-  `sandbox-exec: sandbox_apply: Operation not permitted` above it,
-  is that same plugin actually running rather than being validated.
-  Xcode runs a build tool plugin under `sandbox-exec`, which cannot
-  nest, so the sandbox can never generate this: it builds only
-  because the file is already there and the task is skipped. Never
-  delete `.DerivedData` or its `BuildToolPluginIntermediates` from
-  in here, and if the task does come back, build with `swift build
-  --disable-sandbox` (every package target, and what `script/test`
-  uses anyway) and leave the Xcode build of the app shell to the
-  host and CI. Regenerating the file by hand does not help: the
-  trigger beside it carries a fresh UUID per build, so the task
-  runs again whatever its outputs say.
+- Xcode runs SwiftTerm's build tool plugin under `sandbox-exec`,
+  which cannot nest, so `xcodebuild` cannot get past it in here
+  however its flags are set: `CustomTask Generate SwiftTerm build
+  information` fails with `sandbox_apply: Operation not permitted`,
+  and regenerating the file by hand does not help, since the trigger
+  beside it carries a fresh UUID per planning pass. `script/build`
+  therefore uses `swift build --disable-sandbox` in the sandbox,
+  which runs the same plugin unsandboxed and compiles every target,
+  `App` included, through the `AgentIDEAppSources` target that
+  exists for that alone. The bundle itself, and both of
+  `script/analyze`'s passes, belong to the host and CI: SwiftLint's
+  analyser wants a full `xcodebuild` log and reads a `swift build`
+  one as a confident zero, and periphery cannot load the manifest
+  here either. `script/analyze` says so and stops rather than
+  passing on nothing.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
   most tests. The toolchain is a downloadable asset each user mounts
@@ -265,14 +269,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `script/analyze` has run for more than five minutes, stop it and
   let CI run it instead rather than holding the commit
 - Run `script/analyze` on the host before opening or updating a
-  pull request, and say so plainly if you could not: inside the
-  sandbox it skips every file whose macros must expand, since
-  `sandbox-exec` does not nest and the plugin server that expands
-  `@State` or `@Observable` is denied its own sandbox, leaving the
-  compiler to wait out a timeout for each one (a view with nineteen
-  of them took seven minutes; a file with none takes a quarter of a
-  second). The host and CI still check what the sandbox skips, and
-  unused imports and dead code otherwise surface in CI first (sandboxed
+  pull request, and say plainly that you could not when you are in
+  the sandbox, where it compiles every target and stops: neither
+  its passes can run there (see the platform notes). Unused imports
+  and dead code otherwise surface in CI first (sandboxed
   runs reuse the analyze build's index store, so
   periphery's dead-code pass now runs everywhere). Both passes
   always run and the script fails at the end if either did: the
