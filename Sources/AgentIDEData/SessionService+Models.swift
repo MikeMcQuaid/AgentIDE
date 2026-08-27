@@ -16,6 +16,9 @@ public extension SessionService {
     func discoverModels(for agent: AgentKind) async -> [String]? {
         // swiftlint:enable discouraged_optional_collection
         let runner = runner(for: agent)
+        if runner.modelListingCommand.isEmpty {
+            forgetDiscoveredModels(for: agent)
+        }
         // An agent with no listing command has a curated list and
         // nothing to discover; asking anyway starts a session.
         guard runner.modelListingCommand.isEmpty == false else {
@@ -35,5 +38,20 @@ public extension SessionService {
 
         let models = runner.parseModelList(result.standardOutput)
         return models.isEmpty ? nil : models
+    }
+
+    /// Throws away what was once discovered for an agent, so a list
+    /// scraped before the app knew better stops being offered.
+    func forgetDiscoveredModels(for agent: AgentKind) {
+        store.update { metadata in
+            metadata.discoveredModels[agent.rawValue] = nil
+            metadata.discoveredModelsVersion[agent.rawValue] = nil
+        }
+    }
+
+    /// Whether an agent has a listing of its own at all; one that
+    /// does not is offered its curated models and nothing else.
+    func reportsModels(_ agent: AgentKind) -> Bool {
+        runner(for: agent).modelListingCommand.isEmpty == false
     }
 }

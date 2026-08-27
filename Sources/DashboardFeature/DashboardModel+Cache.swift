@@ -52,7 +52,10 @@ extension DashboardModel {
 
     func restoreDiscoveredModels() {
         for (raw, models) in store.load().discoveredModels {
-            if let agent = AgentKind(rawValue: raw) {
+            // Only what the agent itself can report: anything
+            // remembered for an agent with no listing was scraped
+            // out of its prose by an earlier release.
+            if let agent = AgentKind(rawValue: raw), service.reportsModels(agent) {
                 discoveredModels[agent] = models
             }
         }
