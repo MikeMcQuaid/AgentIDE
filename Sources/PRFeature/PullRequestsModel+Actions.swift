@@ -287,6 +287,12 @@ extension PullRequestsModel {
         }
 
         do {
+            // Linked first, and only then merged: a chain of pull
+            // requests GitHub does not hold as a stack must not be
+            // merged as one, and linking is idempotent, so this
+            // covers a bottom pull request opened anywhere else.
+            // A link that fails takes the merge with it.
+            try await performLinkStack(worktree)
             try await performMergeStack(worktree, number)
             pullRequests.invalidateListings(repositoryPath: repository.path)
             setStatus("Merging the stack.")

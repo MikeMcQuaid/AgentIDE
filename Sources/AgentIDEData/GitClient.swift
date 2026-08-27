@@ -160,8 +160,16 @@ public struct GitClient: Sendable {
     }
 
     /// Whether the worktree has uncommitted changes.
+    /// Whether the worktree has uncommitted work: the one reading
+    /// that cannot be answered for a whole repository at once, since
+    /// it is about the directory rather than the branch. Renames are
+    /// not looked for: the answer is whether anything changed, and
+    /// pairing up what moved is work nobody here reads.
     public func isDirty(worktreePath: String) async -> Bool {
-        let output = try? await git(["status", "--porcelain"], in: worktreePath).standardOutput
+        let output = try? await git(
+            ["status", "--porcelain", "--no-renames"],
+            in: worktreePath,
+        ).standardOutput
         return output?.isEmpty == false
     }
 

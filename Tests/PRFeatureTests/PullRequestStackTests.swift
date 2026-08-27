@@ -109,6 +109,16 @@ struct PullRequestStackTests {
 
         remember(model, branch: "lower", fixtures.summary(1, head: "lower", base: "main"))
         #expect(model.isStackLinked)
+
+        // Merging links first: a chain GitHub does not hold as a
+        // stack must never be merged as one, and a link that fails
+        // takes the merge with it.
+        let done = Mutex([String]())
+        model.performLinkStack = { _ in done.withLock { $0.append("link") } }
+        model.performMergeStack = { _, number in done.withLock { $0.append("merge " + String(number)) } }
+        model.selected = fixtures.summary(2, head: "upper", base: "lower")
+        #expect(await model.mergeStack())
+        #expect(done.withLock { $0 } == ["link", "merge 2"])
     }
 
     @Test

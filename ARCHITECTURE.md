@@ -927,9 +927,12 @@ shim rather than a protocol:
    `gh stack merge <number> --yes --merge-method <method>`, which
    merges that pull request and every one below it in one
    all-or-nothing operation, or puts them in the queue where the base
-   branch has one. Merging one out of order would land its parent's
-   commits under another pull request's name, so the button waits for
-   the whole chain below it to be open: every branch's pull request
+   branch has one. It links the stack first, which is idempotent and
+   covers a bottom pull request opened anywhere else, so nothing
+   GitHub does not hold as a stack can be merged as one, and a link
+   that fails takes the merge with it. Merging one out of order would
+   land its parent's commits under another pull request's name, so
+   the button also waits for the whole chain below it to be open: every branch's pull request
    based on the branch below, read from the listings the tab has
    already cached. That reading is derived rather than asked, because
    `gh stack view` knows only stacks it created and tracked locally

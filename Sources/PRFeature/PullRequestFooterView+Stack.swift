@@ -83,10 +83,11 @@ extension PullRequestFooterView {
             }
             .hoverHelp(
                 model.isStackLinked
-                    ? "Merge, queue or automerge this pull request and every one below it in the "
-                    + "stack, in order, as the repository allows"
-                    : "GitHub does not show these pull requests as a stack yet; opening the pull "
-                    + "request below links them",
+                    ? "Stack these pull requests on GitHub if they are not already, then merge, "
+                    + "queue or automerge this one and every one below it, in order, as the "
+                    + "repository allows"
+                    : "The pull requests below this one are not all open, so there is no stack to "
+                    + "merge and this branch must not be merged into its base on its own",
             )
         }
     }
