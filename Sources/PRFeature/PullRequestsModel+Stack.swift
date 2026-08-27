@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import Foundation
 import TerminalUI
 
 // MARK: - StackWork
