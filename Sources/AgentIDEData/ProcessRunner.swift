@@ -178,6 +178,13 @@ public struct FoundationProcessRunner: ProcessRunner {
                 skipNext = true
                 continue
             }
+            // A flag before the subcommand says nothing about what
+            // was run: without this every git call in the log read
+            // `git --no-optional-locks` and the subcommand was lost.
+            // A flag after it, like `rev-list --count`, is kept.
+            if word.hasPrefix("--"), words.count == 1 {
+                continue
+            }
             words.append(word)
             if words.count == namedWords {
                 break

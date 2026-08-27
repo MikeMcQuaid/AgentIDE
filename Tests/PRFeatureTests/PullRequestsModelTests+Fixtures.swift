@@ -13,6 +13,13 @@ extension PullRequestsModelTests {
         items: [WorktreeItem] = [],
         metadataFile: String? = nil,
     ) -> PullRequestsModel {
+        // The entry a worktree was last looking at lives in the
+        // defaults, which every test in the process shares: without
+        // this, one test's `show(branch:)` chose the branch the next
+        // one opened on.
+        for item in items {
+            StackSelection.remember(nil, for: item.worktree.path)
+        }
         let model = makeBareModel(items: items, metadataFile: metadataFile)
         model.fetchList = { _, _ in [] }
         model.fetchSummary = { _ in nil }
