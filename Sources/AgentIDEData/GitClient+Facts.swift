@@ -1,10 +1,93 @@
 import AgentIDEDomain
 import Foundation
 
+// MARK: - BranchFacts
+
+/// What the sidebar shows about one branch: how far it stands from
+/// the default branch and from its own upstream, and when it last
+/// took a commit.
+public struct BranchFacts: Sendable {
+    public let ahead: Int?
+    public let behind: Int?
+
+    /// Commits the upstream lacks, nil when there is no upstream or
+    /// it has gone.
+    public let aheadOfUpstream: Int?
+    public let committedAt: Int
+}
+
 /// The two facts a repository does not change while the app runs:
-/// read once each, remembered by `RepositoryFacts` and forgotten on
-/// a fetch. Split from the client body for length.
+/// read once each and remembered: see `RepositoryFacts`. Split from
+/// the client body for length.
 public extension GitClient {
+    /// Every branch of a repository, with the counts and the date
+    /// the sidebar shows. One process for a repository rather than
+    /// three per worktree: `rev-list` twice and `log -1` for each of
+    /// twenty-five worktrees, every poll, was most of the git time
+    /// the app spent, and git computes all of it here internally.
+    /// Only a worktree on a detached head falls back to asking about
+    /// itself.
+    func branchFacts(repositoryPath: String, baseRef: String?) async -> [String: BranchFacts] {
+        let counts = baseRef.map { "%(ahead-behind:" + $0 + ")" } ?? ""
+        let format = [
+            "%(refname:short)",
+            "%(upstream)",
+            "%(upstream:track,nobracket)",
+            counts,
+            "%(committerdate:unix)",
+        ].joined(separator: "\t")
+        let result = try? await git(
+            ["for-each-ref", "--format=" + format, "refs/heads/"],
+            in: repositoryPath,
+            allowFailure: true,
+        )
+        guard let result, result.succeeded else {
+            return [:]
+        }
+
+        return Self.branchFacts(fromForEachRef: result.standardOutput)
+    }
+
+    /// Parses what `for-each-ref` printed; separated for tests.
+    static func branchFacts(fromForEachRef output: String) -> [String: BranchFacts] {
+        var facts = [String: BranchFacts]()
+        for line in output.split(separator: "\n") {
+            var fields = line.components(separatedBy: "\t").makeIterator()
+            guard let name = fields.next(), name.isEmpty == false,
+                  let upstream = fields.next(), let track = fields.next(),
+                  let counts = fields.next(), let committed = fields.next()
+            else {
+                continue
+            }
+
+            let distance = counts.split(separator: " ").compactMap { Int($0) }
+            facts[name] = BranchFacts(
+                ahead: distance.first,
+                behind: distance.dropFirst().first,
+                aheadOfUpstream: Self.aheadOfUpstream(upstream: upstream, track: track),
+                committedAt: Int(committed) ?? 0,
+            )
+        }
+        return facts
+    }
+
+    /// The commits an upstream lacks, read from `upstream:track`:
+    /// empty means level with it, `gone` means it was deleted, and
+    /// no upstream at all means there is nothing to count against.
+    static func aheadOfUpstream(upstream: String, track: String) -> Int? {
+        guard upstream.isEmpty == false, track.contains("gone") == false else {
+            return nil
+        }
+        guard let ahead = track
+            .components(separatedBy: ", ")
+            .first(where: { $0.hasPrefix("ahead ") })
+        else {
+            return 0
+        }
+
+        return Int(ahead.dropFirst("ahead ".count))
+    }
+
     /// The repository's GitHub `owner/name`, parsed from the origin
     /// remote, nil for non-GitHub or remoteless repositories.
     func fullName(of repository: Repository) async -> String? {

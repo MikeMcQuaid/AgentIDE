@@ -304,7 +304,10 @@ public struct GitClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
-        let argv = ["git"] + Self.hardening + arguments
+        // `--no-optional-locks` so a read never takes the index
+        // lock an agent's own git may be holding in the same
+        // worktree, and never writes a refreshed index of its own.
+        let argv = ["git", "--no-optional-locks"] + Self.hardening + arguments
         let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)

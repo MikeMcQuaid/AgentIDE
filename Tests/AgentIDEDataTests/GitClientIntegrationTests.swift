@@ -191,6 +191,47 @@ struct GitClientIntegrationTests {
     }
 
     @Test
+    func `one read answers for every branch in a repository`() async throws {
+        let root = try TestSupport.temporaryDirectory("facts")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let path = root + "/repo"
+        try await TestSupport.makeRepository(at: path)
+        let bare = root + "/origin.git"
+        try await TestSupport.runGit(["init", "-q", "--bare", bare], in: root)
+        try await TestSupport.runGit(["remote", "add", "origin", bare], in: path)
+        try await TestSupport.runGit(["push", "-q", "-u", "origin", "main"], in: path)
+        try await TestSupport.runGit(["checkout", "-q", "-b", "feature"], in: path)
+        try "one\n".write(toFile: path + "/one.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(["add", "-A"], in: path)
+        try await TestSupport.runGit(["commit", "-q", "-m", "Add one"], in: path)
+
+        // Three processes per worktree, every poll, for what git
+        // works out for a whole repository in one.
+        let facts = await git.branchFacts(repositoryPath: path, baseRef: "main")
+        let feature = try #require(facts["feature"])
+        let main = try #require(facts["main"])
+
+        #expect(feature.ahead == 1)
+        #expect(feature.behind == 0)
+        #expect(feature.committedAt > 0)
+        // Pushed and level: nothing to push. A branch that was never
+        // pushed has no upstream to count against at all.
+        #expect(main.aheadOfUpstream == 0)
+        #expect(feature.aheadOfUpstream == nil)
+
+        // The parsing itself, including an upstream that has gone.
+        let parsed = GitClient.branchFacts(
+            fromForEachRef: "gone-branch\trefs/remotes/origin/gone\tgone\t2 3\t100\n"
+                + "ahead-branch\trefs/remotes/origin/ahead\tahead 2, behind 1\t0 0\t200\n",
+        )
+        #expect(parsed["gone-branch"]?.aheadOfUpstream == nil)
+        #expect(parsed["gone-branch"]?.ahead == 2)
+        #expect(parsed["gone-branch"]?.behind == 3)
+        #expect(parsed["ahead-branch"]?.aheadOfUpstream == 2)
+        #expect(parsed["ahead-branch"]?.committedAt == 200)
+    }
+
+    @Test
     func `counts commits ahead of and behind the default branch`() async throws {
         let root = try TestSupport.temporaryDirectory("counts")
         defer { try? FileManager.default.removeItem(atPath: root) }

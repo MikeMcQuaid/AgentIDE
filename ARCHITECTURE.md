@@ -787,7 +787,14 @@ shim rather than a protocol:
    with only their sessions brought up to date from the pane listing
    already in hand (`GitReadScope`), since twenty-nine repositories at
    four git calls per worktree every five seconds was most of everything
-   the app did. A repository's full name comes from its remote's URL, a
+   the app did. What is left of those four is one: a repository's
+   branches all answer at once through `git for-each-ref` with
+   `%(ahead-behind:)`, `%(upstream:track)` and `%(committerdate:unix)`,
+   nine milliseconds for a repository against three processes per
+   worktree, and only a worktree on a detached head asks about itself.
+   Uncommitted work stays the one question a worktree answers alone.
+   Every read passes `--no-optional-locks`, so nothing the app asks
+   waits on the index lock an agent's own git is holding. A repository's full name comes from its remote's URL, a
    local read, never from `gh repo view`, which was a network round trip
    per repository per poll; that name and the branch merges are judged
    against are read once and remembered until a fetch, since only a

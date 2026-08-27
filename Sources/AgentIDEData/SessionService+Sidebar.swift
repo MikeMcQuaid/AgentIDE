@@ -1,6 +1,16 @@
 import AgentIDEDomain
 import Foundation
 
+// MARK: - SidebarReading
+
+/// What one reading of the system already has in hand, travelling
+/// together to every row rather than as three parameters each.
+public struct SidebarReading: Sendable {
+    let panes: [HerdrPane]
+    let activity: [String: Date]
+    let metadata: AppMetadata
+}
+
 /// The sidebar's reading of the system: every repository's worktrees
 /// joined with their sessions. Read in parallel at every level, since
 /// each worktree is a handful of git processes sharing nothing.
@@ -130,6 +140,9 @@ public extension SessionService {
         async let fullName = git.fullName(of: repository)
         async let worktrees = (try? git.worktrees(of: repository)) ?? []
         let baseRef = await git.defaultBaseRef(of: repository)
+        // One read for every branch's counts and dates, rather than
+        // three processes per worktree.
+        let facts = await git.branchFacts(repositoryPath: repository.path, baseRef: baseRef)
         // The main checkout always appears, so repositories show
         // with no worktrees and orphaned conversations stay
         // reachable.
@@ -142,9 +155,8 @@ public extension SessionService {
                     await (index, item(
                         worktree: worktree,
                         baseRef: baseRef,
-                        panes: panes,
-                        activity: activity,
-                        metadata: metadata,
+                        facts: facts[worktree.branch],
+                        reading: SidebarReading(panes: panes, activity: activity, metadata: metadata),
                     ))
                 }
             }
@@ -180,29 +192,12 @@ public extension SessionService {
     func item(
         worktree: Worktree,
         baseRef: String?,
-        panes: [HerdrPane],
-        activity: [String: Date],
-        metadata: AppMetadata,
+        facts: BranchFacts?,
+        reading: SidebarReading,
     ) async -> WorktreeItem {
-        // Matched by the recorded session name first: the pane's
-        // current path drifts when the agent changes directory,
-        // which made live sessions vanish from the UI.
-        let recorded = metadata.sessionsByWorktree[worktree.path]
-        let pane = panes.first { pane in
-            SessionName.isAgentIDE(pane.sessionName)
-                && (pane.sessionName == recorded || pane.currentPath == worktree.path)
-        }
-        let session = pane.map { pane in
-            AgentSession(
-                name: pane.sessionName,
-                agent: agentKind(of: pane.sessionName),
-                status: pane.isFinished ? .finished : .running,
-                workingDirectory: pane.currentPath,
-                paneID: pane.paneID,
-                activity: pane.activity,
-                version: metadata.agentVersions[pane.sessionName],
-            )
-        }
+        let metadata = reading.metadata
+        let activity = reading.activity
+        let session = liveSession(of: worktree, reading: reading)
         let past = pastSessions(of: worktree, liveSession: session)
 
         // Unread is any agent activity since the worktree was last
@@ -219,28 +214,69 @@ public extension SessionService {
         let seen = metadata.seenAt[worktree.path] ?? session.flatMap { metadata.lastSeen[$0.name] } ?? startedAt
         let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
 
-        // Four git reads that share nothing, asked at once.
-        async let counts = aheadBehind(of: worktree, baseRef: baseRef)
+        // The counts and the date came with the repository's own
+        // read; only uncommitted work is the worktree's to answer,
+        // and only a detached head has to be asked the rest.
         async let dirty = git.isDirty(worktreePath: worktree.path)
-        async let committedAt = git.lastCommitDate(worktreePath: worktree.path)
-        async let aheadOfUpstream = git.aheadOfUpstream(worktreePath: worktree.path)
+        var known = facts
+        if known == nil {
+            known = await detachedFacts(of: worktree, baseRef: baseRef)
+        }
         let isDirty = await dirty
-        var lastActivity = await committedAt
+        var lastActivity = known?.committedAt ?? 0
         if let session, session.status == .running || isDirty {
             // A live session or uncommitted edits mean work right now.
             lastActivity = Int(Date().timeIntervalSince1970)
         }
         lastActivity = max(lastActivity, Int(lastEvent.timeIntervalSince1970))
-        return await WorktreeItem(
+        return WorktreeItem(
             worktree: worktree,
             session: session,
             isDirty: isDirty,
-            aheadOfUpstream: aheadOfUpstream,
+            aheadOfUpstream: known?.aheadOfUpstream,
             hasUnread: unread,
             pastSessions: past,
-            aheadOfDefault: counts?.ahead,
-            behindDefault: counts?.behind,
+            aheadOfDefault: known?.ahead,
+            behindDefault: known?.behind,
             lastActivityAt: lastActivity,
+        )
+    }
+
+    /// The session running in a worktree, matched by the recorded
+    /// session name first: the pane's current path drifts when the
+    /// agent changes directory, which made live sessions vanish from
+    /// the UI.
+    private func liveSession(of worktree: Worktree, reading: SidebarReading) -> AgentSession? {
+        let recorded = reading.metadata.sessionsByWorktree[worktree.path]
+        let pane = reading.panes.first { pane in
+            SessionName.isAgentIDE(pane.sessionName)
+                && (pane.sessionName == recorded || pane.currentPath == worktree.path)
+        }
+        return pane.map { pane in
+            AgentSession(
+                name: pane.sessionName,
+                agent: agentKind(of: pane.sessionName),
+                status: pane.isFinished ? .finished : .running,
+                workingDirectory: pane.currentPath,
+                paneID: pane.paneID,
+                activity: pane.activity,
+                version: reading.metadata.agentVersions[pane.sessionName],
+            )
+        }
+    }
+
+    /// The same facts for a worktree no branch name covers, which is
+    /// one on a detached head: asked of the worktree itself, the way
+    /// every worktree used to be.
+    private func detachedFacts(of worktree: Worktree, baseRef: String?) async -> BranchFacts {
+        async let counts = aheadBehind(of: worktree, baseRef: baseRef)
+        async let committedAt = git.lastCommitDate(worktreePath: worktree.path)
+        async let aheadOfUpstream = git.aheadOfUpstream(worktreePath: worktree.path)
+        return await BranchFacts(
+            ahead: counts?.ahead,
+            behind: counts?.behind,
+            aheadOfUpstream: aheadOfUpstream,
+            committedAt: committedAt,
         )
     }
 }
