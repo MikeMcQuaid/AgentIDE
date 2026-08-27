@@ -203,20 +203,24 @@ public struct GitClient: Sendable {
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 
-    /// Fetches origin and hard-resets the checkout to its default
-    /// branch, for main checkouts that should mirror the remote.
-    public func fetchAndReset(repositoryPath: String) async throws {
+    /// Fetches origin and hard-resets the checkout to a ref, for
+    /// main checkouts that should mirror the remote. The caller
+    /// resolves the ref: `origin/HEAD` is a symbolic name a clone
+    /// need never have been given, and resetting to one git cannot
+    /// resolve fails where naming the branch works.
+    public func fetchAndReset(repositoryPath: String, onto ref: String) async throws {
         try await git(["fetch", "origin"], in: repositoryPath)
-        try await git(["reset", "--hard", "origin/HEAD"], in: repositoryPath)
+        try await git(["reset", "--hard", ref], in: repositoryPath)
     }
 
-    /// Rebases the worktree onto a ref, re-signing every replayed
+    /// Rebases a branch onto a ref, re-signing every replayed
     /// commit; failure or conflict aborts the rebase so the worktree
     /// is left exactly as it was. The caller fetches first and picks
-    /// the ref.
-    public func rebaseSigned(worktreePath: String, onto ref: String) async throws {
+    /// the ref. The branch is named rather than left to whichever
+    /// the worktree holds, which is not always the one on screen.
+    public func rebaseSigned(worktreePath: String, branch: String, onto ref: String) async throws {
         do {
-            try await git(["rebase", "--force-rebase", "--gpg-sign", ref], in: worktreePath)
+            try await git(["rebase", "--force-rebase", "--gpg-sign", ref, branch], in: worktreePath)
         } catch {
             try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error

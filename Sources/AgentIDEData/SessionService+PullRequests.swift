@@ -97,17 +97,46 @@ public extension SessionService {
         // was filled in, never whatever the worktree has checked out.
         // A branch opening against the branch below it is what makes
         // GitHub show a stack, and the bottom of one opens against
-        // the default branch exactly as a lone branch does.
+        // the default branch exactly as a lone branch does. Both ends
+        // are named: `gh` left to work either out for itself takes
+        // whatever is checked out as the head, which in a stack is
+        // rarely the branch being opened.
         let stack = await stack(for: worktree)
         let branch = worktree.branch
-        let parent = stack.parent(of: branch)
         return try await github.createPullRequest(
             worktreePath: worktree.path,
             title: title,
             body: body,
             head: pushDestination(worktree: worktree).head(branch: branch),
-            base: parent == stack.base ? nil : parent,
+            base: base(for: branch, in: stack, of: worktree),
         )
+    }
+
+    /// The repository's default branch by name, nil when neither
+    /// the remote's head nor a local main or master says what it is.
+    func defaultBranchName(of repository: Repository) async -> String? {
+        await git.defaultBaseRef(of: repository).map(Self.branchName(fromBaseRef:))
+    }
+
+    /// What a pull request for this branch opens against: the branch
+    /// below it in its stack, else the repository's default branch,
+    /// read from git and, for a clone whose remote was never given a
+    /// head, from GitHub itself. Never left to `gh` to work out.
+    func base(for branch: String, in stack: BranchStack, of worktree: Worktree) async throws -> String {
+        let parent = stack.parent(of: branch)
+        if let parent, parent != stack.base {
+            return parent
+        }
+
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        if let local = await defaultBranchName(of: repository) {
+            return local
+        }
+        guard let asked = await github.defaultBranch(repositoryPath: worktree.path) else {
+            throw SessionServiceError(repository.name + " has no default branch to open against.")
+        }
+
+        return asked
     }
 
     /// Where this branch belongs: the repository itself when GitHub
@@ -163,7 +192,7 @@ public extension SessionService {
             // name, which may sit commits behind the remote and drag
             // its missing history into the branch's own span.
             var fork = await git.mergeBase("origin/HEAD", branch, worktreePath: worktree.path)
-            let name = await git.defaultBaseRef(of: repository).map(Self.branchName(fromBaseRef:)) ?? "main"
+            let name = await defaultBranchName(of: repository) ?? "main"
             if fork == nil {
                 fork = await git.mergeBase("origin/" + name, branch, worktreePath: worktree.path)
             }
@@ -262,7 +291,7 @@ public extension SessionService {
                 try await git.resetHard(worktreePath: worktreePath, ref: upstream)
                 report.notes.append("Pulled \(branch) up to \(upstream).")
             } else {
-                try await git.rebaseSigned(worktreePath: worktreePath, onto: upstream)
+                try await git.rebaseSigned(worktreePath: worktreePath, branch: branch, onto: upstream)
                 report.notes.append("Rebased \(counts.ahead) local commits onto \(upstream).")
             }
         } catch {

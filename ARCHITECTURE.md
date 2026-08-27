@@ -860,11 +860,16 @@ shim rather than a protocol:
    is fetched in the background as soon as one of them loads, so the
    strip moves like a tab switch rather than a load. A
    stacked branch's pull request opens against the branch below it, which
-   is one `--base` flag, and always names its own branch as the head,
-   since `gh pr create` left to itself opens one for whatever the
-   worktree has checked out, which in a stack is rarely the entry being
-   looked at. Only an entry opening against another branch is stacked
-   work: the bottom of a stack opens against the default branch exactly
+   is one `--base` flag. Both ends are always named, and the types
+   require it: `gh` left to work either out takes whatever the
+   worktree has checked out as the head, which in a stack is rarely
+   the entry being looked at, and infers a base from the remote. The
+   base is the branch below, or the default branch as git has it,
+   or, for a clone whose remote was never given a head, as GitHub
+   itself has it. Every shelled command names what it acts on for the
+   same reason: a rebase names its branch, a reset names the ref.
+   Only an entry opening against another branch is stacked work: the
+   bottom of a stack opens against the default branch exactly
    as a lone branch does, and keeps the lone branch's Rebase and Push
    rather than the stack's three buttons, however many branches sit
    above it. Push acts on the entry in view, so it is that branch's

@@ -68,6 +68,35 @@ struct BranchStackIntegrationTests {
     }
 
     @Test
+    func `a pull request opens against the branch below it, or the default branch`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let repository = try #require(world.service.repositories().first)
+        let worktree = Worktree(
+            repositoryName: repository.name,
+            repositoryPath: repository.path,
+            branch: "upper",
+            path: repository.path,
+        )
+        try await Self.commit("first", in: repository.path)
+        for branch in ["lower", "upper"] {
+            _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
+            try await Self.commit(branch + " work", in: repository.path)
+        }
+        let stack = await world.service.stack(for: worktree)
+
+        // Both ends of `gh pr create` are named: the bottom of a
+        // stack opens against the default branch exactly as a branch
+        // on its own does, and only an entry above it names another
+        // branch. Left unsaid, `gh` took whatever was checked out.
+        let bottom = try await world.service.base(for: "lower", in: stack, of: worktree)
+        let top = try await world.service.base(for: "upper", in: stack, of: worktree)
+
+        #expect(bottom == "main")
+        #expect(top == "lower")
+    }
+
+    @Test
     func `two branches at one commit are one entry, the checked-out name standing for both`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }

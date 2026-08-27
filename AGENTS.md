@@ -68,6 +68,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   CommandLineTools alone cannot load SourceKit
 - UK English (organised, colour) in documentation, comments and UI
   strings; proper nouns keep their official spellings
+- Name every argument a shelled command takes: `gh` and git both
+  fall back to whatever is checked out or configured, and code has
+  no reason to lean on the shorthand a human types. `gh pr create`
+  names `--head` and `--base`, a rebase names its branch
 - Keep comments minimal; prefer self-documenting code
 - Two-space indentation, four-space for Swift (see `.editorconfig`)
 

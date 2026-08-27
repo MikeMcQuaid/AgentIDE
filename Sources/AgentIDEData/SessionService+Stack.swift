@@ -261,7 +261,7 @@ public extension SessionService {
                 title: described.title,
                 body: described.body,
                 head: pushDestination(worktree: worktree).head(branch: branch),
-                base: parent == stack.base ? nil : parent,
+                base: base(for: branch, in: stack, of: worktree),
             )
             opened.append(url)
             if let number = url.split(separator: "/").last.flatMap({ Int($0) }) {

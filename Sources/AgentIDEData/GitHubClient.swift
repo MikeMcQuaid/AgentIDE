@@ -120,8 +120,8 @@ public struct GitHubClient: Sendable {
         worktreePath: String,
         title: String,
         body: String,
-        head: String? = nil,
-        base: String? = nil,
+        head: String,
+        base: String,
     ) async throws -> String {
         let bodyFile = FileManager.default
             .temporaryDirectory
@@ -133,8 +133,7 @@ public struct GitHubClient: Sendable {
         // since the pull request belongs to the repository it is
         // opened against, not the one holding the branch.
         let arguments = ["pr", "create", "--title", title, "--body-file", bodyFile]
-            + (head.map { ["--head", $0] } ?? [])
-            + (base.map { ["--base", $0] } ?? [])
+            + ["--head", head, "--base", base]
         return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -167,6 +166,18 @@ public struct GitHubClient: Sendable {
     public func merge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
         try await gh(["pr", "merge", String(number), flag], in: repositoryPath)
+    }
+
+    /// The repository's default branch as GitHub itself has it,
+    /// for the rare clone whose remote was never given a head and
+    /// which has no local main or master to fall back on.
+    public func defaultBranch(repositoryPath: String) async -> String? {
+        let result = try? await gh(
+            ["repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"],
+            in: repositoryPath,
+        )
+        let name = result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? nil : name
     }
 
     /// The method flag `gh pr merge` needs when not interactive
