@@ -117,6 +117,43 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   its own group. Slow or unrepeatable actions go
   through `BusyButton` and lock any inputs they read or write
   while running.
+- State changes animate briefly (about 150 ms) and only where the
+  change would otherwise jump: a disclosure chevron, rows appearing,
+  a bar sliding in, a page fading over a pane. Nothing decorative,
+  nothing slower, and never on a surface that is mid-drag or holds
+  a live terminal.
+- Semantic AppKit colours only in UI chrome: selection uses the
+  system selection colours and greys out when the window is not
+  key, text surfaces use `textColor` over `textBackgroundColor`.
+  Literal white or black belongs only in terminal palettes.
+- A shortcut or action that opens a surface with a text field
+  focuses that field, and Escape closes or cancels what it opened.
+  The window title always names the selection (repository and
+  branch) even though the title bar hides it: Mission Control and
+  the Window menu read it.
+
+### Performance Principles
+
+- Prefer events to polling: file changes arrive through FSEvents or
+  dispatch sources, herdr changes through its own channel. A poll
+  that remains must say in a comment why no event can serve it, and
+  it slows to a safety tick while the window is occluded.
+- Never read or decode files during view body evaluation. Models
+  keep decoded state in memory (`MetadataStore` holds the one
+  in-memory copy of the metadata) and views read that memory.
+- A published model value changes only when something user-visible
+  changed. No free-running timestamps or counters: row equality is
+  what lets a poll tick redraw nothing.
+- Memoise parsing: tree-sitter tokens, markdown blocks and
+  attributed strings are cached by content and invalidated by
+  content, never rebuilt per render.
+- Budget process spawns: batch, cache or event-drive anything the
+  performance log shows running more than a few times a minute at
+  idle. Processes finish through termination handlers rather than
+  blocking a thread, and refreshes already in flight coalesce
+  rather than stack.
+- First paint reads only memory and caches; anything slower starts
+  after the window is up and fills in.
 
 ### Platform Notes
 
