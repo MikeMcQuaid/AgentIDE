@@ -799,7 +799,12 @@ shim rather than a protocol:
    worktree, and only a worktree on a detached head asks about itself.
    Uncommitted work stays the one question a worktree answers alone.
    Every read passes `--no-optional-locks`, so nothing the app asks
-   waits on the index lock an agent's own git is holding. A repository's full name comes from its remote's URL, a
+   waits on the index lock an agent's own git is holding. Which
+   branch a worktree holds is read from the `HEAD` file git keeps it
+   in rather than through `symbolic-ref`, since the stack asks it of
+   every worktree on every reading and a file is a hundredth of a
+   millisecond against a process; the command still answers when the
+   file is not where it should be. A repository's full name comes from its remote's URL, a
    local read, never from `gh repo view`, which was a network round trip
    per repository per poll; that name and the branch merges are judged
    against are read once and remembered until a fetch, since only a

@@ -191,6 +191,30 @@ struct GitClientIntegrationTests {
     }
 
     @Test
+    func `the checked-out branch is read from the file git keeps it in`() async throws {
+        let root = try TestSupport.temporaryDirectory("head-file")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let path = root + "/repo"
+        try await TestSupport.makeRepository(at: path)
+        _ = try await TestSupport.runGit(["checkout", "-q", "-b", "feature"], in: path)
+
+        // The same answer the command gives, for a hundredth of the
+        // time: the stack asks this of every worktree on every read.
+        #expect(GitClient.headFileBranch(worktreePath: path) == "feature")
+        #expect(await git.currentBranch(worktreePath: path) == "feature")
+
+        // A detached head holds a commit rather than a ref, and is
+        // what a rebase leaves behind while it runs.
+        let tip = try await TestSupport.runGit(["rev-parse", "HEAD"], in: path)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _ = try await TestSupport.runGit(["checkout", "-q", tip], in: path)
+
+        #expect(GitClient.headFileBranch(worktreePath: path) == nil)
+        #expect(await git.currentBranch(worktreePath: path) == nil)
+    }
+
+    @Test
     func `one read answers for every branch in a repository`() async throws {
         let root = try TestSupport.temporaryDirectory("facts")
         defer { try? FileManager.default.removeItem(atPath: root) }
