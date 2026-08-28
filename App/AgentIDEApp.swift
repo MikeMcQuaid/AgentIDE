@@ -2,6 +2,29 @@ import AppKit
 import SwiftUI
 import TerminalUI
 
+// MARK: - AppDelegate
+
+/// Quits the app when its last window closes. Everything that must
+/// survive lives outside the process: herdr sessions and their
+/// agents keep running, and the event spool holds notifications for
+/// the next launch. A windowless AgentIDE polled nothing and
+/// delivered nothing, so staying resident was a dead app.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    // MARK: Lifecycle
+
+    deinit {
+        // Lives for the app's whole lifetime.
+    }
+
+    // MARK: Internal
+
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
+        true
+    }
+}
+
+// MARK: - AgentIDEApp
+
 @main
 struct AgentIDEApp: App {
     // MARK: Lifecycle

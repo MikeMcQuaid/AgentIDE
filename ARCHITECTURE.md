@@ -336,12 +336,13 @@ next reading that lists the worktree wins. It matters because a row holds
 its worktree's panes open, and a pane holds a running shell (P1 still
 applies; disk is one of the sources).
 
-There is no separate notification daemon in v1. The app switches to accessory
-activation policy when its last window closes, staying resident in the menu
-bar with file watchers and `UNUserNotificationCenter` delivery alive. Because
-the event spool is durable files, a fully quit app delays notifications
-rather than losing them. A login-item helper via `SMAppService` is the
-documented later option if delayed notifications prove annoying.
+There is no separate notification daemon in v1, and no windowless
+resident mode: the app quits when its last window closes. Everything
+that must survive lives outside the process, herdr sessions and their
+agents keep running, and because the event spool is durable files a
+quit app delays notifications rather than losing them; the next launch
+reads them. A login-item helper via `SMAppService` is the documented
+later option if delayed notifications prove annoying.
 
 ## Package architecture
 
