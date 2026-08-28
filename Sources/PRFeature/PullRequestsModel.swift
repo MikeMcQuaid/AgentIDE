@@ -225,6 +225,10 @@ final class PullRequestsModel {
     /// never writes back what it just read.
     var loadingDraft = false
 
+    /// True while a pull request is being opened: the form keeps
+    /// every word it holds and takes no more until GitHub answers.
+    var isOpening = false
+
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
     var hasTemplate = false

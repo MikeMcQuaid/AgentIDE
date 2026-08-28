@@ -65,7 +65,7 @@ struct PullRequestCreateForm: View {
     /// nothing here can be opened until it is, so nothing is typed
     /// into a form that cannot be sent.
     private var isBlocked: Bool {
-        model.unpushedBelow != nil
+        model.unpushedBelow != nil || model.isOpening
     }
 
     /// Back to what the commits say. Typed text asks first; blank

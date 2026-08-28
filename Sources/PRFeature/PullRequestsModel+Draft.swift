@@ -23,6 +23,11 @@ extension PullRequestsModel {
             && summaries.contains { $0.headBranch == listedBranch && $0.state == "OPEN" } == false
     }
 
+    /// The number a pull request URL ends with.
+    static func number(inURL url: String) -> Int? {
+        url.split(separator: "/").last.flatMap { Int($0) }
+    }
+
     /// Whether the last fetch filled its limit, so more pages may
     /// exist beyond what is loaded.
     var hasMore: Bool {

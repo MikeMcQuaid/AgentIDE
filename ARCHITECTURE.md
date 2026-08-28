@@ -981,7 +981,14 @@ shim rather than a protocol:
    deriving every one was a hundred `merge-base` calls in the first
    second of every start), a few worktrees per
    refresh on a minute's rota to keep the git calls off the poll's
-   critical path. A failure resets what moved, returns to the
+   critical path. A derivation asks git about every branch's fork
+   point and how far it has come, thirty processes for a repository
+   of a few branches, so the answer is kept against the one line that
+   decides it: where every branch points, which one is checked out
+   and which are excluded, read in a single `for-each-ref`. A
+   worktree whose branches have not moved is answered from that
+   rather than derived again, and the performance log says which
+   (`stack#<path>`). A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes
    bottom up so a base is on the remote before the branch pointing at it.
 7. The listing and the footer act on the branch actually checked out in the

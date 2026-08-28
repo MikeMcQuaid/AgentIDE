@@ -23,6 +23,18 @@ public extension SessionService {
         // is a branch this worktree has been told to leave out;
         // whatever is checked out is part of it whatever it says.
         let excluded = Set(excludedStackBranches(worktreePath: path))
+        // Everything the answer depends on, in one process: where
+        // every branch points, which is held, and which are left
+        // out. The rota derives a stack for a worktree at a time all
+        // day, and almost none of them have moved since last time.
+        let fingerprint = await git.refFingerprint(worktreePath: path)
+            + checkedOut + baseRef + excluded.sorted().joined(separator: ",")
+        if let known = await StackCache.shared.stack(for: path, derivedFrom: fingerprint) {
+            PerformanceLog.record(cacheHit: true, "stack#" + path)
+            return known
+        }
+
+        PerformanceLog.record(cacheHit: false, "stack#" + path)
         let candidates = await git.branches(worktreePath: path)
             .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
         var related = [StackCandidate]()
@@ -62,11 +74,13 @@ public extension SessionService {
         // same commit, so the actions that move what is checked out
         // stay live rather than dimming on a name that has gone.
         let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
-        return BranchStack(
+        let derived = BranchStack(
             base: base,
             branches: branches.isEmpty ? fallback : branches,
             checkedOut: standingIn ?? checkedOut,
         )
+        await StackCache.shared.remember(derived, for: path, derivedFrom: fingerprint)
+        return derived
     }
 
     /// The stack's entries in build order, with branches at one

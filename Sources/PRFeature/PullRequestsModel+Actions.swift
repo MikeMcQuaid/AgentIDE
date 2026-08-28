@@ -215,6 +215,8 @@ extension PullRequestsModel {
 
         let template = prTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = prBody + (template.isEmpty ? "" : "\n\n" + template)
+        isOpening = true
+        defer { isOpening = false }
         do {
             let url = try await performCreate(worktree, title, body)
             note("Opened pull request " + url)
@@ -227,10 +229,21 @@ extension PullRequestsModel {
                 report("Stacking on GitHub failed: " + error.localizedDescription)
             }
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            prTitle = ""
-            prBody = ""
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            // Straight into what was just opened: the listing has it
+            // by number, and its conversation is what the form was
+            // for. Only once it is showing does the form let go of
+            // the text, so nothing blank is ever on screen.
+            let opened = Self.number(inURL: url)
+            if let summary = summaries.first(where: { $0.number == opened }) {
+                select(summary)
+            }
+            loadingDraft = true
+            prTitle = ""
+            prBody = ""
+            prTemplate = originalTemplate
+            loadingDraft = false
             clearDraft()
             return true
         } catch {
