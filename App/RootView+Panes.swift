@@ -77,6 +77,9 @@ extension RootView {
         .opacity(isCovered ? 0 : 1)
         .allowsHitTesting(isCovered == false)
         .overlay { coveringPage }
+        // A page fades over the pane rather than cutting; the panes
+        // stay mounted either way.
+        .animation(Motion.quick, value: isCovered)
         .overlay(alignment: .topTrailing) {
             if showsUtility == false {
                 utilityToggleButton
@@ -130,6 +133,8 @@ extension RootView {
                 }
             }
             .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
+            // The same fade the covered split gets.
+            .animation(Motion.quick, value: isCovered)
             if showsUtility {
                 Color.clear.frame(width: utilityPaneWidth)
             }

@@ -140,6 +140,9 @@ public struct DashboardView: View {
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
                 .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
+                // The standard disclosure affordance turns, never
+                // jumps.
+                .animation(Motion.quick, value: isExpanded(group.repository.path))
                 .accessibilityHidden(true)
             avatar(for: group.repository)
             // The avatar already names the owner, so the text keeps
@@ -310,7 +313,8 @@ public struct DashboardView: View {
     }
 
     /// Collapsed repositories persist across launches as a
-    /// newline-joined path list.
+    /// newline-joined path list. The rows animate in and out rather
+    /// than popping.
     private func toggleExpansion(of path: String) {
         var collapsed = Set(collapsedRepositories.split(separator: "\n").map(String.init))
         if collapsed.contains(path) {
@@ -318,6 +322,8 @@ public struct DashboardView: View {
         } else {
             collapsed.insert(path)
         }
-        collapsedRepositories = collapsed.sorted().joined(separator: "\n")
+        withAnimation(Motion.quick) {
+            collapsedRepositories = collapsed.sorted().joined(separator: "\n")
+        }
     }
 }
