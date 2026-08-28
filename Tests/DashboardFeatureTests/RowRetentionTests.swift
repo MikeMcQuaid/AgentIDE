@@ -15,6 +15,23 @@ struct RowRetentionTests {
     // MARK: Internal
 
     @Test
+    func `a placeholder that never became a worktree is forgotten, not deleted`() throws {
+        let root = try makeDirectory()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repositoryPath = try makeDirectory(in: root, named: "repo")
+        let placeholder = repositoryPath + DashboardModel.placeholderMarker + "analyse_the_performance_of"
+
+        // A creation that failed leaves a row under `.pending`,
+        // which is a drawing rather than a directory: deleting one
+        // asked git to remove a path that never existed and a branch
+        // that was never cut, and said so in the messages.
+        let rows = [group(repositoryPath: repositoryPath, paths: [repositoryPath, placeholder])]
+        let kept = DashboardModel.forgetting(placeholder, in: rows)
+
+        #expect(kept.flatMap(\.items).map(\.worktree.path) == [repositoryPath])
+    }
+
+    @Test
     func `keeps a row git stopped listing and drops a deleted one`() throws {
         let root = try makeDirectory()
         defer { try? FileManager.default.removeItem(atPath: root) }

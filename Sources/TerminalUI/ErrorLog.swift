@@ -60,6 +60,18 @@ public final class ErrorLog {
         append(message, isError: false)
     }
 
+    /// The same, for work belonging to one repository: the name the
+    /// sidebar shows goes in front, since "Pushed" and "Rebased"
+    /// read identically whichever repository they happened in.
+    public func note(_ message: String, about repository: String) {
+        note(Self.prefixed(message, with: repository))
+    }
+
+    /// A failure in one repository's work, named the same way.
+    public func report(_ message: String, about repository: String) {
+        report(Self.prefixed(message, with: repository))
+    }
+
     /// Empties the log; the messages tab stays either way.
     public func clear() {
         entries = []
@@ -72,6 +84,16 @@ public final class ErrorLog {
 
     /// Monotonic, so identities survive the cap dropping entries.
     private var nextID = 0
+
+    /// The message with its repository in front, unless it is
+    /// already there: a name is worth saying once.
+    private static func prefixed(_ message: String, with repository: String) -> String {
+        guard repository.isEmpty == false, message.hasPrefix(repository + ": ") == false else {
+            return message
+        }
+
+        return repository + ": " + message
+    }
 
     private func append(_ message: String, isError: Bool) {
         nextID += 1

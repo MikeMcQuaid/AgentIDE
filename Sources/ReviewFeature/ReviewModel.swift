@@ -15,6 +15,7 @@ final class ReviewModel {
     /// resolves the whole-branch scope's merge base on demand.
     init(
         worktreePath: String,
+        repositoryName: String,
         git: GitClient,
         baseRefProvider: @escaping () async -> String? = { nil },
         draftMessage: @escaping () async -> String? = { nil },
@@ -24,6 +25,7 @@ final class ReviewModel {
         },
     ) {
         self.worktreePath = worktreePath
+        self.repositoryName = repositoryName
         self.git = git
         self.draftMessage = draftMessage
         self.baseRefProvider = baseRefProvider
@@ -56,6 +58,10 @@ final class ReviewModel {
     static let generatedFragments = [
         ".pbxproj", "Package.resolved", ".lock", "Gemfile.lock", ".xcassets",
     ]
+
+    /// The repository this worktree belongs to, as the sidebar names
+    /// it, so its messages say which repository they are about.
+    let repositoryName: String
 
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
@@ -235,13 +241,7 @@ final class ReviewModel {
     /// pane, where a line that scrolls past can still be read.
     func setStatus(_ message: String) {
         status = message
-        ErrorLog.shared.note(message)
-    }
-
-    /// Reports a failure into the app-wide error log; the local
-    /// status line keeps success reports only.
-    func report(_ message: String) {
-        ErrorLog.shared.report(message)
+        ErrorLog.shared.note(message, about: repositoryName)
     }
 
     /// Toggles one line's selection.

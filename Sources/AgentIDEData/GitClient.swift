@@ -280,7 +280,16 @@ public struct GitClient: Sendable {
     /// keeps the commits recoverable. Pruning drops any stale
     /// bookkeeping so the listing never shows a removed worktree.
     public func removeWorktree(repository: Repository, worktreePath: String, branch: String) async throws {
-        try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
+        // A directory that has already gone is nothing to remove,
+        // and asking git to would fail the whole call; pruning and
+        // forgetting below still finish the job. Every other refusal
+        // is thrown on purpose: a worktree git does not know, or one
+        // holding files the host user cannot delete, both land in
+        // the caller's fallback, which removes the directory as its
+        // owner and then prunes.
+        if FileManager.default.fileExists(atPath: worktreePath) {
+            try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
+        }
         try await forgetWorktree(repository: repository, branch: branch)
     }
 
@@ -299,7 +308,10 @@ public struct GitClient: Sendable {
     /// way.
     public func forgetWorktree(repository: Repository, branch: String) async throws {
         try await git(["worktree", "prune"], in: repository.path)
-        try await git(["branch", "-D", branch], in: repository.path)
+        // A branch that is not there is the state this was asking
+        // for: a worktree whose creation failed part way has none,
+        // and refusing to finish left the row undeletable.
+        try await git(["branch", "-D", branch], in: repository.path, allowFailure: true)
     }
 
     // MARK: Internal

@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import TerminalUI
 
 // MARK: - StackWork
 
@@ -335,7 +334,7 @@ extension PullRequestsModel {
 
         do {
             let moved = try await stacking.restack(worktree)
-            ErrorLog.shared.note(
+            note(
                 moved.isEmpty
                     ? "The stack was already in order."
                     : "Rebased " + moved.joined(separator: ", ") + ".",
@@ -343,7 +342,7 @@ extension PullRequestsModel {
             await loadStack()
             await reload(keepingSelection: true)
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
         }
     }
 
@@ -357,10 +356,10 @@ extension PullRequestsModel {
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            ErrorLog.shared.note("Pushed " + pushed.joined(separator: ", ") + ".")
+            note("Pushed " + pushed.joined(separator: ", ") + ".")
             await reload(keepingSelection: true)
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            report(error.localizedDescription)
         }
     }
 }

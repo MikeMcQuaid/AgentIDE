@@ -47,6 +47,7 @@ public struct ReviewView: View {
         let builder = {
             ReviewModel(
                 worktreePath: worktree.path,
+                repositoryName: worktree.repositoryName,
                 git: git,
                 baseRefProvider: { await service.reviewBase(for: worktree) },
                 draftMessage: { await service.draftCommitMessage(worktreePath: worktree.path) },

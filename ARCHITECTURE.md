@@ -882,10 +882,13 @@ shim rather than a protocol:
    bottom of a stack opens against the default branch exactly
    as a lone branch does, and keeps the lone branch's Rebase and Push
    rather than the stack's three buttons, however many branches sit
-   above it. Push acts on the entry in view, so it is that branch's
-   commits that are counted and that branch's tip whose signature is
-   checked; Rebase moves the branch the worktree holds, so it dims for
-   an entry being read without being checked out; its form fills from the entry's own span
+   above it. Push and Rebase both act on the entry in view: that
+   branch's commits are what Push counts and that branch's tip whose
+   signature it waits for, and Rebase checks the entry out to rebase
+   it and puts the worktree back where it was. Leaving Rebase to the
+   checked-out branch alone deadlocked every other entry, since one
+   whose tip was unsigned could then be neither signed nor pushed.
+   Its form fills from the entry's own span
    (`parent..branch`, not `origin/HEAD..HEAD`) on every entry switch, the
    symbolic `origin/HEAD` resolved through the same default-base lookup
    the sidebar uses, since a worktree whose remote never had its head
@@ -970,12 +973,13 @@ shim rather than a protocol:
    every reload to answer questions the branch itself already answers. The
    template is read from the working copy and, failing that, from git: the
    taps are sparse checkouts that track a template without materialising
-   it, which is why their form had no template box. The AI disclosure
-   button writes the harness with the model and effort the session was
-   started with, worded as the pickers word them, followed by local review
-   and testing, into the template's own AI section, ticking that section's
-   box and replacing any sentence it wrote before, and into the body when
-   the template has no such section. Ticking every box writes it too,
+   it, which is why their form had no template box. Fill template
+   ticks every unticked box and, where the template asks about AI,
+   writes the harness with the model and effort the session was
+   started with, worded as the pickers word them, followed by local
+   review and testing, replacing any sentence it wrote before: the box
+   claims a disclosure and the disclosure answers it, so the two are
+   one button rather than two. It writes
    into the template only: a ticked AI box with nothing under it is the
    one lie that button could tell.
 8. Each pull request row offers the last mile as small actions: copy the

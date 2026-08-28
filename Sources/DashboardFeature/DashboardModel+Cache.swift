@@ -52,7 +52,10 @@ extension DashboardModel {
 
     func restoreDiscoveredModels() {
         for (raw, models) in store.load().discoveredModels {
-            if let agent = AgentKind(rawValue: raw) {
+            // Only what the agent itself can report: anything
+            // remembered for an agent with no listing was scraped
+            // out of its prose by an earlier release.
+            if let agent = AgentKind(rawValue: raw), service.reportsModels(agent) {
                 discoveredModels[agent] = models
             }
         }
@@ -106,7 +109,15 @@ extension DashboardModel {
     }
 
     func cacheSidebar(_ groups: [RepositoryGroup]) {
-        let cached = groups.map { group in
+        // Placeholders are what a creation looks like while it runs;
+        // remembering one meant a failed creation came back on every
+        // launch as a row nothing could delete.
+        let real = groups.map { group in
+            var kept = group
+            kept.items = group.items.filter { $0.isPlaceholder == false }
+            return kept
+        }
+        let cached = real.map { group in
             var cached = CachedRepository()
             cached.name = group.repository.name
             cached.fullName = group.repository.fullName

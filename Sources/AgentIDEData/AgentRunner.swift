@@ -155,9 +155,12 @@ public struct ClaudeCodeRunner: AgentRunner {
         ["fable", "opus", "sonnet", "haiku"]
     }
 
-    /// Claude Code's model listing.
+    /// Claude Code has no listing subcommand: every argument it
+    /// does not know becomes a prompt, so `claude models` started a
+    /// session, answered in prose, and the words of that answer were
+    /// read as model names. The curated list above stands instead.
     public var modelListingCommand: [String] {
-        ["claude", "models"]
+        []
     }
 
     /// Claude Code's effort tiers.

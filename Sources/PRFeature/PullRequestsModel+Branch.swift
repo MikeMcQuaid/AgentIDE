@@ -22,20 +22,13 @@ extension PullRequestsModel {
     }
 
     /// Rebase only lights up when it would actually change
-    /// something: move the base, sign commits, or both. A rebase
-    /// moves the branch the worktree holds, so an entry being read
-    /// without being checked out is not its to move.
+    /// something: move the base, sign commits, or both. It acts on
+    /// the entry in view, checking it out for the rebase and putting
+    /// the worktree back: an entry whose tip is unsigned could
+    /// otherwise never be pushed, since Push waits for the signature
+    /// only this can give it.
     var canRebase: Bool {
-        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing && isListedCheckedOut
-    }
-
-    /// Whether the entry on screen is the branch the worktree
-    /// actually holds, which is always so outside a stack. The
-    /// stack's own checked-out name counts too: where a local-only
-    /// twin is checked out, the entry standing for it is at the same
-    /// commit, so rebasing and pushing are still its work.
-    var isListedCheckedOut: Bool {
-        listedBranch == (currentBranch ?? branch) || listedBranch == stacking.stack.checkedOut
+        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
     /// Push makes sense with unpushed commits that this tab has not

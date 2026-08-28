@@ -153,9 +153,9 @@ struct PullRequestStackTests {
         model.show(branch: "upper")
         try? await Task.sleep(for: .milliseconds(200))
         #expect(model.listedBranch == "upper")
-        // The entry standing in for what is checked out is still the
-        // worktree's own work to rebase and push.
-        #expect(model.isListedCheckedOut)
+        // And the entry in view is what the tab acts on, whatever
+        // the worktree happens to hold.
+        #expect(model.listedWorktree?.branch == "upper")
     }
 
     @Test

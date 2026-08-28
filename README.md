@@ -216,8 +216,9 @@ before shipping.
   button, and resets them to the commit message from the button beside
   it, asking first when something is typed (so the form is never stuck
   on a draft you no longer want)
-- **Discloses** the agent that wrote a branch in one click, and whenever
-  you tick every box: the harness with the model and effort it ran at,
+- **Discloses** the agent that wrote a branch whenever you press Fill
+  template, which is also what ticks the template's boxes: the harness
+  with the model and effort it ran at,
   the pickers' defaults when the launch named none, worded as the
   pickers word them, followed by local review and testing,
   written into the template's own AI section where there is one (so an

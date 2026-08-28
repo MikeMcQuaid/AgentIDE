@@ -100,27 +100,17 @@ struct PullRequestCreateForm: View {
             HStack {
                 Text("Template").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                // Always beside the tick-all button, which claims
-                // the same box: a button that comes and goes with
-                // what the app happens to know is a button nobody
-                // learns to look for.
-                Button("Disclose AI", systemImage: "sparkles.rectangle.stack") {
-                    model.insertAIDisclosure()
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .disabled(isGenerating || model.hasAIDisclosure == false)
-                .hoverHelp(
-                    model.hasAIDisclosure
-                        ? "Name the harness and model that wrote this branch, and that you reviewed and "
-                        + "tested it, in the template's AI section"
-                        : "No agent session is recorded for this branch to name",
-                )
-                Button("Tick every box", systemImage: "checklist") { model.tickTemplateBoxes() }
+                // One button, since ticking the AI box and saying
+                // what wrote the branch are the same act: the box
+                // claims a disclosure and the disclosure answers it.
+                Button("Fill template", systemImage: "checklist") { model.tickTemplateBoxes() }
                     .buttonStyle(.glass)
                     .controlSize(.small)
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
-                    .hoverHelp("Tick every unticked checkbox, and disclose the agent where the template asks")
+                    .hoverHelp(
+                        "Tick every unticked checkbox, and where the template asks about AI, name the "
+                            + "harness and model that wrote this branch and that you reviewed and tested it",
+                    )
             }
             TextEditor(text: $model.prTemplate.readOnly(isGenerating || isBlocked))
                 .font(.body.monospaced())

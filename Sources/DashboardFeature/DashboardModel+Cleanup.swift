@@ -24,6 +24,24 @@ public extension DashboardModel {
         }
     }
 
+    /// Takes a placeholder row out of the sidebar and out of the
+    /// snapshot the next launch paints from, so a creation that
+    /// failed leaves nothing behind to click.
+    func forgetPlaceholder(_ item: WorktreeItem) {
+        groups = Self.forgetting(item.worktree.path, in: groups)
+        cacheSidebar(groups)
+    }
+
+    /// The rows without the one at a path, which is all forgetting a
+    /// placeholder is.
+    static func forgetting(_ path: String, in groups: [RepositoryGroup]) -> [RepositoryGroup] {
+        groups.map { group in
+            var kept = group
+            kept.items = group.items.filter { $0.worktree.path != path }
+            return kept
+        }
+    }
+
     /// Tidies a worktree whose pull request has merged, merge-safely:
     /// a real worktree is removed only when it is clean and its branch
     /// is fully on the base branch (git's `-d` rule), otherwise the

@@ -5,6 +5,17 @@ import Testing
 /// on, the successor to the deleted paste-delivery coverage.
 struct AgentRunnerTests {
     @Test
+    func `an agent with no listing offers its curated models and forgets what was scraped`() {
+        // `claude models` is not a subcommand: Claude Code takes an
+        // unknown argument as a prompt, so asking started a session
+        // and the words of its answer were read as model names.
+        #expect(ClaudeCodeRunner().modelListingCommand.isEmpty)
+        #expect(ClaudeCodeRunner().models == ["fable", "opus", "sonnet", "haiku"])
+        // Codex has a real listing to read, so it keeps one.
+        #expect(CodexRunner().modelListingCommand.isEmpty == false)
+    }
+
+    @Test
     func `versions come out of whatever the CLI wraps them in`() {
         #expect(ClaudeCodeRunner().parseVersion("2.1.238 (Claude Code)") == "2.1.238")
         #expect(CodexRunner().parseVersion("codex-cli 0.149.0\n") == "0.149.0")
