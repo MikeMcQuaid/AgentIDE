@@ -276,59 +276,6 @@ extension PullRequestsModel {
 
     /// Rebases onto origin with signed commits; false means the
     /// rebase aborted and the errors tab should open with the cause.
-    func rebaseSigned() async -> Bool {
-        guard let worktree = listedWorktree else {
-            return true
-        }
-
-        do {
-            try await performRebase(worktree)
-            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
-            Self.requestSidebarRefresh()
-            await reload(keepingSelection: true)
-            return true
-        } catch {
-            report(error.localizedDescription)
-            return false
-        }
-    }
-
-    /// The one merge action's label, naming exactly what a click
-    /// does right now; nil when no open conversation is selected.
-    var mergeActionTitle: String? {
-        guard let selected, selected.state == "OPEN" else {
-            return nil
-        }
-
-        if selected.hasAutomerge {
-            return hasMergeQueue ? "Dequeue" : "Cancel automerge"
-        }
-        if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
-            return hasMergeQueue ? "Queue" : "Merge"
-        }
-        return "Automerge"
-    }
-
-    /// The present-tense form while the merge action runs.
-    var mergeActionBusyTitle: String {
-        switch mergeActionTitle {
-        case "Dequeue":
-            "Dequeuing"
-
-        case "Cancel automerge":
-            "Cancelling"
-
-        case "Queue":
-            "Queueing"
-
-        case "Merge":
-            "Merging"
-
-        default:
-            "Enabling automerge"
-        }
-    }
-
     /// Merges a stacked pull request together with every one below
     /// it, in order; false opens the errors surface. GitHub decides
     /// how each is merged, so the button says only that it merges.

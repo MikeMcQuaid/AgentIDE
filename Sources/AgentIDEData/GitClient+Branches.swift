@@ -36,12 +36,11 @@ public extension GitClient {
     /// checkout keeps both in `.git` itself.
     static func headFileBranch(worktreePath: String) -> String? {
         let dotGit = worktreePath + "/.git"
+        let pointer = (try? String(contentsOfFile: dotGit, encoding: .utf8)) ?? ""
+        let marker = "gitdir: "
         var directory = dotGit
-        if let pointer = try? String(contentsOfFile: dotGit, encoding: .utf8),
-           pointer.hasPrefix("gitdir: ") {
-            directory = pointer
-                .dropFirst("gitdir: ".count)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+        if pointer.hasPrefix(marker) {
+            directory = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         guard let head = try? String(contentsOfFile: directory + "/HEAD", encoding: .utf8) else {
             return nil

@@ -909,7 +909,11 @@ shim rather than a protocol:
    a count of branches; Rebase shows how far it sits behind that
    base. That branch's tip is whose signature Push waits for, and
    Rebase checks the entry out to rebase
-   it and puts the worktree back where it was. Leaving Rebase to the
+   it, puts the worktree back where it was, and takes the branches
+   above it along: left where they were they fork from the default
+   branch rather than from the entry that moved, which is no stack at
+   all, and the tab then lost the entry it had just rebased and showed
+   whichever branch was checked out instead. Leaving Rebase to the
    checked-out branch alone deadlocked every other entry, since one
    whose tip was unsigned could then be neither signed nor pushed.
    Its form fills from the entry's own span
