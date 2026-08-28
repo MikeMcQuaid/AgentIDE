@@ -123,11 +123,13 @@ extension MarkdownText {
     }
 
     static func inline(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace,
-        )
-        let source = ticked(text)
-        return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
+        inlineCache.value(for: text) { text in
+            let options = AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            )
+            let source = ticked(text)
+            return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
+        }
     }
 
     /// Task list markers render as their box glyphs: markdown's

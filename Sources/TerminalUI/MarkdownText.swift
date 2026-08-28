@@ -1,5 +1,12 @@
 import AgentIDEDomain
 import SwiftUI
+import Synchronization
+
+/// The most entries a parse cache holds before being wiped; at file
+/// scope because a generic type cannot hold a static stored value.
+private let parseCacheCap = 512
+
+// MARK: - MarkdownText
 
 /// Renders markdown with fenced code blocks: inline syntax through
 /// AttributedString, code fences as monospaced blocks. SwiftUI's
@@ -34,14 +41,58 @@ public struct MarkdownText: View {
         .font(.callout)
     }
 
-    // MARK: Private
+    // MARK: Internal
 
     /// A top-level run of markdown, either plain or one details
-    /// block folded behind its summary.
-    private struct Chunk {
+    /// block folded behind its summary; internal so the caches can
+    /// name it.
+    struct Chunk {
         let text: String
         let detailsSummary: String?
     }
+
+    /// A parse memoised by its input, since every parse here is
+    /// pure and the views re-evaluate per render: a conversation of
+    /// forty comments re-parsed all forty on every state change.
+    /// Wiped wholesale when full rather than ordered for eviction.
+    final class ParseCache<Value: Sendable>: Sendable {
+        // MARK: Lifecycle
+
+        init() {
+            // Starts empty.
+        }
+
+        deinit {
+            // The caches live for the process.
+        }
+
+        // MARK: Internal
+
+        func value(for key: String, make: (String) -> Value) -> Value {
+            if let cached = store.withLock({ $0[key] }) {
+                return cached
+            }
+
+            let value = make(key)
+            store.withLock { values in
+                if values.count >= parseCacheCap {
+                    values = [:]
+                }
+                values[key] = value
+            }
+            return value
+        }
+
+        // MARK: Private
+
+        private let store: Mutex<[String: Value]> = .init([:])
+    }
+
+    static let chunkCache: ParseCache<[Chunk]> = .init()
+    static let blockCache: ParseCache<[ProseBlock]> = .init()
+    static let inlineCache: ParseCache<AttributedString> = .init()
+
+    // MARK: Private
 
     private static let spacing: CGFloat = 4
     private static let tableSpacing: CGFloat = 12
@@ -54,32 +105,14 @@ public struct MarkdownText: View {
     /// The text split on `<details>` blocks, which render collapsed;
     /// bots fold their long reports into them for a reason.
     private var chunks: [Chunk] {
-        var results = [Chunk]()
-        var remainder = Substring(text)
-        while let match = remainder.firstMatch(of: /<details[^>]*>([\s\S]*?)<\/details>/.ignoresCase()) {
-            let before = String(remainder[..<match.range.lowerBound])
-            if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                results.append(Chunk(text: before, detailsSummary: nil))
-            }
-            var inner = String(match.output.1)
-            var summary = ""
-            if let heading = inner.firstMatch(of: /<summary>([\s\S]*?)<\/summary>/.ignoresCase()) {
-                summary = String(heading.output.1).trimmingCharacters(in: .whitespacesAndNewlines)
-                inner.removeSubrange(heading.range)
-            }
-            results.append(Chunk(text: inner, detailsSummary: summary.isEmpty ? "Details" : summary))
-            remainder = remainder[match.range.upperBound...]
-        }
-        if remainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            results.append(Chunk(text: String(remainder), detailsSummary: nil))
-        }
-        return results
+        Self.chunkCache.value(for: text) { Self.parsedChunks($0) }
     }
 
     /// One chunk's blocks, parsed by the official GitHub-flavoured
-    /// parser after the HTML mapping.
+    /// parser after the HTML mapping, from the cache when unchanged.
     private func segmentViews(_ text: String) -> some View {
-        ForEach(Array(Self.proseBlocks(Self.strippingHTML(text)).enumerated()), id: \.offset) { _, block in
+        let blocks = Self.blockCache.value(for: text) { Self.proseBlocks(Self.strippingHTML($0)) }
+        return ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
             switch block {
             case let .heading(title):
                 Text(Self.inline(title)).fontWeight(.semibold).textSelection(.enabled)
@@ -142,5 +175,28 @@ public struct MarkdownText: View {
                 }
             }
         }
+    }
+
+    private static func parsedChunks(_ text: String) -> [Chunk] {
+        var results = [Chunk]()
+        var remainder = Substring(text)
+        while let match = remainder.firstMatch(of: /<details[^>]*>([\s\S]*?)<\/details>/.ignoresCase()) {
+            let before = String(remainder[..<match.range.lowerBound])
+            if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                results.append(Chunk(text: before, detailsSummary: nil))
+            }
+            var inner = String(match.output.1)
+            var summary = ""
+            if let heading = inner.firstMatch(of: /<summary>([\s\S]*?)<\/summary>/.ignoresCase()) {
+                summary = String(heading.output.1).trimmingCharacters(in: .whitespacesAndNewlines)
+                inner.removeSubrange(heading.range)
+            }
+            results.append(Chunk(text: inner, detailsSummary: summary.isEmpty ? "Details" : summary))
+            remainder = remainder[match.range.upperBound...]
+        }
+        if remainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            results.append(Chunk(text: String(remainder), detailsSummary: nil))
+        }
+        return results
     }
 }
