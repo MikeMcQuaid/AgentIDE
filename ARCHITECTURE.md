@@ -708,9 +708,9 @@ shim rather than a protocol:
    request is read the moment its file lands rather than on a poll; a
    slow safety tick covers a lost event, and a faster one runs only
    while requests are waiting, to sweep those whose command has gone.
-   A request selects the worktree the command ran in, opens the utility
-   pane on its editor tab and shows the file, then writes an `.open`
-   file. An unclaimed request is how the shim knows no app is running:
+   A request brings the app forward, selects the worktree the command
+   ran in, opens the utility pane on its editor tab and shows the
+   file, then writes an `.open` file. An unclaimed request is how the shim knows no app is running:
    it says so and exits non-zero rather than hanging.
 4. Saving and closing writes a `.done` file holding the exit status the shim
    takes: zero when the file was saved, non-zero when the edit was cancelled,

@@ -93,6 +93,17 @@ extension RootView {
         .ignoresSafeArea(.container, edges: .top)
     }
 
+    /// What the anonymous-looking window is actually showing, for
+    /// the surfaces that name windows: the hidden title bar keeps
+    /// it invisible in the window itself.
+    var windowTitle: String {
+        guard let item = dependencies.dashboard.selection else {
+            return "AgentIDE"
+        }
+
+        return item.worktree.repositoryName + ": " + item.worktree.branch
+    }
+
     /// Tells the dashboard whether anyone can see the window, and
     /// refreshes at once on coming back on screen rather than
     /// waiting out the slow tick the hidden window was on.

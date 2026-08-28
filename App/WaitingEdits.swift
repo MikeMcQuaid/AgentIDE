@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import DashboardFeature
 import Foundation
 import Observation
@@ -81,6 +82,9 @@ final class WaitingEdits {
     /// shows it in the editor. Anything outside every worktree says
     /// so in the messages pane rather than silently doing nothing.
     private func act(on edit: ExternalEdit, dashboard: DashboardModel) {
+        // `agentide .` in a terminal means "take me there": the
+        // window mutating behind another app helped nobody.
+        NSApp.activate()
         let items = dashboard.groups.flatMap(\.items)
         let holder = items.first { item in
             edit.path == item.worktree.path || edit.path.hasPrefix(item.worktree.path + "/")
@@ -117,6 +121,9 @@ final class WaitingEdits {
     }
 
     private func takeOverPane(for edit: ExternalEdit, dashboard: DashboardModel) {
+        // The command is stopped until the file is dealt with, so
+        // the window really does come to the front.
+        NSApp.activate()
         let items = dashboard.groups.flatMap(\.items)
         if let item = items.first(where: { edit.belongs(toWorktree: $0.worktree.path) }) {
             dashboard.select(item)

@@ -116,6 +116,9 @@ struct RootView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator { visible in windowVisibilityChanged(visible) })
+        // The title bar hides the string, but Mission Control, the
+        // Window menu and window switching all read it.
+        .navigationTitle(windowTitle)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fitPanes(to: $0) }
         .onChange(of: resizePanesRequest) { evenPanes(in: windowWidth) }
         .sheet(isPresented: sessionManagerBinding) { sessionManager }

@@ -42,7 +42,13 @@ final class AppDependencies {
             github: githubClient,
             launchProgress: launchProgress,
         )
-        try? HookInstaller(paths: paths).ensureInstalled()
+        // Off the launch path: installing hooks writes into the
+        // shared workspace and nothing about the first paint needs
+        // it done first.
+        let installer = HookInstaller(paths: paths)
+        Task.detached(priority: .utility) {
+            try? installer.ensureInstalled()
+        }
     }
 
     deinit {
