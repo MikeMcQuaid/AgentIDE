@@ -16,7 +16,8 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 
 - `script/bootstrap`: install `Brewfile` dependencies and generate
   `AgentIDE.xcodeproj` with XcodeGen
-- `script/build`: build the app with xcodebuild
+- `script/build`: regenerate the Xcode project when sources
+  changed, then build the app with xcodebuild
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds
 - `script/test`: run the unit and integration tests
