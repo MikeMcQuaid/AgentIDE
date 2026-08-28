@@ -23,10 +23,17 @@ public extension SessionService {
 
     /// Records the appearance a session is being born into, called
     /// by the launch funnel just before the agent starts.
-    internal func rememberTerminalScheme(worktreePath: String) {
+    internal func rememberTerminalScheme(worktreePath: String, agent: AgentKind?) {
         // The system appearance, readable without AppKit: the key is
         // set to Dark in the global domain and absent in light mode.
-        let isDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        // Codex 0.148 through at least 0.150 paints its composer
+        // near-black under a light terminal while typing in the
+        // terminal's dark default foreground, unreadable and not
+        // fixable through its theme setting, so Codex launches
+        // pinned to the dark palette whatever the appearance until
+        // that regression is fixed upstream.
+        let isDark = agent == .codexCLI
+            || UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
         store.update { metadata in
             metadata.terminalSchemes[worktreePath] = isDark ? Self.darkName : Self.lightName
         }

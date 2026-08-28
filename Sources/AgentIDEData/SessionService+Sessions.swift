@@ -53,10 +53,11 @@ public extension SessionService {
         // The agent about to start reads the terminal's colours once
         // and trusts them forever; remember which appearance it is
         // being born into, so the pane can keep its word.
-        rememberTerminalScheme(worktreePath: directory)
+        let agent = agentKind(of: sessionName)
+        rememberTerminalScheme(worktreePath: directory, agent: agent)
         await progress("Closing any previous session")
         await killSession(name: sessionName)
-        if let agent = agentKind(of: sessionName) {
+        if let agent {
             await clearQuarantine(for: agent)
         }
         // The version probe finishes before the launch, never runs
