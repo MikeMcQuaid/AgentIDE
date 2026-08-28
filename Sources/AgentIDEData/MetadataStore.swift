@@ -52,14 +52,6 @@ public struct MetadataStore: Sendable {
         write(metadata)
     }
 
-    /// Saves the metadata; the caches are capped first so the file
-    /// never grows forever.
-    public func save(_ metadata: AppMetadata) {
-        Self.lock.lock()
-        defer { Self.lock.unlock() }
-        write(metadata)
-    }
-
     // MARK: Private
 
     /// Serialises every write. The file is one app's, so a lock

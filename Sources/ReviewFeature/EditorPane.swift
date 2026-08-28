@@ -77,8 +77,6 @@ public struct EditorPane: View {
     private static let resultsHeight: CGFloat = 180
     private static let fieldCornerRadius: CGFloat = 6
     private static let fieldBackgroundOpacity = 0.5
-    private static let highlightOpacity = 0.25
-    private static let rowVerticalPadding: CGFloat = 2
 
     @State private var files: [String] = []
     @State private var results: [Result] = []

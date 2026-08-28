@@ -21,7 +21,7 @@ struct MetadataStoreTests {
         metadata.resumeIDs["session"] = "abc"
         metadata.sessionsByWorktree["/w"] = "session"
         metadata.agentVersions["session"] = "2.1.239"
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let loaded = store.load()
         #expect(loaded.prompts["session"] == "prompt")
@@ -100,17 +100,17 @@ struct MetadataStoreTests {
 
         var metadata = AppMetadata()
         metadata.prompts["session"] = "prompt"
-        store.save(metadata)
+        store.update { $0 = metadata }
         try FileManager.default.removeItem(atPath: file)
 
         // The poll saves its sidebar snapshot every tick and most
         // ticks change nothing; an equal value must not be encoded
         // or written again.
-        store.save(metadata)
+        store.update { $0 = metadata }
         #expect(FileManager.default.fileExists(atPath: file) == false)
 
         metadata.prompts["other"] = "changed"
-        store.save(metadata)
+        store.update { $0 = metadata }
         #expect(FileManager.default.fileExists(atPath: file))
     }
 
@@ -160,7 +160,7 @@ struct MetadataStoreTests {
                 ),
                 savedAt: now.addingTimeInterval(-700_000),
             )
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let loaded = store.load()
         #expect(loaded.conversationCache.count == 80)
@@ -188,7 +188,7 @@ struct MetadataStoreTests {
         repository.worktrees = [worktree]
         var metadata = AppMetadata()
         metadata.cachedSidebar = [repository]
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let cached = store.load().cachedSidebar
         #expect(cached.first?.fullName == "octocat/example")

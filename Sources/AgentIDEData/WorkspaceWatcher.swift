@@ -1,5 +1,4 @@
 import CoreServices
-import Foundation
 import Synchronization
 
 // MARK: - WorkspaceWatcher
@@ -33,7 +32,8 @@ public final class WorkspaceWatcher: Sendable {
         watching.withLock { $0 }
     }
 
-    /// Starts watching; safe to call more than once.
+    /// Starts watching; safe to call more than once, and a failed
+    /// attempt may be retried, since nothing was left half started.
     public func start() {
         guard started.withLock({ let was = $0; $0 = true; return was }) == false else {
             return
@@ -42,7 +42,8 @@ public final class WorkspaceWatcher: Sendable {
         var context = FSEventStreamContext()
         // The stream holds the one strong reference the callback
         // reads; never released, since the stream is never stopped.
-        context.info = Unmanaged.passRetained(box).toOpaque()
+        let info = Unmanaged.passRetained(box)
+        context.info = info.toOpaque()
         guard let stream = FSEventStreamCreate(
             nil,
             workspaceEventsCallback,
@@ -53,6 +54,8 @@ public final class WorkspaceWatcher: Sendable {
             Self.latencySeconds,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagUseCFTypes),
         ) else {
+            info.release()
+            started.withLock { $0 = false }
             return
         }
 
@@ -60,6 +63,8 @@ public final class WorkspaceWatcher: Sendable {
         guard FSEventStreamStart(stream) else {
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
+            info.release()
+            started.withLock { $0 = false }
             return
         }
 

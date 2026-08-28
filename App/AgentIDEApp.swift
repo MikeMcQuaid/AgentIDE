@@ -53,6 +53,13 @@ struct AgentIDEApp: App {
 
     // MARK: Internal
 
+    /// Installs `AppDelegate`, which quits the app when its last
+    /// window closes. Internal, not private: nothing references it,
+    /// so the formatter's unused-private-declaration rule silently
+    /// deleted a private one, and the delegate with it.
+    @NSApplicationDelegateAdaptor(AppDelegate.self)
+    var delegate
+
     var body: some Scene {
         WindowGroup {
             RootView(dependencies: dependencies)
