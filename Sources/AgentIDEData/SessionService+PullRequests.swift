@@ -281,7 +281,7 @@ public extension SessionService {
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         do {
-            try await git.fetch(repositoryPath: worktree.path)
+            try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         } catch {
             report.failures.append("Fetching \(worktree.repositoryName) failed: " + error.localizedDescription)
         }

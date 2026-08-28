@@ -882,7 +882,13 @@ shim rather than a protocol:
    bottom of a stack opens against the default branch exactly
    as a lone branch does, and keeps the lone branch's Rebase and Push
    rather than the stack's three buttons, however many branches sit
-   above it. Push and Rebase both act on the entry in view: that
+   above it. Every rebase fetches first, a branch's own and the
+   stack's alike, since rebasing onto a remote nobody has read is the
+   one thing the button must not do; a fetch inside the minute is
+   reused, so pressing Rebase after a Fetch and Reset, or after
+   another entry's rebase, does not wait on the network twice
+   (`gitFetchedAt` in the metadata store, stamped by every fetch the
+   app makes). Push and Rebase both act on the entry in view: that
    branch's commits are what Push counts and that branch's tip whose
    signature it waits for, and Rebase checks the entry out to rebase
    it and puts the worktree back where it was. Leaving Rebase to the

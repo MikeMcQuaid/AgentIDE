@@ -187,6 +187,9 @@ public extension SessionService {
         let path = worktree.path
         let stack = await stack(for: worktree)
         try await requireQuiet(worktree: worktree, action: "restack")
+        // The bottom entry rebases onto the default branch, which is
+        // only worth rebasing onto if the remote is current.
+        try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
         guard let base = stack.base else {
             throw stackError("No default branch to stack on", in: path)
         }

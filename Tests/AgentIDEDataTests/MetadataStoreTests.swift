@@ -57,6 +57,24 @@ struct MetadataStoreTests {
     }
 
     @Test
+    func `a fetch inside the minute is reused, and a stale one is not`() throws {
+        let root = try TestSupport.temporaryDirectory("fetch-stamp")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Rebasing wants a current remote, and fetching a large
+        // repository takes seconds: one rebase's fetch serves the
+        // next rebase started right after it, and nothing older.
+        store.update { $0.gitFetchedAt["/repositories/brew"] = Date().addingTimeInterval(-30) }
+        let recent = try #require(store.load().gitFetchedAt["/repositories/brew"])
+        #expect(Date().timeIntervalSince(recent) < SessionService.fetchInterval)
+
+        store.update { $0.gitFetchedAt["/repositories/brew"] = Date().addingTimeInterval(-90) }
+        let stale = try #require(store.load().gitFetchedAt["/repositories/brew"])
+        #expect(Date().timeIntervalSince(stale) >= SessionService.fetchInterval)
+    }
+
+    @Test
     func `decoding tolerates files written before new fields existed`() throws {
         let root = try TestSupport.temporaryDirectory("store-old")
         defer { try? FileManager.default.removeItem(atPath: root) }

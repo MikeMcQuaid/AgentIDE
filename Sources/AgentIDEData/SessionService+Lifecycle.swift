@@ -108,6 +108,7 @@ public extension SessionService {
     /// Fetches and prunes the repository's remotes.
     func fetch(repository: Repository) async throws {
         try await git.fetch(repositoryPath: repository.path)
+        rememberFetch(repositoryPath: repository.path)
     }
 
     /// A tracked file's committed content; see `GitClient`.
