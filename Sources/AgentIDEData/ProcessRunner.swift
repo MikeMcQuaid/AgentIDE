@@ -123,7 +123,11 @@ public struct FoundationProcessRunner: ProcessRunner {
 
     // MARK: Public
 
-    /// Runs the argv on a global queue and captures its output.
+    /// Runs the argv and captures its output. The exit arrives
+    /// through the process's own termination handler: parking a
+    /// global-queue thread in `waitUntilExit` per process meant a
+    /// fan-out of git reads held a blocked thread each, at default
+    /// quality of service.
     public func run(
         _ arguments: [String],
         workingDirectory: String?,
@@ -137,21 +141,15 @@ public struct FoundationProcessRunner: ProcessRunner {
             Self.name(of: arguments),
             context: workingDirectory ?? "",
         ) {
-            try await withCheckedThrowingContinuation { continuation in
-                DispatchQueue.global().async {
-                    do {
-                        try continuation.resume(
-                            returning: Self.runBlocking(arguments, workingDirectory, environment),
-                        )
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
+            try await Self.launch(arguments, workingDirectory, environment)
         }
     }
 
     // MARK: Private
+
+    /// The finished-process continuation; named so the closure's
+    /// annotation, which inference needs, stays within line length.
+    private typealias Exit = CheckedContinuation<ProcessResult, any Error>
 
     /// How many words of a command name it in the log: enough for
     /// `git rev-list --count` or `gh pr list` without the arguments
@@ -193,11 +191,11 @@ public struct FoundationProcessRunner: ProcessRunner {
         return words.joined(separator: " ")
     }
 
-    private static func runBlocking(
+    private static func launch(
         _ arguments: [String],
         _ workingDirectory: String?,
         _ extraEnvironment: [String: String],
-    ) throws -> ProcessResult {
+    ) async throws -> ProcessResult {
         let outputURL = temporaryFile()
         let errorURL = temporaryFile()
         defer {
@@ -212,18 +210,33 @@ public struct FoundationProcessRunner: ProcessRunner {
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
         }
         process.environment = ProcessEnvironment.scrubbed(merging: extraEnvironment)
-        process.standardOutput = try FileHandle(forWritingTo: outputURL)
-        process.standardError = try FileHandle(forWritingTo: errorURL)
+        let outputHandle = try FileHandle(forWritingTo: outputURL)
+        let errorHandle = try FileHandle(forWritingTo: errorURL)
+        process.standardOutput = outputHandle
+        process.standardError = errorHandle
         process.standardInput = FileHandle.nullDevice
 
-        try process.run()
-        process.waitUntilExit()
-
-        return ProcessResult(
-            status: process.terminationStatus,
-            standardOutput: (try? String(contentsOf: outputURL, encoding: .utf8)) ?? "",
-            standardError: (try? String(contentsOf: errorURL, encoding: .utf8)) ?? "",
-        )
+        return try await withCheckedThrowingContinuation { (continuation: Exit) in
+            process.terminationHandler = { finished in
+                // The parent's handles close once the child is done
+                // with its copies, then the whole output reads back.
+                try? outputHandle.close()
+                try? errorHandle.close()
+                continuation.resume(returning: ProcessResult(
+                    status: finished.terminationStatus,
+                    standardOutput: (try? String(contentsOf: outputURL, encoding: .utf8)) ?? "",
+                    standardError: (try? String(contentsOf: errorURL, encoding: .utf8)) ?? "",
+                ))
+            }
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                try? outputHandle.close()
+                try? errorHandle.close()
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     private static func temporaryFile() -> URL {
