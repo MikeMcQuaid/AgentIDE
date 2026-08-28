@@ -993,8 +993,12 @@ shim rather than a protocol:
    critical path. A derivation asks git about every branch's fork
    point and how far it has come, thirty processes for a repository
    of a few branches, so the answer is kept against the one line that
-   decides it: where every branch points, which one is checked out
-   and which are excluded, read in a single `for-each-ref`. A
+   decides it: where every branch and every remote-tracking ref
+   points, which branch is checked out and which are excluded, read
+   in a single `for-each-ref`. The remotes are in it because every
+   fork point is measured against the default branch: a fetch that
+   moves it changes what a stack is while every local branch stays
+   where it was. A
    worktree whose branches have not moved is answered from that
    rather than derived again, and the performance log says which
    (`stack#<path>`). A failure resets what moved, returns to the

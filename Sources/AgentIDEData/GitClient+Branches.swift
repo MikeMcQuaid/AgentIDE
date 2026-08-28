@@ -1,3 +1,5 @@
+import Foundation
+
 /// Branch inspection and the repository-local exclude file, split
 /// from the client body for length.
 public extension GitClient {
@@ -40,7 +42,19 @@ public extension GitClient {
         let marker = "gitdir: "
         var directory = dotGit
         if pointer.hasPrefix(marker) {
-            directory = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            let named = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            // `git worktree add --relative-paths` writes a path
+            // relative to this file, not to wherever the app is
+            // running: resolved against the process's directory it
+            // would name nothing, and every read would fall back to
+            // asking git.
+            directory = named.hasPrefix("/")
+                ? named
+                : URL(fileURLWithPath: dotGit)
+                .deletingLastPathComponent()
+                .appendingPathComponent(named)
+                .standardizedFileURL
+                .path
         }
         guard let head = try? String(contentsOfFile: directory + "/HEAD", encoding: .utf8) else {
             return nil

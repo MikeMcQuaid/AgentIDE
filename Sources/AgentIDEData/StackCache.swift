@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// The stack each worktree was last found to be in, against the
 /// state it was derived from. Deriving one asks git about every
