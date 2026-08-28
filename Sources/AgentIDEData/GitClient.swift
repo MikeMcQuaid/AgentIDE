@@ -280,11 +280,14 @@ public struct GitClient: Sendable {
     /// keeps the commits recoverable. Pruning drops any stale
     /// bookkeeping so the listing never shows a removed worktree.
     public func removeWorktree(repository: Repository, worktreePath: String, branch: String) async throws {
-        // A path git never registered, or one already gone, is not a
-        // reason to stop: what follows prunes and forgets it, which
-        // is the whole point of asking.
-        let listed = FileManager.default.fileExists(atPath: worktreePath)
-        if listed {
+        // A directory that has already gone is nothing to remove,
+        // and asking git to would fail the whole call; pruning and
+        // forgetting below still finish the job. Every other refusal
+        // is thrown on purpose: a worktree git does not know, or one
+        // holding files the host user cannot delete, both land in
+        // the caller's fallback, which removes the directory as its
+        // owner and then prunes.
+        if FileManager.default.fileExists(atPath: worktreePath) {
             try await git(["worktree", "remove", "--force", worktreePath], in: repository.path)
         }
         try await forgetWorktree(repository: repository, branch: branch)
