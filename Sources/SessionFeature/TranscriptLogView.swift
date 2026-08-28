@@ -33,16 +33,16 @@ struct TranscriptLogView: View {
         // Conversations read newest-last, so open at the end.
         .defaultScrollAnchor(.bottom)
         .font(.callout)
-        .foregroundStyle(colorScheme == .dark ? Color.white : .black)
-        .background(colorScheme == .dark ? Color.black : .white)
+        // The semantic text colours: they track appearance and the
+        // Increase Contrast setting, where literal black and white
+        // tracked nothing.
+        .foregroundStyle(Color(nsColor: .textColor))
+        .background(Color(nsColor: .textBackgroundColor))
     }
 
     // MARK: Private
 
     private static let spacing: CGFloat = 8
-
-    @Environment(\.colorScheme)
-    private var colorScheme
 
     private let entries: [TranscriptEntry]
 

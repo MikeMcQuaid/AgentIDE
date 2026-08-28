@@ -72,6 +72,10 @@ public struct DashboardView: View {
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
 
+    /// Whether the window is key, which decides how selection paints.
+    @Environment(\.controlActiveState)
+    private var controlActiveState
+
     /// The pending confirmed deletion: which worktree, and what the
     /// merge-safe path refused about it (nil for a plain Delete
     /// worktree, which always confirms since it always forces).
@@ -159,10 +163,14 @@ public struct DashboardView: View {
         .contentShape(Rectangle())
     }
 
-    /// Selected rows use the full accent fill with light content,
-    /// matching native sidebar selection.
+    /// Selected rows use the system selection colours, which follow
+    /// the user's highlight choice and grey out when the window is
+    /// not key, the way every native sidebar's selection does; the
+    /// literal accent-and-white pair stayed saturated in inactive
+    /// windows and fell below contrast on light accents.
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
+        let isEmphasised = isSelected && controlActiveState != .inactive
         let isDeleting = model.deletingPaths.contains(item.worktree.path)
         return Button {
             // A worktree mid-deletion cannot be re-entered; the row
@@ -187,11 +195,11 @@ public struct DashboardView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? Color.white : Color.primary)
-        .tint(isSelected ? Color.white : Color.accentColor)
+        .foregroundStyle(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.primary)
+        .tint(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.accentColor)
         .background(
             RoundedRectangle(cornerRadius: Self.rowCornerRadius)
-                .fill(isSelected ? Color.accentColor : Color.clear),
+                .fill(selectionFill(isSelected: isSelected, isEmphasised: isEmphasised)),
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
@@ -283,6 +291,18 @@ public struct DashboardView: View {
         if let refusal = await model.cleanUp(item: item) {
             pendingForceDelete = (item.worktree.path, refusal)
         }
+    }
+
+    /// The selection background: the system's emphasised colour in
+    /// a key window, its grey unemphasised one otherwise.
+    private func selectionFill(isSelected: Bool, isEmphasised: Bool) -> Color {
+        guard isSelected else {
+            return .clear
+        }
+
+        return isEmphasised
+            ? Color(nsColor: .selectedContentBackgroundColor)
+            : Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
     }
 
     private func isExpanded(_ path: String) -> Bool {
