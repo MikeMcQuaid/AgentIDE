@@ -23,6 +23,18 @@ public extension SessionService {
         // is a branch this worktree has been told to leave out;
         // whatever is checked out is part of it whatever it says.
         let excluded = Set(excludedStackBranches(worktreePath: path))
+        // Everything the answer depends on, in one process: where
+        // every branch points, which is held, and which are left
+        // out. The rota derives a stack for a worktree at a time all
+        // day, and almost none of them have moved since last time.
+        let fingerprint = await git.refFingerprint(worktreePath: path)
+            + checkedOut + baseRef + excluded.sorted().joined(separator: ",")
+        if let known = await StackCache.shared.stack(for: path, derivedFrom: fingerprint) {
+            PerformanceLog.record(cacheHit: true, "stack#" + path)
+            return known
+        }
+
+        PerformanceLog.record(cacheHit: false, "stack#" + path)
         let candidates = await git.branches(worktreePath: path)
             .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
         var related = [StackCandidate]()
@@ -62,11 +74,13 @@ public extension SessionService {
         // same commit, so the actions that move what is checked out
         // stay live rather than dimming on a name that has gone.
         let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
-        return BranchStack(
+        let derived = BranchStack(
             base: base,
             branches: branches.isEmpty ? fallback : branches,
             checkedOut: standingIn ?? checkedOut,
         )
+        await StackCache.shared.remember(derived, for: path, derivedFrom: fingerprint)
+        return derived
     }
 
     /// The stack's entries in build order, with branches at one
@@ -187,6 +201,9 @@ public extension SessionService {
         let path = worktree.path
         let stack = await stack(for: worktree)
         try await requireQuiet(worktree: worktree, action: "restack")
+        // The bottom entry rebases onto the default branch, which is
+        // only worth rebasing onto if the remote is current.
+        try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
         guard let base = stack.base else {
             throw stackError("No default branch to stack on", in: path)
         }
@@ -247,11 +264,35 @@ public extension SessionService {
         let stack = await stack(for: worktree)
         var pushed = [String]()
         for branch in stack.branches {
+            // What the single-branch push refuses, this refuses:
+            // unsigned commits are turned away by the hook, and the
+            // stack must not be left half pushed to learn that.
+            guard await git.isCommitSigned(worktreePath: worktree.path, ref: branch) else {
+                throw SessionServiceError(
+                    branch + "'s tip commit is not GPG signed; Rebase signs the stack before pushing.",
+                )
+            }
+
             await progress("Pushing `" + branch + "`")
             try await git.push(worktreePath: worktree.path, branch: branch)
             pushed.append(branch)
         }
         return pushed
+    }
+
+    /// The stack's branches whose tip is not signed, so the button
+    /// that would push them can dim the way a branch's own does
+    /// rather than failing on the first one.
+    func branchesUnsigned(worktree: Worktree) async -> [String] {
+        let stack = await stack(for: worktree)
+        var unsigned = [String]()
+        for branch in stack.branches where await git.isCommitSigned(
+            worktreePath: worktree.path,
+            ref: branch,
+        ) == false {
+            unsigned.append(branch)
+        }
+        return unsigned
     }
 
     /// The branches this worktree's stack has been told to leave

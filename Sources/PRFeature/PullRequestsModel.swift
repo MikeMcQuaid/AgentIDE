@@ -94,6 +94,9 @@ final class PullRequestsModel {
         fetchCommitMessages = { worktree, range in
             await service.commitMessages(worktree: worktree, range: range)
         }
+        fetchCommitCount = { worktree, range in
+            await service.commitCount(worktree: worktree, range: range)
+        }
         launchChoices = { agent in
             let choices = service.launchChoices(for: agent)
             return (choices.models, service.defaultEffort(for: agent))
@@ -186,6 +189,10 @@ final class PullRequestsModel {
     /// Set only by the actions extension's fact refresh.
     var rebaseNeed: SessionService.RebaseNeed = .nothing
 
+    /// The listed entry's own commits: what a push sends and what
+    /// its pull request carries, counted from the branch's base.
+    var commitsAboveBase = 0
+
     /// Whether the tip commit is GPG signed, refreshed on reload;
     /// pushing unsigned commits is never allowed, so Push dims until
     /// Rebase on origin signs the branch.
@@ -217,6 +224,10 @@ final class PullRequestsModel {
     /// Suppresses saving while a draft is restored, so restoring
     /// never writes back what it just read.
     var loadingDraft = false
+
+    /// True while a pull request is being opened: the form keeps
+    /// every word it holds and takes no more until GitHub answers.
+    var isOpening = false
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
@@ -252,6 +263,10 @@ final class PullRequestsModel {
 
     var fetchTemplate: (String) async -> String?
     var fetchCommitMessages: (Worktree, String?) async -> [String]
+
+    /// How many commits the listed entry has of its own, which is
+    /// what the push button counts.
+    var fetchCommitCount: (Worktree, String?) async -> Int = { _, _ in 0 }
     var generateDescription: ([String]) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
@@ -332,6 +347,9 @@ final class PullRequestsModel {
                 // fills the form from this entry's own commits.
                 await prefillFromSingleCommit(worktree)
             }
+            // The count belongs to the entry, not to the worktree,
+            // so an entry switch reads it again.
+            commitsAboveBase = await fetchCommitCount(listedWorktree ?? worktree, listedRange)
         }
         defer {
             isLoading = false

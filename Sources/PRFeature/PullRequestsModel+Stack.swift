@@ -22,6 +22,9 @@ struct StackWork {
 
     /// The branches with commits the remote lacks, bottom first.
     var unpushedBranches: [String] = []
+
+    /// The branches whose tip is unsigned, which no push will take.
+    var unsignedBranches: [String] = []
     var fetch: (Worktree) async -> BranchStack = { worktree in
         BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)
     }
@@ -30,6 +33,7 @@ struct StackWork {
     var push: (Worktree) async throws -> [String] = { _ in [] }
     var pending: (Worktree) async -> Bool = { _ in false }
     var unpushed: (Worktree) async -> [String] = { _ in [] }
+    var unsigned: (Worktree) async -> [String] = { _ in [] }
 }
 
 /// A stack of branches in one worktree, as the pull request tab sees
@@ -53,6 +57,9 @@ extension PullRequestsModel {
         }
         stacking.unpushed = { worktree in
             await service.branchesUnpushed(worktree: worktree)
+        }
+        stacking.unsigned = { worktree in
+            await service.branchesUnsigned(worktree: worktree)
         }
     }
 
@@ -92,7 +99,20 @@ extension PullRequestsModel {
     /// Whether any branch of the stack has commits the remote does
     /// not carry.
     var canPushStack: Bool {
-        stacking.needsPush
+        stacking.needsPush && stacking.unsignedBranches.isEmpty
+    }
+
+    /// Why the stack's push is in its current state, said the way a
+    /// branch's own push says it.
+    var pushStackHelp: String {
+        guard stacking.needsPush else {
+            return "Every branch of the stack is already pushed"
+        }
+        guard let unsigned = stacking.unsignedBranches.first else {
+            return "Push every branch of the stack, bottom first"
+        }
+
+        return unsigned + "'s tip commit is not GPG signed; Rebase signs the stack before pushing"
     }
 
     /// Fills in the listing cache for the stack's other branches,
@@ -140,6 +160,7 @@ extension PullRequestsModel {
         stacking.stack = await stacking.fetch(worktree)
         stacking.needsRestack = await stacking.pending(worktree)
         stacking.unpushedBranches = await stacking.unpushed(worktree)
+        stacking.unsignedBranches = await stacking.unsigned(worktree)
         stacking.needsPush = stacking.unpushedBranches.isEmpty == false
         // The entry in view: the one remembered for this worktree,
         // else the first that could have a pull request opened (the
@@ -327,39 +348,47 @@ extension PullRequestsModel {
     /// Puts every branch back on the one below it and says what
     /// moved; a branch already there is left alone, so no commit is
     /// renamed for nothing.
-    func restack() async {
+    func restack() async -> Bool {
         guard let worktree = branchItem?.worktree else {
-            return
+            return true
         }
 
         do {
             let moved = try await stacking.restack(worktree)
-            note(
-                moved.isEmpty
+            setStatus(
+                moved.isEmpty ? "Already in order." : "Rebased and signed.",
+                detail: moved.isEmpty
                     ? "The stack was already in order."
-                    : "Rebased " + moved.joined(separator: ", ") + ".",
+                    : "Rebased and signed " + moved.joined(separator: ", ") + ".",
             )
+            Self.requestSidebarRefresh()
             await loadStack()
             await reload(keepingSelection: true)
+            return true
         } catch {
             report(error.localizedDescription)
+            return false
         }
     }
 
     /// Pushes the stack bottom up, so each pull request's base is on
     /// the remote before the branch that points at it.
-    func pushStack() async {
+    func pushStack() async -> Bool {
         guard let worktree = branchItem?.worktree else {
-            return
+            return true
         }
 
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            note("Pushed " + pushed.joined(separator: ", ") + ".")
+            setStatus("Pushed.", detail: "Pushed " + pushed.joined(separator: ", ") + ".")
+            Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            refreshAfterPush()
+            return true
         } catch {
             report(error.localizedDescription)
+            return false
         }
     }
 }

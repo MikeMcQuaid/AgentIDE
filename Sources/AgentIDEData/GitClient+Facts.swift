@@ -48,6 +48,27 @@ public extension GitClient {
         return Self.branchFacts(fromForEachRef: result.standardOutput)
     }
 
+    /// Every branch and remote-tracking ref with the commit it
+    /// points at, as one string. Deriving a stack costs thirty
+    /// processes; this costs one, and nothing a derivation reads can
+    /// change without changing it. The remotes are in it because the
+    /// default branch is what every fork point is measured against:
+    /// a fetch that moves it changes what a stack is while every
+    /// local branch stays exactly where it was.
+    func refFingerprint(worktreePath: String) async -> String {
+        let result = try? await git(
+            [
+                "for-each-ref",
+                "--format=%(refname) %(objectname)",
+                "refs/heads/",
+                "refs/remotes/",
+            ],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        return result?.standardOutput ?? ""
+    }
+
     /// Parses what `for-each-ref` printed; separated for tests.
     static func branchFacts(fromForEachRef output: String) -> [String: BranchFacts] {
         var facts = [String: BranchFacts]()

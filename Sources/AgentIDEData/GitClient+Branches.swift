@@ -1,3 +1,5 @@
+import Foundation
+
 /// Branch inspection and the repository-local exclude file, split
 /// from the client body for length.
 public extension GitClient {
@@ -8,6 +10,15 @@ public extension GitClient {
     /// (`--abbrev-ref`) answered `heads/main` whenever an agent left
     /// a stray ref named `main` elsewhere in the repository.
     func currentBranch(worktreePath: String) async -> String? {
+        // git keeps this in a file, and reading it is the difference
+        // between a hundredth of a millisecond and a process: the
+        // stack asks which branch is held on every reading of every
+        // worktree, all day. The command still answers when the file
+        // is not where it is expected.
+        if let named = Self.headFileBranch(worktreePath: worktreePath) {
+            return named
+        }
+
         let name = await (try? git(["symbolic-ref", "HEAD"], in: worktreePath, allowFailure: true))
             .flatMap { $0.succeeded ? $0.standardOutput : nil }?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -17,6 +28,45 @@ public extension GitClient {
         }
 
         return String(name.dropFirst(prefix.count))
+    }
+
+    /// The branch named in the worktree's own `HEAD`, nil when it
+    /// holds a commit rather than a ref (a detached head, which is
+    /// what a rebase leaves behind while it runs) or when the file
+    /// cannot be found. A worktree's `.git` is a file naming the
+    /// directory git keeps for it, and `HEAD` lives in there; a
+    /// checkout keeps both in `.git` itself.
+    static func headFileBranch(worktreePath: String) -> String? {
+        let dotGit = worktreePath + "/.git"
+        let pointer = (try? String(contentsOfFile: dotGit, encoding: .utf8)) ?? ""
+        let marker = "gitdir: "
+        var directory = dotGit
+        if pointer.hasPrefix(marker) {
+            let named = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            // `git worktree add --relative-paths` writes a path
+            // relative to this file, not to wherever the app is
+            // running: resolved against the process's directory it
+            // would name nothing, and every read would fall back to
+            // asking git.
+            directory = named.hasPrefix("/")
+                ? named
+                : URL(fileURLWithPath: dotGit)
+                .deletingLastPathComponent()
+                .appendingPathComponent(named)
+                .standardizedFileURL
+                .path
+        }
+        guard let head = try? String(contentsOfFile: directory + "/HEAD", encoding: .utf8) else {
+            return nil
+        }
+
+        let prefix = "ref: refs/heads/"
+        let line = head.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard line.hasPrefix(prefix) else {
+            return nil
+        }
+
+        return String(line.dropFirst(prefix.count))
     }
 
     /// Whether a commit carries a verifying GPG signature: good, or

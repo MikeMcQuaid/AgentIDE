@@ -161,6 +161,7 @@ public extension SessionService {
         }
 
         try await git.fetchAndReset(repositoryPath: repository.path, onto: ref)
+        rememberFetch(repositoryPath: repository.path)
     }
 
     /// Fetches, then rebases the worktree onto the signed-rebase
@@ -168,6 +169,11 @@ public extension SessionService {
     /// on conflict. This is how unsigned agent commits become
     /// pushable: the sandbox cannot sign and a hook blocks unsigned
     /// pushes, so signing always happens here on the host.
+    /// Fetches, then rebases the entry onto the signed-rebase target
+    /// with every replayed commit re-signed, aborting cleanly on
+    /// conflict. This is how unsigned agent commits become pushable:
+    /// the sandbox cannot sign and a hook blocks unsigned pushes, so
+    /// signing always happens here on the host.
     func rebaseSigned(worktree: Worktree) async throws {
         let branch = worktree.branch
         let held = await git.currentBranch(worktreePath: worktree.path)
@@ -177,7 +183,7 @@ public extension SessionService {
             try await requireQuiet(worktree: worktree, action: "rebase")
         }
 
-        try await git.fetch(repositoryPath: worktree.path)
+        try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
         try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
         if let held, held != branch {

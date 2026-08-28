@@ -207,6 +207,25 @@ public extension SessionService {
     /// entry's own span (`parent..branch`), nil the checked-out
     /// branch against the default.
     func commitMessages(worktree: Worktree, range: String? = nil) async -> [String] {
+        guard let span = await resolvedSpan(worktree: worktree, range: range) else {
+            return []
+        }
+
+        return await git.commitMessages(worktreePath: worktree.path, range: span)
+    }
+
+    /// How many commits a branch has of its own, which is how many a
+    /// pull request for it would carry.
+    func commitCount(worktree: Worktree, range: String? = nil) async -> Int {
+        guard let span = await resolvedSpan(worktree: worktree, range: range) else {
+            return 0
+        }
+
+        return await git.commitCount(worktreePath: worktree.path, range: span) ?? 0
+    }
+
+    /// The span a range names, with `origin/HEAD` resolved.
+    private func resolvedSpan(worktree: Worktree, range: String?) async -> String? {
         // `origin/HEAD` names the default branch symbolically; a
         // worktree whose remote never had its head set cannot
         // resolve it, and git then listed the branch back to the
@@ -234,12 +253,12 @@ public extension SessionService {
                 fork = await git.mergeBase(name, branch, worktreePath: worktree.path)
             }
             guard let fork else {
-                return []
+                return nil
             }
 
             span = fork + ".." + branch
         }
-        return await git.commitMessages(worktreePath: worktree.path, range: span)
+        return span
     }
 
     /// A pull request title and body drafted by the on-device model,
@@ -281,7 +300,7 @@ public extension SessionService {
 
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         do {
-            try await git.fetch(repositoryPath: worktree.path)
+            try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         } catch {
             report.failures.append("Fetching \(worktree.repositoryName) failed: " + error.localizedDescription)
         }

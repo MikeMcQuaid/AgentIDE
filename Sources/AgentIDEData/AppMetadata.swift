@@ -136,6 +136,7 @@ public struct AppMetadata: Codable, Sendable {
         discoveredModels = ledgers.discoveredModels
         discoveredModelsVersion = ledgers.discoveredModelsVersion
         etags = ledgers.etags
+        gitFetchedAt = ledgers.gitFetchedAt
         pendingSince = ledgers.pendingSince
         terminalSchemes = ledgers.terminalSchemes
     }
@@ -189,6 +190,12 @@ public struct AppMetadata: Codable, Sendable {
     /// once at startup and never again, so the pane must keep the
     /// palette the agent believes in for the session's whole life.
     public var terminalSchemes: [String: String] = [:]
+
+    /// When each repository's remotes were last fetched, by
+    /// repository path. Rebasing wants a current remote and fetching
+    /// takes seconds on a large repository, so a rebase within the
+    /// minute of another one's fetch reuses it.
+    public var gitFetchedAt: [String: Date] = [:]
 
     /// Branches a worktree's stack should leave out, by worktree
     /// path. The stack is inferred from ancestry, which cannot know
@@ -347,6 +354,7 @@ public struct AppMetadata: Codable, Sendable {
             etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
             pendingSince = try container.decodeIfPresent([String: Date].self, forKey: .pendingSince) ?? [:]
             terminalSchemes = try container.decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
+            gitFetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .gitFetchedAt) ?? [:]
         }
 
         // MARK: Internal
@@ -356,6 +364,7 @@ public struct AppMetadata: Codable, Sendable {
         var etags: [String: String] = [:]
         var pendingSince: [String: Date] = [:]
         var terminalSchemes: [String: String] = [:]
+        var gitFetchedAt: [String: Date] = [:]
     }
 
     /// How long a fetch stamp is worth keeping: longer than the
@@ -370,30 +379,4 @@ public struct AppMetadata: Codable, Sendable {
     /// without the file growing forever.
     private static let conversationCap = 80
     private static let listingCap = 40
-}
-
-// MARK: - PullRequestFormDraft
-
-/// A branch's unfinished pull request text, kept so leaving the tab
-/// and coming back does not lose the writing.
-public struct PullRequestFormDraft: Codable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates a draft.
-    public init(title: String, body: String, template: String) {
-        self.title = title
-        self.body = body
-        self.template = template
-    }
-
-    // MARK: Public
-
-    /// The drafted title.
-    public let title: String
-
-    /// The drafted body.
-    public let body: String
-
-    /// The template as edited.
-    public let template: String
 }

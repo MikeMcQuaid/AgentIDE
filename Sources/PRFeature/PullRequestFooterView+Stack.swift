@@ -26,14 +26,18 @@ extension PullRequestFooterView {
             rebaseCount,
             busy: "Rebasing",
             systemImage: "arrow.triangle.2.circlepath",
-            accessibilityLabel: "Restack",
+            accessibilityLabel: "Rebase the stack",
             disabled: model.canRestack == false,
         ) {
-            await model.restack()
+            if await model.restack() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
         }
         .hoverHelp(
             model.canRestack
-                ? "Rebase every branch onto the one below it, signed, leaving alone any already there"
+                ? "Fetch, then rebase every branch onto the one below it, signing every commit it "
+                + "replays and leaving alone any branch already in place; a conflict aborts and "
+                + "reports to Messages"
                 : "Every branch is already on the one below it",
         )
     }
@@ -47,13 +51,11 @@ extension PullRequestFooterView {
             disabled: model.canPushStack == false,
             keepsTitle: true,
         ) {
-            await model.pushStack()
+            if await model.pushStack() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
         }
-        .hoverHelp(
-            model.canPushStack
-                ? "Push every branch of the stack, bottom first"
-                : "Every branch of the stack is already pushed",
-        )
+        .hoverHelp(model.pushStackHelp)
     }
 
     /// Why the stacked merge is in its current state: what it does

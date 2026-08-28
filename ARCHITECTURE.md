@@ -773,7 +773,12 @@ shim rather than a protocol:
    keeps the cached answer. A pull request in flight jumps every tier:
    checks still running will pass or fail, and a queued one will merge
    or leave the queue within the hour, so both are asked about every
-   half minute, the one question allowed under the minute floor. The
+   half minute, the one question allowed under the minute floor. A
+   push looks again a minute afterwards, from the store's timers
+   outwards: asked at once, GitHub answers with the checks as they
+   were before it and the store then holds that stale green or red
+   for a minute more, where a minute's wait finds the run the push
+   started and the row goes yellow. The
    store remembers when a pull request's checks were first seen running;
    past an hour the row goes back to its tier, since a run that long is
    a stalled check or GitHub down, and an outage must not be polled at
@@ -794,7 +799,12 @@ shim rather than a protocol:
    worktree, and only a worktree on a detached head asks about itself.
    Uncommitted work stays the one question a worktree answers alone.
    Every read passes `--no-optional-locks`, so nothing the app asks
-   waits on the index lock an agent's own git is holding. A repository's full name comes from its remote's URL, a
+   waits on the index lock an agent's own git is holding. Which
+   branch a worktree holds is read from the `HEAD` file git keeps it
+   in rather than through `symbolic-ref`, since the stack asks it of
+   every worktree on every reading and a file is a hundredth of a
+   millisecond against a process; the command still answers when the
+   file is not where it should be. A repository's full name comes from its remote's URL, a
    local read, never from `gh repo view`, which was a network round trip
    per repository per poll; that name and the branch merges are judged
    against are read once and remembered until a fetch, since only a
@@ -861,10 +871,14 @@ shim rather than a protocol:
    bottom up with `--onto <parent> <the parent's recorded tip>` so only a
    branch's own commits replay, signing each; a branch already on its
    parent is skipped rather than rewritten, since renaming commits for
-   nothing is its own damage. The three stack actions sit where a lone
+   nothing is its own damage. The stack's two actions sit where a lone
    branch's Rebase and Push sit, in the footer's left, icon-only with
    their words in the hover help, and dim when they would do nothing:
-   nothing out of place, or nothing the remote lacks. Moving between a
+   nothing out of place, nothing the remote lacks, or a branch whose
+   tip is unsigned, which the hook would turn away exactly as it does
+   a lone branch's. Both report as their counterparts do, a line in
+   the footer and the sidebar told what moved, and a failure opens the
+   messages rather than being left in them. Moving between a
    stack's entries asks git nothing at all, since every entry shares one
    worktree: the listing paints from the cache and every entry's listing
    is fetched in the background as soon as one of them loads, so the
@@ -882,10 +896,24 @@ shim rather than a protocol:
    bottom of a stack opens against the default branch exactly
    as a lone branch does, and keeps the lone branch's Rebase and Push
    rather than the stack's three buttons, however many branches sit
-   above it. Push and Rebase both act on the entry in view: that
-   branch's commits are what Push counts and that branch's tip whose
-   signature it waits for, and Rebase checks the entry out to rebase
-   it and puts the worktree back where it was. Leaving Rebase to the
+   above it. Every rebase fetches first, a branch's own and the
+   stack's alike, since rebasing onto a remote nobody has read is the
+   one thing the button must not do; a fetch inside the minute is
+   reused, so pressing Rebase after a Fetch and Reset, or after
+   another entry's rebase, does not wait on the network twice
+   (`gitFetchedAt` in the metadata store, stamped by every fetch the
+   app makes). Push and Rebase both act on the entry in view, and count
+   it: Push shows the commits that entry has above its base, which is
+   what a push sends and what its pull request carries, and the
+   stack's Push shows the same number for the same entry rather than
+   a count of branches; Rebase shows how far it sits behind that
+   base. That branch's tip is whose signature Push waits for, and
+   Rebase checks the entry out to rebase
+   it, puts the worktree back where it was, and takes the branches
+   above it along: left where they were they fork from the default
+   branch rather than from the entry that moved, which is no stack at
+   all, and the tab then lost the entry it had just rebased and showed
+   whichever branch was checked out instead. Leaving Rebase to the
    checked-out branch alone deadlocked every other entry, since one
    whose tip was unsigned could then be neither signed nor pushed.
    Its form fills from the entry's own span
@@ -962,7 +990,18 @@ shim rather than a protocol:
    deriving every one was a hundred `merge-base` calls in the first
    second of every start), a few worktrees per
    refresh on a minute's rota to keep the git calls off the poll's
-   critical path. A failure resets what moved, returns to the
+   critical path. A derivation asks git about every branch's fork
+   point and how far it has come, thirty processes for a repository
+   of a few branches, so the answer is kept against the one line that
+   decides it: where every branch and every remote-tracking ref
+   points, which branch is checked out and which are excluded, read
+   in a single `for-each-ref`. The remotes are in it because every
+   fork point is measured against the default branch: a fetch that
+   moves it changes what a stack is while every local branch stays
+   where it was. A
+   worktree whose branches have not moved is answered from that
+   rather than derived again, and the performance log says which
+   (`stack#<path>`). A failure resets what moved, returns to the
    branch it started on and reports which branch conflicted. Pushing goes
    bottom up so a base is on the remote before the branch pointing at it.
 7. The listing and the footer act on the branch actually checked out in the

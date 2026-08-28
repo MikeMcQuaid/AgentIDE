@@ -159,6 +159,55 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `the stack refuses to push what no push would take`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        model.stacking.unpushed = { _ in ["lower", "upper"] }
+        model.stacking.unsigned = { _ in ["lower"] }
+        await model.reload()
+
+        // A branch's own Push dims until its tip is signed, since
+        // the hook turns unsigned commits away; the stack's did not,
+        // and pushed until the first refusal.
+        #expect(model.canPushStack == false)
+        #expect(model.pushStackHelp.contains("not GPG signed"))
+
+        model.stacking.unsigned = { _ in [] }
+        await model.loadStack()
+
+        #expect(model.canPushStack)
+    }
+
+    @Test
+    func `rebasing one entry carries the branches above it`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        let done = Mutex([String]())
+        model.performRebase = { _ in done.withLock { $0.append("rebase") } }
+        model.stacking.restack = { _ in
+            done.withLock { $0.append("restack") }
+            return ["upper"]
+        }
+        await model.reload()
+
+        #expect(await model.rebaseSigned())
+
+        // Left where they were, the branches above fork from the
+        // default branch instead of from the one that moved, and the
+        // stack stops being one: the tab then lost the entry that
+        // had just moved and showed whatever was checked out.
+        #expect(done.withLock { $0 } == ["rebase", "restack"])
+    }
+
+    @Test
     func `the listed branch's span is its own, stacked or not`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])

@@ -53,6 +53,32 @@ extension PullRequestsModel {
         note(detail ?? message)
     }
 
+    /// How long a push waits before looking again. Asking at once
+    /// answers with the checks as they were before it: GitHub takes
+    /// a moment to see the new commits, and the store would then
+    /// hold that stale answer for a minute more. A minute later the
+    /// run has been created and the row goes yellow.
+    static let checksDelay: Duration = .seconds(PullRequestStore.minimumInterval)
+
+    /// Looks at the branch's pull request again a minute after a
+    /// push, from the store's own timers outwards, so the row and
+    /// the header catch the checks the push started.
+    func refreshAfterPush() {
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.checksDelay)
+            guard let self, Task.isCancelled == false else {
+                return
+            }
+
+            pullRequests.invalidateListings(repositoryPath: repository.path)
+            if let number = selected?.number {
+                pullRequests.invalidate(repositoryPath: repository.path, number: number)
+            }
+            Self.requestSidebarRefresh()
+            await reload(keepingSelection: true)
+        }
+    }
+
     /// A note about this repository's work, named as the sidebar
     /// names it.
     func note(_ message: String) {
@@ -189,6 +215,8 @@ extension PullRequestsModel {
 
         let template = prTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = prBody + (template.isEmpty ? "" : "\n\n" + template)
+        isOpening = true
+        defer { isOpening = false }
         do {
             let url = try await performCreate(worktree, title, body)
             note("Opened pull request " + url)
@@ -201,10 +229,21 @@ extension PullRequestsModel {
                 report("Stacking on GitHub failed: " + error.localizedDescription)
             }
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            prTitle = ""
-            prBody = ""
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            // Straight into what was just opened: the listing has it
+            // by number, and its conversation is what the form was
+            // for. Only once it is showing does the form let go of
+            // the text, so nothing blank is ever on screen.
+            let opened = Self.number(inURL: url)
+            if let summary = summaries.first(where: { $0.number == opened }) {
+                select(summary)
+            }
+            loadingDraft = true
+            prTitle = ""
+            prBody = ""
+            prTemplate = originalTemplate
+            loadingDraft = false
             clearDraft()
             return true
         } catch {
@@ -227,6 +266,7 @@ extension PullRequestsModel {
             setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            refreshAfterPush()
             return true
         } catch {
             report(error.localizedDescription)
@@ -236,59 +276,6 @@ extension PullRequestsModel {
 
     /// Rebases onto origin with signed commits; false means the
     /// rebase aborted and the errors tab should open with the cause.
-    func rebaseSigned() async -> Bool {
-        guard let worktree = listedWorktree else {
-            return true
-        }
-
-        do {
-            try await performRebase(worktree)
-            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
-            Self.requestSidebarRefresh()
-            await reload(keepingSelection: true)
-            return true
-        } catch {
-            report(error.localizedDescription)
-            return false
-        }
-    }
-
-    /// The one merge action's label, naming exactly what a click
-    /// does right now; nil when no open conversation is selected.
-    var mergeActionTitle: String? {
-        guard let selected, selected.state == "OPEN" else {
-            return nil
-        }
-
-        if selected.hasAutomerge {
-            return hasMergeQueue ? "Dequeue" : "Cancel automerge"
-        }
-        if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
-            return hasMergeQueue ? "Queue" : "Merge"
-        }
-        return "Automerge"
-    }
-
-    /// The present-tense form while the merge action runs.
-    var mergeActionBusyTitle: String {
-        switch mergeActionTitle {
-        case "Dequeue":
-            "Dequeuing"
-
-        case "Cancel automerge":
-            "Cancelling"
-
-        case "Queue":
-            "Queueing"
-
-        case "Merge":
-            "Merging"
-
-        default:
-            "Enabling automerge"
-        }
-    }
-
     /// Merges a stacked pull request together with every one below
     /// it, in order; false opens the errors surface. GitHub decides
     /// how each is merged, so the button says only that it merges.

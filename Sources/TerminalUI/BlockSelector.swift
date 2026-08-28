@@ -32,10 +32,7 @@ final class BlockSelector {
         switch event.type {
         case .leftMouseDown:
             let point = view.convert(event.locationInWindow, from: nil)
-            guard event.modifierFlags.contains(.option), view.bounds.contains(point),
-                  view.isHiddenOrHasHiddenAncestor == false,
-                  Self.hitsTerminal(event, in: view)
-            else {
+            guard event.modifierFlags.contains(.option), Self.hitsTerminal(event, in: view) else {
                 // Any other click puts the last block selection away,
                 // as clicking does to an ordinary one.
                 clear()
@@ -103,16 +100,20 @@ final class BlockSelector {
     private var heldRows: ClosedRange<Int>?
     private var heldColumns: ClosedRange<Int>?
 
-    /// Whether the window resolves the click to this terminal: a
-    /// pane kept mounted but covered or hidden must not steal drags
-    /// from the view actually under the pointer.
+    /// Whether this terminal is the one under the pointer: it is on
+    /// screen, and the click is inside it. Not the window's own hit
+    /// test, which was the rule before: panes stay mounted when
+    /// another worktree's are showing, faded out rather than
+    /// removed, and AppKit still resolves a click to one of those.
+    /// The pane the pointer was actually over was told the drag was
+    /// not its own, so a shell pane never started a selection while
+    /// the covered pane quietly took it.
     private static func hitsTerminal(_ event: NSEvent, in view: PaneTerminalView) -> Bool {
-        guard let content = view.window?.contentView, let root = content.superview else {
+        guard view.window != nil, view.isOnScreen else {
             return false
         }
 
-        let hit = content.hitTest(root.convert(event.locationInWindow, from: nil))
-        return hit === view || hit?.isDescendant(of: view) == true
+        return view.bounds.contains(view.convert(event.locationInWindow, from: nil))
     }
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {

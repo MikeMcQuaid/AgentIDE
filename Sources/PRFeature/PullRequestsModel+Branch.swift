@@ -31,6 +31,73 @@ extension PullRequestsModel {
         branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
+    func rebaseSigned() async -> Bool {
+        guard let worktree = listedWorktree else {
+            return true
+        }
+
+        do {
+            try await performRebase(worktree)
+            // A stack member that moves takes the branches above it
+            // with it. Left where they were, they fork from the
+            // default branch instead of from it, which is not a
+            // stack at all: the tab lost the entry that had just
+            // moved and showed whichever branch was checked out, so
+            // the next press rebased that one instead.
+            if stacking.stack.isStacked {
+                do {
+                    _ = try await stacking.restack(worktree)
+                } catch {
+                    report("Rebasing the branches above " + worktree.branch + " failed: "
+                        + error.localizedDescription)
+                }
+            }
+            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
+            Self.requestSidebarRefresh()
+            await reload(keepingSelection: true)
+            return true
+        } catch {
+            report(error.localizedDescription)
+            return false
+        }
+    }
+
+    /// The one merge action's label, naming exactly what a click
+    /// does right now; nil when no open conversation is selected.
+    var mergeActionTitle: String? {
+        guard let selected, selected.state == "OPEN" else {
+            return nil
+        }
+
+        if selected.hasAutomerge {
+            return hasMergeQueue ? "Dequeue" : "Cancel automerge"
+        }
+        if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
+            return hasMergeQueue ? "Queue" : "Merge"
+        }
+        return "Automerge"
+    }
+
+    /// The present-tense form while the merge action runs.
+    var mergeActionBusyTitle: String {
+        switch mergeActionTitle {
+        case "Dequeue":
+            "Dequeuing"
+
+        case "Cancel automerge":
+            "Cancelling"
+
+        case "Queue":
+            "Queueing"
+
+        case "Merge":
+            "Merging"
+
+        default:
+            "Enabling automerge"
+        }
+    }
+
     /// Push makes sense with unpushed commits that this tab has not
     /// already pushed and a GPG-signed tip; nil upstream means
     /// nothing was ever pushed. In a stack it is the listed entry's
