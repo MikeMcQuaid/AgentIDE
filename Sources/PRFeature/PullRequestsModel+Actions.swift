@@ -53,6 +53,32 @@ extension PullRequestsModel {
         note(detail ?? message)
     }
 
+    /// How long a push waits before looking again. Asking at once
+    /// answers with the checks as they were before it: GitHub takes
+    /// a moment to see the new commits, and the store would then
+    /// hold that stale answer for a minute more. A minute later the
+    /// run has been created and the row goes yellow.
+    static let checksDelay: Duration = .seconds(PullRequestStore.minimumInterval)
+
+    /// Looks at the branch's pull request again a minute after a
+    /// push, from the store's own timers outwards, so the row and
+    /// the header catch the checks the push started.
+    func refreshAfterPush() {
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.checksDelay)
+            guard let self, Task.isCancelled == false else {
+                return
+            }
+
+            pullRequests.invalidateListings(repositoryPath: repository.path)
+            if let number = selected?.number {
+                pullRequests.invalidate(repositoryPath: repository.path, number: number)
+            }
+            Self.requestSidebarRefresh()
+            await reload(keepingSelection: true)
+        }
+    }
+
     /// A note about this repository's work, named as the sidebar
     /// names it.
     func note(_ message: String) {
@@ -227,6 +253,7 @@ extension PullRequestsModel {
             setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            refreshAfterPush()
             return true
         } catch {
             report(error.localizedDescription)

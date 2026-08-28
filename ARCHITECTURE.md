@@ -773,7 +773,12 @@ shim rather than a protocol:
    keeps the cached answer. A pull request in flight jumps every tier:
    checks still running will pass or fail, and a queued one will merge
    or leave the queue within the hour, so both are asked about every
-   half minute, the one question allowed under the minute floor. The
+   half minute, the one question allowed under the minute floor. A
+   push looks again a minute afterwards, from the store's timers
+   outwards: asked at once, GitHub answers with the checks as they
+   were before it and the store then holds that stale green or red
+   for a minute more, where a minute's wait finds the run the push
+   started and the row goes yellow. The
    store remembers when a pull request's checks were first seen running;
    past an hour the row goes back to its tier, since a run that long is
    a stalled check or GitHub down, and an outage must not be polled at
@@ -892,9 +897,13 @@ shim rather than a protocol:
    reused, so pressing Rebase after a Fetch and Reset, or after
    another entry's rebase, does not wait on the network twice
    (`gitFetchedAt` in the metadata store, stamped by every fetch the
-   app makes). Push and Rebase both act on the entry in view: that
-   branch's commits are what Push counts and that branch's tip whose
-   signature it waits for, and Rebase checks the entry out to rebase
+   app makes). Push and Rebase both act on the entry in view, and count
+   it: Push shows the commits that entry has above its base, which is
+   what a push sends and what its pull request carries, and the
+   stack's Push shows the same number for the same entry rather than
+   a count of branches; Rebase shows how far it sits behind that
+   base. That branch's tip is whose signature Push waits for, and
+   Rebase checks the entry out to rebase
    it and puts the worktree back where it was. Leaving Rebase to the
    checked-out branch alone deadlocked every other entry, since one
    whose tip was unsigned could then be neither signed nor pushed.

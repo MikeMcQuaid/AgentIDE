@@ -384,6 +384,7 @@ extension PullRequestsModel {
             setStatus("Pushed.", detail: "Pushed " + pushed.joined(separator: ", ") + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
+            refreshAfterPush()
             return true
         } catch {
             report(error.localizedDescription)
