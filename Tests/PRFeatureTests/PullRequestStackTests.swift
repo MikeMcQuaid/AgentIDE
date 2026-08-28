@@ -159,6 +159,30 @@ struct PullRequestStackTests {
     }
 
     @Test
+    func `the stack refuses to push what no push would take`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        model.stacking.unpushed = { _ in ["lower", "upper"] }
+        model.stacking.unsigned = { _ in ["lower"] }
+        await model.reload()
+
+        // A branch's own Push dims until its tip is signed, since
+        // the hook turns unsigned commits away; the stack's did not,
+        // and pushed until the first refusal.
+        #expect(model.canPushStack == false)
+        #expect(model.pushStackHelp.contains("not GPG signed"))
+
+        model.stacking.unsigned = { _ in [] }
+        await model.loadStack()
+
+        #expect(model.canPushStack)
+    }
+
+    @Test
     func `the listed branch's span is its own, stacked or not`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])

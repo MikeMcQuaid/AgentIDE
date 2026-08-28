@@ -861,10 +861,14 @@ shim rather than a protocol:
    bottom up with `--onto <parent> <the parent's recorded tip>` so only a
    branch's own commits replay, signing each; a branch already on its
    parent is skipped rather than rewritten, since renaming commits for
-   nothing is its own damage. The three stack actions sit where a lone
+   nothing is its own damage. The stack's two actions sit where a lone
    branch's Rebase and Push sit, in the footer's left, icon-only with
    their words in the hover help, and dim when they would do nothing:
-   nothing out of place, or nothing the remote lacks. Moving between a
+   nothing out of place, nothing the remote lacks, or a branch whose
+   tip is unsigned, which the hook would turn away exactly as it does
+   a lone branch's. Both report as their counterparts do, a line in
+   the footer and the sidebar told what moved, and a failure opens the
+   messages rather than being left in them. Moving between a
    stack's entries asks git nothing at all, since every entry shares one
    worktree: the listing paints from the cache and every entry's listing
    is fetched in the background as soon as one of them loads, so the
