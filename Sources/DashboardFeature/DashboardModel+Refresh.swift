@@ -15,32 +15,50 @@ public extension DashboardModel {
     internal static let occludedPollInterval = 60
 
     /// Reloads everything and notifies about newly finished or
-    /// newly unread sessions. Readings never stack: a call arriving
-    /// while one runs waits for it and shares one follow-up with
-    /// every other waiter, so the poll, a launch's listing retries
-    /// and an action's refresh cost one reading between them rather
-    /// than one each. Each caller still returns only after a reading
-    /// that began at or after its call, which is the promise an
-    /// action needs to see its own change land.
+    /// newly unread sessions. Readings never stack: at most one
+    /// runs and one waits, and a call arriving while one runs joins
+    /// the queued follow-up with every other waiter, so the poll, a
+    /// launch's listing retries and an action's refresh cost one
+    /// reading between them rather than one each. Each caller still
+    /// returns only after a reading begun at or after its call, the
+    /// promise an action needs to see its own change land. No
+    /// waiting loop: awaiting an already-finished task resumes
+    /// without yielding the actor, and a loop of waiters doing that
+    /// starved the one task able to move the state on, which hung
+    /// the app at startup.
     func refresh(forcing repositoryPath: String? = nil) async {
         if let repositoryPath {
             pendingForces.insert(repositoryPath)
         }
-        refreshRequests += 1
-        let target = refreshRequests
-        while completedRefreshes < target {
-            if let running = refreshTask {
-                await running.value
-                continue
-            }
-
-            let covers = refreshRequests
-            let task = Task { await performRefresh() }
-            refreshTask = task
-            await task.value
-            refreshTask = nil
-            completedRefreshes = max(completedRefreshes, covers)
+        // A queued reading has not started, so it must begin after
+        // this call: joining it keeps the promise.
+        if let queued = queuedRefresh {
+            await queued.value
+            return
         }
+        if let running = refreshTask {
+            let queued = Task {
+                await running.value
+                // Promote: this run is now the current one, and the
+                // queued slot opens for the next caller. The slot
+                // still holds this task, since joiners never
+                // replace a queued reading.
+                refreshTask = queuedRefresh
+                queuedRefresh = nil
+                await performRefresh()
+                refreshTask = nil
+            }
+            queuedRefresh = queued
+            await queued.value
+            return
+        }
+
+        let task = Task {
+            await performRefresh()
+            refreshTask = nil
+        }
+        refreshTask = task
+        await task.value
     }
 
     /// Polls the system on an interval while the dashboard is alive.

@@ -320,14 +320,14 @@ public final class DashboardModel {
     /// by the cache extension; absent agents fall back.
     var discoveredModels: [AgentKind: [String]] = [:]
 
-    /// The reading in flight, the readings asked for and finished,
-    /// and the repositories queued to be forced: what lets `refresh`
-    /// coalesce callers instead of stacking whole readings. Stored
-    /// here because extensions cannot hold state; the refresh
-    /// extension file is the only thing that touches them.
+    /// The newest reading (running or queued), the queued follow-up
+    /// while one is joinable, and the repositories queued to be
+    /// forced: what lets `refresh` coalesce callers instead of
+    /// stacking whole readings. Stored here because extensions
+    /// cannot hold state; the refresh extension file is the only
+    /// thing that touches them.
     var refreshTask: Task<Void, Never>?
-    var refreshRequests = 0
-    var completedRefreshes = 0
+    var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
 
     /// Every pull request question the sidebar asks goes through
