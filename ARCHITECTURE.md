@@ -704,11 +704,14 @@ shim rather than a protocol:
    and its own process id, written to one side and renamed into place so the
    app never reads half of one. Nothing inside the sandbox can reach that
    directory, so an agent cannot queue an edit or see what is being edited.
-3. The window polls the spool (a small directory listing, off the main
-   actor), selects the worktree the command ran in, opens the utility pane on
-   its editor tab and shows the file, then writes an `.open` file. An
-   unclaimed request is how the shim knows no app is running: it says so and
-   exits non-zero rather than hanging.
+3. The window watches the spool directory with a dispatch source, so a
+   request is read the moment its file lands rather than on a poll; a
+   slow safety tick covers a lost event, and a faster one runs only
+   while requests are waiting, to sweep those whose command has gone.
+   A request selects the worktree the command ran in, opens the utility
+   pane on its editor tab and shows the file, then writes an `.open`
+   file. An unclaimed request is how the shim knows no app is running:
+   it says so and exits non-zero rather than hanging.
 4. Saving and closing writes a `.done` file holding the exit status the shim
    takes: zero when the file was saved, non-zero when the edit was cancelled,
    which is how git is told to abort a rebase. The shim removes the files it

@@ -40,14 +40,19 @@ public extension SessionService {
     }
 
     /// Every file a command is waiting on, in the order they were
-    /// asked for, published again whenever the set changes. Reading
-    /// the spool is a directory listing, so it polls rather than
-    /// watching: a request has to reach the screen in the time it
-    /// takes to notice a shell has stopped echoing.
+    /// asked for, published again whenever the set changes. A
+    /// dispatch source on the spool directory reads a request the
+    /// moment its file lands; the 300 ms poll it replaces woke two
+    /// hundred times a minute with nothing ever waiting. The ticks
+    /// that remain are backstops: a slow one for a lost event, a
+    /// faster one only while requests wait, whose commands can die
+    /// without writing anything.
     func pendingEdits() -> AsyncStream<[ExternalEdit]> {
         let spool = ExternalEditSpool(directory: paths.editsDirectory)
+        let directory = paths.editsDirectory
         return AsyncStream { continuation in
             let task = Task {
+                let wake = Self.directoryChanges(in: directory)
                 var previous = [ExternalEdit]()
                 var hasRead = false
                 while Task.isCancelled == false {
@@ -57,7 +62,22 @@ public extension SessionService {
                         hasRead = true
                         continuation.yield(current)
                     }
-                    try? await Task.sleep(for: .milliseconds(Self.editPollMilliseconds))
+                    let timeoutSeconds =
+                        if wake == nil {
+                            // No watch (the directory would not
+                            // open): the old poll, a touch slower.
+                            Self.unwatchedPollSeconds
+                        } else if current.isEmpty {
+                            Self.idleSweepSeconds
+                        } else {
+                            Self.activeSweepSeconds
+                        }
+                    let timeout = Duration.seconds(timeoutSeconds)
+                    if let wake {
+                        await Self.wakeOrTimeout(wake, timeout: timeout)
+                    } else {
+                        try? await Task.sleep(for: timeout)
+                    }
                 }
                 continuation.finish()
             }
@@ -86,14 +106,62 @@ public extension SessionService {
 
     // MARK: Private
 
-    /// How often the spool is read; the shim polls for its answer at
-    /// the same rate, so the whole round trip stays under a second.
-    private static let editPollMilliseconds = 300
+    /// The backstop ticks around the directory watch, in seconds:
+    /// sweep waiting requests whose command has died every couple
+    /// of seconds, and re-read a quiet spool inside the ten seconds
+    /// a waiting shim gives the app to claim, so even a dead watch
+    /// answers in time.
+    private static let activeSweepSeconds = 2.0
+    private static let idleSweepSeconds = 8.0
 
-    /// Off the caller's actor: the poll runs while the window is
+    /// The plain poll used only when the directory cannot be
+    /// watched at all.
+    private static let unwatchedPollSeconds = 1.0
+
+    /// Off the caller's actor: the watch runs while the window is
     /// being used, so it must never touch the main thread.
     @concurrent
     private static func pending(in spool: ExternalEditSpool) async -> [ExternalEdit] {
         spool.pending()
+    }
+
+    /// A stream that fires whenever the spool directory's listing
+    /// changes, coalescing bursts; nil when the directory cannot be
+    /// opened for watching.
+    private static func directoryChanges(in directory: String) -> AsyncStream<Void>? {
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        let descriptor = open(directory, O_EVTONLY)
+        guard descriptor >= 0 else {
+            return nil
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: .write,
+            queue: .global(qos: .utility),
+        )
+        return AsyncStream(Void.self, bufferingPolicy: .bufferingNewest(1)) { continuation in
+            source.setEventHandler { continuation.yield(()) }
+            source.setCancelHandler { close(descriptor) }
+            source.resume()
+            continuation.onTermination = { _ in source.cancel() }
+        }
+    }
+
+    /// Waits for the next directory event or the timeout, whichever
+    /// comes first. Events that land mid-scan stay buffered, so the
+    /// next wait returns at once rather than losing them.
+    private static func wakeOrTimeout(_ wake: AsyncStream<Void>, timeout: Duration) async {
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                var events = wake.makeAsyncIterator()
+                _ = await events.next()
+            }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+            }
+            _ = await group.next()
+            group.cancelAll()
+        }
     }
 }

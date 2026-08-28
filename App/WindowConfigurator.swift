@@ -22,6 +22,10 @@ struct WindowConfigurator: NSViewRepresentable {
 
         // MARK: Internal
 
+        /// The representable's visibility callback, refreshed on
+        /// every SwiftUI update.
+        var onVisibilityChange: ((Bool) -> Void)?
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard window != nil else {
@@ -166,6 +170,25 @@ struct WindowConfigurator: NSViewRepresentable {
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.movedIfFullScreen() }
             })
+            // Minimised or fully covered, the window is not being
+            // read, and the poll slows to a safety tick until it
+            // shows again.
+            observers.append(centre.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification,
+                object: window,
+                queue: .main,
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reportVisibility() }
+            })
+            reportVisibility()
+        }
+
+        private func reportVisibility() {
+            guard let window else {
+                return
+            }
+
+            onVisibilityChange?(window.occlusionState.contains(.visible))
         }
 
         private func movedIfFullScreen() {
@@ -355,32 +378,19 @@ struct WindowConfigurator: NSViewRepresentable {
         }
     }
 
+    /// Told whether the window is visible on screen at all, so
+    /// polling can slow right down while it is minimised or fully
+    /// covered. Observed here because the occlusion notification is
+    /// per window, and this is the one place that knows which
+    /// window is ours.
+    let onVisibilityChange: (Bool) -> Void
+
     func makeNSView(context _: Context) -> ConfiguringView {
         ConfiguringView()
     }
 
     func updateNSView(_ view: ConfiguringView, context _: Context) {
+        view.onVisibilityChange = onVisibilityChange
         view.configureWindowIfNeeded()
-    }
-}
-
-// MARK: - NSScreen display identity
-
-private extension NSScreen {
-    /// The display's own identity, which outlives its number across
-    /// reboots and rearrangements.
-    static func uuid(of display: CGDirectDisplayID) -> String? {
-        guard let identity = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else {
-            return nil
-        }
-
-        return CFUUIDCreateString(nil, identity) as String?
-    }
-
-    /// The display this screen renders on, which outlives the
-    /// `NSScreen` object a reconfiguration replaces.
-    var displayID: CGDirectDisplayID? {
-        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? Int)
-            .map(CGDirectDisplayID.init)
     }
 }

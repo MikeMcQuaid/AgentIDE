@@ -93,6 +93,38 @@ extension RootView {
         .ignoresSafeArea(.container, edges: .top)
     }
 
+    /// Tells the dashboard whether anyone can see the window, and
+    /// refreshes at once on coming back on screen rather than
+    /// waiting out the slow tick the hidden window was on.
+    func windowVisibilityChanged(_ visible: Bool) {
+        let wasVisible = dependencies.dashboard.isWindowVisible
+        dependencies.dashboard.isWindowVisible = visible
+        if visible, wasVisible == false {
+            Task { await dependencies.dashboard.refresh() }
+        }
+    }
+
+    /// The unselected detail shape: the page fills the primary pane
+    /// and the utility pane's width is held empty beside it, so a
+    /// repository picker or a new session form sits in the column it
+    /// would occupy with a worktree open rather than spreading
+    /// across the window.
+    var unselectedSplit: some View {
+        HStack(spacing: 0) {
+            Group {
+                if isCovered {
+                    coveringPage
+                } else {
+                    unselectedDetail
+                }
+            }
+            .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
+            if showsUtility {
+                Color.clear.frame(width: utilityPaneWidth)
+            }
+        }
+    }
+
     /// Narrows the sidebar to the least its rows need and splits
     /// what is left evenly between the panes that do the work, which
     /// is the layout worth going back to when dragging has left them

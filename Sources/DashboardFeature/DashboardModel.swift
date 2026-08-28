@@ -52,6 +52,11 @@ public final class DashboardModel {
     /// Whether the session manager sheet is shown.
     public var showsSessionManager = false
 
+    /// Whether the window is visible on screen at all; minimised or
+    /// fully covered, the poll slows to a safety tick, since nobody
+    /// is reading what it refreshes. The window reports it.
+    public var isWindowVisible = true
+
     /// Whether the first reading of the system has landed; until then
     /// the window shows progress, not an empty selection.
     public internal(set) var hasLoaded = false

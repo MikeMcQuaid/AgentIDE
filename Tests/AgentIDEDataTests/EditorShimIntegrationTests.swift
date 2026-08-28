@@ -70,6 +70,44 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `a new request wakes the watcher through the directory event`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-watch")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let workspace = paths(root: root)
+        let runner = FoundationProcessRunner()
+        let service = SessionService(
+            paths: workspace,
+            git: GitClient(runner: runner),
+            herdr: HerdrClient(
+                runner: runner,
+                launcher: SandvaultLauncher(hostUser: "test"),
+                isInsideSandbox: true,
+            ),
+            github: GitHubClient(runner: runner),
+            transcripts: TranscriptReader(),
+            spool: EventSpool(directory: workspace.eventsDirectory),
+            store: MetadataStore(file: root + "/state.json"),
+            runners: [],
+        )
+
+        var edits = service.pendingEdits().makeAsyncIterator()
+        #expect(await edits.next()?.isEmpty == true)
+
+        // The watcher idles between slow safety ticks; a request
+        // must reach it through the directory event, well before
+        // any tick could have.
+        let shim = shim(root: root)
+        let process = try run(shim, arguments: ["--wait", root + "/file.txt"], in: root)
+        let started = ContinuousClock.now
+        let published = await edits.next()
+        #expect(published?.count == 1)
+        #expect(ContinuousClock.now - started < .seconds(2))
+
+        process.terminate()
+        try await exit(of: process)
+    }
+
+    @Test
     func `without waiting a file is asked for and the command returns at once`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-open")
         defer { try? FileManager.default.removeItem(atPath: root) }

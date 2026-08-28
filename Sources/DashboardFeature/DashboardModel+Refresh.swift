@@ -7,8 +7,12 @@ import UserNotifications
 /// the model body for length; the coalescing fields live there,
 /// since extensions cannot hold state.
 public extension DashboardModel {
-    /// How often the system is re-read while the dashboard is alive.
+    /// How often the system is re-read while the dashboard is alive,
+    /// and the slower safety tick while the window is minimised or
+    /// fully covered: nobody reads a hidden window, and notifications
+    /// still fire, one tick later at worst.
     internal static let pollInterval = 5
+    internal static let occludedPollInterval = 60
 
     /// Reloads everything and notifies about newly finished or
     /// newly unread sessions. Readings never stack: a call arriving
@@ -56,7 +60,8 @@ public extension DashboardModel {
         publishSessionChoices()
         while Task.isCancelled == false {
             await refresh()
-            try? await Task.sleep(for: .seconds(Self.pollInterval))
+            let interval = isWindowVisible ? Self.pollInterval : Self.occludedPollInterval
+            try? await Task.sleep(for: .seconds(interval))
         }
     }
 
