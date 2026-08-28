@@ -26,6 +26,8 @@ public final class DashboardModel {
         self.store = store
         self.github = github
         self.launchProgress = launchProgress
+        watcher = service.makeWorkspaceWatcher()
+        watcher.start()
         restoreCachedSidebar()
         restoreDiscoveredModels()
     }
@@ -117,6 +119,9 @@ public final class DashboardModel {
             }
             service.markSeen(worktreePath: selection.worktree.path)
             clearUnread(at: selection.worktree.path)
+            // A fresh selection reads its repository's git on the
+            // next tick rather than waiting out a safety interval.
+            pendingForces.insert(selection.worktree.repositoryPath)
         }
     }
 
@@ -306,6 +311,10 @@ public final class DashboardModel {
     /// When each repository's git was last read in full; the git
     /// reads extension keeps it.
     var gitReadAt: [String: Date] = [:]
+
+    /// The file-system events that say which repository is worth
+    /// asking git about; the git reads extension consumes it.
+    let watcher: WorkspaceWatcher
 
     /// Models each CLI reported, seeded from the last launch's answer
     /// by the cache extension; absent agents fall back.

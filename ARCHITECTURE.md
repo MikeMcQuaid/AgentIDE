@@ -790,13 +790,18 @@ shim rather than a protocol:
    branch listing (conditional REST) carries no checks, review or
    mergeability, so each open pull request's state comes from the
    one-pull-request query on its own stamp, which is also what keeps
-   the sidebar's icons true between selections. The sidebar's git reading is tiered the same
-   way: the selected repository's worktrees are read every tick, an
-   idle repository's every half minute, its rows kept between readings
-   with only their sessions brought up to date from the pane listing
-   already in hand (`GitReadScope`), since twenty-nine repositories at
-   four git calls per worktree every five seconds was most of everything
-   the app did. What is left of those four is one: a repository's
+   the sidebar's icons true between selections. The sidebar's git reading is driven by the
+   file system rather than the clock: one FSEvents stream over the
+   repository and worktree roots (`WorkspaceWatcher`) remembers what
+   changed, and a reading asks git only about repositories something
+   moved under, with safety re-reads at a minute for the selected
+   repository and five for the rest in case an event was lost (the
+   old time-based cadence returns if the stream cannot start). Rows
+   are kept between readings with only their sessions brought up to
+   date from the pane listing already in hand (`GitReadScope`);
+   twenty-nine repositories at four git calls per worktree every five
+   seconds was most of everything the app did, and an idle workspace
+   now reads almost nothing. What is left of those four is one: a repository's
    branches all answer at once through `git for-each-ref` with
    `%(ahead-behind:)`, `%(upstream:track)` and `%(committerdate:unix)`,
    nine milliseconds for a repository against three processes per
