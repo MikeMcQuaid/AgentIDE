@@ -53,6 +53,32 @@ struct TranscriptReaderTests {
     }
 
     @Test
+    func `a rewritten transcript retitles once its file changes`() throws {
+        let directory = try TestSupport.temporaryDirectory("session-titles")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let transcript = directory + "/eeee.jsonl"
+        let reader = TranscriptReader()
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"first title"}]}}"#
+            .write(toFile: transcript, atomically: true, encoding: .utf8)
+        // Explicit stamps: the cache is keyed by whole seconds, and
+        // a rewrite inside the same second must not serve the old
+        // title, so the rewrite moves the clock.
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 100)],
+            ofItemAtPath: transcript,
+        )
+        #expect(reader.sessions(in: directory, agent: .claudeCode).first?.title == "first title")
+
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"second title"}]}}"#
+            .write(toFile: transcript, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 200)],
+            ofItemAtPath: transcript,
+        )
+        #expect(reader.sessions(in: directory, agent: .claudeCode).first?.title == "second title")
+    }
+
+    @Test
     func `parses a conversation into log entries with tool commands`() throws {
         let directory = try TestSupport.temporaryDirectory("entries")
         defer { try? FileManager.default.removeItem(atPath: directory) }

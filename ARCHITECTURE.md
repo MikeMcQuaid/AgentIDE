@@ -1291,7 +1291,9 @@ Repository icons are GitHub owner avatars, cached one per owner (not per
 repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a
 sidebar of many repositories under a few owners fetches a few times and a
 GitHub outage leaves the icons showing. A failed fetch is silent: the icon
-is decoration and the messages pane is for what the user can act on.
+is decoration and the messages pane is for what the user can act on. An
+owner with no avatar is remembered for the run, so a redrawing sidebar
+never retries the fetch per frame.
 
 The one file the app writes outside its own support directory is the
 performance log, and only when asked for: with `AGENTIDE_PERFORMANCE_LOG`

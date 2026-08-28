@@ -35,6 +35,10 @@ public final class OwnerAvatarStore {
         if let image = images[owner] {
             return image
         }
+        guard missing.contains(owner) == false else {
+            return nil
+        }
+
         if let image = Self.diskImage(for: owner) {
             images[owner] = image
             return image
@@ -50,16 +54,22 @@ public final class OwnerAvatarStore {
     /// the off-main download can read it.
     private nonisolated static let httpOK = 200
 
-    private static var directory: URL {
+    /// Resolved once: the sidebar reads a file per row per render,
+    /// and each read was also a `createDirectory` call.
+    private static let directory: URL = {
         let base = URL(fileURLWithPath: NSHomeDirectory())
             .appending(path: "Library/Application Support/AgentIDE/Avatars")
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base
-    }
+    }()
 
     /// Owners already being fetched, so a redrawing sidebar asks
-    /// once rather than once per row per frame.
+    /// once rather than once per row per frame, and owners whose
+    /// fetch failed, remembered for the run: without the negative
+    /// cache a missing avatar re-read the disk and re-fetched on
+    /// every render.
     private var inFlight: Set<String> = []
+    private var missing: Set<String> = []
     private var images: [String: NSImage] = [:]
 
     /// The cached file for an owner; the name is percent encoded, so
@@ -112,6 +122,9 @@ public final class OwnerAvatarStore {
             let data = await Self.download(from: url, to: Self.file(for: owner))
             self?.inFlight.remove(owner)
             guard let data, let image = NSImage(data: data) else {
+                // Remembered for the run: an owner with no avatar
+                // is not fetched again per render.
+                self?.missing.insert(owner)
                 return
             }
 

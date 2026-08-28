@@ -1,8 +1,12 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 /// Reads agent transcript JSONL files across the user boundary; the
-/// sandbox's export ACLs make them host-readable.
+/// sandbox's export ACLs make them host-readable. Titles parse once
+/// per file change, the treatment `CodexTranscriptIndex` gives the
+/// other agent's tree: without the cache every poll re-read the
+/// head of every transcript of every worktree.
 public struct TranscriptReader: Sendable {
     // MARK: Lifecycle
 
@@ -14,14 +18,18 @@ public struct TranscriptReader: Sendable {
     // MARK: Public
 
     /// The newest transcript file in a directory, by modification
-    /// time.
+    /// time; each file is stat-ed once, not once per comparison.
     public func latestTranscript(in directory: String) -> URL? {
         let manager = FileManager.default
         let names = (try? manager.contentsOfDirectory(atPath: directory)) ?? []
-        let transcripts = names.filter { $0.hasSuffix(".jsonl") }.map { directory + "/" + $0 }
-        return transcripts
-            .max { modificationDate($0) < modificationDate($1) }
-            .map { URL(fileURLWithPath: $0) }
+        return names
+            .filter { $0.hasSuffix(".jsonl") }
+            .map { name in
+                let path = directory + "/" + name
+                return (path: path, modifiedAt: modificationDate(path))
+            }
+            .max { $0.modifiedAt < $1.modifiedAt }
+            .map { URL(fileURLWithPath: $0.path) }
     }
 
     /// The resume id a transcript represents, its file name stem.
@@ -36,7 +44,11 @@ public struct TranscriptReader: Sendable {
     }
 
     /// Every session in a transcript directory, newest first, titled
-    /// by the first user prompt.
+    /// by the first user prompt. Titles are read from a head cache
+    /// keyed by modification time, so a listing is a stat per file
+    /// where it was a 64 KB read and decode per transcript; unlike
+    /// the shared Codex tree, each worktree's directory is its own,
+    /// so the listing itself is not worth caching against the poll.
     public func sessions(in directory: String, agent: AgentKind) -> [TranscriptSession] {
         let manager = FileManager.default
         let names = (try? manager.contentsOfDirectory(atPath: directory)) ?? []
@@ -44,12 +56,13 @@ public struct TranscriptReader: Sendable {
             .filter { $0.hasSuffix(".jsonl") }
             .map { name in
                 let path = directory + "/" + name
+                let modifiedAt = Int(modificationDate(path).timeIntervalSince1970)
                 return TranscriptSession(
                     id: String(name.dropLast(".jsonl".count)),
                     path: path,
                     agent: agent,
-                    modifiedAt: Int(modificationDate(path).timeIntervalSince1970),
-                    title: title(ofTranscriptAt: path),
+                    modifiedAt: modifiedAt,
+                    title: cachedTitle(ofTranscriptAt: path, modifiedAt: modifiedAt),
                 )
             }
             .sorted { $0.modifiedAt > $1.modifiedAt }
@@ -169,11 +182,23 @@ public struct TranscriptReader: Sendable {
         private static let summaryLimit = 200
     }
 
+    /// One parsed title, keyed by file path and valid while the
+    /// file's modification time stands.
+    private struct CachedTitle {
+        let modifiedAt: Int
+        let title: String
+    }
+
     /// Only the head of a transcript is read for its title; the first
     /// user prompt always sits there.
     private static let titleByteLimit = 65_536
 
     private static let titleCharacterLimit = 100
+
+    /// The title cache mirroring `CodexTranscriptIndex`'s: keyed by
+    /// path, capped at the newest.
+    private static let titles: Mutex<[String: CachedTitle]> = .init([:])
+    private static let titleCap = 2_000
 
     /// The one decoder configuration: transcript JSON uses snake case
     /// keys in tool inputs.
@@ -270,6 +295,26 @@ public struct TranscriptReader: Sendable {
         default:
             nil
         }
+    }
+
+    /// The cached title while the file is unchanged, parsed afresh
+    /// otherwise; the cache keeps the newest files when it fills.
+    private func cachedTitle(ofTranscriptAt path: String, modifiedAt: Int) -> String {
+        if let cached = Self.titles.withLock({ $0[path] }), cached.modifiedAt == modifiedAt {
+            return cached.title
+        }
+
+        let title = title(ofTranscriptAt: path)
+        Self.titles.withLock { titles in
+            titles[path] = CachedTitle(modifiedAt: modifiedAt, title: title)
+            if titles.count > Self.titleCap {
+                let newest = titles
+                    .sorted { $0.value.modifiedAt > $1.value.modifiedAt }
+                    .prefix(Self.titleCap)
+                titles = Dictionary(uniqueKeysWithValues: Array(newest))
+            }
+        }
+        return title
     }
 
     private func title(ofTranscriptAt path: String) -> String {
