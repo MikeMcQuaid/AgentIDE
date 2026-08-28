@@ -34,29 +34,21 @@ struct WindowConfigurator: NSViewRepresentable {
                 return
             }
 
-            configureWindow()
+            configureWindowIfNeeded()
             observeDisplays()
         }
 
-        func configureWindow() {
-            guard let window else {
+        /// Configures a window not yet configured. SwiftUI updates
+        /// the representable on every render, and reconfiguring
+        /// re-walked the window's buttons and wrote two defaults
+        /// keys per poll tick.
+        func configureWindowIfNeeded() {
+            guard let window, window !== configuredWindow else {
                 return
             }
 
-            window.styleMask.insert(.fullSizeContentView)
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            // An empty toolbar still reserves a tall unified strip;
-            // removing it leaves only the plain titlebar, which the
-            // panes draw beneath.
-            if window.toolbar != nil {
-                window.toolbar = nil
-            }
-            for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-                window.standardWindowButton(kind)?.isHidden = false
-            }
-            restoreFrame(of: window)
-            rememberDisplay()
+            configuredWindow = window
+            configureWindow()
         }
 
         // MARK: Private
@@ -93,6 +85,10 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private var observers: [any NSObjectProtocol] = []
 
+        /// The window already configured, so re-renders reconfigure
+        /// nothing.
+        private weak var configuredWindow: NSWindow?
+
         /// The display the window was last seen on, so a screen
         /// change can tell one that has gone from one that merely
         /// changed resolution or place.
@@ -109,6 +105,27 @@ struct WindowConfigurator: NSViewRepresentable {
             }
 
             return NSScreen.screens.contains { $0.displayID == last } == false
+        }
+
+        private func configureWindow() {
+            guard let window else {
+                return
+            }
+
+            window.styleMask.insert(.fullSizeContentView)
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            // An empty toolbar still reserves a tall unified strip;
+            // removing it leaves only the plain titlebar, which the
+            // panes draw beneath.
+            if window.toolbar != nil {
+                window.toolbar = nil
+            }
+            for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+                window.standardWindowButton(kind)?.isHidden = false
+            }
+            restoreFrame(of: window)
+            rememberDisplay()
         }
 
         /// Displays come and go. Unplugging the one a fullscreen
@@ -343,7 +360,7 @@ struct WindowConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ view: ConfiguringView, context _: Context) {
-        view.configureWindow()
+        view.configureWindowIfNeeded()
     }
 }
 

@@ -3,7 +3,6 @@ import AgentIDEDomain
 import Foundation
 import Observation
 import TerminalUI
-import UserNotifications
 
 // MARK: - DashboardModel
 
@@ -42,8 +41,9 @@ public final class DashboardModel {
     /// shows while it is created, the sessions extension.
     public internal(set) var groups: [RepositoryGroup] = []
 
-    /// Sessions not created by AgentIDE.
-    public private(set) var foreign: [AgentSession] = []
+    /// Sessions not created by AgentIDE; internal so the refresh
+    /// extension file can write it.
+    public internal(set) var foreign: [AgentSession] = []
 
     /// The step log the current launch narrates into, shown by the
     /// pane covering the split while a session is created or resumed.
@@ -163,68 +163,6 @@ public final class DashboardModel {
         showsNewSession = false
         showsRepositoryFinder = false
         selection = item
-    }
-
-    /// Reloads everything and notifies about newly finished or
-    /// newly unread sessions. The selected worktree is on screen, so
-    /// its activity counts as seen; a manual unread mark survives.
-    public func refresh(forcing repositoryPath: String? = nil) async {
-        if let selection {
-            service.acknowledgeActivity(worktreePath: selection.worktree.path)
-        }
-        // Reading the whole system takes a while, and the poll is
-        // always doing it too. Without this the poll's older reading
-        // could land after an action's newer one and put the state
-        // it just changed back on screen: a cleaned-up branch would
-        // reappear in the sidebar until the next tick.
-        refreshGeneration += 1
-        let generation = refreshGeneration
-        let overview = await service.overview(scope: gitReadScope(forcing: repositoryPath), kept: groups)
-        guard generation == refreshGeneration else {
-            return
-        }
-
-        let listed = Self.retainingLostRows(of: groups, in: overview.groups)
-        notifyChanges(from: groups, to: listed)
-        groups = listed
-        foreign = overview.foreign
-        if let selected = selection {
-            // A creation placeholder is never in a listing; it stays
-            // selected until the creation replaces it.
-            selection = listed.flatMap(\.items).first { $0.id == selected.id }
-                ?? (selected.isPlaceholder ? selected : nil)
-        } else if hasRestoredSelection == false {
-            let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
-            selection = listed.flatMap(\.items).first { $0.worktree.path == stored }
-        }
-        hasRestoredSelection = true
-        hasLoaded = true
-        // herdr has answered, so nothing is waiting on it any more.
-        awaitedSessions = []
-        cacheSidebar(listed)
-        await refreshStacks(of: listed)
-        await refreshStalePullRequests(forcing: repositoryPath)
-    }
-
-    /// Polls the system on an interval while the dashboard is alive.
-    /// Model discovery runs once per launch, so the pickers track the
-    /// installed CLIs.
-    public func poll() async {
-        // The sidebar and the restored selection come first: model
-        // discovery and the notification prompt take seconds, and
-        // the window showed "no worktree selected" while they ran.
-        await refresh()
-        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
-        // Each CLI is asked its models beside the others, not one
-        // after another, and the answers are kept: the pickers open
-        // on the last list at once and take the fresh one when it
-        // lands, where waiting on the sandbox took twenty seconds.
-        await discoverModels()
-        publishSessionChoices()
-        while Task.isCancelled == false {
-            await refresh()
-            try? await Task.sleep(for: .seconds(Self.pollInterval))
-        }
     }
 
     /// The models and efforts an agent offers: models the CLI
@@ -368,6 +306,16 @@ public final class DashboardModel {
     /// by the cache extension; absent agents fall back.
     var discoveredModels: [AgentKind: [String]] = [:]
 
+    /// The reading in flight, the readings asked for and finished,
+    /// and the repositories queued to be forced: what lets `refresh`
+    /// coalesce callers instead of stacking whole readings. Stored
+    /// here because extensions cannot hold state; the refresh
+    /// extension file is the only thing that touches them.
+    var refreshTask: Task<Void, Never>?
+    var refreshRequests = 0
+    var completedRefreshes = 0
+    var pendingForces: Set<String> = []
+
     /// Every pull request question the sidebar asks goes through
     /// here, which holds both the answers and when they arrived.
     var pullRequests: PullRequestStore {
@@ -375,12 +323,6 @@ public final class DashboardModel {
     }
 
     // MARK: Private
-
-    private static let pollInterval = 5
-
-    /// Counts refreshes, so a slower one that started earlier can
-    /// tell it has been superseded and drop its reading.
-    private var refreshGeneration = 0
 
     private func clearUnread(at path: String) {
         for groupIndex in groups.indices {

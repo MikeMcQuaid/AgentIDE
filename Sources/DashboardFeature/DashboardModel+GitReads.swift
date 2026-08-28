@@ -11,9 +11,9 @@ extension DashboardModel {
     static let idleGitInterval: TimeInterval = 30
 
     /// The repositories whose git is read this tick: the selected
-    /// one, one asked for by name, and any whose last reading is old
+    /// one, any asked for by name, and any whose last reading is old
     /// enough. Everything before the first reading lands.
-    func gitReadScope(forcing path: String?) -> GitReadScope {
+    func gitReadScope(forcing paths: Set<String>) -> GitReadScope {
         guard hasLoaded else {
             for group in groups {
                 gitReadAt[group.repository.path] = Date()
@@ -21,10 +21,7 @@ extension DashboardModel {
             return .all
         }
 
-        var due = Set<String>()
-        if let path {
-            due.insert(path)
-        }
+        var due = paths
         if let selected = selection?.worktree.repositoryPath {
             due.insert(selected)
         }
