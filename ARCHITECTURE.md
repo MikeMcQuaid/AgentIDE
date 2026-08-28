@@ -1256,11 +1256,12 @@ already hold the first and the second is not ours to put in anyone's cloud.
 | Unread markers, spool offsets, prompt history, per-repository settings, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
 
 The metadata store lives at
-`~/Library/Application Support/AgentIDE/agentide.sqlite` (WAL mode, migrated
-with `DatabaseMigrator`), deliberately outside the shared workspace so agents
-can neither read nor corrupt it. Deleting it loses only unread state, prompt
-history, settings and the attribution of conversations to worktrees that no
-longer exist; everything else re-derives from the system (P1).
+`~/Library/Application Support/AgentIDE/state.json`, one JSON file
+encoded compactly with sorted keys, deliberately outside the shared
+workspace so agents can neither read nor corrupt it. Deleting it loses
+only unread state, prompt history, settings and the attribution of
+conversations to worktrees that no longer exist; everything else
+re-derives from the system (P1).
 
 Every change to it goes through `MetadataStore.update`, which loads,
 changes and saves under one lock. The file is written whole, so loading
@@ -1270,6 +1271,12 @@ saved it afterwards silently erased whatever the launch, the draft or
 another poll had written in between, which is how a branch's cached pull
 requests and a worktree's recorded session went missing while the app
 was busy.
+
+One decoded copy stays in memory per file: nothing but the app writes
+the file, so every load after the first is a dictionary read rather
+than a whole-file JSON decode, which views were paying per sidebar row
+on the main thread. A save whose value equals the copy in memory
+writes nothing, and most poll ticks change nothing.
 
 Repository icons are GitHub owner avatars, cached one per owner (not per
 repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a

@@ -4,7 +4,7 @@ import Foundation
 // MARK: - CachedConversation
 
 /// One pull request's cached body and feedback timeline.
-public struct CachedConversation: Codable, Sendable {
+public struct CachedConversation: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a cached conversation stamped now by default.
@@ -39,7 +39,7 @@ public struct CachedConversation: Codable, Sendable {
 
 /// One enriched pull request header, stamped so the cap can evict
 /// the oldest.
-public struct CachedSummary: Codable, Sendable {
+public struct CachedSummary: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a cached header stamped now by default.
@@ -61,7 +61,7 @@ public struct CachedSummary: Codable, Sendable {
 
 /// One conversation's review threads, stamped so the cap can evict
 /// the oldest.
-public struct CachedThreads: Codable, Sendable {
+public struct CachedThreads: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates cached threads stamped now by default.
@@ -83,7 +83,7 @@ public struct CachedThreads: Codable, Sendable {
 
 /// One repository scope's cached pull request listing, stamped so
 /// the cap can evict the oldest.
-public struct CachedPullRequestList: Codable, Sendable {
+public struct CachedPullRequestList: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a cached listing stamped now by default.
