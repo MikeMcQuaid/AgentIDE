@@ -62,6 +62,12 @@ public extension SessionService {
         // while a session runs there, so resuming on the repository
         // page bumps its repository to the top like a worktree does.
         groups.sort { first, second in
+            let firstActive = Self.hasActiveWork(of: first)
+            let secondActive = Self.hasActiveWork(of: second)
+            guard firstActive == secondActive else {
+                return firstActive
+            }
+
             let firstActivity = Self.repositoryActivity(of: first)
             let secondActivity = Self.repositoryActivity(of: second)
             return firstActivity == secondActivity
@@ -170,7 +176,13 @@ public extension SessionService {
         // recency of their own work. Directories of your own come
         // last: they have no activity to order by and are not what
         // the sidebar is mostly about.
-        var sorted = [items[0]] + items.dropFirst().sorted { $0.lastActivityAt > $1.lastActivityAt }
+        var sorted = [items[0]] + items.dropFirst().sorted { first, second in
+            guard first.isActive == second.isActive else {
+                return first.isActive
+            }
+
+            return first.lastActivityAt > second.lastActivityAt
+        }
         sorted += await hostItems(of: repository, metadata: metadata)
         return await RepositoryGroup(
             repository: Repository(name: repository.name, path: repository.path, fullName: fullName),
@@ -223,12 +235,10 @@ public extension SessionService {
             known = await detachedFacts(of: worktree, baseRef: baseRef)
         }
         let isDirty = await dirty
-        var lastActivity = known?.committedAt ?? 0
-        if let session, session.status == .running || isDirty {
-            // A live session or uncommitted edits mean work right now.
-            lastActivity = Int(Date().timeIntervalSince1970)
-        }
-        lastActivity = max(lastActivity, Int(lastEvent.timeIntervalSince1970))
+        // Work happening right now is `isActive`, never a "now"
+        // stamp: stamping the moment in changed every active row on
+        // every poll, and an unchanged row is what a tick may skip.
+        let lastActivity = max(known?.committedAt ?? 0, Int(lastEvent.timeIntervalSince1970))
         return WorktreeItem(
             worktree: worktree,
             session: session,

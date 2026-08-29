@@ -1,6 +1,6 @@
 /// A branch's unfinished pull request text, kept so leaving the tab
 /// and coming back does not lose the writing.
-public struct PullRequestFormDraft: Codable, Sendable {
+public struct PullRequestFormDraft: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a draft.

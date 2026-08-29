@@ -141,7 +141,7 @@ struct PullRequestStoreTests {
         let metadata = MetadataStore(file: file)
         var stripped = metadata.load()
         stripped.pullRequestListsCache = [:]
-        metadata.save(stripped)
+        metadata.update { $0 = stripped }
         #expect(metadata.load().etags.isEmpty)
     }
 
@@ -160,7 +160,7 @@ struct PullRequestStoreTests {
         for key in metadata.fetchedAt.keys {
             metadata.fetchedAt[key] = Date().addingTimeInterval(-40)
         }
-        MetadataStore(file: file).save(metadata)
+        MetadataStore(file: file).update { $0 = metadata }
         let before = runner.calls
 
         _ = try await store.summary(repositoryPath: "/repo", number: 7, interval: 30)

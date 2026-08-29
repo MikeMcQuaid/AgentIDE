@@ -21,7 +21,7 @@ struct MetadataStoreTests {
         metadata.resumeIDs["session"] = "abc"
         metadata.sessionsByWorktree["/w"] = "session"
         metadata.agentVersions["session"] = "2.1.239"
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let loaded = store.load()
         #expect(loaded.prompts["session"] == "prompt")
@@ -75,6 +75,46 @@ struct MetadataStoreTests {
     }
 
     @Test
+    func `a load after an update is served from memory`() throws {
+        let root = try TestSupport.temporaryDirectory("store-memory")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+
+        // Views ask models per row and models ask the store; each
+        // ask was a whole-file read and JSON decode on the main
+        // thread. The in-memory copy answers even with the file
+        // gone, which is what proves no read happened.
+        store.update { $0.prompts["session"] = "prompt" }
+        try FileManager.default.removeItem(atPath: file)
+
+        #expect(store.load().prompts["session"] == "prompt")
+    }
+
+    @Test
+    func `saving an unchanged value writes nothing`() throws {
+        let root = try TestSupport.temporaryDirectory("store-unchanged")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+
+        var metadata = AppMetadata()
+        metadata.prompts["session"] = "prompt"
+        store.update { $0 = metadata }
+        try FileManager.default.removeItem(atPath: file)
+
+        // The poll saves its sidebar snapshot every tick and most
+        // ticks change nothing; an equal value must not be encoded
+        // or written again.
+        store.update { $0 = metadata }
+        #expect(FileManager.default.fileExists(atPath: file) == false)
+
+        metadata.prompts["other"] = "changed"
+        store.update { $0 = metadata }
+        #expect(FileManager.default.fileExists(atPath: file))
+    }
+
+    @Test
     func `decoding tolerates files written before new fields existed`() throws {
         let root = try TestSupport.temporaryDirectory("store-old")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -120,7 +160,7 @@ struct MetadataStoreTests {
                 ),
                 savedAt: now.addingTimeInterval(-700_000),
             )
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let loaded = store.load()
         #expect(loaded.conversationCache.count == 80)
@@ -148,7 +188,7 @@ struct MetadataStoreTests {
         repository.worktrees = [worktree]
         var metadata = AppMetadata()
         metadata.cachedSidebar = [repository]
-        store.save(metadata)
+        store.update { $0 = metadata }
 
         let cached = store.load().cachedSidebar
         #expect(cached.first?.fullName == "octocat/example")

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// A plain-text record of what the app waits on: every process it
 /// runs, every network call, and whether each cache read hit or
@@ -56,10 +57,21 @@ public enum PerformanceLog {
 
     /// Whether anything is recorded: the variable, or the marker file
     /// in the log's directory, which is how the installed build is
-    /// switched on without rebuilding.
+    /// switched on without rebuilding. The answer holds for a few
+    /// seconds at a time: every process the app runs asks, and each
+    /// ask was a file-existence stat even with the log off, which
+    /// made the log the one thing it could never measure.
     public static var isEnabled: Bool {
-        ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG"] != nil
+        let now = ContinuousClock.now
+        if let state = enabledState.withLock({ $0 }),
+           now - state.checkedAt < .seconds(enabledRecheckSeconds) {
+            return state.value
+        }
+
+        let value = ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG"] != nil
             || FileManager.default.fileExists(atPath: directory + "/performance-log")
+        enabledState.withLock { $0 = (value: value, checkedAt: now) }
+        return value
     }
 
     /// Where the lines go when enabled; the directory is made on
@@ -102,7 +114,7 @@ public enum PerformanceLog {
             return
         }
 
-        let line = Self.stamp().string(from: Date()) + "\t" + kind.label + "\t"
+        let line = Date().formatted(Self.stampStyle) + "\t" + kind.label + "\t"
             + String(format: "%8.3f", seconds) + "\t" + context + "\t" + what + "\n"
         queue.async {
             sweepIfDue()
@@ -151,16 +163,19 @@ public enum PerformanceLog {
 
     // MARK: Private
 
-    private static let queue: DispatchQueue = .init(label: "agentide.performance-log")
+    private static let queue: DispatchQueue = .init(label: "agentide.performance-log", qos: .utility)
     private static let sweepInterval: TimeInterval = 3_600
 
-    /// A formatter per use: the type is not Sendable, and a line is
-    /// written rarely enough that sharing one would save nothing.
-    private static func stamp() -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }
+    /// The cached enablement answer and how long it holds; the
+    /// marker file can be toggled at runtime, so the file is asked
+    /// again after a few seconds rather than never.
+    private static let enabledState: Mutex<(value: Bool, checkedAt: ContinuousClock.Instant)?> = .init(nil)
+    private static let enabledRecheckSeconds = 5.0
+
+    /// One Sendable format style shared by every line; the class
+    /// formatter this replaces was constructed per line, one of
+    /// Foundation's dearer allocations.
+    private static let stampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     /// Sweeps at most once an hour: reading the whole file on every
     /// line would make the log the slowest thing it measures. The
@@ -177,11 +192,10 @@ public enum PerformanceLog {
 
         // The creation date is the sweep clock: rewriting resets it.
         try? FileManager.default.setAttributes([.creationDate: Date()], ofItemAtPath: file)
-        let stamp = stamp()
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         let kept = lines.filter { line in
             guard let tab = line.firstIndex(of: "\t"),
-                  let written = stamp.date(from: String(line[..<tab]))
+                  let written = try? Date(String(line[..<tab]), strategy: stampStyle)
             else {
                 return false
             }

@@ -1,6 +1,7 @@
 import AgentIDEDomain
 import Foundation
 import SwiftTreeSitter
+import Synchronization
 import TreeSitterBash
 import TreeSitterC
 import TreeSitterCPP
@@ -25,32 +26,26 @@ public enum CodeHighlighter {
     // MARK: Public
 
     /// The coloured tokens of one line; concatenating the token texts
-    /// reproduces the line.
+    /// reproduces the line. Memoised by content: a line's tokens are
+    /// pure, and rendering asked per line per render, constructing a
+    /// tree-sitter parser each time, so selecting one diff line
+    /// re-parsed every line of every expanded file.
     public static func tokens(for line: String, language: SyntaxLanguage?) -> [SyntaxToken] {
         guard let language else {
             return [SyntaxToken(kind: .plain, text: line)]
         }
-        guard let classified = classifiedRanges(in: line, language: language), classified.isEmpty == false else {
-            return SyntaxHighlighter.highlight(line: line, language: language)
+
+        let key = String(describing: language) + "\u{0}" + line
+        if let cached = lineCache.withLock({ $0[key] }) {
+            return cached
         }
 
-        // Capture ranges are UTF-16 offsets, so NSString arithmetic is
-        // the correct interop here, not String.
-        // swiftlint:disable:next legacy_objc_type
-        let content = line as NSString
-        var kinds = [SyntaxToken.Kind](repeating: .plain, count: content.length)
-        for (range, kind) in classified {
-            for offset in range.location ..< min(NSMaxRange(range), content.length) {
-                kinds[offset] = kind
+        let tokens = parsedTokens(for: line, language: language)
+        lineCache.withLock { cache in
+            if cache.count >= Self.lineCacheCap {
+                cache = [:]
             }
-        }
-
-        var tokens = [SyntaxToken]()
-        var start = 0
-        for index in 1 ... content.length where index == content.length || kinds[index] != kinds[start] {
-            let range = NSRange(location: start, length: index - start)
-            tokens.append(SyntaxToken(kind: kinds[start], text: content.substring(with: range)))
-            start = index
+            cache[key] = tokens
         }
         return tokens
     }
@@ -125,6 +120,12 @@ public enum CodeHighlighter {
 
     // MARK: Private
 
+    /// Tokens by language and line, wiped wholesale when full: one
+    /// diff or comment holds far fewer distinct lines than the cap,
+    /// and wiping is simpler than an eviction order nothing needs.
+    private static let lineCache: Mutex<[String: [SyntaxToken]]> = .init([:])
+    private static let lineCacheCap = 8_192
+
     /// Grammars are loaded once; a failed load leaves the language on
     /// the fallback tokenizer.
     private static let configurations: [SyntaxLanguage: LanguageConfiguration] = {
@@ -164,6 +165,34 @@ public enum CodeHighlighter {
         }
         return containers
     }()
+
+    /// One line's tokens parsed afresh, the slow path behind the
+    /// memoised `tokens(for:language:)`.
+    private static func parsedTokens(for line: String, language: SyntaxLanguage) -> [SyntaxToken] {
+        guard let classified = classifiedRanges(in: line, language: language), classified.isEmpty == false else {
+            return SyntaxHighlighter.highlight(line: line, language: language)
+        }
+
+        // Capture ranges are UTF-16 offsets, so NSString arithmetic is
+        // the correct interop here, not String.
+        // swiftlint:disable:next legacy_objc_type
+        let content = line as NSString
+        var kinds = [SyntaxToken.Kind](repeating: .plain, count: content.length)
+        for (range, kind) in classified {
+            for offset in range.location ..< min(NSMaxRange(range), content.length) {
+                kinds[offset] = kind
+            }
+        }
+
+        var tokens = [SyntaxToken]()
+        var start = 0
+        for index in 1 ... content.length where index == content.length || kinds[index] != kinds[start] {
+            let range = NSRange(location: start, length: index - start)
+            tokens.append(SyntaxToken(kind: kinds[start], text: content.substring(with: range)))
+            start = index
+        }
+        return tokens
+    }
 
     /// Loads a grammar and its bundled highlight queries. SwiftPM's
     /// command line builds lay resource bundles out flat while Xcode

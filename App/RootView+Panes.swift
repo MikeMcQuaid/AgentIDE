@@ -77,6 +77,9 @@ extension RootView {
         .opacity(isCovered ? 0 : 1)
         .allowsHitTesting(isCovered == false)
         .overlay { coveringPage }
+        // A page fades over the pane rather than cutting; the panes
+        // stay mounted either way.
+        .animation(Motion.quick, value: isCovered)
         .overlay(alignment: .topTrailing) {
             if showsUtility == false {
                 utilityToggleButton
@@ -91,6 +94,51 @@ extension RootView {
             alignment: .top,
         )
         .ignoresSafeArea(.container, edges: .top)
+    }
+
+    /// What the anonymous-looking window is actually showing, for
+    /// the surfaces that name windows: the hidden title bar keeps
+    /// it invisible in the window itself.
+    var windowTitle: String {
+        guard let item = dependencies.dashboard.selection else {
+            return "AgentIDE"
+        }
+
+        return item.worktree.repositoryName + ": " + item.worktree.branch
+    }
+
+    /// Tells the dashboard whether anyone can see the window, and
+    /// refreshes at once on coming back on screen rather than
+    /// waiting out the slow tick the hidden window was on.
+    func windowVisibilityChanged(_ visible: Bool) {
+        let wasVisible = dependencies.dashboard.isWindowVisible
+        dependencies.dashboard.isWindowVisible = visible
+        if visible, wasVisible == false {
+            Task { await dependencies.dashboard.refresh() }
+        }
+    }
+
+    /// The unselected detail shape: the page fills the primary pane
+    /// and the utility pane's width is held empty beside it, so a
+    /// repository picker or a new session form sits in the column it
+    /// would occupy with a worktree open rather than spreading
+    /// across the window.
+    var unselectedSplit: some View {
+        HStack(spacing: 0) {
+            Group {
+                if isCovered {
+                    coveringPage
+                } else {
+                    unselectedDetail
+                }
+            }
+            .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
+            // The same fade the covered split gets.
+            .animation(Motion.quick, value: isCovered)
+            if showsUtility {
+                Color.clear.frame(width: utilityPaneWidth)
+            }
+        }
     }
 
     /// Narrows the sidebar to the least its rows need and splits

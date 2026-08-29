@@ -70,6 +70,46 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `a new request wakes the watcher through the directory event`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-watch")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let workspace = paths(root: root)
+        let runner = FoundationProcessRunner()
+        let service = SessionService(
+            paths: workspace,
+            git: GitClient(runner: runner),
+            herdr: HerdrClient(
+                runner: runner,
+                launcher: SandvaultLauncher(hostUser: "test"),
+                isInsideSandbox: true,
+            ),
+            github: GitHubClient(runner: runner),
+            transcripts: TranscriptReader(),
+            spool: EventSpool(directory: workspace.eventsDirectory),
+            store: MetadataStore(file: root + "/state.json"),
+            runners: [],
+        )
+
+        var edits = service.pendingEdits().makeAsyncIterator()
+        #expect(await edits.next()?.isEmpty == true)
+
+        // The watcher idles between slow safety ticks; a request
+        // must reach it through the directory event, inside the
+        // eight-second tick it would otherwise wait out. The bound
+        // is generous because a loaded CI runner can take seconds
+        // just spawning the shim.
+        let shim = shim(root: root)
+        let process = try run(shim, arguments: ["--wait", root + "/file.txt"], in: root)
+        let started = ContinuousClock.now
+        let published = await edits.next()
+        #expect(published?.count == 1)
+        #expect(ContinuousClock.now - started < .seconds(Self.eventDeadlineSeconds))
+
+        process.terminate()
+        try await exit(of: process)
+    }
+
+    @Test
     func `without waiting a file is asked for and the command returns at once`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-open")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -185,6 +225,11 @@ struct EditorShimIntegrationTests {
     // MARK: Private
 
     private static let settleMilliseconds = 600
+
+    /// How long a directory event may take to surface a request:
+    /// well under the idle sweep it must beat, well over what a
+    /// slow CI runner needs to spawn the shim.
+    private static let eventDeadlineSeconds = 6.0
     private static let pollMilliseconds = 50
     private static let waitAttempts = 100
 

@@ -77,7 +77,7 @@ public struct CachedRepository: Codable, Hashable, Sendable {
 /// The app-owned metadata that cannot be derived from the system.
 /// Decoding tolerates missing keys so adding a field never discards
 /// an existing file.
-public struct AppMetadata: Codable, Sendable {
+public struct AppMetadata: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates empty metadata.

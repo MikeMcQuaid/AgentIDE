@@ -254,6 +254,14 @@ public extension SessionService {
         return remote
     }
 
+    /// Whether anything in a repository is actively working, which
+    /// sorts it above recency: the boost a running session used to
+    /// get by stamping "now" into its activity, without the stamp
+    /// that changed every row on every poll.
+    internal static func hasActiveWork(of group: RepositoryGroup) -> Bool {
+        group.items.contains(where: \.isActive)
+    }
+
     /// A repository's recency for sidebar ordering: its worktrees
     /// always count, the main checkout only while a session runs in
     /// it, so resuming on the repository page bumps the repository

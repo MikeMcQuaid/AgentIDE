@@ -57,7 +57,7 @@ struct PullRequestDisclosureTests {
         var metadata = model.store.load()
         metadata.sessionsByWorktree["/worktrees/feature"] = "agentide--repo--feature--claude"
         metadata.arguments["agentide--repo--feature--claude"] = ""
-        model.store.save(metadata)
+        model.store.update { $0 = metadata }
 
         #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
     }

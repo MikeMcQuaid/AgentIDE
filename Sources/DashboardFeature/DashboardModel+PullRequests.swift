@@ -76,7 +76,7 @@ extension DashboardModel {
     /// gateway on very large repositories. Failures keep the last
     /// cached answer, and a branch whose cached result is green and
     /// approved for its current commit is final and never refetched.
-    func refreshStalePullRequests(forcing repositoryPath: String? = nil) async {
+    func refreshStalePullRequests(forcing repositoryPaths: Set<String>) async {
         hydratePullRequestCache()
         await refreshMergeQueues()
         let collapsed = Set(
@@ -88,7 +88,8 @@ extension DashboardModel {
             // An outage answers every branch identically, so one
             // branch probes for a recovery and the rest wait; the
             // repository a refresh was asked for keeps asking.
-            let ridesOutOutage = ServiceStatus.shared.isUnavailable && repositoryPath != group.repository.path
+            let ridesOutOutage = ServiceStatus.shared.isUnavailable
+                && repositoryPaths.contains(group.repository.path) == false
             // The repository's own checkout is asked about too when
             // it is off its default branch: work done there has a
             // pull request like any other, and skipping the row left

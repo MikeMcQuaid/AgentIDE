@@ -66,6 +66,12 @@ public struct SessionService: Sendable {
         git.repositories(under: paths.repositoriesDirectory)
     }
 
+    /// A watcher over the workspace roots whose file-system events
+    /// decide when a repository's git is worth reading again.
+    public func makeWorkspaceWatcher() -> WorkspaceWatcher {
+        WorkspaceWatcher(roots: [paths.repositoriesDirectory, paths.worktreesDirectory])
+    }
+
     /// Creates a worktree and branch for a prompt and starts the
     /// agent in herdr with the picked model, effort and the prompt
     /// as its initial message. Returns the session name.

@@ -115,7 +115,10 @@ struct RootView: View {
                 .ignoresSafeArea(.container, edges: .top)
         }
         .ignoresSafeArea(.container, edges: .top)
-        .background(WindowConfigurator())
+        .background(WindowConfigurator { visible in windowVisibilityChanged(visible) })
+        // The title bar hides the string, but Mission Control, the
+        // Window menu and window switching all read it.
+        .navigationTitle(windowTitle)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fitPanes(to: $0) }
         .onChange(of: resizePanesRequest) { evenPanes(in: windowWidth) }
         .sheet(isPresented: sessionManagerBinding) { sessionManager }
@@ -333,27 +336,6 @@ struct RootView: View {
                 split(for: item)
             } else {
                 unselectedSplit
-            }
-        }
-    }
-
-    /// The same shape with nothing selected: the page fills the
-    /// primary pane and the utility pane's width is held empty
-    /// beside it, so a repository picker or a new session form sits
-    /// in the column it would occupy with a worktree open rather
-    /// than spreading across the window.
-    private var unselectedSplit: some View {
-        HStack(spacing: 0) {
-            Group {
-                if isCovered {
-                    coveringPage
-                } else {
-                    unselectedDetail
-                }
-            }
-            .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
-            if showsUtility {
-                Color.clear.frame(width: utilityPaneWidth)
             }
         }
     }

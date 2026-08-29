@@ -58,6 +58,16 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// running session or uncommitted edits. Seconds since 1970.
     public let lastActivityAt: Int
 
+    /// Whether work is happening right now: a session with the run
+    /// light on, or a session whose worktree holds uncommitted
+    /// edits. Ordering reads this beside `lastActivityAt` rather
+    /// than the moment being stamped into it: a "now" timestamp
+    /// changed every active row on every poll, and row equality is
+    /// what lets a tick redraw nothing.
+    public var isActive: Bool {
+        session != nil && (session?.status == .running || isDirty)
+    }
+
     /// The stable identity, the worktree path.
     public var id: String {
         worktree.id

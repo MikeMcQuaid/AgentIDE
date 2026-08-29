@@ -6,6 +6,14 @@ cd "$(dirname "$0")/.."
 
 [[ -d AgentIDE.xcodeproj ]] || script/bootstrap
 
+# A new source file is invisible to the generated project until
+# XcodeGen runs again; the sandbox gate builds with SwiftPM, which
+# globs sources itself, so staleness only ever bites the host
+# build. The cache makes an unchanged regeneration a no-op.
+if [[ -z "${SV_SESSION_ID:-}" ]] && command -v xcodegen &>/dev/null; then
+  xcodegen generate --use-cache
+fi
+
 # Capped parallelism inside the sandbox: full-width builds have
 # triggered resource kills that tore down the whole sandbox user,
 # taking the production herdr server and its agents with it.

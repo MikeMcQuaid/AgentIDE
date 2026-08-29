@@ -336,12 +336,13 @@ next reading that lists the worktree wins. It matters because a row holds
 its worktree's panes open, and a pane holds a running shell (P1 still
 applies; disk is one of the sources).
 
-There is no separate notification daemon in v1. The app switches to accessory
-activation policy when its last window closes, staying resident in the menu
-bar with file watchers and `UNUserNotificationCenter` delivery alive. Because
-the event spool is durable files, a fully quit app delays notifications
-rather than losing them. A login-item helper via `SMAppService` is the
-documented later option if delayed notifications prove annoying.
+There is no separate notification daemon in v1, and no windowless
+resident mode: the app quits when its last window closes. Everything
+that must survive lives outside the process, herdr sessions and their
+agents keep running, and because the event spool is durable files a
+quit app delays notifications rather than losing them; the next launch
+reads them. A login-item helper via `SMAppService` is the documented
+later option if delayed notifications prove annoying.
 
 ## Package architecture
 
@@ -703,11 +704,14 @@ shim rather than a protocol:
    and its own process id, written to one side and renamed into place so the
    app never reads half of one. Nothing inside the sandbox can reach that
    directory, so an agent cannot queue an edit or see what is being edited.
-3. The window polls the spool (a small directory listing, off the main
-   actor), selects the worktree the command ran in, opens the utility pane on
-   its editor tab and shows the file, then writes an `.open` file. An
-   unclaimed request is how the shim knows no app is running: it says so and
-   exits non-zero rather than hanging.
+3. The window watches the spool directory with a dispatch source, so a
+   request is read the moment its file lands rather than on a poll; a
+   slow safety tick covers a lost event, and a faster one runs only
+   while requests are waiting, to sweep those whose command has gone.
+   A request brings the app forward, selects the worktree the command
+   ran in, opens the utility pane on its editor tab and shows the
+   file, then writes an `.open` file. An unclaimed request is how the shim knows no app is running:
+   it says so and exits non-zero rather than hanging.
 4. Saving and closing writes a `.done` file holding the exit status the shim
    takes: zero when the file was saved, non-zero when the edit was cancelled,
    which is how git is told to abort a rebase. The shim removes the files it
@@ -786,13 +790,18 @@ shim rather than a protocol:
    branch listing (conditional REST) carries no checks, review or
    mergeability, so each open pull request's state comes from the
    one-pull-request query on its own stamp, which is also what keeps
-   the sidebar's icons true between selections. The sidebar's git reading is tiered the same
-   way: the selected repository's worktrees are read every tick, an
-   idle repository's every half minute, its rows kept between readings
-   with only their sessions brought up to date from the pane listing
-   already in hand (`GitReadScope`), since twenty-nine repositories at
-   four git calls per worktree every five seconds was most of everything
-   the app did. What is left of those four is one: a repository's
+   the sidebar's icons true between selections. The sidebar's git reading is driven by the
+   file system rather than the clock: one FSEvents stream over the
+   repository and worktree roots (`WorkspaceWatcher`) remembers what
+   changed, and a reading asks git only about repositories something
+   moved under, with safety re-reads at a minute for the selected
+   repository and five for the rest in case an event was lost (the
+   old time-based cadence returns if the stream cannot start). Rows
+   are kept between readings with only their sessions brought up to
+   date from the pane listing already in hand (`GitReadScope`);
+   twenty-nine repositories at four git calls per worktree every five
+   seconds was most of everything the app did, and an idle workspace
+   now reads almost nothing. What is left of those four is one: a repository's
    branches all answer at once through `git for-each-ref` with
    `%(ahead-behind:)`, `%(upstream:track)` and `%(committerdate:unix)`,
    nine milliseconds for a repository against three processes per
@@ -1256,11 +1265,12 @@ already hold the first and the second is not ours to put in anyone's cloud.
 | Unread markers, spool offsets, prompt history, per-repository settings, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
 
 The metadata store lives at
-`~/Library/Application Support/AgentIDE/agentide.sqlite` (WAL mode, migrated
-with `DatabaseMigrator`), deliberately outside the shared workspace so agents
-can neither read nor corrupt it. Deleting it loses only unread state, prompt
-history, settings and the attribution of conversations to worktrees that no
-longer exist; everything else re-derives from the system (P1).
+`~/Library/Application Support/AgentIDE/state.json`, one JSON file
+encoded compactly with sorted keys, deliberately outside the shared
+workspace so agents can neither read nor corrupt it. Deleting it loses
+only unread state, prompt history, settings and the attribution of
+conversations to worktrees that no longer exist; everything else
+re-derives from the system (P1).
 
 Every change to it goes through `MetadataStore.update`, which loads,
 changes and saves under one lock. The file is written whole, so loading
@@ -1271,11 +1281,19 @@ another poll had written in between, which is how a branch's cached pull
 requests and a worktree's recorded session went missing while the app
 was busy.
 
+One decoded copy stays in memory per file: nothing but the app writes
+the file, so every load after the first is a dictionary read rather
+than a whole-file JSON decode, which views were paying per sidebar row
+on the main thread. A save whose value equals the copy in memory
+writes nothing, and most poll ticks change nothing.
+
 Repository icons are GitHub owner avatars, cached one per owner (not per
 repository) in `~/Library/Application Support/AgentIDE/Avatars`, so a
 sidebar of many repositories under a few owners fetches a few times and a
 GitHub outage leaves the icons showing. A failed fetch is silent: the icon
-is decoration and the messages pane is for what the user can act on.
+is decoration and the messages pane is for what the user can act on. An
+owner with no avatar is remembered for the run, so a redrawing sidebar
+never retries the fetch per frame.
 
 The one file the app writes outside its own support directory is the
 performance log, and only when asked for: with `AGENTIDE_PERFORMANCE_LOG`

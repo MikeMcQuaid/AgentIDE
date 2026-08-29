@@ -39,6 +39,10 @@ public struct RepositoryFinderPane: View {
 
     @State private var query = ""
 
+    /// The field takes focus the moment the pane opens: the
+    /// shortcut's whole point is typing straight away.
+    @FocusState private var fieldFocused: Bool
+
     /// Fills the pane with progress the moment a pick starts:
     /// cloning takes seconds and the list must not stay interactive.
     @State private var isOpening = false
@@ -72,6 +76,7 @@ public struct RepositoryFinderPane: View {
             header
             TextField(fieldPrompt, text: $query)
                 .textFieldStyle(.roundedBorder)
+                .focused($fieldFocused)
                 .onChange(of: query) { highlighted = 0 }
                 .onSubmit { pickHighlighted() }
                 .onKeyPress(.downArrow) { moveHighlight(by: 1) }
@@ -92,8 +97,11 @@ public struct RepositoryFinderPane: View {
         .padding([.horizontal, .bottom])
         .padding(.top, Self.topPadding)
         .frame(maxWidth: Self.maximumWidth, maxHeight: .infinity, alignment: .top)
+        // Escape closes the page, the way it cancels anywhere else.
+        .onExitCommand { model.showsRepositoryFinder = false }
         // Cached listings paint instantly; the fetches refresh.
         .task {
+            fieldFocused = true
             owners = model.cachedOrganisations()
             owners = await model.organisations()
         }
@@ -131,14 +139,20 @@ public struct RepositoryFinderPane: View {
     }
 
     private var resultsList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(results.enumerated()), id: \.element) { index, result in
-                    row(result, isHighlighted: index == highlighted)
-                        .onTapGesture { pick(result) }
-                        .accessibilityAddTraits(.isButton)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(results.enumerated()), id: \.element) { index, result in
+                        row(result, isHighlighted: index == highlighted)
+                            .onTapGesture { pick(result) }
+                            .accessibilityAddTraits(.isButton)
+                            .id(index)
+                    }
                 }
             }
+            // Arrowing past the visible rows scrolls the highlight
+            // into view rather than moving it off screen.
+            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
         }
         .frame(minHeight: Self.listHeight, maxHeight: Self.listHeight)
         .hoverHelp("Arrows move the highlight; return or a click picks")

@@ -85,6 +85,9 @@ public struct ReviewView: View {
                 canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
             )
         }
+        // The find bar fades in rather than popping; nothing else
+        // in the stack changes with it.
+        .animation(Motion.quick, value: showsFind)
         // The model is rebuilt whenever the worktree changes: state
         // survives the view struct's re-initialisation, so the first
         // worktree's model would otherwise review every one.
