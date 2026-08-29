@@ -282,7 +282,7 @@ public extension HerdrClient {
     }
 
     /// Waits until a session's agent reaches a settled state
-    /// (working, idle or blocked), or the timeout passes. herdr
+    /// (working, idle, blocked or done), or the timeout passes. herdr
     /// watches its own detection, where the app could only re-read
     /// whole snapshots on a half-second loop; false means the wait
     /// timed out or the session had no pane, and the caller's
@@ -294,7 +294,7 @@ public extension HerdrClient {
 
         let result = try? await herdr([
             "agent", "wait", row.paneID,
-            "--until", "working", "--until", "idle", "--until", "blocked",
+            "--until", "working", "--until", "idle", "--until", "blocked", "--until", "done",
             "--timeout", String(timeoutMilliseconds),
         ], allowFailure: true)
         return result?.succeeded == true
