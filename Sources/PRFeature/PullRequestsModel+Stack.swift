@@ -133,13 +133,13 @@ extension PullRequestsModel {
             return
         }
 
-        stacking.factsGeneration += 1
-        let generation = stacking.factsGeneration
+        stacking.stackGeneration += 1
+        let generation = stacking.stackGeneration
         let derived = await stacking.fetch(worktree)
         let needsRestack = await stacking.pending(worktree)
         let unpushed = await stacking.unpushed(worktree)
         let unsigned = await stacking.unsigned(worktree)
-        guard generation == stacking.factsGeneration else {
+        guard generation == stacking.stackGeneration else {
             return
         }
 

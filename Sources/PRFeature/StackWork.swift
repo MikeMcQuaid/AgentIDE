@@ -26,10 +26,15 @@ struct StackWork {
     /// The branches whose tip is unsigned, which no push will take.
     var unsignedBranches: [String] = []
 
-    /// Bumped as each facts read begins; a slower, older read must
-    /// not land its answers over a newer one's, which is how a
+    /// Bumped as each read of its kind begins; a slower, older read
+    /// must not land its answers over a newer one's, which is how a
     /// rebase sometimes needed pressing twice: a poll's reload
     /// started before the rebase finished after the action's own.
+    /// One counter per kind: the stack read and the worktree facts
+    /// overlap constantly, and sharing a counter let a stack read
+    /// discard the facts, leaving Rebase greyed with nothing to
+    /// put it right until a later read happened to win.
+    var stackGeneration = 0
     var factsGeneration = 0
     var fetch: (Worktree) async -> BranchStack = { worktree in
         BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)

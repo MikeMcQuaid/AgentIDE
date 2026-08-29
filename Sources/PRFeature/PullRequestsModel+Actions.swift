@@ -16,6 +16,7 @@ extension PullRequestsModel {
         // older reload landing stale signing facts over the rebase's
         // fresh ones is how Push sometimes stayed locked until a
         // second press ran a fresh read.
+        stacking.factsGeneration += 1
         let generation = stacking.factsGeneration
         let signed = await checkTipSigned(listedWorktree ?? worktree)
         let need = await fetchRebaseNeed(listedWorktree ?? worktree)
