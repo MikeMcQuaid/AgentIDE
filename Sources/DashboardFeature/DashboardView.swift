@@ -101,8 +101,10 @@ public struct DashboardView: View {
                     }
                 } icon: {
                     Image(systemName: "questionmark.circle")
+                        .accessibilityHidden(true)
                 }
                 .padding(.leading, Self.rowIndent)
+                .hoverHelp("A herdr session this app did not start; visible, not attachable")
             }
         }
     }

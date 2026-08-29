@@ -232,13 +232,18 @@ extension RootView {
             .hoverHelp("A directory of your own: this shell runs as you, and no agent runs here")
             Divider()
         } else if let session = item.session {
-            // Left to right: which agent, whether it is connected,
-            // the herdr workspace name, and the close button at the
-            // pane's far edge; each part explains itself on hover.
-            HStack(spacing: Self.stripSpacing) {
-                agentMark(for: session)
-                    .padding(.leading, Self.tabHorizontalPadding)
-                connectionDot(for: session)
+            // The agent's mark at the left (colour while connected,
+            // greyscale once ended), the herdr workspace name
+            // centred, the close button at the pane's far edge;
+            // each part explains itself on hover.
+            ZStack {
+                HStack(spacing: Self.stripSpacing) {
+                    agentMark(for: session)
+                        .padding(.leading, Self.tabHorizontalPadding)
+                    Spacer(minLength: 0)
+                    closeSessionButton(session, in: item)
+                        .padding(.trailing, Self.tabHorizontalPadding)
+                }
                 Text(session.name)
                     // Monospaced: it is the workspace label herdr
                     // shows, matched by eye against terminal output.
@@ -246,9 +251,6 @@ extension RootView {
                     .padding(.vertical, Self.tabVerticalPadding)
                     .hoverHelp("The herdr workspace name; `script/attach " + session.name
                         + "` joins this session from a terminal")
-                Spacer(minLength: 0)
-                closeSessionButton(session, in: item)
-                    .padding(.trailing, Self.tabHorizontalPadding)
             }
             .padding(Self.stripSpacing)
             Divider()
@@ -265,43 +267,36 @@ extension RootView {
     private static let tabVerticalPadding: CGFloat = 3
 
     /// The brand mark beside the live session's title, sized to the
-    /// callout text beside it, and the presence dot's point size.
+    /// callout text beside it.
     private static let agentIconSize: CGFloat = 15
-    private static let connectionDotSize: CGFloat = 8
 
-    /// The agent's brand mark; its tooltip carries the CLI version,
-    /// which matters because an agent upgraded while running goes on
-    /// running the old one, and this is the only place that shows.
+    /// The agent's brand mark, doubling as the connection light: in
+    /// colour while the process runs, greyscale once it has ended.
+    /// The tooltip carries the CLI version, which matters because an
+    /// agent upgraded while running goes on running the old one, and
+    /// this is the only place that shows.
     @ViewBuilder
     private func agentMark(for session: AgentSession) -> some View {
         let name = session.agent?.displayName ?? "Agent"
         let version = session.version.map { " " + $0 } ?? ""
+        let isRunning = session.status == .running
+        let state = isRunning
+            ? "connected and running"
+            : "ended; the conversation stays resumable"
         if let agent = session.agent {
             Image(agent.iconAssetName)
+                .renderingMode(isRunning ? .original : .template)
                 .resizable()
                 .scaledToFit()
                 .frame(width: Self.agentIconSize, height: Self.agentIconSize)
-                .accessibilityLabel(name)
-                .hoverHelp(name + version + " runs in this pane")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(name + (isRunning ? ", connected" : ", ended"))
+                .hoverHelp(name + version + ": " + state)
         } else {
             Image(systemName: "questionmark.circle")
                 .accessibilityLabel("Unknown agent")
-                .hoverHelp("An agent this app does not recognise")
+                .hoverHelp("An agent this app does not recognise: " + state)
         }
-    }
-
-    /// The system presence metaphor: a green dot while the agent's
-    /// process is connected, grey once it has ended.
-    private func connectionDot(for session: AgentSession) -> some View {
-        let isRunning = session.status == .running
-        return Image(systemName: "circle.fill")
-            .font(.system(size: Self.connectionDotSize))
-            .foregroundStyle(isRunning ? Color.green : Color(nsColor: .tertiaryLabelColor))
-            .symbolEffect(.pulse, isActive: isRunning)
-            .accessibilityLabel(isRunning ? "Connected" : "Ended")
-            .hoverHelp(isRunning
-                ? "Connected: the agent's process is running"
-                : "Ended: the process has exited; the conversation stays resumable")
     }
 
     /// At the pane's far edge, clear of the name it closes.

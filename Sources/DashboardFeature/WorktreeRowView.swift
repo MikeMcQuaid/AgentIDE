@@ -200,15 +200,20 @@ struct WorktreeRowView: View {
                     .foregroundStyle(.green)
                     .font(.caption)
                     .accessibilityHidden(true)
+                    .hoverHelp("The agent is running")
 
             case .finished:
                 Image(systemName: "checkmark.circle")
                     .foregroundStyle(.secondary)
                     .font(.caption)
                     .accessibilityHidden(true)
+                    .hoverHelp("The agent's process ended; the conversation stays resumable")
 
             case nil:
                 Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
+                    .hoverHelp(isMainCheckout
+                        ? "The repository's own checkout, where merged work lands"
+                        : "A worktree with no session running")
             }
         }
     }
