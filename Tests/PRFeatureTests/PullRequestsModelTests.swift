@@ -201,19 +201,23 @@ struct PullRequestsModelTests {
             return .origin
         }
         var created: (title: String, body: String)?
-        model.performCreate = { _, title, body in
+        var createdLabels = [String]()
+        model.performCreate = { _, title, body, labels in
             created = (title, body)
+            createdLabels = labels
             return "https://example.invalid/pull/1"
         }
         model.prTitle = "A change"
         model.prBody = "Why it changed."
         model.prTemplate = "- [ ] Checked"
+        model.prLabels = ["bug", "ci"]
         #expect(model.isFullyPushed)
         #expect(await model.createPullRequest())
         #expect(pushed == false)
         #expect(created?.title == "A change")
         #expect(created?.body == "Why it changed.\n\n- [ ] Checked")
-        #expect(model.prTitle.isEmpty)
+        #expect(createdLabels == ["bug", "ci"])
+        #expect(model.prTitle.isEmpty && model.prLabels.isEmpty)
 
         // Unpushed commits dim Open PR instead of pushing for it.
         #expect(makeModel(items: [item(branch: "feature", ahead: 1)]).isFullyPushed == false)

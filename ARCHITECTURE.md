@@ -870,7 +870,9 @@ shim rather than a protocol:
    being written, and a commit message never refills a form whose draft
    was deliberately emptied. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
-   template appended below the body after an empty line; while the form
+   template appended below the body after an empty line and one
+   `--label` per label picked from the repository's own (`gh label
+   list`, read once per form and kept with the draft); while the form
    shows, revisiting the tab does not re-poll for a pull request that
    cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and

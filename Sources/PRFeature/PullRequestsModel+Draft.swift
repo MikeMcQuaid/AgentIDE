@@ -98,6 +98,7 @@ extension PullRequestsModel {
                 title: prTitle,
                 body: prBody,
                 template: prTemplate,
+                labels: prLabels,
             )
         }
     }
@@ -122,6 +123,9 @@ extension PullRequestsModel {
         }
         if Self.isBlank(prTemplate) {
             prTemplate = draft.template
+        }
+        if prLabels.isEmpty {
+            prLabels = draft.labels
         }
         loadingDraft = false
         // What was already typed may be newer than the draft, so the

@@ -22,12 +22,14 @@ extension PullRequestsModel {
         let need = await fetchRebaseNeed(listedWorktree ?? worktree)
         let template = await fetchTemplate(worktree.path)
         let live = await fetchCurrentBranch(worktree.path)
+        let labels = availableLabels.isEmpty ? await fetchLabels() : availableLabels
         guard generation == stacking.factsGeneration else {
             return
         }
 
         isTipSigned = signed
         rebaseNeed = need
+        availableLabels = labels
         hasTemplate = template != nil
         originalTemplate = template ?? ""
         if prTemplate.isEmpty {
@@ -231,7 +233,7 @@ extension PullRequestsModel {
         isOpening = true
         defer { isOpening = false }
         do {
-            let url = try await performCreate(worktree, title, body)
+            let url = try await performCreate(worktree, title, body, prLabels)
             note("Opened pull request " + url)
             // A stack is built one pull request at a time: each one
             // links what is open into the stack, and failing to link
@@ -254,6 +256,7 @@ extension PullRequestsModel {
             }
             loadingDraft = true
             prTitle = ""
+            prLabels = []
             prBody = ""
             prTemplate = originalTemplate
             loadingDraft = false

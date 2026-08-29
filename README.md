@@ -213,7 +213,8 @@ before shipping.
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
-  template below your title and body, defaulting both from a single
+  template below your title and body and attaches any of the
+  repository's labels you pick, defaulting the text from a single
   commit, unwrapped from the narrow column commit messages are written
   to, or drafting them from many with the on-device model (so shipping
   needs no retyping)

@@ -98,7 +98,7 @@ public extension SessionService {
     /// branch as `owner:branch` when it lives in a fork: the pull
     /// request belongs to the repository it is opened against rather
     /// than the one holding the branch.
-    func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
+    func createPullRequest(worktree: Worktree, title: String, body: String, labels: [String]) async throws -> String {
         // The branch is the caller's, which is the entry whose form
         // was filled in, never whatever the worktree has checked out.
         // A branch opening against the branch below it is what makes
@@ -111,8 +111,7 @@ public extension SessionService {
         let branch = worktree.branch
         return try await github.createPullRequest(
             worktreePath: worktree.path,
-            title: title,
-            body: body,
+            request: NewPullRequest(title: title, body: body, labels: labels),
             head: pushDestination(worktree: worktree).head(branch: branch),
             base: base(for: branch, in: stack, of: worktree),
         )

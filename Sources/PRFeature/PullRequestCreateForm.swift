@@ -28,6 +28,9 @@ struct PullRequestCreateForm: View {
                 .textFieldStyle(.roundedBorder)
                 .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
+            if model.availableLabels.isEmpty == false {
+                labelsRow
+            }
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
                 .font(.body)
@@ -47,6 +50,8 @@ struct PullRequestCreateForm: View {
     private static let spacing: CGFloat = 8
 
     private static let fieldCorner: CGFloat = 6
+    private static let chipPadding: CGFloat = 6
+    private static let chipVerticalPadding: CGFloat = 3
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
 
@@ -92,6 +97,34 @@ struct PullRequestCreateForm: View {
         ) {
             Button("Reset", role: .destructive) { Task { await model.resetToCommits() } }
             Button("Cancel", role: .cancel) { isConfirmingReset = false }
+        }
+    }
+
+    /// The labels the pull request opens with: the picks as chips,
+    /// the repository's own behind a menu of toggles.
+    private var labelsRow: some View {
+        HStack(spacing: Self.spacing) {
+            Text("Labels").font(.caption).foregroundStyle(.secondary)
+            ForEach(model.prLabels, id: \.self) { label in
+                Text(label)
+                    .font(.caption)
+                    .padding(.horizontal, Self.chipPadding)
+                    .padding(.vertical, Self.chipVerticalPadding)
+                    .background(.quaternary, in: Capsule())
+            }
+            Menu {
+                ForEach(model.availableLabels, id: \.self) { label in
+                    Toggle(label, isOn: labelBinding(label))
+                }
+            } label: {
+                Image(systemName: "tag")
+                    .accessibilityLabel("Pick labels")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(isGenerating || isBlocked)
+            .hoverHelp("Labels from the repository to attach when the pull request opens")
+            Spacer()
         }
     }
 
@@ -161,5 +194,19 @@ struct PullRequestCreateForm: View {
     /// alone is as good as empty, and generating replaces it.
     private static func hasText(_ text: String) -> Bool {
         PullRequestsModel.isBlank(text) == false
+    }
+
+    /// Whether one label is picked, toggled in place.
+    private func labelBinding(_ label: String) -> Binding<Bool> {
+        Binding(
+            get: { model.prLabels.contains(label) },
+            set: { picked in
+                if picked {
+                    model.prLabels.append(label)
+                } else {
+                    model.prLabels.removeAll { $0 == label }
+                }
+            },
+        )
     }
 }
