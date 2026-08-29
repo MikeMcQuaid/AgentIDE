@@ -129,6 +129,7 @@ extension PullRequestsModel {
     func select(_ summary: PullRequestSummary) {
         selected = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
             ?? summary
+        Task { await loadSelectedLabels(summary.number) }
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {

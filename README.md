@@ -225,7 +225,8 @@ before shipping.
 - **Fills** a pull request's title and body from the branch's commits,
   drafts them with the on-device model at the press of the sparkles
   button, and resets them to the commit message from the button beside
-  it, asking first when something is typed (so the form is never stuck
+  it, asking first when something is typed, and toggles labels on an
+  open pull request from its conversation (so the form is never stuck
   on a draft you no longer want)
 - **Discloses** the agent that wrote a branch whenever you press Fill
   template, which is also what ticks the template's boxes: the harness

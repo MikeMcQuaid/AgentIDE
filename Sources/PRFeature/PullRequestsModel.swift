@@ -72,6 +72,12 @@ final class PullRequestsModel {
         fetchLabels = {
             await github.labels(repositoryPath: repository.path)
         }
+        fetchPullRequestLabels = { number in
+            await github.pullRequestLabels(repositoryPath: repository.path, number: number)
+        }
+        performLabelChange = { number, add, remove in
+            try await github.editLabels(repositoryPath: repository.path, number: number, add: add, remove: remove)
+        }
         performLinkStack = { worktree in
             try await service.linkStack(worktree: worktree)
         }
@@ -256,6 +262,14 @@ final class PullRequestsModel {
     /// first needs them.
     var fetchLabels: () async -> [String] = { [] }
 
+    /// The selected pull request's labels, read on selection.
+    var fetchPullRequestLabels: (Int) async -> [String] = { _ in [] }
+
+    /// Adds and removes labels on a pull request.
+    var performLabelChange: (Int, [String], [String]) async throws -> Void = { _, _, _ in
+        // Replaced by the initialiser.
+    }
+
     /// Tells GitHub the stack's open pull requests are a stack; run
     /// whenever one opens, since a stack is built one at a time.
     var performLinkStack: (Worktree) async throws -> Void
@@ -300,6 +314,9 @@ final class PullRequestsModel {
 
     /// What the repository offers; empty until read.
     var availableLabels: [String] = []
+
+    /// The selected pull request's labels, as GitHub last said.
+    var selectedLabels: [String] = []
 
     /// The pull request creation form's fields; the template loads
     /// from the repository on reload when the form shows.

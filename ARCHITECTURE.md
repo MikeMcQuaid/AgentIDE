@@ -872,7 +872,9 @@ shim rather than a protocol:
    dims until the branch is pushed, then runs `gh pr create` with the
    template appended below the body after an empty line and one
    `--label` per label picked from the repository's own (`gh label
-   list`, read once per form and kept with the draft); while the form
+   list`, read once per form and kept with the draft), and an open
+   conversation shows the same row over its timeline, each toggle one
+   `gh pr edit --add-label` or `--remove-label` at once; while the form
    shows, revisiting the tab does not re-poll for a pull request that
    cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and

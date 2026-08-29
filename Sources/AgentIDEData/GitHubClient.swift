@@ -116,19 +116,6 @@ public struct GitHubClient: Sendable {
         return await GitClient(runner: runner).fullName(of: Repository(name: name, path: repositoryPath))
     }
 
-    /// The repository's labels by name, for the creation form; an
-    /// unreadable answer is no labels rather than an error.
-    public func labels(repositoryPath: String) async -> [String] {
-        struct Row: Decodable {
-            let name: String
-        }
-
-        let output = try? await gh(["label", "list", "--json", "name", "--limit", "200"], in: repositoryPath)
-            .standardOutput
-        let rows = output.flatMap { try? JSONDecoder().decode([Row].self, from: Data($0.utf8)) } ?? []
-        return rows.map(\.name).sorted()
-    }
-
     /// Opens a pull request from the worktree's branch; returns its
     /// URL. The body travels by file: it can hold anything. Labels
     /// go on at creation, one `--label` each.

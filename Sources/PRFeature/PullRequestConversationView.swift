@@ -9,6 +9,8 @@ import TerminalUI
 /// The conversation page: the back button and full header row over
 /// the timeline.
 struct PullRequestConversationPane: View {
+    // MARK: Internal
+
     let summary: PullRequestSummary
     let stackDepth: Int
     let github: GitHubClient
@@ -19,6 +21,16 @@ struct PullRequestConversationPane: View {
     let onOpenChecks: @MainActor () async -> Void
     let onResolvedChanged: @MainActor () async -> Void
 
+    /// Toggles one label against GitHub the moment a menu item is
+    /// clicked; declared before the lists so the call site's
+    /// closure is never its final argument, which SwiftFormat
+    /// would turn into a trailing closure it then mangles.
+    let onToggleLabel: @MainActor (String) async -> Void
+
+    /// The pull request's labels and the repository's.
+    let labels: [String]
+    let availableLabels: [String]
+
     var body: some View {
         VStack(spacing: 0) {
             PullRequestHeaderRow(
@@ -28,6 +40,18 @@ struct PullRequestConversationPane: View {
                 onCopyComments: onCopyComments,
                 onOpenChecks: onOpenChecks,
             )
+            if availableLabels.isEmpty == false || labels.isEmpty == false {
+                LabelsRow(
+                    picked: labels,
+                    available: availableLabels,
+                    isEnabled: true,
+                    help: "This pull request's labels; toggle one to add or remove it on GitHub",
+                ) { label in
+                    Task { await onToggleLabel(label) }
+                }
+                .padding(.horizontal, Self.labelsPadding)
+                .padding(.bottom, Self.labelsPadding)
+            }
             Divider()
             PullRequestConversationView(
                 github: github,
@@ -39,6 +63,10 @@ struct PullRequestConversationPane: View {
             )
         }
     }
+
+    // MARK: Private
+
+    private static let labelsPadding: CGFloat = 8
 }
 
 // MARK: - PullRequestHeaderRow
