@@ -54,7 +54,7 @@ public extension SessionService {
         // and trusts them forever; remember which appearance it is
         // being born into, so the pane can keep its word.
         let agent = agentKind(of: sessionName)
-        rememberTerminalScheme(worktreePath: directory, agent: agent)
+        rememberTerminalScheme(worktreePath: directory)
         await progress("Closing any previous session")
         await killSession(name: sessionName)
         if let agent {
