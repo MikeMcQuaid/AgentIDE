@@ -1,8 +1,68 @@
 import AgentIDEDomain
+import Synchronization
+
+// MARK: - OverwriteTips
+
+/// The remote tips set aside by a conflicted integration rebase,
+/// keyed by worktree and branch, in memory only: losing them costs
+/// nothing but a repeated fetch-and-rebase. A class so every copy
+/// of the service value shares one set.
+final class OverwriteTips: Sendable {
+    // MARK: Lifecycle
+
+    deinit {
+        // Nothing owned beyond the dictionary; the rule wants the
+        // release made explicit.
+    }
+
+    // MARK: Internal
+
+    func remember(_ tip: String, worktreePath: String, branch: String) {
+        tips.withLock { $0[worktreePath + "#" + branch] = tip }
+    }
+
+    func tip(worktreePath: String, branch: String) -> String? {
+        tips.withLock { $0[worktreePath + "#" + branch] }
+    }
+
+    func forget(worktreePath: String, branch: String) {
+        tips.withLock { $0[worktreePath + "#" + branch] = nil }
+    }
+
+    // MARK: Private
+
+    private let tips: Mutex<[String: String]> = .init([:])
+}
+
+// MARK: - SessionService
 
 /// What the rebase button would do and where its rebase lands,
 /// split from the sources file for length.
 public extension SessionService {
+    /// Rebases onto the target; when integrating a remote tip this
+    /// branch has never seen conflicts, the remote's version is set
+    /// aside instead: the branch rebases onto origin/HEAD as it
+    /// would have before the remote moved, the conflicting tip is
+    /// remembered, and the next Push replaces it with an explicit
+    /// lease naming that tip. Fetch and Rebase, then Push: never a
+    /// terminal step.
+    internal func integrateOrSetAside(worktree: Worktree, branch: String, target: String) async throws {
+        do {
+            try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
+            overwriteTips.forget(worktreePath: worktree.path, branch: branch)
+        } catch {
+            let remote = "origin/" + branch
+            guard target == remote,
+                  let tip = await git.commitHash(of: remote, worktreePath: worktree.path)
+            else {
+                throw error
+            }
+
+            overwriteTips.remember(tip, worktreePath: worktree.path, branch: branch)
+            try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: "origin/HEAD")
+        }
+    }
+
     /// What a signed rebase would actually change, so the button
     /// dims or names its work: moving the branch onto a newer base,
     /// signing unsigned commits, both, or nothing at all.

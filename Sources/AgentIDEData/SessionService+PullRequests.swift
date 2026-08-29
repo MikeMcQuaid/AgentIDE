@@ -80,7 +80,12 @@ public extension SessionService {
 
         let destination = await pushDestination(worktree: worktree)
         guard case let .fork(owner) = destination else {
-            try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+            try await git.push(
+                worktreePath: worktree.path,
+                branch: worktree.branch,
+                expectedTip: overwriteTips.tip(worktreePath: worktree.path, branch: worktree.branch),
+            )
+            overwriteTips.forget(worktreePath: worktree.path, branch: worktree.branch)
             return destination
         }
 

@@ -185,7 +185,7 @@ public extension SessionService {
 
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
-        try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
+        try await integrateOrSetAside(worktree: worktree, branch: branch, target: target)
         if let held, held != branch {
             try await git.checkout(branch: held, worktreePath: worktree.path)
         }

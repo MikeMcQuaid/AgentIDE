@@ -90,4 +90,61 @@ struct PullRequestIntegrationTests {
 
         #expect(await world.service.signedRebaseTarget(worktreePath: path, branch: "feature") == "origin/feature")
     }
+
+    @Test
+    func `a rewritten remote that conflicts is set aside and replaced by push`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let path = world.repository.path
+        try await BranchStackIntegrationTests.signable(path)
+        let bare = try TestSupport.temporaryDirectory("rewritten-origin") + "/origin.git"
+        try await TestSupport.runGit(["init", "-q", "--bare", bare], in: world.root)
+        try await TestSupport.runGit(["remote", "add", "origin", bare], in: path)
+        try await TestSupport.runGit(["push", "-q", "-u", "origin", "main"], in: path)
+        try await TestSupport.runGit(["remote", "set-head", "origin", "main"], in: path)
+        try await TestSupport.runGit(["checkout", "-q", "-b", "feature"], in: path)
+        try "ours\n".write(toFile: path + "/claim.txt", atomically: true, encoding: .utf8)
+        // Only the claim: `add -A` would commit the signing key,
+        // and rebasing over a tree without it checks the key back
+        // out world-readable, which SSH signing then refuses.
+        try await TestSupport.runGit(["add", "claim.txt"], in: path)
+        try await TestSupport.runGit(["commit", "-q", "--no-gpg-sign", "-m", "Claim"], in: path)
+        try await TestSupport.runGit(["push", "-q", "-u", "origin", "feature"], in: path)
+
+        // Rewritten elsewhere with conflicting content, and locally
+        // amended too: the histories share no tip, and the remote's
+        // was never seen here.
+        let elsewhere = try TestSupport.temporaryDirectory("rewritten-clone") + "/clone"
+        try await TestSupport.runGit(["clone", "-q", bare, elsewhere], in: world.root)
+        try await TestSupport.runGit(["checkout", "-q", "feature"], in: elsewhere)
+        try "theirs\n".write(toFile: elsewhere + "/claim.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(
+            [
+                "-c", "user.name=Elsewhere", "-c", "user.email=elsewhere@example.com",
+                "commit", "-q", "-a", "--amend", "--no-gpg-sign", "-m", "Claim, rewritten",
+            ],
+            in: elsewhere,
+        )
+        try await TestSupport.runGit(["push", "-q", "--force", "origin", "feature"], in: elsewhere)
+        try "ours, amended\n".write(toFile: path + "/claim.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(
+            ["commit", "-q", "-a", "--amend", "--no-gpg-sign", "-m", "Claim, amended"],
+            in: path,
+        )
+        try await TestSupport.runGit(["fetch", "-q", "origin"], in: path)
+
+        // The integration rebase conflicts, so the remote's version
+        // is set aside; Push then replaces it with no terminal step.
+        let worktree = Worktree(
+            repositoryName: world.repository.name,
+            repositoryPath: path,
+            branch: "feature",
+            path: path,
+        )
+        try await world.service.rebaseSigned(worktree: worktree)
+        _ = try await world.service.push(worktree: worktree)
+        let local = try await TestSupport.runGit(["rev-parse", "feature"], in: path).standardOutput
+        let pushed = try await TestSupport.runGit(["rev-parse", "feature"], in: bare).standardOutput
+        #expect(local == pushed)
+    }
 }

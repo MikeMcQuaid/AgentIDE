@@ -1074,10 +1074,13 @@ shim rather than a protocol:
    fetches constantly, so the bare lease always matches what was last
    fetched; `--force-if-includes` is the real protection, refusing a
    remote tip that was never integrated locally. That refusal is
-   retold in the app's own terms: the rebase is the integrator, and a
-   known-stale remote is overwritten from a terminal with an explicit
-   lease (`--force-with-lease=<branch>:<tip>`), which is exactly the
-   confirmation the check exists to demand.
+   retold and resolved in the app: the rebase integrates the remote's
+   commits, and when they conflict with this branch's it sets the
+   remote's version aside instead, rebasing onto origin/HEAD and
+   remembering the conflicting tip so the next push replaces it with
+   an explicit lease naming that tip, which is exactly the
+   confirmation the check exists to demand. Fetch and Rebase, then
+   Push; never a terminal step.
 9. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
