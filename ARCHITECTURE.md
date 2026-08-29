@@ -511,7 +511,13 @@ Sendable` and `nonisolated(unsafe)` are banned.
    derives from `git worktree list` (P1); the friendly symlinks earlier
    releases kept beside them are no longer created and are removed with
    their worktrees. Sessions always launch from the real path because
-   agent transcripts are keyed by cwd.
+   agent transcripts are keyed by cwd. Each poll also scans the
+   `worktrees/<repository>` container for checkouts the canonical
+   listing does not know: an agent may clone a base of its own (a
+   huge repository wants a partial clone) and cut worktrees from it,
+   and those are adopted with the owning clone as their repository
+   path, so sessions, pull requests, shells and deletion land on the
+   clone that actually holds the branch.
 4. The prompt is written to
    `/Users/Shared/sv-<user>/agentide/prompts/<session>.md`, readable in the
    sandbox through the workspace ACLs.

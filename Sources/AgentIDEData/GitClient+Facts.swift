@@ -202,4 +202,23 @@ public extension GitClient {
 
         return log.split(separator: "\n").contains(Substring(tip))
     }
+
+    /// The checkout that owns a linked worktree, read from its
+    /// `.git` pointer (`gitdir: <owner>/.git/worktrees/<name>`);
+    /// nil for a checkout of its own or an unreadable pointer.
+    static func owningCheckout(of worktreePath: String) -> String? {
+        let marker = "gitdir: "
+        guard let pointer = try? String(contentsOfFile: worktreePath + "/.git", encoding: .utf8),
+              pointer.hasPrefix(marker)
+        else {
+            return nil
+        }
+
+        let gitdir = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let range = gitdir.range(of: "/.git/worktrees/") else {
+            return nil
+        }
+
+        return String(gitdir[..<range.lowerBound])
+    }
 }

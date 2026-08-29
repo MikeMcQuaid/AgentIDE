@@ -72,8 +72,10 @@ before shipping.
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to
   revisit, with a right-click Refresh that asks GitHub about that
-  repository's branches at once (so you always know where you are
-  needed)
+  repository's branches at once; worktrees agents made for themselves
+  in the same containers are adopted on the next poll, ready for
+  sessions, pull requests, shells or deletion like any other (so you
+  always know where you are needed)
 - **Watches** what is about to change: a pull request whose checks are
   still running, or that is sitting in the merge queue, is asked about
   every half minute whatever its row's place in the sidebar, until

@@ -97,6 +97,36 @@ public extension SessionService {
         )
     }
 
+    /// Worktrees in the repository's container that its checkout
+    /// does not list: an agent can clone a base of its own beside
+    /// them and cut worktrees from that, and those deserve rows,
+    /// sessions and deletion like any other. Each carries its
+    /// owning checkout as its repository path, so branch work and
+    /// removal land on the clone that actually holds the branch.
+    /// One directory listing per poll is what makes a manual
+    /// worktree appear without a restart.
+    func strayWorktrees(of repository: Repository) -> [Worktree] {
+        let container = worktreeContainer(repository: repository)
+        let manager = FileManager.default
+        let names = (try? manager.contentsOfDirectory(atPath: container)) ?? []
+        return names.sorted().compactMap { name in
+            let path = container + "/" + name
+            guard name.hasPrefix(".") == false,
+                  manager.fileExists(atPath: path + "/.git"),
+                  let owner = GitClient.owningCheckout(of: path)
+            else {
+                return nil
+            }
+
+            return Worktree(
+                repositoryName: repository.name,
+                repositoryPath: owner,
+                branch: GitClient.headFileBranch(worktreePath: path) ?? name,
+                path: path,
+            )
+        }
+    }
+
     /// The repository's own checkout as a worktree: its branch is
     /// whatever is actually checked out, so a feature branch in the
     /// main checkout still matches its pull request in the listing.
@@ -154,7 +184,8 @@ public extension SessionService {
         // reachable.
         let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
         var seenPaths = Set<String>()
-        let candidates = await ([mainCheckout] + worktrees).filter { seenPaths.insert($0.path).inserted }
+        var candidates = await ([mainCheckout] + worktrees).filter { seenPaths.insert($0.path).inserted }
+        candidates += strayWorktrees(of: repository).filter { seenPaths.insert($0.path).inserted }
         let items = await withTaskGroup(of: (Int, WorktreeItem).self) { tasks in
             for (index, worktree) in candidates.enumerated() {
                 tasks.addTask {
