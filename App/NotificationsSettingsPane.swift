@@ -12,14 +12,21 @@ struct NotificationsSettingsPane: View {
 
     var body: some View {
         Form {
-            eventRow(.finished, title: "Agent finished", detail: "An agent exits or completes a turn")
-            eventRow(.needsInput, title: "Agent needs input", detail: "An approval or question waits")
-            eventRow(.output, title: "Agent output", detail: "New output lands in an unviewed worktree")
+            eventRow(.finished, title: "Agent finished", detail: "An agent exits or completes a turn.")
+            eventRow(.needsInput, title: "Agent needs input", detail: "An approval or question is waiting.")
+            eventRow(
+                .output,
+                title: "Agent output",
+                detail: "New output landed in a worktree you are not viewing.",
+            )
         }
         .formStyle(.grouped)
     }
 
     // MARK: Private
+
+    private static let iconSpacing: CGFloat = 6
+    private static let dotSize: CGFloat = 6
 
     private func eventRow(
         _ event: NotificationPreferences.Event,
@@ -27,9 +34,40 @@ struct NotificationsSettingsPane: View {
         detail: String,
     ) -> some View {
         Section {
-            Toggle(title, isOn: enabledBinding(for: event))
-                .hoverHelp(detail)
+            HStack(spacing: Self.iconSpacing) {
+                statusIcon(for: event)
+                Toggle(title, isOn: enabledBinding(for: event))
+            }
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             SoundPicker(event: event)
+        }
+    }
+
+    /// The sidebar icon this event pairs with, so the sound and the
+    /// glyph learn each other here.
+    @ViewBuilder
+    private func statusIcon(for event: NotificationPreferences.Event) -> some View {
+        switch event {
+        case .finished:
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+                .hoverHelp("The sidebar's finished icon")
+
+        case .needsInput:
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+                .hoverHelp("The sidebar's waiting-on-input icon")
+
+        case .output:
+            Circle()
+                .fill(.tint)
+                .frame(width: Self.dotSize, height: Self.dotSize)
+                .accessibilityHidden(true)
+                .hoverHelp("The sidebar's unread dot")
         }
     }
 
@@ -63,6 +101,15 @@ private struct SoundPicker: View {
                 }
             }
             .hoverHelp("Played on this event whether or not banners may show; None is silence")
+            Button {
+                CompletionSound.play(path: chosen)
+            } label: {
+                Image(systemName: "play.circle")
+                    .accessibilityLabel("Play the selected sound")
+            }
+            .buttonStyle(.borderless)
+            .disabled(chosen.isEmpty)
+            .hoverHelp("Play the selected sound")
             Button("Choose File…") { chooseFile() }
                 .hoverHelp("Any audio file playback accepts")
         }
@@ -118,9 +165,10 @@ struct EditorSettingsPane: View {
         Form {
             Section("External editor") {
                 TextField("Command", text: $externalEditor, prompt: Text("e.g. zed --wait"))
-                    .hoverHelp("Runs with the file path appended; arguments split on spaces, so "
-                        + "the executable's path must not contain one. Empty uses the built-in "
-                        + "editor only.")
+                Text("Runs with the file path appended; arguments split on spaces. "
+                    + "Empty keeps everything in the built-in editor.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Monospace font") {
                 Picker("Font", selection: $fontName) {
@@ -128,10 +176,11 @@ struct EditorSettingsPane: View {
                         Text(name).tag(name)
                     }
                 }
-                .hoverHelp("Shared by diffs, the editor, finder results and code blocks; "
-                    + "terminals already open keep the font they started with")
                 Stepper("Size " + String(Int(fontSize)), value: $fontSize, in: Self.sizeRange)
-                    .hoverHelp("The shared monospace point size")
+                Text("Shared by diffs, the editor, finder results and code blocks; "
+                    + "terminals already open keep the font they started with.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

@@ -56,15 +56,19 @@ private struct GeneralSettingsPane: View {
             }
             Section("Pushing") {
                 Toggle("Require signed commits before pushing", isOn: $requireSignedCommits)
-                    .hoverHelp("Off, Push stops checking for a GPG signature on the tip: only for "
-                        + "repositories whose remote runs no signature hook. Rebase still signs.")
+                Text("Off, pushes skip the tip's signature check, for remotes without a "
+                    + "signing hook; rebases still sign.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Sessions") {
                 Button("Manage Sessions…") {
                     NSApp.activate()
                     dashboard.showsSessionManager = true
                 }
-                .hoverHelp("Everything running and what it costs, in the main window")
+                Text("Every agent, shell and browser pane with what it costs, in the main window.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -100,32 +104,8 @@ private struct AdvancedSettingsPane: View {
 
     var body: some View {
         Form {
-            Section("Cadence") {
-                Stepper(
-                    "Refresh every " + String(pollSeconds) + " s",
-                    value: $pollSeconds,
-                    in: Self.pollRange,
-                )
-                .hoverHelp("How often herdr, git and the transcripts are re-read while the "
-                    + "window is visible; hidden windows drop to a minute regardless")
-                Stepper(
-                    "Re-derive stacks every " + String(Int(stackSeconds)) + " s",
-                    value: $stackSeconds,
-                    in: Self.stackRange,
-                    step: Self.stackStep,
-                )
-                .hoverHelp("How long a derived branch stack is trusted; lone branches wait "
-                    + "five times as long")
-            }
-            Section("Machine") {
-                Toggle("Keep the Mac awake while agents or shells run", isOn: $inhibitsSleep)
-                    .hoverHelp("Blocks idle sleep only; closing the lid still sleeps. Applies "
-                        + "as work starts and stops.")
-                Toggle("Performance log", isOn: performanceLogBinding)
-                    .hoverHelp("Writes every process, network call and cache decision to "
-                        + "`tmp/agentide/performance.log`, the switch `script/performance-log` "
-                        + "flips; the environment variable, when set, always wins")
-            }
+            cadenceSection
+            machineSection
         }
         .formStyle(.grouped)
     }
@@ -161,5 +141,43 @@ private struct AdvancedSettingsPane: View {
                 logGeneration += 1
             },
         )
+    }
+
+    private var cadenceSection: some View {
+        Section("Cadence") {
+            Stepper(
+                "Refresh every " + String(pollSeconds) + " s",
+                value: $pollSeconds,
+                in: Self.pollRange,
+            )
+            Text("How often herdr, git and transcripts are re-read while the window is "
+                + "visible; hidden windows drop to a minute regardless.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Stepper(
+                "Re-derive stacks every " + String(Int(stackSeconds)) + " s",
+                value: $stackSeconds,
+                in: Self.stackRange,
+                step: Self.stackStep,
+            )
+            Text("How long a derived branch stack is trusted; lone branches wait five "
+                + "times as long.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var machineSection: some View {
+        Section("Machine") {
+            Toggle("Keep the Mac awake while agents or shells run", isOn: $inhibitsSleep)
+            Text("Blocks idle sleep only; closing the lid still sleeps.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Toggle("Performance log", isOn: performanceLogBinding)
+            Text("Records every process, network call and cache decision to the shared "
+                + "log, the switch script/performance-log flips.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
