@@ -188,7 +188,7 @@ public struct DashboardView: View {
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
         .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
-            StackPopover(item: item, model: model)
+            StackPopover(item: item, model: model) { pendingStack = nil }
         }
         .popover(isPresented: pendingBinding($pendingBranchSwitch, for: item), arrowEdge: .trailing) {
             BranchSwitchPopover(item: item, model: model) { pendingBranchSwitch = nil }

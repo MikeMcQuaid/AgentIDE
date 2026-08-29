@@ -20,11 +20,6 @@ public enum CompletionSound {
     /// accepts, so a picked file always sounds.
     public static let allowedTypes: [UTType] = [.audio]
 
-    /// The chosen sound's path, defaulting to the system chime.
-    public static var chosenPath: String {
-        UserDefaults.standard.string(forKey: key) ?? defaultPath
-    }
-
     /// The sound files the system offers: macOS's own, then the
     /// machine's and the user's additions, each directory sorted by
     /// name. Listed live so a newly added sound appears on the next

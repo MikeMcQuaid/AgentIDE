@@ -3,7 +3,6 @@ import AgentIDEDomain
 import AppKit
 import DashboardFeature
 import SwiftUI
-import TerminalUI
 
 // MARK: - SettingsView
 

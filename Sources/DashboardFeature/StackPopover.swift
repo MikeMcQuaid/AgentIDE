@@ -13,6 +13,10 @@ struct StackPopover: View {
     let item: WorktreeItem
     let model: DashboardModel
 
+    /// Told when a branch has been cut, so the popover closes on
+    /// the row that now shows it.
+    let onCreated: () -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             Text("Stack in " + (stack?.checkedOut ?? item.worktree.branch)).font(.headline)
@@ -174,6 +178,6 @@ struct StackPopover: View {
         defer { isCreating = false }
         newBranch = ""
         await model.stackBranch(named: branch, on: item)
-        await load()
+        onCreated()
     }
 }

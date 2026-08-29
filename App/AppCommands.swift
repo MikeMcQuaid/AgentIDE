@@ -1,7 +1,6 @@
 import AppKit
 import DashboardFeature
 import SwiftUI
-import TerminalUI
 
 /// The app's menus: session and repository creation replace the
 /// stock New Window item, and View gains the utility pane, its tabs
