@@ -184,4 +184,22 @@ public extension GitClient {
         }
         return nil
     }
+
+    /// Whether a ref's commit was ever this branch's own tip, read
+    /// from the branch's reflog: how an amend's stale remote twin
+    /// (once the tip here) is told from commits pushed elsewhere
+    /// that this checkout has never seen.
+    func refWasBranchTip(worktreePath: String, branch: String, ref: String) async -> Bool {
+        guard
+            let tip = try? await git(["rev-parse", ref], in: worktreePath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            let log = try? await git(["reflog", "show", "--format=%H", branch], in: worktreePath)
+            .standardOutput
+        else {
+            return false
+        }
+
+        return log.split(separator: "\n").contains(Substring(tip))
+    }
 }

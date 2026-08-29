@@ -1081,7 +1081,12 @@ shim rather than a protocol:
    ancestor test is what keeps an amended branch out of that path:
    amending a pushed commit leaves the pushed one behind as a stale twin
    rather than a parent, and rebasing on it replays the amended work on
-   top of what it replaced.
+   top of what it replaced. A remote that moved instead, to a tip this
+   branch never had, is rebased on rather than around, `git pull
+   --rebase` in effect: the leased push refuses to overwrite commits
+   that were never integrated, so the rebase is what integrates them,
+   and the branch's reflog is what tells such commits from an amend's
+   stale twin, which was once the branch's own tip.
 
 ### Cleanup (Tidy up)
 

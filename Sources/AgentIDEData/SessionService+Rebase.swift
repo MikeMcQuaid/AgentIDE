@@ -53,15 +53,28 @@ public extension SessionService {
     /// every commit unique to it verifies and local commits sit on
     /// top needing signatures: rebasing there signs only the new
     /// commits, so pushed history keeps its hashes. Anything else
-    /// falls back to origin/HEAD, re-signing the whole branch.
+    /// falls back to origin/HEAD, re-signing the whole branch, with
+    /// one exception: a remote that moved to a tip this branch
+    /// never had is rebased on rather than around, since the leased
+    /// push refuses to overwrite commits that were never integrated
+    /// and nothing else would ever integrate them.
     ///
-    /// The ancestor test is what keeps an amended branch out of
-    /// that path. Amending a pushed commit leaves the pushed one
-    /// behind as a stale twin rather than a parent, and rebasing on
-    /// it replays the amended work on top of what it replaced,
-    /// which is a conflict at best and a duplicated commit at worst.
+    /// The branch's reflog is what tells that apart from an amend.
+    /// Amending a pushed commit leaves the pushed one behind as a
+    /// stale twin rather than a parent, and rebasing on it would
+    /// replay the amended work on top of what it replaced; but the
+    /// twin was once this branch's own tip, and a tip pushed
+    /// elsewhere never was.
     func signedRebaseTarget(worktreePath: String, branch: String) async -> String {
         let remote = "origin/" + branch
+        guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch) else {
+            return "origin/HEAD"
+        }
+        guard await git.isAncestor(worktreePath: worktreePath, ref: remote, of: "HEAD") else {
+            let wasOurs = await git.refWasBranchTip(worktreePath: worktreePath, branch: branch, ref: remote)
+            return wasOurs ? "origin/HEAD" : remote
+        }
+
         // With signing waived the pushed commits need no verifying:
         // the point of preferring the branch's own origin ref is
         // keeping pushed history's hashes, which holds either way.
@@ -71,9 +84,7 @@ public extension SessionService {
             } else {
                 true
             }
-        guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch),
-              await git.isAncestor(worktreePath: worktreePath, ref: remote, of: "HEAD"),
-              pushedSigned,
+        guard pushedSigned,
               await (git.commitCount(worktreePath: worktreePath, range: remote + "..HEAD") ?? 0) > 0
         else {
             return "origin/HEAD"
