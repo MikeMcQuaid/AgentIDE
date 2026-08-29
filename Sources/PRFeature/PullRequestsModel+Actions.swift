@@ -259,6 +259,8 @@ extension PullRequestsModel {
             return true
         }
 
+        isBranchActionRunning = true
+        defer { isBranchActionRunning = false }
         do {
             let destination = try await performPush(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)

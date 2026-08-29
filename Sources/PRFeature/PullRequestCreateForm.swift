@@ -61,11 +61,12 @@ struct PullRequestCreateForm: View {
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
-    /// Whether a branch below this one is not on the remote yet:
-    /// nothing here can be opened until it is, so nothing is typed
-    /// into a form that cannot be sent.
+    /// Whether a branch below this one is not on the remote yet, a
+    /// pull request is opening, or a push or rebase is running:
+    /// the fields grey out rather than racing a reload that could
+    /// replace what is being typed.
     private var isBlocked: Bool {
-        model.unpushedBelow != nil || model.isOpening
+        model.unpushedBelow != nil || model.isOpening || model.isBranchActionRunning
     }
 
     /// Back to what the commits say. Typed text asks first; blank

@@ -36,6 +36,8 @@ extension PullRequestsModel {
             return true
         }
 
+        isBranchActionRunning = true
+        defer { isBranchActionRunning = false }
         do {
             try await performRebase(worktree)
             // A stack member that moves takes the branches above it
@@ -166,5 +168,15 @@ extension PullRequestsModel {
             branch: branch,
             path: item.worktree.path,
         )
+    }
+
+    /// Whether one pull request could be merged as it stands: no
+    /// draft, no conflict, checks green, and no review outstanding
+    /// or refused. An empty review decision is a repository that
+    /// asks for none.
+    static func isReadyToMerge(_ summary: PullRequestSummary) -> Bool {
+        summary.state == "OPEN" && summary.isDraft == false
+            && summary.mergeable == "MERGEABLE" && summary.checks == "SUCCESS"
+            && ["", "APPROVED"].contains(summary.reviewDecision)
     }
 }

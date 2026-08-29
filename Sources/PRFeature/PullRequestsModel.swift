@@ -229,9 +229,11 @@ final class PullRequestsModel {
     /// never writes back what it just read.
     var loadingDraft = false
 
-    /// True while a pull request is being opened: the form keeps
-    /// every word it holds and takes no more until GitHub answers.
+    /// True while a pull request opens, and while a push, rebase
+    /// or restack runs: either way the creation form keeps every
+    /// word it holds, greyed, and takes no more until it is over.
     var isOpening = false
+    var isBranchActionRunning = false
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
