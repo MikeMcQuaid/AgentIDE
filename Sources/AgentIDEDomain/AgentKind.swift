@@ -29,4 +29,17 @@ public enum AgentKind: String, CaseIterable, Codable, Sendable {
             "agent-codex"
         }
     }
+
+    /// The mark's coloured form, for the connected state: Claude's
+    /// is already coloured, while Codex's base asset is a template
+    /// and needs the tinted variant to read as "in colour".
+    public var connectedIconAssetName: String {
+        switch self {
+        case .claudeCode:
+            "agent-claude"
+
+        case .codexCLI:
+            "agent-codex-colour"
+        }
+    }
 }

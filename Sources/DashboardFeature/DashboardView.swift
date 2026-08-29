@@ -13,9 +13,11 @@ import TerminalUI
 public struct DashboardView: View {
     // MARK: Lifecycle
 
-    /// Creates the sidebar for a model.
-    public init(model: DashboardModel) {
+    /// Creates the sidebar for a model. `isFullScreen` says the
+    /// traffic lights are hidden, so the rows may start higher.
+    public init(model: DashboardModel, isFullScreen: Bool = false) {
         self.model = model
+        self.isFullScreen = isFullScreen
     }
 
     // MARK: Public
@@ -42,7 +44,7 @@ public struct DashboardView: View {
         // repository lives at the list's end as its last row, not
         // floating up here.
         .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: Self.titlebarClearance)
+            Color.clear.frame(height: isFullScreen ? Self.fullScreenClearance : Self.titlebarClearance)
         }
     }
 
@@ -62,10 +64,10 @@ public struct DashboardView: View {
     private static let expandedChevronDegrees: Double = 90
 
     /// Clears the traffic lights alone, which is all that occupies
-    /// the band now: the first rows start as high as windowed mode
-    /// allows, and fullscreen (lights hidden until hovered) needs
-    /// no more.
+    /// the band now; fullscreen hides them entirely and keeps only
+    /// a breath of air, reclaiming the band for rows.
     private static let titlebarClearance: CGFloat = 26
+    private static let fullScreenClearance: CGFloat = 6
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
@@ -84,6 +86,9 @@ public struct DashboardView: View {
     @State private var pendingStack: WorktreeItem?
 
     private let model: DashboardModel
+
+    /// Whether the window is fullscreen, with the lights hidden.
+    private let isFullScreen: Bool
 
     @ViewBuilder private var foreignSection: some View {
         if model.foreign.isEmpty == false {

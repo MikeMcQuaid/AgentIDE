@@ -284,7 +284,7 @@ extension RootView {
             ? "connected and running"
             : "ended; the conversation stays resumable"
         if let agent = session.agent {
-            Image(agent.iconAssetName)
+            Image(isRunning ? agent.connectedIconAssetName : agent.iconAssetName)
                 .renderingMode(isRunning ? .original : .template)
                 .resizable()
                 .scaledToFit()

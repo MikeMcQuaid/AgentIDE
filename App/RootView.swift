@@ -103,7 +103,7 @@ struct RootView: View {
         // window whose display was unplugged lands on whatever is
         // left.
         HStack(spacing: 0) {
-            DashboardView(model: dependencies.dashboard)
+            DashboardView(model: dependencies.dashboard, isFullScreen: isFullScreen)
                 .frame(width: sidebarWidth)
                 .frame(maxHeight: .infinity)
                 .background(SidebarMaterial())
@@ -115,7 +115,10 @@ struct RootView: View {
                 .ignoresSafeArea(.container, edges: .top)
         }
         .ignoresSafeArea(.container, edges: .top)
-        .background(WindowConfigurator { visible in windowVisibilityChanged(visible) })
+        .background(WindowConfigurator(
+            onVisibilityChange: { visible in windowVisibilityChanged(visible) },
+            onFullScreenChange: { isFullScreen = $0 },
+        ))
         // The title bar hides the string, but Mission Control, the
         // Window menu and window switching all read it.
         .navigationTitle(windowTitle)
@@ -272,6 +275,10 @@ struct RootView: View {
     /// Whether the launch's one automatic resume has run, so later
     /// selection changes never launch anything by themselves.
     @State private var hasAutoResumed = false
+
+    /// Whether the window is fullscreen, where the traffic lights
+    /// hide and the sidebar starts higher.
+    @State private var isFullScreen = false
 
     /// Fills the primary pane with progress while the launch resume
     /// runs, instead of flashing the conversation list first.
