@@ -50,7 +50,7 @@ struct PullRequestIntegrationTests {
         // a stale twin rather than a parent, so rebasing there would
         // replay the amended work on top of what it replaced.
         try await TestSupport.runGit(["commit", "-q", "--amend", "-m", "Add more, again"], in: path)
-        #expect(await git.isAncestor(worktreePath: path, ref: "origin/feature", of: "HEAD") == false)
+        #expect(await git.isAncestor("origin/feature", of: "HEAD", worktreePath: path) == false)
         #expect(await world.service.signedRebaseTarget(worktreePath: path, branch: "feature") == "origin/HEAD")
     }
 

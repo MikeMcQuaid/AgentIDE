@@ -1070,7 +1070,14 @@ shim rather than a protocol:
    rebase, leases the push (`--force-with-lease`) rather than being
    refused as a non-fast-forward. The lease is what makes that safe: it
    still refuses if the remote moved since the last fetch. A branch whose
-   remote ref is still an ancestor pushes plainly, as before.
+   remote ref is still an ancestor pushes plainly, as before. The app
+   fetches constantly, so the bare lease always matches what was last
+   fetched; `--force-if-includes` is the real protection, refusing a
+   remote tip that was never integrated locally. That refusal is
+   retold in the app's own terms: the rebase is the integrator, and a
+   known-stale remote is overwritten from a terminal with an explicit
+   lease (`--force-with-lease=<branch>:<tip>`), which is exactly the
+   confirmation the check exists to demand.
 9. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push

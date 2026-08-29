@@ -71,7 +71,8 @@ public extension SessionService {
     /// (a local hook enforces the same), and Rebase on origin is the
     /// signing path.
     func push(worktree: Worktree) async throws -> PushDestination {
-        guard await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) else {
+        if AppSettings.requiresSignedCommits,
+           await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )

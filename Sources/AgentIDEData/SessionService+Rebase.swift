@@ -70,7 +70,7 @@ public extension SessionService {
         guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch) else {
             return "origin/HEAD"
         }
-        guard await git.isAncestor(worktreePath: worktreePath, ref: remote, of: "HEAD") else {
+        guard await git.isAncestor(remote, of: "HEAD", worktreePath: worktreePath) else {
             let wasOurs = await git.refWasBranchTip(worktreePath: worktreePath, branch: branch, ref: remote)
             return wasOurs ? "origin/HEAD" : remote
         }

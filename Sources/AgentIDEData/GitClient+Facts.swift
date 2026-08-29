@@ -221,4 +221,32 @@ public extension GitClient {
 
         return String(gitdir[..<range.lowerBound])
     }
+
+    /// A leased push refused by git's integration check, retold in
+    /// this app's terms. The app fetches constantly, so the bare
+    /// lease always matches what was last fetched and this check is
+    /// the one real protection: it refuses a remote tip that was
+    /// never integrated locally. Git's own hint says to pull, which
+    /// is not how this app works; the rebase is the integrator, and
+    /// an explicit lease is the deliberate overwrite.
+    internal func leaseRefusal(
+        _ error: CommandError,
+        branch: String,
+        remote: String,
+        worktreePath: String,
+    ) async -> CommandError {
+        let ref = remote + "/" + branch
+        let tip = await (try? git(["rev-parse", ref], in: worktreePath))?
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ref
+        return CommandError(command: error.command, result: ProcessResult(
+            status: error.result.status,
+            standardOutput: error.result.standardOutput,
+            standardError: ref + " was rewritten or moved from another checkout and its tip was "
+                + "never integrated here, so the leased push refuses to overwrite it. Rebase "
+                + "integrates its commits and unlocks Push; if its version is known stale, "
+                + "overwrite from a terminal with `git push --force-with-lease=" + branch + ":"
+                + tip + " " + remote + " " + branch + "`.",
+        ))
+    }
 }

@@ -93,17 +93,6 @@ public extension GitClient {
         return output.split(separator: "\n").allSatisfy { Self.signedStates.contains(String($0)) }
     }
 
-    /// Whether one ref is an ancestor of another, which is how an
-    /// appended branch is told from a rewritten one.
-    func isAncestor(worktreePath: String, ref: String, of descendant: String) async -> Bool {
-        let result = try? await git(
-            ["merge-base", "--is-ancestor", ref, descendant],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        return result?.succeeded ?? false
-    }
-
     /// Pushes the branch to a remote and tracks it there, leasing
     /// the push when the branch's history has been rewritten.
     func push(worktreePath: String, branch: String, remote: String = "origin") async throws {
@@ -118,7 +107,12 @@ public extension GitClient {
         // and overwriting someone else's.
         let rewrites = await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote)
         let force = rewrites ? ["--force-with-lease", "--force-if-includes"] : []
-        try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+        do {
+            try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+        } catch let error as CommandError
+            where error.result.standardError.contains("remote ref updated since checkout") {
+            throw await leaseRefusal(error, branch: branch, remote: remote, worktreePath: worktreePath)
+        }
     }
 
     /// Checks out the default branch and pulls it: `--ff-only`, so
@@ -249,7 +243,7 @@ public extension GitClient {
             return false
         }
 
-        return await isAncestor(worktreePath: worktreePath, ref: ref, of: "HEAD") == false
+        return await isAncestor(ref, of: "HEAD", worktreePath: worktreePath) == false
     }
 
     /// How many commits a range spans, nil when unreadable.
