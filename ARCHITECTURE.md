@@ -565,16 +565,19 @@ Sendable` and `nonisolated(unsafe)` are banned.
 4. herdr's agent lifecycle (working, idle and blocked, from its screen
    detection) covers every agent equally, hooks or none: the sidebar
    flags an agent waiting on input, and notifications fire when an agent
-   finishes a turn, needs input or exits, each event with its own
-   toggle and chime chosen in Settings' Notifications pane: the
-   system's sound directories, any audio file the open panel's
-   audio-type filter admits, or silence, the chosen paths riding the
-   storage bus so no audio ships in the repository. The sidebar and
+   finishes a turn or needs input, each event with its own toggle
+   and chime chosen in Settings' Notifications pane: the system's
+   sound directories, any audio file the open panel's audio-type
+   filter admits, or silence, the chosen paths riding the storage
+   bus so no audio ships in the repository, every chime played as an
+   alert so the system's alert volume and accessibility flash apply.
+   An exit posts nothing of its own: the stop icon and the unread
+   dot carry it. The sidebar and
    pane distinguish herdr's working, idle, done and blocked states
    (idle owes nothing, done has an answer waiting), and the Dock
    badge counts the worktrees needing attention, each contribution
-   behind its own Settings toggle: waiting on input, a done or
-   exited turn not yet viewed, or unread output anywhere but the
+   behind its own Settings toggle: waiting on input, a done turn
+   not yet viewed, or unread output anywhere but the
    pane being read. Foreign sessions keep the transcript-mtime timeout on a
    30 second tick for stalls.
 5. If the app is fully quit, events accumulate in the spool and notifications

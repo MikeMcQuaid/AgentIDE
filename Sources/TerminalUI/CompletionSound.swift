@@ -1,4 +1,5 @@
 import AppKit
+import AudioToolbox
 import UniformTypeIdentifiers
 
 /// The chime played when an agent finishes its work, stored on the
@@ -47,15 +48,26 @@ public enum CompletionSound {
         return sounds
     }
 
-    /// Plays a sound file. The empty path is silence by choice, and
-    /// a file that no longer plays is silence rather than an error:
-    /// a missing sound must never break the notification it rode.
+    /// Plays a sound file as an alert, so the system's alert volume
+    /// and accessibility flash apply. The empty path is silence by
+    /// choice, and a file that no longer plays is silence rather
+    /// than an error: a missing sound must never break the
+    /// notification it rode.
     public static func play(path: String) {
         guard path.isEmpty == false else {
             return
         }
 
-        NSSound(contentsOfFile: path, byReference: true)?.play()
+        var sound: SystemSoundID = 0
+        let made = AudioServicesCreateSystemSoundID(URL(fileURLWithPath: path) as CFURL, &sound)
+        guard made == kAudioServicesNoError else {
+            NSSound(contentsOfFile: path, byReference: true)?.play()
+            return
+        }
+
+        AudioServicesPlayAlertSoundWithCompletion(sound) {
+            AudioServicesDisposeSystemSoundID(sound)
+        }
     }
 
     // MARK: Internal

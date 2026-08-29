@@ -12,7 +12,6 @@ public enum NotificationPreferences {
     public enum Event: CaseIterable, Sendable {
         case done
         case blocked
-        case finished
         case output
 
         // MARK: Public
@@ -28,9 +27,6 @@ public enum NotificationPreferences {
             case .blocked:
                 "notifyNeedsInput"
 
-            case .finished:
-                "notifyExited"
-
             case .output:
                 "notifyOutput"
             }
@@ -44,9 +40,6 @@ public enum NotificationPreferences {
 
             case .blocked:
                 "badgeNeedsInput"
-
-            case .finished:
-                "badgeExited"
 
             case .output:
                 "badgeOutput"
@@ -64,9 +57,6 @@ public enum NotificationPreferences {
             case .blocked:
                 "needsInputSound"
 
-            case .finished:
-                "exitSound"
-
             case .output:
                 nil
             }
@@ -83,8 +73,7 @@ public enum NotificationPreferences {
             case .blocked:
                 "/System/Library/Sounds/Ping.aiff"
 
-            case .finished,
-                 .output:
+            case .output:
                 ""
             }
         }

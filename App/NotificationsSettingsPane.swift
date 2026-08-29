@@ -14,7 +14,6 @@ struct NotificationsSettingsPane: View {
         Form {
             eventRow(.done, title: "Agent finished", detail: "A turn completed; the answer is waiting.")
             eventRow(.blocked, title: "Agent needs input", detail: "A question or approval is waiting.")
-            eventRow(.finished, title: "Agent exited", detail: "The agent's process ended.")
             eventRow(
                 .output,
                 title: "Agent output",
@@ -66,12 +65,6 @@ struct NotificationsSettingsPane: View {
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
                 .hoverHelp("The sidebar's waiting-on-input icon")
-
-        case .finished:
-            Image(systemName: "stop.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-                .hoverHelp("The sidebar's exited icon")
 
         case .output:
             Circle()

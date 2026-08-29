@@ -6,8 +6,9 @@ import UserNotifications
 
 /// Poll-to-poll change detection posting user notifications. One
 /// notification per worktree per poll, the most decided state first:
-/// an exit or a completed turn beats needing input beats new output.
-/// Settings decides which events notify and what each sounds like.
+/// a completed turn beats needing input beats new output. Settings
+/// decides which events notify and what each sounds like; an exit
+/// posts nothing of its own, the stop icon and unread dot carry it.
 extension DashboardModel {
     func notifyChanges(from old: [RepositoryGroup], to new: [RepositoryGroup]) {
         // Uniquing, not trapping: duplicate ids would crash the poll.
@@ -18,11 +19,8 @@ extension DashboardModel {
             }
 
             let body = "\(item.worktree.repositoryName): \(item.worktree.branch)"
-            let exited = previous.session?.status == .running && session.status != .running
             let completedTurn = previous.session?.activity == .working && session.activity == .done
-            if exited {
-                post(.finished, title: "Agent exited", body: body)
-            } else if completedTurn {
+            if completedTurn {
                 post(.done, title: "Agent finished", body: body)
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
                 post(.blocked, title: "Agent needs input", body: body)
@@ -50,10 +48,8 @@ extension DashboardModel {
                 && NotificationPreferences.badges(.blocked)
             let doneUnseen = item.session?.activity == .done && unseen
                 && NotificationPreferences.badges(.done)
-            let exitedUnseen = item.session?.status == .finished && unseen
-                && NotificationPreferences.badges(.finished)
             let outputUnseen = unseen && NotificationPreferences.badges(.output)
-            return blocked || doneUnseen || exitedUnseen || outputUnseen
+            return blocked || doneUnseen || outputUnseen
         }
         NSApp.dockTile.badgeLabel = attention > 0 ? String(attention) : nil
     }
