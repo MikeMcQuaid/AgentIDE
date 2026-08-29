@@ -183,7 +183,7 @@ struct PullRequestFooterView: View {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp(rebaseHelp)
+        .hoverHelp(rebaseHelp, shortcut: "⌥⌘R")
     }
 
     var pushButton: some View {
@@ -199,7 +199,7 @@ struct PullRequestFooterView: View {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp(model.pushHelp)
+        .hoverHelp(model.pushHelp, shortcut: "⇧⌘P")
     }
 
     // MARK: Private
@@ -237,7 +237,8 @@ struct PullRequestFooterView: View {
             model.unpushedBelow.map { "Push and open `" + $0 + "` below this one first" }
                 ?? (model.templateUnedited
                     ? "Fill in the template before opening: it still reads as the repository wrote it"
-                    : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed"),
+                    : "Open the pull request with the form's title and body; dimmed until pushed"),
+            shortcut: "⌘↩",
         )
     }
 

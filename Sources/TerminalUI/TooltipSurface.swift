@@ -46,4 +46,11 @@ public extension View {
     func hoverHelp(_ text: String) -> some View {
         help(text).overlay(TooltipSurface(text: text))
     }
+
+    /// The same, closing with the control's keyboard shortcut in
+    /// one shared style, so every tooltip teaches the key that
+    /// presses its control.
+    func hoverHelp(_ text: String, shortcut: String) -> some View {
+        hoverHelp(text + " (" + shortcut + ")")
+    }
 }
