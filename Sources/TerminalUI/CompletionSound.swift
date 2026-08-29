@@ -65,9 +65,7 @@ public enum CompletionSound {
             return
         }
 
-        AudioServicesPlayAlertSoundWithCompletion(sound) {
-            AudioServicesDisposeSystemSoundID(sound)
-        }
+        AudioServicesPlayAlertSoundWithCompletion(sound, Self.disposal(of: sound))
     }
 
     // MARK: Internal
@@ -82,5 +80,15 @@ public enum CompletionSound {
         }
 
         return allowedTypes.contains { type.conforms(to: $0) }
+    }
+
+    // MARK: Private
+
+    /// The completion runs on the sound service's own queue, so it
+    /// must not be a main-actor closure: the runtime's executor
+    /// check traps there. Formed in a nonisolated context it stays
+    /// free of any actor.
+    private nonisolated static func disposal(of sound: SystemSoundID) -> @Sendable () -> Void {
+        { AudioServicesDisposeSystemSoundID(sound) }
     }
 }
