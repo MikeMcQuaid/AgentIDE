@@ -36,6 +36,9 @@ struct WorktreeRowView: View {
     /// row's very top.
     private static let iconDrop: CGFloat = 2
 
+    /// The agent's monochrome mark, sized to the caption line.
+    private static let agentIconSize: CGFloat = 11
+
     private var counts: String {
         var parts = [String]()
         if let ahead = item.aheadOfDefault, ahead > 0 {
@@ -140,7 +143,15 @@ struct WorktreeRowView: View {
     private var worktreeDetailLine: some View {
         HStack(spacing: Self.spacing) {
             if let agent = item.session?.agent {
-                Text(agent.displayName)
+                // The brand mark, monochrome so it reads as detail
+                // beside the counts rather than shouting colour.
+                Image(agent.iconAssetName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                    .accessibilityLabel(agent.displayName)
+                    .hoverHelp("A " + agent.displayName + " session runs here")
             }
             pullRequestBadge
             Text(counts)

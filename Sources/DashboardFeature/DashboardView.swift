@@ -61,8 +61,11 @@ public struct DashboardView: View {
     private static let avatarCornerRadius: CGFloat = 3
     private static let expandedChevronDegrees: Double = 90
 
-    /// Clears the traffic lights band now that no button sits in it.
-    private static let titlebarClearance: CGFloat = 40
+    /// Clears the traffic lights alone, which is all that occupies
+    /// the band now: the first rows start as high as windowed mode
+    /// allows, and fullscreen (lights hidden until hovered) needs
+    /// no more.
+    private static let titlebarClearance: CGFloat = 26
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
