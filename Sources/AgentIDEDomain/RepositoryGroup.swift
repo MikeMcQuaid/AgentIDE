@@ -68,6 +68,23 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         session != nil && (session?.status == .running || isDirty)
     }
 
+    /// Whether unread output is worth acting on: the turn is done,
+    /// the process ended, or the agent is blocked on input. Output
+    /// still streaming from a working agent is not news, and the
+    /// dot that lit for it kept lighting with nothing to do.
+    public var hasActionableUnread: Bool {
+        guard hasUnread else {
+            return false
+        }
+        guard let session else {
+            return true
+        }
+
+        return session.status == .finished
+            || session.activity == .done
+            || session.activity == .blocked
+    }
+
     /// The stable identity, the worktree path.
     public var id: String {
         worktree.id

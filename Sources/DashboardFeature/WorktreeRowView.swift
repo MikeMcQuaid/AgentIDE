@@ -110,11 +110,11 @@ struct WorktreeRowView: View {
             Text(title)
                 .lineLimit(1)
             Spacer(minLength: Self.spacing)
-            if item.hasUnread {
+            if item.hasActionableUnread {
                 Circle()
                     .fill(.tint)
                     .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
-                    .hoverHelp("Unseen agent output")
+                    .hoverHelp("Unseen agent output waiting for you")
             }
         }
     }

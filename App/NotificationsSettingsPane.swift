@@ -18,8 +18,8 @@ struct NotificationsSettingsPane: View {
             eventRow(
                 .output,
                 title: "Agent output",
-                detail: "New output landed in a worktree you are not viewing. Never chimes: "
-                    + "it would sound per burst until the turn ended.",
+                detail: "Unread output once the agent pauses for you; streaming output "
+                    + "never counts, and this never chimes.",
             )
         }
         .formStyle(.grouped)

@@ -26,7 +26,9 @@ extension DashboardModel {
                 post(.done, title: "Agent finished", body: body)
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
                 post(.blocked, title: "Agent needs input", body: body)
-            } else if previous.hasUnread == false, item.hasUnread {
+            } else if previous.hasActionableUnread == false, item.hasActionableUnread {
+                // Only output that pauses for you counts; streaming
+                // output notified per burst with nothing to do.
                 post(.output, title: "Agent output", body: body)
             }
         }
@@ -43,7 +45,7 @@ extension DashboardModel {
     private func updateDockBadge(for groups: [RepositoryGroup]) {
         let focusedPath = NSApp.isActive ? selection?.worktree.path : nil
         let attention = groups.flatMap(\.items).count { item in
-            let unseen = item.hasUnread && item.worktree.path != focusedPath
+            let unseen = item.hasActionableUnread && item.worktree.path != focusedPath
             let blocked = item.session?.activity == .blocked
                 && NotificationPreferences.badges(.blocked)
             let doneUnseen = item.session?.activity == .done && unseen
