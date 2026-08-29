@@ -5,8 +5,8 @@ import TerminalUI
 
 // MARK: - DashboardView
 
-/// The sidebar listing worktrees grouped by repository and foreign
-/// sessions. Built on a plain scroll view rather than a list: the
+/// The sidebar listing worktrees grouped by repository. Built on a
+/// plain scroll view rather than a list: the
 /// outline-backed list both crashed and ignored collapses when
 /// sections removed their rows, and rows here are simple enough not
 /// to need one.
@@ -34,7 +34,6 @@ public struct DashboardView: View {
                         }
                     }
                 }
-                foreignSection
                 NewRepositoryRow { model.showsRepositoryFinder = true }
             }
             .padding(Self.listPadding)
@@ -90,30 +89,6 @@ public struct DashboardView: View {
 
     /// Whether the window is fullscreen, with the lights hidden.
     private let isFullScreen: Bool
-
-    @ViewBuilder private var foreignSection: some View {
-        if model.foreign.isEmpty == false {
-            Text("Foreign sessions")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, Self.rowIndent)
-            ForEach(model.foreign) { session in
-                Label {
-                    VStack(alignment: .leading) {
-                        Text(session.name)
-                        if let directory = session.workingDirectory {
-                            Text(directory).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "questionmark.circle")
-                        .accessibilityHidden(true)
-                }
-                .padding(.leading, Self.rowIndent)
-                .hoverHelp("A herdr session this app did not start; visible, not attachable")
-            }
-        }
-    }
 
     /// The disclosure button and a trailing new-session plus are
     /// siblings: a button nested inside another button never

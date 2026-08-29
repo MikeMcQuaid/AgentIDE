@@ -43,10 +43,6 @@ public final class DashboardModel {
     /// shows while it is created, the sessions extension.
     public internal(set) var groups: [RepositoryGroup] = []
 
-    /// Sessions not created by AgentIDE; internal so the refresh
-    /// extension file can write it.
-    public internal(set) var foreign: [AgentSession] = []
-
     /// The step log the current launch narrates into, shown by the
     /// pane covering the split while a session is created or resumed.
     public let launchProgress: LaunchProgress

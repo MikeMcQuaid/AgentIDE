@@ -324,7 +324,10 @@ snapshot` (through the launch shape, tolerating "no server running"), a
 `ps` scan for session
 ids in process arguments, `git worktree list` across tracked repositories,
 transcript directory scans and finally its own metadata store. Unmatched
-sessions surface as foreign rather than being hidden.
+sessions stay off the sidebar: a row that cannot be entered and
+steered like a worktree's is noise rather than information. The
+session manager's pane listing is where everything the server runs,
+matched or not, stays visible.
 
 Deriving is not the same as trusting one reading. A reading that loses a
 worktree or a repository is never taken as proof it went away: its listing

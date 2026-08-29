@@ -99,7 +99,6 @@ public extension DashboardModel {
         let listed = Self.retainingLostRows(of: groups, in: overview.groups)
         notifyChanges(from: groups, to: listed)
         groups = listed
-        foreign = overview.foreign
         if let selected = selection {
             // A creation placeholder is never in a listing; it stays
             // selected until the creation replaces it.
