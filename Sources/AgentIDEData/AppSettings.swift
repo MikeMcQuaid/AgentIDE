@@ -26,6 +26,13 @@ public enum AppSettings {
     /// empty means the system's default browser.
     public static let externalBrowserKey = "externalBrowser"
 
+    /// The repositories directory override's storage key; empty
+    /// keeps the shared workspace's own.
+    public static let repositoriesDirectoryKey = "repositoriesDirectory"
+
+    /// The worktrees directory override's storage key.
+    public static let worktreesDirectoryKey = "worktreesDirectory"
+
     /// The monospace face's storage key.
     public static let codeFontNameKey = "codeFontName"
 

@@ -139,6 +139,7 @@ private struct AdvancedSettingsPane: View {
 
     var body: some View {
         Form {
+            locationsSection
             cadenceSection
             machineSection
         }
@@ -178,6 +179,27 @@ private struct AdvancedSettingsPane: View {
         )
     }
 
+    private var locationsSection: some View {
+        let shared = WorkspacePaths.current().sharedWorkspace
+        return Section("Locations") {
+            LocationRow(
+                title: "Repositories",
+                key: AppSettings.repositoriesDirectoryKey,
+                fallback: shared + "/repositories",
+            )
+            LocationRow(
+                title: "Worktrees",
+                key: AppSettings.worktreesDirectoryKey,
+                fallback: shared + "/worktrees",
+            )
+            Text("Where checkouts and worktrees live; the defaults are the shared "
+                + "workspace's own directories. Takes effect on the next refresh; the "
+                + "bundled agentide command keeps the defaults.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var cadenceSection: some View {
         Section("Cadence") {
             LabeledContent("Refresh every") {
@@ -214,5 +236,58 @@ private struct AdvancedSettingsPane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - LocationRow
+
+/// One Settings-chosen directory: the current pick or its default,
+/// a chooser and the way back.
+private struct LocationRow: View {
+    // MARK: Lifecycle
+
+    init(title: String, key: String, fallback: String) {
+        self.title = title
+        self.fallback = fallback
+        _stored = AppStorage(wrappedValue: "", key)
+    }
+
+    // MARK: Internal
+
+    let title: String
+    let fallback: String
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack {
+                Text(stored.isEmpty ? fallback : stored)
+                    .foregroundStyle(stored.isEmpty ? Color.secondary : Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Button("Choose…") { choose() }
+                    .hoverHelp("Pick another directory")
+                if stored.isEmpty == false {
+                    Button("Default") { stored = "" }
+                        .hoverHelp("Back to " + fallback)
+                }
+            }
+        }
+    }
+
+    // MARK: Private
+
+    @AppStorage private var stored: String
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: stored.isEmpty ? fallback : stored)
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        stored = url.path
     }
 }
