@@ -1,11 +1,14 @@
 import AgentIDEDomain
+import AppKit
 import Foundation
 import TerminalUI
 import UserNotifications
 
 /// Poll-to-poll change detection posting user notifications. One
 /// notification per worktree per poll, the most decided state first:
-/// an exit or a completed turn beats needing input beats new output.
+/// a completed turn beats needing input beats new output. Settings
+/// decides which events notify and what each sounds like; an exit
+/// posts nothing of its own, the stop icon and unread dot carry it.
 extension DashboardModel {
     func notifyChanges(from old: [RepositoryGroup], to new: [RepositoryGroup]) {
         // Uniquing, not trapping: duplicate ids would crash the poll.
@@ -16,19 +19,46 @@ extension DashboardModel {
             }
 
             let body = "\(item.worktree.repositoryName): \(item.worktree.branch)"
-            let exited = previous.session?.status == .running && session.status != .running
-            let completedTurn = previous.session?.activity == .working && session.activity == .idle
-            if exited || completedTurn {
-                post(title: "Agent finished", body: body, chimes: true)
+            let completedTurn = previous.session?.activity == .working && session.activity == .done
+            if completedTurn {
+                post(.done, title: "Agent finished", body: body)
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
-                post(title: "Agent needs input", body: body)
-            } else if previous.hasUnread == false, item.hasUnread {
-                post(title: "Agent output", body: body)
+                post(.blocked, title: "Agent needs input", body: body)
+            } else if previous.hasActionableUnread == false, item.hasActionableUnread {
+                // Only output that pauses for you counts; streaming
+                // output notified per burst with nothing to do.
+                post(.output, title: "Agent output", body: body)
             }
         }
+        updateDockBadge(for: new)
     }
 
-    private func post(title: String, body: String, chimes: Bool = false) {
+    // MARK: Private
+
+    /// The Dock badge counts the worktrees needing attention, each
+    /// contribution behind its Settings toggle: an agent waiting on
+    /// input, a done or exited turn not yet viewed, or unread
+    /// output anywhere but the selected worktree of the focused
+    /// window, the one pane demonstrably being read.
+    private func updateDockBadge(for groups: [RepositoryGroup]) {
+        let focusedPath = NSApp.isActive ? selection?.worktree.path : nil
+        let attention = groups.flatMap(\.items).count { item in
+            let unseen = item.hasActionableUnread && item.worktree.path != focusedPath
+            let blocked = item.session?.activity == .blocked
+                && NotificationPreferences.badges(.blocked)
+            let doneUnseen = item.session?.activity == .done && unseen
+                && NotificationPreferences.badges(.done)
+            let outputUnseen = unseen && NotificationPreferences.badges(.output)
+            return blocked || doneUnseen || outputUnseen
+        }
+        NSApp.dockTile.badgeLabel = attention > 0 ? String(attention) : nil
+    }
+
+    private func post(_ event: NotificationPreferences.Event, title: String, body: String) {
+        guard NotificationPreferences.notifies(event) else {
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -38,11 +68,8 @@ extension DashboardModel {
             trigger: nil,
         )
         UNUserNotificationCenter.current().add(request)
-        if chimes {
-            // The user's pick from the menu bar, macOS's own Glass
-            // until they choose; it plays whether or not
-            // notification banners are allowed to.
-            CompletionSound.play(path: CompletionSound.chosenPath)
-        }
+        // The event's chosen sound plays whether or not banners are
+        // allowed to; silence is a choice.
+        CompletionSound.play(path: NotificationPreferences.sound(for: event))
     }
 }

@@ -270,11 +270,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   composer. Agent panes pin the palette recorded at session launch
   (`terminalSchemes` in the metadata) instead of following the
   appearance; only shell panes re-theme live. Codex 0.148 through
-  at least 0.150 also paints its composer near-black under a light
-  terminal while typing in the terminal's dark default foreground,
-  which its theme setting does not control, so Codex sessions
-  launch pinned to the dark palette whatever the appearance until
-  that regression is fixed upstream.
+  at least 0.150 misthemes its composer in both palettes and its
+  theme setting does not control it; a forced dark palette proved
+  worse than the default, so Codex follows the launch appearance
+  like every other agent.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

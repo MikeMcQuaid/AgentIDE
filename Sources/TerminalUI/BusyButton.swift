@@ -48,6 +48,10 @@ public struct BusyButton: View {
 
     private static let iconSpacing: CGFloat = 3
 
+    /// The icon's and the spinner's shared frame, so swapping one
+    /// for the other moves nothing.
+    private static let iconSlot: CGFloat = 14
+
     @State private var isBusy = false
 
     private let title: String
@@ -79,17 +83,38 @@ public struct BusyButton: View {
                 isBusy = false
             }
         } label: {
-            HStack(spacing: Self.iconSpacing) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .accessibilityLabel(spokenTitle)
-                }
-                if isBusy || title.isEmpty == false {
-                    Text(isBusy ? busyTitle : title)
-                }
+            // Both states render and the hidden one keeps its size,
+            // so a press never resizes the button and the row never
+            // shuffles; while busy a spinner takes the icon's slot.
+            ZStack {
+                stateLabel(text: title, spinning: false)
+                    .opacity(isBusy ? 0 : 1)
+                stateLabel(text: busyTitle, spinning: true)
+                    .opacity(isBusy ? 1 : 0)
             }
+            .animation(Motion.quick, value: isBusy)
         }
         .accessibilityLabel(spokenTitle)
         .disabled(isDisabled || isBusy)
+    }
+
+    /// One state's content: the icon or the progress spinner in the
+    /// same fixed slot, then the state's text.
+    private func stateLabel(text: String, spinning: Bool) -> some View {
+        HStack(spacing: Self.iconSpacing) {
+            if spinning {
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(width: Self.iconSlot, height: Self.iconSlot)
+                    .accessibilityHidden(true)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .frame(width: Self.iconSlot, height: Self.iconSlot)
+                    .accessibilityLabel(spokenTitle)
+            }
+            if text.isEmpty == false {
+                Text(text)
+            }
+        }
     }
 }

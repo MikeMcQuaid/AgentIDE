@@ -23,6 +23,10 @@ struct WorktreeActions: View {
     /// owns the popover, since a menu cannot hold one.
     @Binding var pendingStack: WorktreeItem?
 
+    /// The worktree picking another branch; the sidebar owns this
+    /// popover too.
+    @Binding var pendingBranchSwitch: WorktreeItem?
+
     var body: some View {
         Button("Refresh") { Task { await model.refreshRepository(path: item.worktree.repositoryPath) } }
             .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
@@ -48,6 +52,8 @@ struct WorktreeActions: View {
         }
         Button("Stack…") { pendingStack = item }
             .hoverHelp("Show which branches are stacked in this worktree, drop any that are not, or cut a new one")
+        Button("Switch branch…") { pendingBranchSwitch = item }
+            .hoverHelp("Check out another local branch here; branches held by other worktrees are not offered")
         Divider()
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")

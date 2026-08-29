@@ -38,7 +38,6 @@ struct RepositoryDeletionTests {
             name: "agentide--repo--main--claude",
             agent: .claudeCode,
             status: running ? .running : .finished,
-            workingDirectory: Self.repository.path,
             paneID: "w1:p1",
         )
         return WorktreeItem(

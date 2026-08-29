@@ -28,6 +28,7 @@ struct PullRequestCreateForm: View {
                 .textFieldStyle(.roundedBorder)
                 .readOnly(isGenerating || isBlocked)
                 .hoverHelp("The pull request title; git convention keeps it short and imperative")
+            labelsSection
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
                 .font(.body)
@@ -61,11 +62,12 @@ struct PullRequestCreateForm: View {
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
-    /// Whether a branch below this one is not on the remote yet:
-    /// nothing here can be opened until it is, so nothing is typed
-    /// into a form that cannot be sent.
+    /// Whether a branch below this one is not on the remote yet, a
+    /// pull request is opening, or a push or rebase is running:
+    /// the fields grey out rather than racing a reload that could
+    /// replace what is being typed.
     private var isBlocked: Bool {
-        model.unpushedBelow != nil || model.isOpening
+        model.unpushedBelow != nil || model.isOpening || model.isBranchActionRunning
     }
 
     /// Back to what the commits say. Typed text asks first; blank
@@ -91,6 +93,25 @@ struct PullRequestCreateForm: View {
         ) {
             Button("Reset", role: .destructive) { Task { await model.resetToCommits() } }
             Button("Cancel", role: .cancel) { isConfirmingReset = false }
+        }
+    }
+
+    /// The labels the pull request opens with, once the repository
+    /// is known to have any.
+    @ViewBuilder private var labelsSection: some View {
+        if model.availableLabels.isEmpty == false {
+            LabelsRow(
+                picked: model.prLabels,
+                available: model.availableLabels,
+                isEnabled: isGenerating == false && isBlocked == false,
+                help: "Labels from the repository to attach when the pull request opens",
+            ) { label in
+                if model.prLabels.contains(label) {
+                    model.prLabels.removeAll { $0 == label }
+                } else {
+                    model.prLabels.append(label)
+                }
+            }
         }
     }
 

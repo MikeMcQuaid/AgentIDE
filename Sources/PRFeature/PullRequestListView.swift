@@ -133,9 +133,15 @@ struct PullRequestFooterView: View {
     }
 
     var rebaseHelp: String {
-        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
-            + "own origin ref when that is fully signed and only new commits need signatures, "
-            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+        guard AppSettings.requiresSignedCommits else {
+            return model.rebaseTitle
+                + ": fetch, then rebase onto origin; a conflict aborts and reports to Messages"
+        }
+
+        return model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this "
+            + "branch's own origin ref when that is fully signed and only new commits need "
+            + "signatures, otherwise onto origin/HEAD re-signing everything; a conflict aborts "
+            + "and reports to Messages"
     }
 
     var body: some View {
@@ -183,7 +189,7 @@ struct PullRequestFooterView: View {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp(rebaseHelp)
+        .hoverHelp(rebaseHelp, shortcut: "⌥⌘R")
     }
 
     var pushButton: some View {
@@ -199,7 +205,7 @@ struct PullRequestFooterView: View {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp(model.pushHelp)
+        .hoverHelp(model.pushHelp, shortcut: "⇧⌘P")
     }
 
     // MARK: Private
@@ -237,7 +243,8 @@ struct PullRequestFooterView: View {
             model.unpushedBelow.map { "Push and open `" + $0 + "` below this one first" }
                 ?? (model.templateUnedited
                     ? "Fill in the template before opening: it still reads as the repository wrote it"
-                    : "Open the pull request with the form's title and body (Cmd-Return); dimmed until pushed"),
+                    : "Open the pull request with the form's title and body; dimmed until pushed"),
+            shortcut: "⌘↩",
         )
     }
 
@@ -260,7 +267,7 @@ struct PullRequestFooterView: View {
             Image(systemName: "exclamationmark.triangle")
                 .accessibilityLabel("Open failing checks")
         }
-        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the system browser")
+        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the Cmd-click browser")
     }
 }
 

@@ -3,17 +3,21 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-/// The sidebar listing worktrees grouped by repository and foreign
-/// sessions. Built on a plain scroll view rather than a list: the
+// MARK: - DashboardView
+
+/// The sidebar listing worktrees grouped by repository. Built on a
+/// plain scroll view rather than a list: the
 /// outline-backed list both crashed and ignored collapses when
 /// sections removed their rows, and rows here are simple enough not
 /// to need one.
 public struct DashboardView: View {
     // MARK: Lifecycle
 
-    /// Creates the sidebar for a model.
-    public init(model: DashboardModel) {
+    /// Creates the sidebar for a model. `isFullScreen` says the
+    /// traffic lights are hidden, so the rows may start higher.
+    public init(model: DashboardModel, isFullScreen: Bool = false) {
         self.model = model
+        self.isFullScreen = isFullScreen
     }
 
     // MARK: Public
@@ -30,33 +34,22 @@ public struct DashboardView: View {
                         }
                     }
                 }
-                foreignSection
+                NewRepositoryRow { model.showsRepositoryFinder = true }
             }
             .padding(Self.listPadding)
         }
-        // The traffic lights occupy the top-left; Open repository
-        // sits at the band's right end, and the inset spaces the
-        // first repository row beneath it.
+        // The traffic lights occupy the top-left band; the inset
+        // keeps the first repository row beneath it. Opening a
+        // repository lives at the list's end as its last row, not
+        // floating up here.
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack {
-                Spacer()
-                Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
-                    .labelStyle(.iconOnly)
-                    // The glass bubble the split view's own floating
-                    // toggle used to draw.
-                    .buttonStyle(.glass)
-                    .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
-            }
-            .padding(.trailing, Self.listPadding)
-            .padding(.top, Self.headerTopPadding)
-            .padding(.bottom, Self.statusPadding)
+            Color.clear.frame(height: isFullScreen ? Self.listPadding : Self.titlebarClearance)
         }
     }
 
     // MARK: Private
 
     private static let statusPadding: CGFloat = 4
-    private static let headerTopPadding: CGFloat = 12
     private static let listPadding: CGFloat = 6
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
@@ -68,6 +61,11 @@ public struct DashboardView: View {
     private static let avatarSize: CGFloat = 14
     private static let avatarCornerRadius: CGFloat = 3
     private static let expandedChevronDegrees: Double = 90
+
+    /// Clears the traffic lights alone, which is all that occupies
+    /// the band now; fullscreen hides them entirely and keeps only
+    /// the list's own padding, reclaiming the band for rows.
+    private static let titlebarClearance: CGFloat = 26
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
@@ -82,32 +80,15 @@ public struct DashboardView: View {
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
     /// The worktree whose stack is being looked over: a menu cannot
-    /// hold a popover, so the sidebar holds it.
+    /// hold a popover, so the sidebar holds it. The branch switcher
+    /// is held the same way.
     @State private var pendingStack: WorktreeItem?
+    @State private var pendingBranchSwitch: WorktreeItem?
 
     private let model: DashboardModel
 
-    @ViewBuilder private var foreignSection: some View {
-        if model.foreign.isEmpty == false {
-            Text("Foreign sessions")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, Self.rowIndent)
-            ForEach(model.foreign) { session in
-                Label {
-                    VStack(alignment: .leading) {
-                        Text(session.name)
-                        if let directory = session.workingDirectory {
-                            Text(directory).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                } icon: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .padding(.leading, Self.rowIndent)
-            }
-        }
-    }
+    /// Whether the window is fullscreen, with the lights hidden.
+    private let isFullScreen: Bool
 
     /// The disclosure button and a trailing new-session plus are
     /// siblings: a button nested inside another button never
@@ -206,8 +187,11 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
-        .popover(isPresented: stackBinding(for: item), arrowEdge: .trailing) {
-            StackPopover(item: item, model: model)
+        .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
+            StackPopover(item: item, model: model) { pendingStack = nil }
+        }
+        .popover(isPresented: pendingBinding($pendingBranchSwitch, for: item), arrowEdge: .trailing) {
+            BranchSwitchPopover(item: item, model: model) { pendingBranchSwitch = nil }
         }
         .confirmationDialog(
             forceDeleteTitle(for: item),
@@ -235,6 +219,7 @@ public struct DashboardView: View {
                 onCleanUp: { await cleanUpOrOffer(item) },
                 pendingForceDelete: $pendingForceDelete,
                 pendingStack: $pendingStack,
+                pendingBranchSwitch: $pendingBranchSwitch,
             )
         }
     }
@@ -246,12 +231,17 @@ public struct DashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
     }
 
-    private func stackBinding(for item: WorktreeItem) -> Binding<Bool> {
+    /// One shape serves both popovers: shown while the pending item
+    /// is this row's, cleared when its popover closes.
+    private func pendingBinding(
+        _ pending: Binding<WorktreeItem?>,
+        for item: WorktreeItem,
+    ) -> Binding<Bool> {
         Binding(
-            get: { pendingStack?.id == item.id },
+            get: { pending.wrappedValue?.id == item.id },
             set: { shown in
-                if shown == false, pendingStack?.id == item.id {
-                    pendingStack = nil
+                if shown == false, pending.wrappedValue?.id == item.id {
+                    pending.wrappedValue = nil
                 }
             },
         )
@@ -326,4 +316,42 @@ public struct DashboardView: View {
             collapsedRepositories = collapsed.sorted().joined(separator: "\n")
         }
     }
+}
+
+// MARK: - NewRepositoryRow
+
+/// The sidebar's last row: opening a repository not listed yet. A
+/// row of the list rather than a button floating above it, with the
+/// trailing plus saying it adds rather than selects; its own view
+/// for the sidebar's type length.
+private struct NewRepositoryRow: View {
+    // MARK: Internal
+
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: Self.spacing) {
+                Text("New repository")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "plus")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, Self.verticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Self.spacing)
+        .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
+    }
+
+    // MARK: Private
+
+    private static let spacing: CGFloat = 4
+    private static let verticalPadding: CGFloat = 5
 }

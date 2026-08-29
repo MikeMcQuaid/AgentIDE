@@ -163,6 +163,9 @@ public struct PullRequestsView: View {
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onOpenChecks: { model.openFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },
+            onToggleLabel: { _ = await model.toggleLabel($0) },
+            labels: model.selectedLabels,
+            availableLabels: model.availableLabels,
         )
     }
 }

@@ -1,6 +1,8 @@
 import AgentIDEDomain
 import Foundation
 
+// MARK: - GitHubClient
+
 /// Talks to GitHub through the host user's authenticated `gh` CLI;
 /// the sandbox never sees these credentials.
 public struct GitHubClient: Sendable {
@@ -115,11 +117,11 @@ public struct GitHubClient: Sendable {
     }
 
     /// Opens a pull request from the worktree's branch; returns its
-    /// URL. The body travels by file: it can hold anything.
+    /// URL. The body travels by file: it can hold anything. Labels
+    /// go on at creation, one `--label` each.
     public func createPullRequest(
         worktreePath: String,
-        title: String,
-        body: String,
+        request: NewPullRequest,
         head: String,
         base: String,
     ) async throws -> String {
@@ -127,13 +129,14 @@ public struct GitHubClient: Sendable {
             .temporaryDirectory
             .appendingPathComponent("agentide-pr-body-" + UUID().uuidString + ".md")
             .path
-        try body.write(toFile: bodyFile, atomically: true, encoding: .utf8)
+        try request.body.write(toFile: bodyFile, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(atPath: bodyFile) }
         // A branch in a fork has to name itself as `owner:branch`,
         // since the pull request belongs to the repository it is
         // opened against, not the one holding the branch.
-        let arguments = ["pr", "create", "--title", title, "--body-file", bodyFile]
+        let arguments = ["pr", "create", "--title", request.title, "--body-file", bodyFile]
             + ["--head", head, "--base", base]
+            + request.labels.flatMap { ["--label", $0] }
         return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -345,4 +348,31 @@ public struct GitHubClient: Sendable {
         }
         return "PENDING"
     }
+}
+
+// MARK: - NewPullRequest
+
+/// What a pull request opens with, apart from where: the form's
+/// title, its body with the template appended, and the labels
+/// picked from the repository's own.
+public struct NewPullRequest: Sendable {
+    // MARK: Lifecycle
+
+    /// Creates the request.
+    public init(title: String, body: String, labels: [String]) {
+        self.title = title
+        self.body = body
+        self.labels = labels
+    }
+
+    // MARK: Public
+
+    /// The title.
+    public let title: String
+
+    /// The body.
+    public let body: String
+
+    /// The labels to attach.
+    public let labels: [String]
 }

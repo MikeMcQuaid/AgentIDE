@@ -37,7 +37,10 @@ struct ErrorsPane: View {
     private var entryList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.entrySpacing) {
-                ForEach(log.entries) { entry in
+                // Newest first, from the top down: the message that
+                // just happened is the one being looked for, and it
+                // arrives where the eye already is.
+                ForEach(log.entries.reversed()) { entry in
                     row(entry)
                 }
                 if log.entries.isEmpty {
@@ -49,7 +52,6 @@ struct ErrorsPane: View {
             .padding(Self.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .defaultScrollAnchor(.bottom)
     }
 
     /// One message as one paragraph: the time in front of it and the

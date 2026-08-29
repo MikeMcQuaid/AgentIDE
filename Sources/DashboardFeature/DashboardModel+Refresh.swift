@@ -7,11 +7,14 @@ import UserNotifications
 /// the model body for length; the coalescing fields live there,
 /// since extensions cannot hold state.
 public extension DashboardModel {
-    /// How often the system is re-read while the dashboard is alive,
-    /// and the slower safety tick while the window is minimised or
-    /// fully covered: nobody reads a hidden window, and notifications
-    /// still fire, one tick later at worst.
-    internal static let pollInterval = 5
+    /// How often the system is re-read while the dashboard is alive
+    /// (Settings can slow it), and the slower safety tick while the
+    /// window is minimised or fully covered: nobody reads a hidden
+    /// window, and notifications still fire, one tick later at worst.
+    internal static var pollInterval: Int {
+        AppSettings.pollInterval
+    }
+
     internal static let occludedPollInterval = 60
 
     /// Reloads everything and notifies about newly finished or
@@ -96,7 +99,6 @@ public extension DashboardModel {
         let listed = Self.retainingLostRows(of: groups, in: overview.groups)
         notifyChanges(from: groups, to: listed)
         groups = listed
-        foreign = overview.foreign
         if let selected = selection {
             // A creation placeholder is never in a listing; it stays
             // selected until the creation replaces it.

@@ -94,7 +94,7 @@ public extension DashboardModel {
     /// The remote default branch ref a worktree's branch merges into,
     /// nil when the repository's default is unknown.
     func baseRef(for item: WorktreeItem) -> String? {
-        groups.first { $0.repository.path == item.worktree.repositoryPath }?
+        groups.group(holding: item)?
             .defaultBranch
             .map { "origin/" + $0 }
     }
@@ -105,7 +105,7 @@ public extension DashboardModel {
     /// unknown, so the offer never appears on a guess.
     func isOffDefaultBranch(_ item: WorktreeItem) -> Bool {
         guard item.worktree.path == item.worktree.repositoryPath,
-              let group = groups.first(where: { $0.repository.path == item.worktree.repositoryPath }),
+              let group = groups.group(holding: item),
               let defaultBranch = group.defaultBranch
         else {
             return false

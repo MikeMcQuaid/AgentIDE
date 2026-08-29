@@ -324,7 +324,10 @@ snapshot` (through the launch shape, tolerating "no server running"), a
 `ps` scan for session
 ids in process arguments, `git worktree list` across tracked repositories,
 transcript directory scans and finally its own metadata store. Unmatched
-sessions surface as foreign rather than being hidden.
+sessions stay off the sidebar: a row that cannot be entered and
+steered like a worktree's is noise rather than information. The
+session manager's pane listing is where everything the server runs,
+matched or not, stays visible.
 
 Deriving is not the same as trusting one reading. A reading that loses a
 worktree or a repository is never taken as proof it went away: its listing
@@ -511,7 +514,17 @@ Sendable` and `nonisolated(unsafe)` are banned.
    derives from `git worktree list` (P1); the friendly symlinks earlier
    releases kept beside them are no longer created and are removed with
    their worktrees. Sessions always launch from the real path because
-   agent transcripts are keyed by cwd.
+   agent transcripts are keyed by cwd. The app also keeps herdr's own
+   `[worktrees] directory` pointed at this layout, written once per
+   run only when the config has no such section so a hand edit wins
+   forever, which is what makes `herdr worktree create` land where
+   the sidebar looks. Each poll also scans the
+   `worktrees/<repository>` container for checkouts the canonical
+   listing does not know: an agent may clone a base of its own (a
+   huge repository wants a partial clone) and cut worktrees from it,
+   and those are adopted with the owning clone as their repository
+   path, so sessions, pull requests, shells and deletion land on the
+   clone that actually holds the branch.
 4. The prompt is written to
    `/Users/Shared/sv-<user>/agentide/prompts/<session>.md`, readable in the
    sandbox through the workspace ACLs.
@@ -565,11 +578,20 @@ Sendable` and `nonisolated(unsafe)` are banned.
 4. herdr's agent lifecycle (working, idle and blocked, from its screen
    detection) covers every agent equally, hooks or none: the sidebar
    flags an agent waiting on input, and notifications fire when an agent
-   finishes a turn, needs input or exits, the finish with a completion
-   chime chosen from a menu bar submenu: the system's sound directories,
-   any audio file the open panel's audio-type filter admits, or silence,
-   the chosen path riding the storage bus so no audio ships in the
-   repository. Foreign sessions keep the transcript-mtime timeout on a
+   finishes a turn or needs input, each event with its own toggle
+   and chime chosen in Settings' Notifications pane: the system's
+   sound directories, any audio file the open panel's audio-type
+   filter admits, or silence, the chosen paths riding the storage
+   bus so no audio ships in the repository, every chime played as an
+   alert so the system's alert volume and accessibility flash apply.
+   An exit posts nothing of its own: the stop icon and the unread
+   dot carry it. The sidebar and
+   pane distinguish herdr's working, idle, done and blocked states
+   (idle owes nothing, done has an answer waiting), and the Dock
+   badge counts the worktrees needing attention, each contribution
+   behind its own Settings toggle: waiting on input, a done turn
+   not yet viewed, or unread output anywhere but the
+   pane being read. Foreign sessions keep the transcript-mtime timeout on a
    30 second tick for stalls.
 5. If the app is fully quit, events accumulate in the spool and notifications
    arrive on next launch.
@@ -848,7 +870,11 @@ shim rather than a protocol:
    being written, and a commit message never refills a form whose draft
    was deliberately emptied. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
-   template appended below the body after an empty line; while the form
+   template appended below the body after an empty line and one
+   `--label` per label picked from the repository's own (`gh label
+   list`, read once per form and kept with the draft), and an open
+   conversation shows the same row over its timeline, each toggle one
+   `gh pr edit --add-label` or `--remove-label` at once; while the form
    shows, revisiting the tab does not re-poll for a pull request that
    cannot exist yet. Open PR sits in the
    footer as the primary action (Cmd-Return), after fetch, rebase and
@@ -1055,11 +1081,25 @@ shim rather than a protocol:
    rebase, leases the push (`--force-with-lease`) rather than being
    refused as a non-fast-forward. The lease is what makes that safe: it
    still refuses if the remote moved since the last fetch. A branch whose
-   remote ref is still an ancestor pushes plainly, as before.
+   remote ref is still an ancestor pushes plainly, as before. The app
+   fetches constantly, so the bare lease always matches what was last
+   fetched; `--force-if-includes` is the real protection, refusing a
+   remote tip that was never integrated locally. That refusal is
+   retold and resolved in the app: the rebase integrates the remote's
+   commits, and when they conflict with this branch's it sets the
+   remote's version aside instead, rebasing onto origin/HEAD and
+   remembering the conflicting tip so the next push replaces it with
+   an explicit lease naming that tip, which is exactly the
+   confirmation the check exists to demand. Fetch and Rebase, then
+   Push; never a terminal step.
 9. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
    dims until the tip commit verifies and the service refuses regardless.
+   All of it sits behind Settings' Require signed commits, on by
+   default: switched off nothing signs or checks, rebases drop
+   `--gpg-sign` and pushes skip the tip check, for repositories
+   without a signing hook.
    The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
    base to sign the minimum: the branch's own origin ref when it exists,
    is still an ancestor of the branch, every commit unique to it verifies
@@ -1068,7 +1108,12 @@ shim rather than a protocol:
    ancestor test is what keeps an amended branch out of that path:
    amending a pushed commit leaves the pushed one behind as a stale twin
    rather than a parent, and rebasing on it replays the amended work on
-   top of what it replaced.
+   top of what it replaced. A remote that moved instead, to a tip this
+   branch never had, is rebased on rather than around, `git pull
+   --rebase` in effect: the leased push refuses to overwrite commits
+   that were never integrated, so the rebase is what integrates them,
+   and the branch's reflog is what tells such commits from an amend's
+   stale twin, which was once the branch's own tip.
 
 ### Cleanup (Tidy up)
 

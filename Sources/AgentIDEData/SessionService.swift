@@ -140,6 +140,10 @@ public struct SessionService: Sendable {
     /// install does not flag every historic conversation unread.
     let startedAt: Date = .init()
 
+    /// See `OverwriteTips`; a default so the public init is
+    /// untouched.
+    let overwriteTips: OverwriteTips = .init()
+
     func runner(for agent: AgentKind) -> any AgentRunner {
         runners.first { $0.kind == agent } ?? ClaudeCodeRunner()
     }

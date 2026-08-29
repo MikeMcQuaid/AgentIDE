@@ -67,6 +67,8 @@ struct UtilityTabStrip: View {
         .onHover { inside in
             hovered = inside ? tab.rawValue : (hovered == tab.rawValue ? nil : hovered)
         }
-        .hoverHelp(tab.help)
+        // Numbered from the full tab list, hidden tabs included, so
+        // the tooltip always matches the View menu's own shortcut.
+        .hoverHelp(tab.help, shortcut: "⌘" + String((UtilityTab.allCases.firstIndex(of: tab) ?? 0) + 1))
     }
 }

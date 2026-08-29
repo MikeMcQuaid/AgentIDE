@@ -33,8 +33,8 @@ public protocol AgentRunner: Sendable {
     /// first.
     var models: [String] { get }
 
-    /// The reasoning efforts the agent's picker offers, in rising
-    /// order.
+    /// The reasoning efforts the agent's picker offers, strongest
+    /// first, matching the model list's most-capable-first order.
     var efforts: [String] { get }
 
     /// The effort a launch without a flag runs at, for saying what a
@@ -165,7 +165,7 @@ public struct ClaudeCodeRunner: AgentRunner {
 
     /// Claude Code's effort tiers.
     public var efforts: [String] {
-        ["low", "medium", "high", "xhigh", "max"]
+        ["max", "xhigh", "high", "medium", "low"]
     }
 
     /// What Claude Code runs at when not told otherwise.
@@ -258,7 +258,7 @@ public struct CodexRunner: AgentRunner {
 
     /// Codex's reasoning effort levels.
     public var efforts: [String] {
-        ["minimal", "low", "medium", "high", "xhigh"]
+        ["xhigh", "high", "medium", "low", "minimal"]
     }
 
     /// What Codex runs at when not told otherwise.

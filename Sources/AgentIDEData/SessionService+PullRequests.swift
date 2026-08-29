@@ -71,7 +71,8 @@ public extension SessionService {
     /// (a local hook enforces the same), and Rebase on origin is the
     /// signing path.
     func push(worktree: Worktree) async throws -> PushDestination {
-        guard await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) else {
+        if AppSettings.requiresSignedCommits,
+           await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )
@@ -79,7 +80,12 @@ public extension SessionService {
 
         let destination = await pushDestination(worktree: worktree)
         guard case let .fork(owner) = destination else {
-            try await git.push(worktreePath: worktree.path, branch: worktree.branch)
+            try await git.push(
+                worktreePath: worktree.path,
+                branch: worktree.branch,
+                expectedTip: overwriteTips.tip(worktreePath: worktree.path, branch: worktree.branch),
+            )
+            overwriteTips.forget(worktreePath: worktree.path, branch: worktree.branch)
             return destination
         }
 
@@ -92,7 +98,7 @@ public extension SessionService {
     /// branch as `owner:branch` when it lives in a fork: the pull
     /// request belongs to the repository it is opened against rather
     /// than the one holding the branch.
-    func createPullRequest(worktree: Worktree, title: String, body: String) async throws -> String {
+    func createPullRequest(worktree: Worktree, title: String, body: String, labels: [String]) async throws -> String {
         // The branch is the caller's, which is the entry whose form
         // was filled in, never whatever the worktree has checked out.
         // A branch opening against the branch below it is what makes
@@ -105,8 +111,7 @@ public extension SessionService {
         let branch = worktree.branch
         return try await github.createPullRequest(
             worktreePath: worktree.path,
-            title: title,
-            body: body,
+            request: NewPullRequest(title: title, body: body, labels: labels),
             head: pushDestination(worktree: worktree).head(branch: branch),
             base: base(for: branch, in: stack, of: worktree),
         )

@@ -54,7 +54,7 @@ public extension SessionService {
         // and trusts them forever; remember which appearance it is
         // being born into, so the pane can keep its word.
         let agent = agentKind(of: sessionName)
-        rememberTerminalScheme(worktreePath: directory, agent: agent)
+        rememberTerminalScheme(worktreePath: directory)
         await progress("Closing any previous session")
         await killSession(name: sessionName)
         if let agent {
@@ -257,6 +257,21 @@ public extension SessionService {
     func typeText(_ text: String, sessionName: String) async throws {
         try await herdr.typeText(text, sessionName: sessionName)
     }
+
+    /// Waits for a just-launched session's agent to settle into a
+    /// detected state, so the listing that follows finds it first
+    /// time instead of polling half-second refreshes.
+    func waitForAgentReady(sessionName: String) async {
+        _ = await herdr.waitForAgent(
+            sessionName: sessionName,
+            timeoutMilliseconds: Self.agentReadyTimeoutMilliseconds,
+        )
+    }
+
+    /// How long a fresh agent gets to settle before the old listing
+    /// loop carries the wait alone; twenty seconds covers a slow
+    /// sandbox launch without ever hanging the flow on herdr.
+    internal static let agentReadyTimeoutMilliseconds = 20_000
 
     // MARK: Internal
 

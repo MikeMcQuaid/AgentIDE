@@ -57,15 +57,17 @@ public struct WorkspacePaths: Sendable {
         appDirectory + (Self.isProductionBuild ? "/edits" : "/edits-dev")
     }
 
-    /// Where full repository checkouts live.
+    /// Where full repository checkouts live; Settings can point
+    /// this elsewhere, the empty override meaning the default.
     public var repositoriesDirectory: String {
-        sharedWorkspace + "/repositories"
+        Self.overridden(AppSettings.repositoriesDirectoryKey) ?? sharedWorkspace + "/repositories"
     }
 
     /// Where canonical worktrees live, grouped by repository (or
-    /// by uuid, in the layout an older release inherited).
+    /// by uuid, in the layout an older release inherited); Settings
+    /// can point this elsewhere too.
     public var worktreesDirectory: String {
-        sharedWorkspace + "/worktrees"
+        Self.overridden(AppSettings.worktreesDirectoryKey) ?? sharedWorkspace + "/worktrees"
     }
 
     /// AgentIDE's own area of the shared workspace.
@@ -107,5 +109,13 @@ public struct WorkspacePaths: Sendable {
             sandboxHome: "/Users/sandvault-" + host,
             metadataFile: support + "/state.json",
         )
+    }
+
+    // MARK: Private
+
+    /// A non-empty Settings override for a location key.
+    private static func overridden(_ key: String) -> String? {
+        let stored = UserDefaults.standard.string(forKey: key) ?? ""
+        return stored.isEmpty ? nil : stored
     }
 }

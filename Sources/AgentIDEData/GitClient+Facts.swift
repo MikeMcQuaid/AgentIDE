@@ -184,4 +184,66 @@ public extension GitClient {
         }
         return nil
     }
+
+    /// Whether a ref's commit was ever this branch's own tip, read
+    /// from the branch's reflog: how an amend's stale remote twin
+    /// (once the tip here) is told from commits pushed elsewhere
+    /// that this checkout has never seen.
+    func refWasBranchTip(worktreePath: String, branch: String, ref: String) async -> Bool {
+        guard
+            let tip = try? await git(["rev-parse", ref], in: worktreePath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            let log = try? await git(["reflog", "show", "--format=%H", branch], in: worktreePath)
+            .standardOutput
+        else {
+            return false
+        }
+
+        return log.split(separator: "\n").contains(Substring(tip))
+    }
+
+    /// The checkout that owns a linked worktree, read from its
+    /// `.git` pointer (`gitdir: <owner>/.git/worktrees/<name>`);
+    /// nil for a checkout of its own or an unreadable pointer.
+    static func owningCheckout(of worktreePath: String) -> String? {
+        let marker = "gitdir: "
+        guard let pointer = try? String(contentsOfFile: worktreePath + "/.git", encoding: .utf8),
+              pointer.hasPrefix(marker)
+        else {
+            return nil
+        }
+
+        let gitdir = pointer.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let range = gitdir.range(of: "/.git/worktrees/") else {
+            return nil
+        }
+
+        return String(gitdir[..<range.lowerBound])
+    }
+
+    /// The commit a ref names, nil when unreadable.
+    func commitHash(of ref: String, worktreePath: String) async -> String? {
+        await (try? git(["rev-parse", ref], in: worktreePath))?
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A leased push refused by git's integration check, retold in
+    /// this app's terms. The app fetches constantly, so the bare
+    /// lease always matches what was last fetched and this check is
+    /// the one real protection: it refuses a remote tip that was
+    /// never integrated locally. Git's own hint says to pull, which
+    /// is not how this app works; the rebase integrates or sets
+    /// aside, and the push after it carries the confirmation.
+    internal func leaseRefusal(_ error: CommandError, branch: String, remote: String) -> CommandError {
+        CommandError(command: error.command, result: ProcessResult(
+            status: error.result.status,
+            standardOutput: error.result.standardOutput,
+            standardError: remote + "/" + branch + " was rewritten or moved from another checkout "
+                + "and its tip was never integrated here, so the leased push refuses to overwrite "
+                + "it. Fetch and Rebase, then Push: the rebase integrates the remote's commits, "
+                + "or sets a conflicting version aside for Push to replace.",
+        ))
+    }
 }

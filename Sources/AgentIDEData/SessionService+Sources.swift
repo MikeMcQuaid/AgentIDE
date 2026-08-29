@@ -185,73 +185,10 @@ public extension SessionService {
 
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
-        try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
+        try await integrateOrSetAside(worktree: worktree, branch: branch, target: target)
         if let held, held != branch {
             try await git.checkout(branch: held, worktreePath: worktree.path)
         }
-    }
-
-    /// What a signed rebase would actually change, so the button
-    /// dims or names its work: moving the branch onto a newer base,
-    /// signing unsigned commits, both, or nothing at all.
-    enum RebaseNeed: Sendable {
-        case nothing
-        case rebase
-        case sign
-        case rebaseAndSign
-    }
-
-    /// The rebase button's work, judged from local refs; the action
-    /// itself fetches first, so a stale answer only mislabels until
-    /// the next reload.
-    func rebaseNeed(worktree: Worktree) async -> RebaseNeed {
-        // The caller's branch, which for a stack is the entry being
-        // looked at rather than whichever one the worktree holds.
-        let branch = worktree.branch
-        let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
-        let movesBase = await (git.aheadBehind(worktreePath: worktree.path, baseRef: target)?.behind ?? 0) > 0
-        let needsSigning = await git.allCommitsSigned(
-            worktreePath: worktree.path,
-            range: target + ".." + branch,
-        ) == false
-        switch (movesBase, needsSigning) {
-        case (true, true):
-            return .rebaseAndSign
-
-        case (true, false):
-            return .rebase
-
-        case (false, true):
-            return .sign
-
-        case (false, false):
-            return .nothing
-        }
-    }
-
-    /// The ref a signed rebase lands on. The branch's own origin ref
-    /// wins when it exists, is still an ancestor of the branch,
-    /// every commit unique to it verifies and local commits sit on
-    /// top needing signatures: rebasing there signs only the new
-    /// commits, so pushed history keeps its hashes. Anything else
-    /// falls back to origin/HEAD, re-signing the whole branch.
-    ///
-    /// The ancestor test is what keeps an amended branch out of
-    /// that path. Amending a pushed commit leaves the pushed one
-    /// behind as a stale twin rather than a parent, and rebasing on
-    /// it replays the amended work on top of what it replaced,
-    /// which is a conflict at best and a duplicated commit at worst.
-    func signedRebaseTarget(worktreePath: String, branch: String) async -> String {
-        let remote = "origin/" + branch
-        guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch),
-              await git.isAncestor(worktreePath: worktreePath, ref: remote, of: "HEAD"),
-              await git.allCommitsSigned(worktreePath: worktreePath, range: "origin/HEAD.." + remote),
-              await (git.commitCount(worktreePath: worktreePath, range: remote + "..HEAD") ?? 0) > 0
-        else {
-            return "origin/HEAD"
-        }
-
-        return remote
     }
 
     /// Whether anything in a repository is actively working, which

@@ -23,7 +23,6 @@ struct SnapshotTests {
                 name: "agentide--agentide--agent-fix-crash--claude",
                 agent: .claudeCode,
                 status: .running,
-                workingDirectory: "/tmp/worktrees/1234/agent-fix-crash",
             ),
             isDirty: true,
             aheadOfUpstream: 2,

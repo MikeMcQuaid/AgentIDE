@@ -139,6 +139,10 @@ public extension DashboardModel {
             screenError = nil
             let sessionName = try await work()
             rememberLaunch(sessionName: sessionName)
+            // herdr says when the agent settles, so the listing loop
+            // below usually succeeds on its first reading.
+            launchProgress.report("Waiting for herdr to see the agent settle")
+            await service.waitForAgentReady(sessionName: sessionName)
             await refreshUntil { items in items.contains { $0.session?.name == sessionName } }
             if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
                 launchProgress.report("Listed; opening the pane of `" + sessionName + "`")

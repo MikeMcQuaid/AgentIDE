@@ -22,9 +22,9 @@ struct WindowConfigurator: NSViewRepresentable {
 
         // MARK: Internal
 
-        /// The representable's visibility callback, refreshed on
-        /// every SwiftUI update.
+        /// The representable's callbacks, refreshed per update.
         var onVisibilityChange: ((Bool) -> Void)?
+        var onFullScreenChange: ((Bool) -> Void)?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -151,10 +151,14 @@ struct WindowConfigurator: NSViewRepresentable {
                 (NSWindow.didEnterFullScreenNotification, window),
                 (NSWindow.didExitFullScreenNotification, window),
                 (NSWindow.didChangeScreenNotification, window),
+                (NSWindow.didChangeOcclusionStateNotification, window),
             ]
             for (name, object) in names {
                 observers.append(centre.addObserver(forName: name, object: object, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.moved(displayGone: self?.displayGone ?? false) }
+                    MainActor.assumeIsolated {
+                        self?.moved(displayGone: self?.displayGone ?? false)
+                        self?.reportWindowState()
+                    }
                 })
             }
             // A fullscreen space sent to another display posts no
@@ -170,25 +174,19 @@ struct WindowConfigurator: NSViewRepresentable {
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.movedIfFullScreen() }
             })
-            // Minimised or fully covered, the window is not being
-            // read, and the poll slows to a safety tick until it
-            // shows again.
-            observers.append(centre.addObserver(
-                forName: NSWindow.didChangeOcclusionStateNotification,
-                object: window,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.reportVisibility() }
-            })
-            reportVisibility()
+            reportWindowState()
         }
 
-        private func reportVisibility() {
+        /// Minimised or fully covered, the window is not being
+        /// read and the poll slows; fullscreen hides the traffic
+        /// lights and the sidebar reclaims their band.
+        private func reportWindowState() {
             guard let window else {
                 return
             }
 
             onVisibilityChange?(window.occlusionState.contains(.visible))
+            onFullScreenChange?(window.styleMask.contains(.fullScreen))
         }
 
         private func movedIfFullScreen() {
@@ -385,12 +383,17 @@ struct WindowConfigurator: NSViewRepresentable {
     /// window is ours.
     let onVisibilityChange: (Bool) -> Void
 
+    /// Told when the window enters or leaves fullscreen, where the
+    /// traffic lights hide and the sidebar can start higher.
+    let onFullScreenChange: (Bool) -> Void
+
     func makeNSView(context _: Context) -> ConfiguringView {
         ConfiguringView()
     }
 
     func updateNSView(_ view: ConfiguringView, context _: Context) {
         view.onVisibilityChange = onVisibilityChange
+        view.onFullScreenChange = onFullScreenChange
         view.configureWindowIfNeeded()
     }
 }

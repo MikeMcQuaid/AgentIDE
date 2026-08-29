@@ -93,32 +93,33 @@ public extension GitClient {
         return output.split(separator: "\n").allSatisfy { Self.signedStates.contains(String($0)) }
     }
 
-    /// Whether one ref is an ancestor of another, which is how an
-    /// appended branch is told from a rewritten one.
-    func isAncestor(worktreePath: String, ref: String, of descendant: String) async -> Bool {
-        let result = try? await git(
-            ["merge-base", "--is-ancestor", ref, descendant],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        return result?.succeeded ?? false
-    }
-
     /// Pushes the branch to a remote and tracks it there, leasing
     /// the push when the branch's history has been rewritten.
-    func push(worktreePath: String, branch: String, remote: String = "origin") async throws {
-        // Amending or rebasing a pushed branch rewrites what the
-        // remote holds, and a plain push refuses that as a
-        // non-fast-forward. The lease is what makes forcing safe:
-        // it refuses if the remote moved since the last fetch. On
-        // its own that trusts a stale fetch, so `--force-if-includes`
-        // goes with it: the push is refused unless what it would
-        // replace is already in this branch's history, which is
-        // exactly the difference between a rewrite of your own work
-        // and overwriting someone else's.
-        let rewrites = await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote)
-        let force = rewrites ? ["--force-with-lease", "--force-if-includes"] : []
-        try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+    func push(
+        worktreePath: String,
+        branch: String,
+        remote: String = "origin",
+        expectedTip: String? = nil,
+    ) async throws {
+        // A rewritten branch forces with a lease, and the includes
+        // check refuses a remote tip never integrated here: the
+        // difference between rewriting your own work and overwriting
+        // someone else's. leaseRefusal carries the full story.
+        var force = [String]()
+        if let expectedTip {
+            // Naming the tip is the confirmation the includes check
+            // exists to demand: the refusal was seen, the remote
+            // fetched and its version set aside, all in the app.
+            force = ["--force-with-lease=" + branch + ":" + expectedTip]
+        } else if await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote) {
+            force = ["--force-with-lease", "--force-if-includes"]
+        }
+        do {
+            try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+        } catch let error as CommandError
+            where error.result.standardError.contains("remote ref updated since checkout") {
+            throw leaseRefusal(error, branch: branch, remote: remote)
+        }
     }
 
     /// Checks out the default branch and pulls it: `--ff-only`, so
@@ -201,8 +202,15 @@ public extension GitClient {
     /// the branch exactly as it was.
     func rebaseSigned(branch: String, onto newBase: String, from oldBase: String, worktreePath: String) async throws {
         do {
+            // Forced like the single-branch rebase: without it a
+            // branch already in place fast-forwards, rewriting and
+            // signing nothing, which left unsigned tips unsigned.
+            var arguments = ["rebase", "--force-rebase"]
+            if AppSettings.requiresSignedCommits {
+                arguments.append("--gpg-sign")
+            }
             try await git(
-                ["rebase", "--gpg-sign", "--onto", newBase, oldBase, branch],
+                arguments + ["--onto", newBase, oldBase, branch],
                 in: worktreePath,
             )
         } catch {
@@ -242,7 +250,7 @@ public extension GitClient {
             return false
         }
 
-        return await isAncestor(worktreePath: worktreePath, ref: ref, of: "HEAD") == false
+        return await isAncestor(ref, of: "HEAD", worktreePath: worktreePath) == false
     }
 
     /// How many commits a range spans, nil when unreadable.

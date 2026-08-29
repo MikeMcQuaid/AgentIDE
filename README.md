@@ -72,8 +72,11 @@ before shipping.
   since each was last viewed, open pull requests, mergeability and
   uncommitted or unpushed work, and a worktree can be marked unread to
   revisit, with a right-click Refresh that asks GitHub about that
-  repository's branches at once (so you always know where you are
-  needed)
+  repository's branches at once; worktrees agents made for themselves
+  in the same containers are adopted on the next poll, ready for
+  sessions, pull requests, shells or deletion like any other, and the
+  app keeps herdr's own worktree create pointed at that same layout
+  (so you always know where you are needed)
 - **Watches** what is about to change: a pull request whose checks are
   still running, or that is sitting in the merge queue, is asked about
   every half minute whatever its row's place in the sidebar, until
@@ -88,9 +91,16 @@ before shipping.
   happened yet, any unresolved conversations, and its commit counts last
   (so one glance across the sidebar says where everything stands)
 - **Notifies** you when an agent finishes its work, needs your input or
-  stalls, the finish with a completion chime picked from the menu bar:
-  macOS's own sounds, any audio file of your own or silence (so you never
-  sit polling a terminal and ship no audio files either)
+  stalls, badges the Dock with how many need attention, and plays a
+  chime per event picked in Settings: macOS's own sounds, any audio
+  file of your own or silence (so you never sit polling a terminal and
+  ship no audio files either)
+- **Configures** itself in one Settings window (Cmd-,): default agent,
+  model and effort, per-event notifications and sounds, the external
+  editor, the Cmd-click browser, the repositories and worktrees
+  locations, the shared monospace font, refresh cadences and whether
+  commits must be signed at all (so preferences
+  live where macOS puts them rather than in menus and hidden defaults)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel
@@ -203,7 +213,8 @@ before shipping.
 - **Pushes** branches, showing how many commits each push sends and naming
   whether a rebase would move the base, sign commits or both, then opens
   pull requests from an in-app form that fills in the project's own
-  template below your title and body, defaulting both from a single
+  template below your title and body and attaches any of the
+  repository's labels you pick, defaulting the text from a single
   commit, unwrapped from the narrow column commit messages are written
   to, or drafting them from many with the on-device model (so shipping
   needs no retyping)
@@ -214,7 +225,8 @@ before shipping.
 - **Fills** a pull request's title and body from the branch's commits,
   drafts them with the on-device model at the press of the sparkles
   button, and resets them to the commit message from the button beside
-  it, asking first when something is typed (so the form is never stuck
+  it, asking first when something is typed, and toggles labels on an
+  open pull request from its conversation (so the form is never stuck
   on a draft you no longer want)
 - **Discloses** the agent that wrote a branch whenever you press Fill
   template, which is also what ticks the template's boxes: the harness

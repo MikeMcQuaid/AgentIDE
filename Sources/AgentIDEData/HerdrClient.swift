@@ -130,6 +130,33 @@ public struct HerdrClient: Sendable {
         }
     }
 
+    /// Points herdr's own worktree creation at the app's layout, so
+    /// `herdr worktree create` typed into any terminal lands where
+    /// the sidebar looks. Written only when the config has no
+    /// `[worktrees]` section, so a hand edit wins forever; the
+    /// reload is best-effort because the server may not be running.
+    func configureWorktrees(directory: String) async {
+        let config = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml\""
+        let payload = exportPrefix
+            + "mkdir -p \"$(dirname " + config + ")\"; touch " + config + "; "
+            + "grep -q '^\\[worktrees\\]' " + config
+            + " || printf '\\n[worktrees]\\ndirectory = \"%s\"\\n' " + directory.shellQuoted
+            + " >> " + config + "; "
+            + "herdr server reload-config &>/dev/null; exit 0"
+        let argv =
+            if isInsideSandbox {
+                ["/bin/zsh", "-c", payload]
+            } else {
+                launcher.command(
+                    payload: payload,
+                    initialDirectory: launcher.sharedWorkspace,
+                    sessionID: UUID().uuidString,
+                    sessionName: "agentide-config",
+                )
+            }
+        _ = try? await runner.run(argv, workingDirectory: nil, environment: environment)
+    }
+
     /// Runs one herdr CLI command against the selected server.
     @discardableResult
     func herdr(_ arguments: [String], allowFailure: Bool = false) async throws -> ProcessResult {

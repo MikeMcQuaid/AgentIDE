@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 // MARK: - SidebarReading
 
@@ -15,6 +16,9 @@ public struct SidebarReading: Sendable {
 /// joined with their sessions. Read in parallel at every level, since
 /// each worktree is a handful of git processes sharing nothing.
 public extension SessionService {
+    /// See `configureHerdrOnce`; process-wide on purpose.
+    private static let herdrConfigured: Mutex = .init(false)
+
     /// The full dashboard state: every repository's worktrees joined
     /// with their sessions, plus foreign sessions.
     /// `scope` says whose git is read this time; the others come
@@ -24,6 +28,7 @@ public extension SessionService {
         scope: GitReadScope = .all,
         kept: [RepositoryGroup] = [],
     ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
+        await configureHerdrOnce()
         let panes = await (try? herdr.panes()) ?? []
         let activity = spool.activity()
         let metadata = store.load()
@@ -85,16 +90,61 @@ public extension SessionService {
         return (groups, foreign)
     }
 
+    /// Once per run, on the first reading rather than the first
+    /// launch: a `herdr worktree create` typed into a terminal
+    /// should land right even before any session starts.
+    internal func configureHerdrOnce() async {
+        let first = Self.herdrConfigured.withLock { configured in
+            let was = configured
+            configured = true
+            return was == false
+        }
+        guard first else {
+            return
+        }
+
+        await herdr.configureWorktrees(directory: paths.worktreesDirectory)
+    }
+
     /// A pane AgentIDE did not create, shown rather than hidden.
     static func foreignSession(of pane: HerdrPane) -> AgentSession {
         AgentSession(
             name: pane.sessionName,
             agent: nil,
             status: pane.isFinished ? .finished : .running,
-            workingDirectory: pane.currentPath,
             paneID: pane.paneID,
             activity: pane.activity,
         )
+    }
+
+    /// Worktrees in the repository's container that its checkout
+    /// does not list: an agent can clone a base of its own beside
+    /// them and cut worktrees from that, and those deserve rows,
+    /// sessions and deletion like any other. Each carries its
+    /// owning checkout as its repository path, so branch work and
+    /// removal land on the clone that actually holds the branch.
+    /// One directory listing per poll is what makes a manual
+    /// worktree appear without a restart.
+    func strayWorktrees(of repository: Repository) -> [Worktree] {
+        let container = worktreeContainer(repository: repository)
+        let manager = FileManager.default
+        let names = (try? manager.contentsOfDirectory(atPath: container)) ?? []
+        return names.sorted().compactMap { name in
+            let path = container + "/" + name
+            guard name.hasPrefix(".") == false,
+                  manager.fileExists(atPath: path + "/.git"),
+                  let owner = GitClient.owningCheckout(of: path)
+            else {
+                return nil
+            }
+
+            return Worktree(
+                repositoryName: repository.name,
+                repositoryPath: owner,
+                branch: GitClient.headFileBranch(worktreePath: path) ?? name,
+                path: path,
+            )
+        }
     }
 
     /// The repository's own checkout as a worktree: its branch is
@@ -125,7 +175,6 @@ public extension SessionService {
                     name: pane.sessionName,
                     agent: item.session?.agent ?? .claudeCode,
                     status: pane.isFinished ? .finished : .running,
-                    workingDirectory: pane.currentPath,
                     paneID: pane.paneID,
                     activity: pane.activity,
                     version: item.session?.version,
@@ -154,7 +203,8 @@ public extension SessionService {
         // reachable.
         let mainCheckout = await mainCheckout(of: repository, baseRef: baseRef)
         var seenPaths = Set<String>()
-        let candidates = await ([mainCheckout] + worktrees).filter { seenPaths.insert($0.path).inserted }
+        var candidates = await ([mainCheckout] + worktrees).filter { seenPaths.insert($0.path).inserted }
+        candidates += strayWorktrees(of: repository).filter { seenPaths.insert($0.path).inserted }
         let items = await withTaskGroup(of: (Int, WorktreeItem).self) { tasks in
             for (index, worktree) in candidates.enumerated() {
                 tasks.addTask {
@@ -267,7 +317,6 @@ public extension SessionService {
                 name: pane.sessionName,
                 agent: agentKind(of: pane.sessionName),
                 status: pane.isFinished ? .finished : .running,
-                workingDirectory: pane.currentPath,
                 paneID: pane.paneID,
                 activity: pane.activity,
                 version: reading.metadata.agentVersions[pane.sessionName],

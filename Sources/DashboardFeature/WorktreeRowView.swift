@@ -36,6 +36,9 @@ struct WorktreeRowView: View {
     /// row's very top.
     private static let iconDrop: CGFloat = 2
 
+    /// The agent's monochrome mark, sized to the caption line.
+    private static let agentIconSize: CGFloat = 11
+
     private var counts: String {
         var parts = [String]()
         if let ahead = item.aheadOfDefault, ahead > 0 {
@@ -107,11 +110,11 @@ struct WorktreeRowView: View {
             Text(title)
                 .lineLimit(1)
             Spacer(minLength: Self.spacing)
-            if item.hasUnread {
+            if item.hasActionableUnread {
                 Circle()
                     .fill(.tint)
                     .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
-                    .hoverHelp("Unseen agent output")
+                    .hoverHelp("Unseen agent output waiting for you")
             }
         }
     }
@@ -140,7 +143,15 @@ struct WorktreeRowView: View {
     private var worktreeDetailLine: some View {
         HStack(spacing: Self.spacing) {
             if let agent = item.session?.agent {
-                Text(agent.displayName)
+                // The brand mark, monochrome so it reads as detail
+                // beside the counts rather than shouting colour.
+                Image(agent.iconAssetName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                    .accessibilityLabel(agent.displayName)
+                    .hoverHelp("A " + agent.displayName + " session runs here")
             }
             pullRequestBadge
             Text(counts)
@@ -174,30 +185,62 @@ struct WorktreeRowView: View {
             )
             .hoverHelp(stateHelp(for: pullRequest))
         } else {
+            // The media-player vocabulary, shared with the session
+            // strip: play is working, pause is rest, a tick is a
+            // turn's answer waiting, a question mark is a question
+            // asked of you, stop is an exited process and a dotted
+            // circle is herdr unable to tell.
             switch item.session?.status {
             case .running where item.session?.activity == .blocked:
-                // The one state that needs the user: herdr saw an
-                // approval or question waiting.
-                Image(systemName: "exclamationmark.circle.fill")
+                Image(systemName: "questionmark.circle.fill")
                     .foregroundStyle(.orange)
                     .font(.caption)
                     .accessibilityHidden(true)
-                    .hoverHelp("The agent is waiting on your input")
+                    .hoverHelp("The agent asked a question or wants an approval")
 
-            case .running:
+            case .running where item.session?.activity == .working:
                 Image(systemName: "play.circle.fill")
                     .foregroundStyle(.green)
                     .font(.caption)
                     .accessibilityHidden(true)
+                    .hoverHelp("The agent is working on its turn")
 
-            case .finished:
-                Image(systemName: "checkmark.circle")
+            case .running where item.session?.activity == .done:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+                    .hoverHelp("The turn is done; the answer is waiting")
+
+            case .running where item.session?.activity == .idle:
+                Image(systemName: "pause.circle")
                     .foregroundStyle(.secondary)
                     .font(.caption)
                     .accessibilityHidden(true)
+                    .hoverHelp("At rest: nothing asked, or the turn was interrupted")
+
+            case .running:
+                Image(systemName: "circle.dotted")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+                    .hoverHelp("Running, but herdr cannot tell what the agent is doing")
+
+            case .finished:
+                Image(systemName: "stop.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .accessibilityHidden(true)
+                    .hoverHelp("The agent's process exited; the conversation stays resumable")
 
             case nil:
+                // The one deliberate difference from a worktree row:
+                // the repository's own checkout rests green, home
+                // rather than idle.
                 Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
+                    .hoverHelp(isMainCheckout
+                        ? "The repository's own checkout, where merged work lands"
+                        : "A worktree with no session running")
             }
         }
     }

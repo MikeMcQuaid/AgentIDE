@@ -1,3 +1,4 @@
+import AgentIDEData
 import Foundation
 
 /// Holds a system activity that blocks idle sleep while agents or
@@ -14,12 +15,13 @@ final class SleepInhibitor {
     // MARK: Internal
 
     func update(hasLiveWork: Bool) {
-        if hasLiveWork, activity == nil {
+        if hasLiveWork, AppSettings.inhibitsSleep, activity == nil {
             activity = ProcessInfo.processInfo.beginActivity(
                 options: .idleSystemSleepDisabled,
                 reason: "Agent sessions or shells are running",
             )
-        } else if hasLiveWork == false, let current = activity {
+        } else if hasLiveWork == false || AppSettings.inhibitsSleep == false,
+                  let current = activity {
             ProcessInfo.processInfo.endActivity(current)
             activity = nil
         }

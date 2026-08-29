@@ -1,4 +1,5 @@
 import AppKit
+import AudioToolbox
 import UniformTypeIdentifiers
 
 /// The chime played when an agent finishes its work, stored on the
@@ -18,11 +19,6 @@ public enum CompletionSound {
     /// The types the file chooser admits: exactly what playback
     /// accepts, so a picked file always sounds.
     public static let allowedTypes: [UTType] = [.audio]
-
-    /// The chosen sound's path, defaulting to the system chime.
-    public static var chosenPath: String {
-        UserDefaults.standard.string(forKey: key) ?? defaultPath
-    }
 
     /// The sound files the system offers: macOS's own, then the
     /// machine's and the user's additions, each directory sorted by
@@ -47,15 +43,24 @@ public enum CompletionSound {
         return sounds
     }
 
-    /// Plays a sound file. The empty path is silence by choice, and
-    /// a file that no longer plays is silence rather than an error:
-    /// a missing sound must never break the notification it rode.
+    /// Plays a sound file as an alert, so the system's alert volume
+    /// and accessibility flash apply. The empty path is silence by
+    /// choice, and a file that no longer plays is silence rather
+    /// than an error: a missing sound must never break the
+    /// notification it rode.
     public static func play(path: String) {
         guard path.isEmpty == false else {
             return
         }
 
-        NSSound(contentsOfFile: path, byReference: true)?.play()
+        var sound: SystemSoundID = 0
+        let made = AudioServicesCreateSystemSoundID(URL(fileURLWithPath: path) as CFURL, &sound)
+        guard made == kAudioServicesNoError else {
+            NSSound(contentsOfFile: path, byReference: true)?.play()
+            return
+        }
+
+        AudioServicesPlayAlertSoundWithCompletion(sound, Self.disposal(of: sound))
     }
 
     // MARK: Internal
@@ -70,5 +75,15 @@ public enum CompletionSound {
         }
 
         return allowedTypes.contains { type.conforms(to: $0) }
+    }
+
+    // MARK: Private
+
+    /// The completion runs on the sound service's own queue, so it
+    /// must not be a main-actor closure: the runtime's executor
+    /// check traps there. Formed in a nonisolated context it stays
+    /// free of any actor.
+    private nonisolated static func disposal(of sound: SystemSoundID) -> @Sendable () -> Void {
+        { AudioServicesDisposeSystemSoundID(sound) }
     }
 }

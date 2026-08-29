@@ -8,7 +8,11 @@ import AgentIDEDomain
 extension PullRequestsModel {
     /// The rebase button's label names exactly what it would do.
     var rebaseTitle: String {
-        switch rebaseNeed {
+        guard AppSettings.requiresSignedCommits else {
+            return "Rebase on origin"
+        }
+
+        return switch rebaseNeed {
         case .sign:
             "Sign commits"
 
@@ -36,6 +40,8 @@ extension PullRequestsModel {
             return true
         }
 
+        isBranchActionRunning = true
+        defer { isBranchActionRunning = false }
         do {
             try await performRebase(worktree)
             // A stack member that moves takes the branches above it
@@ -52,9 +58,16 @@ extension PullRequestsModel {
                         + error.localizedDescription)
                 }
             }
+            await reload(keepingSelection: true)
+            // Done means Push agrees; reporting success with the tip
+            // still unsigned took a second press to notice.
+            if isTipSigned == false {
+                report("Rebased, but the tip still reads unsigned; check the signing key "
+                    + "and hit Rebase again")
+                return false
+            }
             setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
-            await reload(keepingSelection: true)
             return true
         } catch {
             report(error.localizedDescription)
@@ -166,5 +179,15 @@ extension PullRequestsModel {
             branch: branch,
             path: item.worktree.path,
         )
+    }
+
+    /// Whether one pull request could be merged as it stands: no
+    /// draft, no conflict, checks green, and no review outstanding
+    /// or refused. An empty review decision is a repository that
+    /// asks for none.
+    static func isReadyToMerge(_ summary: PullRequestSummary) -> Bool {
+        summary.state == "OPEN" && summary.isDraft == false
+            && summary.mergeable == "MERGEABLE" && summary.checks == "SUCCESS"
+            && ["", "APPROVED"].contains(summary.reviewDecision)
     }
 }

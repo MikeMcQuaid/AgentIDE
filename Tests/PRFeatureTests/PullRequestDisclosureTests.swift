@@ -73,7 +73,6 @@ struct PullRequestDisclosureTests {
             name: "agentide--repo--feature--claude",
             agent: .claudeCode,
             status: .running,
-            workingDirectory: "/worktrees/feature",
             paneID: "p1",
             activity: nil,
             version: nil,

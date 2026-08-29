@@ -66,8 +66,17 @@ final class PullRequestsModel {
             }
             return answer?.threads ?? []
         }
-        performCreate = { worktree, title, body in
-            try await service.createPullRequest(worktree: worktree, title: title, body: body)
+        performCreate = { worktree, title, body, labels in
+            try await service.createPullRequest(worktree: worktree, title: title, body: body, labels: labels)
+        }
+        fetchLabels = {
+            await github.labels(repositoryPath: repository.path)
+        }
+        fetchPullRequestLabels = { number in
+            await github.pullRequestLabels(repositoryPath: repository.path, number: number)
+        }
+        performLabelChange = { number, add, remove in
+            try await github.editLabels(repositoryPath: repository.path, number: number, add: add, remove: remove)
         }
         performLinkStack = { worktree in
             try await service.linkStack(worktree: worktree)
@@ -144,7 +153,11 @@ final class PullRequestsModel {
             try await service.rebaseSigned(worktree: worktree)
         }
         checkTipSigned = { worktree in
-            await service.isTipSigned(worktree: worktree)
+            // Settings can waive signing for repositories whose
+            // remote runs no signature hook.
+            AppSettings.requiresSignedCommits
+                ? await service.isTipSigned(worktree: worktree)
+                : true
         }
         currentBranch = branch
         wireStack(service: service)
@@ -205,13 +218,15 @@ final class PullRequestsModel {
     var selected: PullRequestSummary?
 
     var summaries: [PullRequestSummary] = []
-    private(set) var isLoading = false
+    var isLoading = false
 
     /// True once the first listing answered; the creation form only
     /// appears after that, and mid-reload churn never hides it.
     var hasLoaded = false
-    private(set) var fetchedLimit = 0
-    private(set) var hasMergeQueue = false
+    /// Fetches stay one page ahead of the visible one, so the pager
+    /// knows whether a next page exists.
+    var fetchedLimit = 0
+    var hasMergeQueue = false
 
     /// The footer's status line. Written only by the actions
     /// extension.
@@ -225,9 +240,11 @@ final class PullRequestsModel {
     /// never writes back what it just read.
     var loadingDraft = false
 
-    /// True while a pull request is being opened: the form keeps
-    /// every word it holds and takes no more until GitHub answers.
+    /// True while a pull request opens, and while a push, rebase
+    /// or restack runs: either way the creation form keeps every
+    /// word it holds, greyed, and takes no more until it is over.
     var isOpening = false
+    var isBranchActionRunning = false
 
     /// Whether the repository has a pull request template; without
     /// one the form shows no template field at all.
@@ -239,7 +256,19 @@ final class PullRequestsModel {
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
-    var performCreate: (Worktree, String, String) async throws -> String
+    var performCreate: (Worktree, String, String, [String]) async throws -> String
+
+    /// The repository's labels, read once per model when the form
+    /// first needs them.
+    var fetchLabels: () async -> [String] = { [] }
+
+    /// The selected pull request's labels, read on selection.
+    var fetchPullRequestLabels: (Int) async -> [String] = { _ in [] }
+
+    /// Adds and removes labels on a pull request.
+    var performLabelChange: (Int, [String], [String]) async throws -> Void = { _, _, _ in
+        // Replaced by the initialiser.
+    }
 
     /// Tells GitHub the stack's open pull requests are a stack; run
     /// whenever one opens, since a stack is built one at a time.
@@ -283,6 +312,12 @@ final class PullRequestsModel {
     /// of open pull requests.
     var page = 0
 
+    /// What the repository offers; empty until read.
+    var availableLabels: [String] = []
+
+    /// The selected pull request's labels, as GitHub last said.
+    var selectedLabels: [String] = []
+
     /// The pull request creation form's fields; the template loads
     /// from the repository on reload when the form shows.
     var prTitle = "" {
@@ -297,6 +332,12 @@ final class PullRequestsModel {
         didSet { saveDraft() }
     }
 
+    /// The labels the pull request opens with, from the repository's
+    /// own; empty until picked.
+    var prLabels: [String] = [] {
+        didSet { saveDraft() }
+    }
+
     /// The repository's worktree items, refreshed by the view as the
     /// dashboard polls; fresh counts also clear the local pushed
     /// mark, so new commits light Push up again.
@@ -305,90 +346,4 @@ final class PullRequestsModel {
             isPushed = false
         }
     }
-
-    /// The merge queue answer for the repository, which decides
-    /// whether the merge action queues or merges.
-    func loadMergeQueue() async {
-        hasMergeQueue = await fetchHasMergeQueue()
-    }
-
-    /// The cached listing paints instantly while the fetch runs; a
-    /// kept selection is re-selected once the fetch answers, and a
-    /// single result opens its conversation directly. Extending
-    /// keeps the current page and raises the fetch limit.
-    /// `refreshingFacts` re-reads what the worktree itself says:
-    /// its signing, its rebase need, its template and its stack.
-    /// Moving up and down a stack leaves all of that alone, since
-    /// every entry shares one worktree, and asking git again is
-    /// what made the move feel like a load rather than a click.
-    func reload(keepingSelection: Bool = false, refreshingFacts: Bool = true) async {
-        let previous = keepingSelection ? selected?.number : nil
-        isLoading = true
-        // The cache paints before any of the reading: the listing
-        // this branch had last time is on screen at once, and the
-        // fetch replaces it in place.
-        page = 0
-        if keepingSelection == false {
-            selected = nil
-        }
-        paintCachedListing()
-        // Selected from the cache, not after the fetch: a branch
-        // with one pull request opens it the moment the tab does,
-        // and clicking between worktrees paints what each had.
-        if selected == nil, summaries.count == 1, let only = summaries.first {
-            select(only)
-        }
-        loadDraft()
-        if let worktree = branchItem?.worktree {
-            if refreshingFacts {
-                await refreshWorktreeFacts(worktree)
-            } else {
-                // An entry switch keeps the worktree's facts but
-                // fills the form from this entry's own commits.
-                await prefillFromSingleCommit(worktree)
-            }
-            // The count belongs to the entry, not to the worktree,
-            // so an entry switch reads it again.
-            commitsAboveBase = await fetchCommitCount(listedWorktree ?? worktree, listedRange)
-        }
-        defer {
-            isLoading = false
-            hasLoaded = true
-        }
-        // Captured before the await: a slow answer for an already
-        // switched scope must neither show nor cache under the new
-        // scope's key.
-        let requested = cacheKey
-        do {
-            let limit = GitHubClient.listLimit
-            let fetched = try await listing(limit: limit)
-            guard Task.isCancelled == false, requested == cacheKey else {
-                return
-            }
-
-            summaries = Self.worthShowing(fetched)
-            fetchedLimit = limit
-            pullRequests.rememberListing(
-                repositoryPath: repository.path,
-                scope: scope.listScope(branch: listedBranch),
-                summaries: fetched,
-            )
-            // A branch with one live pull request opens it: there
-            // is nothing else the list could be for.
-            let chosen = summaries.first { $0.number == previous }
-                ?? (summaries.count == 1 ? summaries.first : nil)
-            if let chosen {
-                select(chosen)
-            }
-            ServiceStatus.shared.recordSuccess()
-            prefetchStack()
-        } catch {
-            ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)
-        }
-    }
-
-    // MARK: Private
-
-    // Fetches stay one page ahead of the visible one, so the pager
-    // knows whether a next page exists.
 }

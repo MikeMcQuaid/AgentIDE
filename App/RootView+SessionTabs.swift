@@ -18,22 +18,7 @@ extension RootView {
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
-        dependencies.dashboard
-            .groups
-            .first { $0.repository.path == item.worktree.repositoryPath }?
-            .items ?? []
-    }
-
-    /// The version rather than the family alone: an agent whose CLI
-    /// was upgraded while it ran goes on running the old one, and
-    /// the number is the only place that shows.
-    func sessionTitle(for session: AgentSession) -> String {
-        let state = session.status == .running ? "●" : "○"
-        let agent = session.agent?.displayName ?? "Agent"
-        // The session name closes the line: it is the workspace
-        // label herdr shows, so a pane here and a workspace there
-        // can be matched by eye.
-        return state + " " + agent + (session.version.map { " " + $0 } ?? "") + " · " + session.name
+        dependencies.dashboard.groups.group(holding: item)?.items ?? []
     }
 
     var utilityToggleButton: some View {
@@ -45,9 +30,8 @@ extension RootView {
         }
         .buttonStyle(.plain)
         .hoverHelp(
-            showsUtilityPane
-                ? "Hide the utility pane; View or Cmd-Shift-U brings it back"
-                : "Show the utility pane",
+            showsUtilityPane ? "Hide the utility pane" : "Show the utility pane",
+            shortcut: "⇧⌘U",
         )
     }
 
@@ -124,10 +108,7 @@ extension RootView {
     /// The repository's default branch, which has no pull request
     /// of its own to go looking for.
     func defaultBranch(of item: WorktreeItem) -> String? {
-        dependencies.dashboard
-            .groups
-            .first { $0.repository.path == item.worktree.repositoryPath }?
-            .defaultBranch
+        dependencies.dashboard.groups.group(holding: item)?.defaultBranch
     }
 
     func repository(of item: WorktreeItem) -> Repository {
@@ -164,7 +145,10 @@ extension RootView {
         do {
             try await PerformanceLog.time(.process, "resume: launch", context: context) {
                 if let past = item.pastSessions.first {
-                    _ = try await dependencies.service.resumePast(past, worktree: item.worktree)
+                    let name = try await dependencies.service.resumePast(past, worktree: item.worktree)
+                    // herdr says when the resumed agent settles, so
+                    // the listing loop after finds it first time.
+                    await dependencies.service.waitForAgentReady(sessionName: name)
                 } else {
                     try await dependencies.service.resumeWorktree(item.worktree)
                 }
@@ -245,16 +229,28 @@ extension RootView {
             .hoverHelp("A directory of your own: this shell runs as you, and no agent runs here")
             Divider()
         } else if let session = item.session {
-            HStack(spacing: Self.stripSpacing) {
-                Text(sessionTitle(for: session))
-                    .font(.callout)
-                    .padding(.horizontal, Self.tabHorizontalPadding)
+            // The agent's mark at the left (colour while connected,
+            // greyscale once ended), the herdr workspace name
+            // centred, the close button at the pane's far edge;
+            // each part explains itself on hover.
+            ZStack {
+                HStack(spacing: Self.stripSpacing) {
+                    agentMark(for: session)
+                        .padding(.leading, Self.tabHorizontalPadding)
+                    stateGlyph(for: session)
+                    Spacer(minLength: 0)
+                    closeSessionButton(session, in: item)
+                        .padding(.trailing, Self.tabHorizontalPadding)
+                }
+                Text(session.name)
+                    // Monospaced: it is the workspace label herdr
+                    // shows, matched by eye against terminal output.
+                    .font(.callout.monospaced())
                     .padding(.vertical, Self.tabVerticalPadding)
-                closeSessionButton(session, in: item)
-                Spacer(minLength: 0)
+                    .hoverHelp("The herdr workspace name; `script/attach " + session.name
+                        + "` joins this session from a terminal")
             }
             .padding(Self.stripSpacing)
-            .hoverHelp("The live session; closing keeps the conversation resumable")
             Divider()
         }
     }
@@ -268,7 +264,85 @@ extension RootView {
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
 
-    /// Beside the live session's title, since that is what it closes.
+    /// The brand mark beside the live session's title, sized to the
+    /// callout text beside it.
+    private static let agentIconSize: CGFloat = 15
+
+    /// The agent's brand mark, doubling as the connection light: in
+    /// colour while the process runs, greyscale once it has ended.
+    /// The tooltip carries the CLI version, which matters because an
+    /// agent upgraded while running goes on running the old one, and
+    /// this is the only place that shows.
+    @ViewBuilder
+    private func agentMark(for session: AgentSession) -> some View {
+        let name = session.agent?.displayName ?? "Agent"
+        let version = session.version.map { " " + $0 } ?? ""
+        let isRunning = session.status == .running
+        let state = isRunning
+            ? "connected and running"
+            : "ended; the conversation stays resumable"
+        if let agent = session.agent {
+            Image(isRunning ? agent.connectedIconAssetName : agent.iconAssetName)
+                .renderingMode(isRunning ? .original : .template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(name + (isRunning ? ", connected" : ", ended"))
+                .hoverHelp(name + version + ": " + state)
+        } else {
+            Image(systemName: "questionmark.circle")
+                .accessibilityLabel("Unknown agent")
+                .hoverHelp("An agent this app does not recognise: " + state)
+        }
+    }
+
+    /// The activity glyph beside the mark, the sidebar's vocabulary
+    /// at strip size; only working moves, because only working is
+    /// happening right now.
+    @ViewBuilder
+    private func stateGlyph(for session: AgentSession) -> some View {
+        switch (session.status, session.activity) {
+        case (.finished, _):
+            Image(systemName: "stop.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Exited")
+                .hoverHelp("The process exited; the conversation stays resumable")
+
+        case (.running, .working):
+            Image(systemName: "play.circle.fill")
+                .foregroundStyle(.green)
+                .symbolEffect(.pulse)
+                .accessibilityLabel("Working")
+                .hoverHelp("The agent is working on its turn")
+
+        case (.running, .done):
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .accessibilityLabel("Done")
+                .hoverHelp("The turn is done; the answer is waiting")
+
+        case (.running, .idle):
+            Image(systemName: "pause.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Idle")
+                .hoverHelp("At rest: nothing asked, or the turn was interrupted")
+
+        case (.running, .blocked):
+            Image(systemName: "questionmark.circle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Needs input")
+                .hoverHelp("The agent asked a question or wants an approval")
+
+        case (.running, nil):
+            Image(systemName: "circle.dotted")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Undetected")
+                .hoverHelp("Running, but herdr cannot tell what the agent is doing")
+        }
+    }
+
+    /// At the pane's far edge, clear of the name it closes.
     private func closeSessionButton(_ session: AgentSession, in item: WorktreeItem) -> some View {
         Button {
             Task { await close(session, in: item) }

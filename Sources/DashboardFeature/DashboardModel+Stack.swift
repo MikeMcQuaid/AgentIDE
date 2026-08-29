@@ -63,9 +63,18 @@ extension DashboardModel {
 
     // MARK: Private
 
-    /// How long a derived stack is trusted before being asked again,
-    /// and how many worktrees one refresh will derive.
-    static let stackInterval: TimeInterval = 60
-    private static let loneInterval: TimeInterval = 300
+    /// How long a derived stack is trusted before being asked again
+    /// (Settings can change it; a lone branch waits five times as
+    /// long), and how many worktrees one refresh will derive.
+    static var stackInterval: TimeInterval {
+        AppSettings.stackInterval
+    }
+
+    private static var loneInterval: TimeInterval {
+        stackInterval * loneMultiplier
+    }
+
+    private static let loneMultiplier: TimeInterval = 5
+
     private static let stacksPerRefresh = 8
 }

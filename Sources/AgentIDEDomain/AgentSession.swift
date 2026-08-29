@@ -5,24 +5,28 @@
 public enum AgentActivity: Hashable, Sendable {
     /// The agent is actively running a turn.
     case working
-    /// The agent is ready for input.
+    /// The agent is at rest without a completed turn: never asked,
+    /// or interrupted mid-answer.
     case idle
+    /// The agent completed its turn; the answer is waiting.
+    case done
     /// The agent is waiting on an approval or decision.
     case blocked
 
     // MARK: Lifecycle
 
-    /// Maps herdr's status strings; `done` is herdr's own
-    /// idle-but-unseen, which this app's seen tracking replaces, and
-    /// `unknown` or absent statuses answer nil.
+    /// Maps herdr's status strings one to one; `unknown` or absent
+    /// statuses answer nil, which the surfaces show as undetected.
     public init?(herdrStatus: String?) {
         switch herdrStatus {
         case "working":
             self = .working
 
-        case "done",
-             "idle":
+        case "idle":
             self = .idle
+
+        case "done":
+            self = .done
 
         case "blocked":
             self = .blocked
@@ -55,7 +59,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         name: String,
         agent: AgentKind?,
         status: SessionStatus,
-        workingDirectory: String?,
         paneID: String? = nil,
         activity: AgentActivity? = nil,
         version: String? = nil,
@@ -64,7 +67,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         self.name = name
         self.agent = agent
         self.status = status
-        self.workingDirectory = workingDirectory
         self.paneID = paneID
         self.activity = activity
     }
@@ -79,9 +81,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
 
     /// Whether the session's process is running or finished.
     public let status: SessionStatus
-
-    /// The pane's current working directory, when known.
-    public let workingDirectory: String?
 
     /// The herdr id of the workspace's pane, the target terminals
     /// attach to; nil when no live pane is known.

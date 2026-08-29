@@ -70,6 +70,10 @@ struct AgentIDEApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
         .commands { AppCommands(dashboard: dependencies.dashboard) }
+
+        Settings {
+            SettingsView(dependencies: dependencies)
+        }
     }
 
     // MARK: Private

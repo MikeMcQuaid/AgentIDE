@@ -3,9 +3,29 @@ import TerminalUI
 
 public extension DashboardModel {
     /// Lists a directory of your own under the repository whose menu
-    /// asked for it, and shows it at once.
+    /// asked for it, and shows it at once: the row appears the
+    /// moment the click lands, its branch filled in by the refresh,
+    /// the way a new worktree's placeholder does.
     func addHostDirectory(_ path: String, to repository: Repository) async {
         service.addHostDirectory(path, to: repository)
+        let row = WorktreeItem(
+            worktree: Worktree(
+                repositoryName: repository.name,
+                repositoryPath: repository.path,
+                branch: "",
+                path: path,
+                isHostDirectory: true,
+            ),
+            session: nil,
+            isDirty: false,
+            aheadOfUpstream: nil,
+            hasUnread: false,
+        )
+        for index in groups.indices
+            where groups[index].repository.path == repository.path
+            && groups[index].items.contains(where: { $0.worktree.path == path }) == false {
+            groups[index].items.append(row)
+        }
         await refresh()
     }
 
@@ -92,6 +112,24 @@ public extension DashboardModel {
     /// git is not touched either way.
     func setStackExclusion(branch: String, excluded: Bool, for item: WorktreeItem) {
         service.setStackExclusion(branch: branch, excluded: excluded, worktreePath: item.worktree.path)
+    }
+
+    /// The local branches this worktree could switch to.
+    func availableBranches(for item: WorktreeItem) async -> [String] {
+        await service.availableBranches(worktree: item.worktree)
+    }
+
+    /// Checks out another branch in place, telling the row at once
+    /// the way the pull-default action does.
+    func switchBranch(_ branch: String, for item: WorktreeItem) async {
+        do {
+            try await service.switchBranch(branch, worktree: item.worktree)
+            ErrorLog.shared.note("Checked out " + branch + " in " + item.worktree.path + ".")
+            await rename(item, to: branch)
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
     }
 
     /// Stops listing one; nothing on disk is touched.
