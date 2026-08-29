@@ -342,11 +342,12 @@ extension PullRequestsModel {
                     + "check the signing key and hit Rebase again")
                 return false
             }
+            let verb = AppSettings.requiresSignedCommits ? "Rebased and signed" : "Rebased"
             setStatus(
-                moved.isEmpty ? "Already in order." : "Rebased and signed.",
+                moved.isEmpty ? "Already in order." : verb + ".",
                 detail: moved.isEmpty
                     ? "The stack was already in order."
-                    : "Rebased and signed " + moved.joined(separator: ", ") + ".",
+                    : verb + " " + moved.joined(separator: ", ") + ".",
             )
             Self.requestSidebarRefresh()
             return true

@@ -228,7 +228,11 @@ public struct GitClient: Sendable {
     /// the worktree holds, which is not always the one on screen.
     public func rebaseSigned(worktreePath: String, branch: String, onto ref: String) async throws {
         do {
-            try await git(["rebase", "--force-rebase", "--gpg-sign", ref, branch], in: worktreePath)
+            var arguments = ["rebase", "--force-rebase"]
+            if AppSettings.requiresSignedCommits {
+                arguments.append("--gpg-sign")
+            }
+            try await git(arguments + [ref, branch], in: worktreePath)
         } catch {
             try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error

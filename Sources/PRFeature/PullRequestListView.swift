@@ -133,9 +133,15 @@ struct PullRequestFooterView: View {
     }
 
     var rebaseHelp: String {
-        model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this branch's "
-            + "own origin ref when that is fully signed and only new commits need signatures, "
-            + "otherwise onto origin/HEAD re-signing everything; a conflict aborts and reports to Messages"
+        guard AppSettings.requiresSignedCommits else {
+            return model.rebaseTitle
+                + ": fetch, then rebase onto origin; a conflict aborts and reports to Messages"
+        }
+
+        return model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this "
+            + "branch's own origin ref when that is fully signed and only new commits need "
+            + "signatures, otherwise onto origin/HEAD re-signing everything; a conflict aborts "
+            + "and reports to Messages"
     }
 
     var body: some View {

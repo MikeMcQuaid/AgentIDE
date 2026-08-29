@@ -204,8 +204,12 @@ public extension GitClient {
             // Forced like the single-branch rebase: without it a
             // branch already in place fast-forwards, rewriting and
             // signing nothing, which left unsigned tips unsigned.
+            var arguments = ["rebase", "--force-rebase"]
+            if AppSettings.requiresSignedCommits {
+                arguments.append("--gpg-sign")
+            }
             try await git(
-                ["rebase", "--force-rebase", "--gpg-sign", "--onto", newBase, oldBase, branch],
+                arguments + ["--onto", newBase, oldBase, branch],
                 in: worktreePath,
             )
         } catch {

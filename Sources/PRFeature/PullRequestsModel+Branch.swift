@@ -8,7 +8,11 @@ import AgentIDEDomain
 extension PullRequestsModel {
     /// The rebase button's label names exactly what it would do.
     var rebaseTitle: String {
-        switch rebaseNeed {
+        guard AppSettings.requiresSignedCommits else {
+            return "Rebase on origin"
+        }
+
+        return switch rebaseNeed {
         case .sign:
             "Sign commits"
 

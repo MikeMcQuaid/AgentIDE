@@ -1066,6 +1066,10 @@ shim rather than a protocol:
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
    dims until the tip commit verifies and the service refuses regardless.
+   All of it sits behind Settings' Require signed commits, on by
+   default: switched off nothing signs or checks, rebases drop
+   `--gpg-sign` and pushes skip the tip check, for repositories
+   without a signing hook.
    The signed rebase (`--force-rebase --gpg-sign` after a fetch) picks its
    base to sign the minimum: the branch's own origin ref when it exists,
    is still an ancestor of the branch, every commit unique to it verifies
