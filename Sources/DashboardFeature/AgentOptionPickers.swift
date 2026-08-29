@@ -6,16 +6,26 @@ import TerminalUI
 /// creation surface. Neither model nor effort has a default: until
 /// one has been picked the picker stands empty and the form refuses
 /// to start, and afterwards the last pick is what comes back.
-struct AgentOptionPickers: View {
-    // MARK: Internal
+public struct AgentOptionPickers: View {
+    // MARK: Lifecycle
 
-    @Binding var agent: AgentKind
-    @Binding var model: String
-    @Binding var effort: String
+    /// Creates the pickers; public so the Settings window can offer
+    /// the same controls the session forms use.
+    public init(
+        agent: Binding<AgentKind>,
+        model: Binding<String>,
+        effort: Binding<String>,
+        choices: @escaping (AgentKind) -> (models: [String], efforts: [String]),
+    ) {
+        _agent = agent
+        _model = model
+        _effort = effort
+        self.choices = choices
+    }
 
-    let choices: (AgentKind) -> (models: [String], efforts: [String])
+    // MARK: Public
 
-    var body: some View {
+    public var body: some View {
         HStack(spacing: Self.spacing) {
             Picker("Agent", selection: $agent) {
                 ForEach(AgentKind.allCases, id: \.self) { kind in
@@ -58,6 +68,14 @@ struct AgentOptionPickers: View {
         .onAppear { resetUnavailableChoices() }
         .onChange(of: agent) { resetUnavailableChoices() }
     }
+
+    // MARK: Internal
+
+    @Binding var agent: AgentKind
+    @Binding var model: String
+    @Binding var effort: String
+
+    let choices: (AgentKind) -> (models: [String], efforts: [String])
 
     // MARK: Private
 

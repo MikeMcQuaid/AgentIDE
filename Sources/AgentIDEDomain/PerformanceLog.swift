@@ -80,6 +80,21 @@ public enum PerformanceLog {
         directory + "/performance.log"
     }
 
+    /// Creates or removes the marker file, the same switch
+    /// `script/performance-log` flips, and forgets the cached
+    /// answer so the change takes effect now rather than in a few
+    /// seconds. The environment variable, when set, still wins.
+    public static func setEnabled(_ enabled: Bool) {
+        let marker = directory + "/performance-log"
+        if enabled {
+            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: marker, contents: nil)
+        } else {
+            try? FileManager.default.removeItem(atPath: marker)
+        }
+        enabledState.withLock { $0 = nil }
+    }
+
     /// Whether a line written at a moment is still kept.
     public static func keeps(lineWrittenAt written: Date, now: Date = Date()) -> Bool {
         written > now.addingTimeInterval(-lifetime)

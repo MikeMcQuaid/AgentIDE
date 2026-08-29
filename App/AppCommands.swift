@@ -19,9 +19,6 @@ struct AppCommands: Commands {
                 NSApplication.shared.orderFrontStandardAboutPanel(options: [.version: ""])
             }
         }
-        CommandGroup(after: .appSettings) {
-            completionSoundMenu
-        }
         CommandGroup(replacing: .newItem) {
             Button("New Agent Session") {
                 // No preset: the menu is repository-agnostic, and a
@@ -97,70 +94,6 @@ struct AppCommands: Commands {
     /// agent panes ignore it.
     @AppStorage("clearShellRequest")
     private var clearShellRequest = 0
-
-    /// The completion chime's sound file, on the storage bus for the
-    /// notifier; picking a sound also previews it.
-    @AppStorage(CompletionSound.key)
-    private var completionSound: String = CompletionSound.defaultPath
-
-    /// Whether the chosen sound came from the file chooser rather
-    /// than the listed directories, so it still shows as picked.
-    private var isCustomSound: Bool {
-        completionSound.isEmpty == false
-            && CompletionSound.systemSounds().contains { $0.path == completionSound } == false
-    }
-
-    private var customSoundName: String {
-        URL(filePath: completionSound).lastPathComponent
-    }
-
-    /// The picker's selection, previewing each pick as it lands so
-    /// choosing a chime is also hearing it.
-    private var previewingSoundSelection: Binding<String> {
-        Binding(
-            get: { completionSound },
-            set: { path in
-                completionSound = path
-                CompletionSound.play(path: path)
-            },
-        )
-    }
-
-    /// The chime picker: silence, the system's sound directories and
-    /// whatever file was chosen, with the chooser below admitting
-    /// only audio types playback accepts.
-    private var completionSoundMenu: some View {
-        Menu("Completion Sound") {
-            Picker("Completion Sound", selection: previewingSoundSelection) {
-                Text("None").tag("")
-                ForEach(CompletionSound.systemSounds(), id: \.path) { sound in
-                    Text(sound.name).tag(sound.path)
-                }
-                if isCustomSound {
-                    Text(customSoundName).tag(completionSound)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
-            Divider()
-            Button("Choose Audio File…") { chooseCompletionSound() }
-        }
-    }
-
-    /// Asks for an audio file, admitting only the types playback
-    /// accepts, and previews the pick.
-    private func chooseCompletionSound() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = CompletionSound.allowedTypes
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = URL(fileURLWithPath: "/System/Library/Sounds")
-        guard panel.runModal() == .OK, let url = panel.url else {
-            return
-        }
-
-        completionSound = url.path
-        CompletionSound.play(path: url.path)
-    }
 
     /// Increments a storage-bus counter; the pane owning the
     /// action observes it and runs.

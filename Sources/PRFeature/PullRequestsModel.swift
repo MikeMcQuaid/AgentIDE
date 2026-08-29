@@ -144,7 +144,11 @@ final class PullRequestsModel {
             try await service.rebaseSigned(worktree: worktree)
         }
         checkTipSigned = { worktree in
-            await service.isTipSigned(worktree: worktree)
+            // Settings can waive signing for repositories whose
+            // remote runs no signature hook.
+            AppSettings.requiresSignedCommits
+                ? await service.isTipSigned(worktree: worktree)
+                : true
         }
         currentBranch = branch
         wireStack(service: service)

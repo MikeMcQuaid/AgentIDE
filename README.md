@@ -88,9 +88,15 @@ before shipping.
   happened yet, any unresolved conversations, and its commit counts last
   (so one glance across the sidebar says where everything stands)
 - **Notifies** you when an agent finishes its work, needs your input or
-  stalls, the finish with a completion chime picked from the menu bar:
-  macOS's own sounds, any audio file of your own or silence (so you never
-  sit polling a terminal and ship no audio files either)
+  stalls, badges the Dock with how many need attention, and plays a
+  chime per event picked in Settings: macOS's own sounds, any audio
+  file of your own or silence (so you never sit polling a terminal and
+  ship no audio files either)
+- **Configures** itself in one Settings window (Cmd-,): default agent,
+  model and effort, per-event notifications and sounds, the external
+  editor, the shared monospace font, refresh cadences and whether
+  pushing requires signed commits (so preferences live where macOS
+  puts them rather than in menus and hidden defaults)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel

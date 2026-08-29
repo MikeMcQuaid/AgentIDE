@@ -266,8 +266,15 @@ public extension SessionService {
         for branch in stack.branches {
             // What the single-branch push refuses, this refuses:
             // unsigned commits are turned away by the hook, and the
-            // stack must not be left half pushed to learn that.
-            guard await git.isCommitSigned(worktreePath: worktree.path, ref: branch) else {
+            // stack must not be left half pushed to learn that;
+            // Settings can waive signing for hookless remotes.
+            let signed =
+                if AppSettings.requiresSignedCommits {
+                    await git.isCommitSigned(worktreePath: worktree.path, ref: branch)
+                } else {
+                    true
+                }
+            guard signed else {
                 throw SessionServiceError(
                     branch + "'s tip commit is not GPG signed; Rebase signs the stack before pushing.",
                 )
@@ -284,6 +291,10 @@ public extension SessionService {
     /// that would push them can dim the way a branch's own does
     /// rather than failing on the first one.
     func branchesUnsigned(worktree: Worktree) async -> [String] {
+        guard AppSettings.requiresSignedCommits else {
+            return []
+        }
+
         let stack = await stack(for: worktree)
         var unsigned = [String]()
         for branch in stack.branches where await git.isCommitSigned(

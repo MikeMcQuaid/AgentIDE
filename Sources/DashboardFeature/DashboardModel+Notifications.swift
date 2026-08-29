@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import Foundation
 import TerminalUI
 import UserNotifications
@@ -6,6 +7,7 @@ import UserNotifications
 /// Poll-to-poll change detection posting user notifications. One
 /// notification per worktree per poll, the most decided state first:
 /// an exit or a completed turn beats needing input beats new output.
+/// Settings decides which events notify and what each sounds like.
 extension DashboardModel {
     func notifyChanges(from old: [RepositoryGroup], to new: [RepositoryGroup]) {
         // Uniquing, not trapping: duplicate ids would crash the poll.
@@ -19,16 +21,34 @@ extension DashboardModel {
             let exited = previous.session?.status == .running && session.status != .running
             let completedTurn = previous.session?.activity == .working && session.activity == .idle
             if exited || completedTurn {
-                post(title: "Agent finished", body: body, chimes: true)
+                post(.finished, title: "Agent finished", body: body)
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
-                post(title: "Agent needs input", body: body)
+                post(.needsInput, title: "Agent needs input", body: body)
             } else if previous.hasUnread == false, item.hasUnread {
-                post(title: "Agent output", body: body)
+                post(.output, title: "Agent output", body: body)
             }
         }
+        updateDockBadge(for: new)
     }
 
-    private func post(title: String, body: String, chimes: Bool = false) {
+    // MARK: Private
+
+    /// The Dock badge counts the worktrees needing attention: an
+    /// agent waiting on input, or one whose output ended unseen.
+    /// Output still streaming is not attention; it is work.
+    private func updateDockBadge(for groups: [RepositoryGroup]) {
+        let attention = groups.flatMap(\.items).count { item in
+            item.session?.activity == .blocked
+                || (item.hasUnread && item.session?.status != .running)
+        }
+        NSApp.dockTile.badgeLabel = attention > 0 ? String(attention) : nil
+    }
+
+    private func post(_ event: NotificationPreferences.Event, title: String, body: String) {
+        guard NotificationPreferences.notifies(event) else {
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -38,11 +58,8 @@ extension DashboardModel {
             trigger: nil,
         )
         UNUserNotificationCenter.current().add(request)
-        if chimes {
-            // The user's pick from the menu bar, macOS's own Glass
-            // until they choose; it plays whether or not
-            // notification banners are allowed to.
-            CompletionSound.play(path: CompletionSound.chosenPath)
-        }
+        // The event's chosen sound plays whether or not banners are
+        // allowed to; silence is a choice.
+        CompletionSound.play(path: NotificationPreferences.sound(for: event))
     }
 }
