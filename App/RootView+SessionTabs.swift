@@ -18,10 +18,7 @@ extension RootView {
     }
 
     func repositoryItems(for item: WorktreeItem) -> [WorktreeItem] {
-        dependencies.dashboard
-            .groups
-            .first { $0.repository.path == item.worktree.repositoryPath }?
-            .items ?? []
+        dependencies.dashboard.groups.group(holding: item)?.items ?? []
     }
 
     var utilityToggleButton: some View {
@@ -111,10 +108,7 @@ extension RootView {
     /// The repository's default branch, which has no pull request
     /// of its own to go looking for.
     func defaultBranch(of item: WorktreeItem) -> String? {
-        dependencies.dashboard
-            .groups
-            .first { $0.repository.path == item.worktree.repositoryPath }?
-            .defaultBranch
+        dependencies.dashboard.groups.group(holding: item)?.defaultBranch
     }
 
     func repository(of item: WorktreeItem) -> Repository {

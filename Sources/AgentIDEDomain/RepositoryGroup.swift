@@ -179,3 +179,15 @@ public struct RepositoryGroup: Identifiable, Hashable, Sendable {
         repository.id
     }
 }
+
+public extension [RepositoryGroup] {
+    /// The group an item belongs to: by membership first, since an
+    /// adopted worktree's repository path names the clone that owns
+    /// its branch, which no group is keyed by. Falling back to the
+    /// repository path covers items from readings these groups have
+    /// not caught up with yet.
+    func group(holding item: WorktreeItem) -> RepositoryGroup? {
+        first { group in group.items.contains { $0.worktree.path == item.worktree.path } }
+            ?? first { $0.repository.path == item.worktree.repositoryPath }
+    }
+}
