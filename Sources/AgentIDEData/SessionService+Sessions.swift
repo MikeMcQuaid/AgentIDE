@@ -258,6 +258,21 @@ public extension SessionService {
         try await herdr.typeText(text, sessionName: sessionName)
     }
 
+    /// Waits for a just-launched session's agent to settle into a
+    /// detected state, so the listing that follows finds it first
+    /// time instead of polling half-second refreshes.
+    func waitForAgentReady(sessionName: String) async {
+        _ = await herdr.waitForAgent(
+            sessionName: sessionName,
+            timeoutMilliseconds: Self.agentReadyTimeoutMilliseconds,
+        )
+    }
+
+    /// How long a fresh agent gets to settle before the old listing
+    /// loop carries the wait alone; twenty seconds covers a slow
+    /// sandbox launch without ever hanging the flow on herdr.
+    internal static let agentReadyTimeoutMilliseconds = 20_000
+
     // MARK: Internal
 
     /// Earlier conversations for a worktree, newest first, from every

@@ -281,6 +281,25 @@ public extension HerdrClient {
         return closed
     }
 
+    /// Waits until a session's agent reaches a settled state
+    /// (working, idle or blocked), or the timeout passes. herdr
+    /// watches its own detection, where the app could only re-read
+    /// whole snapshots on a half-second loop; false means the wait
+    /// timed out or the session had no pane, and the caller's
+    /// listing loop takes over as before.
+    func waitForAgent(sessionName: String, timeoutMilliseconds: Int) async -> Bool {
+        guard let row = try? await snapshotRows().first(where: { $0.sessionName == sessionName }) else {
+            return false
+        }
+
+        let result = try? await herdr([
+            "agent", "wait", row.paneID,
+            "--until", "working", "--until", "idle", "--until", "blocked",
+            "--timeout", String(timeoutMilliseconds),
+        ], allowFailure: true)
+        return result?.succeeded == true
+    }
+
     /// Types literal text into a session's terminal.
     func typeText(_ text: String, sessionName: String) async throws {
         guard let row = try await snapshotRows().first(where: { $0.sessionName == sessionName }) else {

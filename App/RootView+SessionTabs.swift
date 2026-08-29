@@ -151,7 +151,10 @@ extension RootView {
         do {
             try await PerformanceLog.time(.process, "resume: launch", context: context) {
                 if let past = item.pastSessions.first {
-                    _ = try await dependencies.service.resumePast(past, worktree: item.worktree)
+                    let name = try await dependencies.service.resumePast(past, worktree: item.worktree)
+                    // herdr says when the resumed agent settles, so
+                    // the listing loop after finds it first time.
+                    await dependencies.service.waitForAgentReady(sessionName: name)
                 } else {
                     try await dependencies.service.resumeWorktree(item.worktree)
                 }
