@@ -246,9 +246,18 @@ extension RootView {
             Divider()
         } else if let session = item.session {
             HStack(spacing: Self.stripSpacing) {
+                if let agent = session.agent {
+                    // Which agent at a glance, before any reading.
+                    Image(agent.iconAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                        .accessibilityHidden(true)
+                        .padding(.leading, Self.tabHorizontalPadding)
+                }
                 Text(sessionTitle(for: session))
                     .font(.callout)
-                    .padding(.horizontal, Self.tabHorizontalPadding)
+                    .padding(.horizontal, session.agent == nil ? Self.tabHorizontalPadding : 0)
                     .padding(.vertical, Self.tabVerticalPadding)
                 closeSessionButton(session, in: item)
                 Spacer(minLength: 0)
@@ -267,6 +276,10 @@ extension RootView {
     static let terminalInset: CGFloat = 6
     private static let tabHorizontalPadding: CGFloat = 8
     private static let tabVerticalPadding: CGFloat = 3
+
+    /// The brand mark beside the live session's title, sized to the
+    /// callout text beside it.
+    private static let agentIconSize: CGFloat = 15
 
     /// Beside the live session's title, since that is what it closes.
     private func closeSessionButton(_ session: AgentSession, in item: WorktreeItem) -> some View {
