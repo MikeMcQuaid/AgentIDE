@@ -72,6 +72,12 @@ extension PullRequestsModel {
     /// reading up and down a stack is navigation, and moving the
     /// worktree to another branch is a deliberate act of its own.
     func show(branch: String) {
+        // Clearing below is for arriving somewhere new; re-listing
+        // the entry already in view wiped typed text.
+        guard branch != stacking.selected else {
+            return
+        }
+
         stacking.selected = branch
         if let worktreePath {
             StackSelection.remember(branch, for: worktreePath)
@@ -90,10 +96,13 @@ extension PullRequestsModel {
         Task { await reload(keepingSelection: false, refreshingFacts: false) }
     }
 
-    /// Whether restacking would move anything: a branch not already
-    /// sitting on the one below it.
+    /// Whether restacking would change anything: a branch not
+    /// already sitting on the one below it, or an unsigned tip that
+    /// only the signing rebase can make pushable. Without the
+    /// second half an in-place stack with unsigned commits greyed
+    /// this button while Push waited on exactly this.
     var canRestack: Bool {
-        stacking.needsRestack
+        stacking.needsRestack || stacking.unsignedBranches.isEmpty == false
     }
 
     /// Whether any branch of the stack has commits the remote does
@@ -222,16 +231,6 @@ extension PullRequestsModel {
         }
     }
 
-    /// Whether one pull request could be merged as it stands: no
-    /// draft, no conflict, checks green, and no review outstanding
-    /// or refused. An empty review decision is a repository that
-    /// asks for none.
-    static func isReadyToMerge(_ summary: PullRequestSummary) -> Bool {
-        summary.state == "OPEN" && summary.isDraft == false
-            && summary.mergeable == "MERGEABLE" && summary.checks == "SUCCESS"
-            && ["", "APPROVED"].contains(summary.reviewDecision)
-    }
-
     /// Whether GitHub has the chain this entry sits on: every branch
     /// below it open against the branch below that, which is what a
     /// stack there is made of and what a stacked merge needs.
@@ -353,6 +352,8 @@ extension PullRequestsModel {
             return true
         }
 
+        isBranchActionRunning = true
+        defer { isBranchActionRunning = false }
         do {
             let moved = try await stacking.restack(worktree)
             setStatus(
@@ -378,6 +379,8 @@ extension PullRequestsModel {
             return true
         }
 
+        isBranchActionRunning = true
+        defer { isBranchActionRunning = false }
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)

@@ -201,8 +201,11 @@ public extension GitClient {
     /// the branch exactly as it was.
     func rebaseSigned(branch: String, onto newBase: String, from oldBase: String, worktreePath: String) async throws {
         do {
+            // Forced like the single-branch rebase: without it a
+            // branch already in place fast-forwards, rewriting and
+            // signing nothing, which left unsigned tips unsigned.
             try await git(
-                ["rebase", "--gpg-sign", "--onto", newBase, oldBase, branch],
+                ["rebase", "--force-rebase", "--gpg-sign", "--onto", newBase, oldBase, branch],
                 in: worktreePath,
             )
         } catch {

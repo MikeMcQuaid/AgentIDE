@@ -221,9 +221,20 @@ public extension SessionService {
             for branch in stack.branches {
                 let parent = stack.parent(of: branch) ?? base
                 // Already on its parent: leave every commit's name
-                // alone rather than rewriting them to say so.
+                // alone rather than rewriting them to say so —
+                // unless its tip is unsigned while signing is
+                // required, since this rebase is the only thing
+                // that can sign it and Push waits on exactly that.
                 if await git.isAncestor(parent, of: branch, worktreePath: path) {
-                    continue
+                    let signed =
+                        if AppSettings.requiresSignedCommits {
+                            await git.isCommitSigned(worktreePath: path, ref: branch)
+                        } else {
+                            true
+                        }
+                    if signed {
+                        continue
+                    }
                 }
                 // Where it forked from, recorded before anything
                 // moved: without it the replay takes the parent's

@@ -7,7 +7,41 @@ import Testing
 /// branches sharing a line of descent, ordered by how far each has
 /// come from the default branch.
 struct BranchStackIntegrationTests {
-    // MARK: Internal
+    /// Shared with the signing extension file. Gives the
+    /// repository a signing key of its own, since a
+    /// restack signs everything it replays and the runner has no
+    /// key: SSH signing needs nothing but a keypair.
+    static func signable(_ path: String) async throws {
+        let key = path + "/.signing-key"
+        _ = try await TestSupport.run(["/usr/bin/ssh-keygen", "-t", "ed25519", "-N", "", "-q", "-f", key])
+        _ = try await TestSupport.runGit(["config", "gpg.format", "ssh"], in: path)
+        _ = try await TestSupport.runGit(["config", "user.signingkey", key], in: path)
+        // Verification needs the allowed signers too, or every
+        // signature reads as uncheckable and the restack treats
+        // signed branches as unsigned forever.
+        let publicKey = try String(contentsOfFile: key + ".pub", encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = path + "/.allowed-signers"
+        try ("* " + publicKey + "\n").write(toFile: allowed, atomically: true, encoding: .utf8)
+        _ = try await TestSupport.runGit(["config", "gpg.ssh.allowedSignersFile", allowed], in: path)
+    }
+
+    static func commit(_ message: String, in path: String) async throws {
+        let file = path + "/" + message.replacing(" ", with: "_") + ".txt"
+        try message.write(toFile: file, atomically: true, encoding: .utf8)
+        _ = try await TestSupport.runGit(["add", "."], in: path)
+        _ = try await TestSupport.runGit(["commit", "--no-gpg-sign", "-m", message], in: path)
+    }
+
+    static func tip(of branch: String, in path: String) async throws -> String {
+        try await TestSupport.runGit(["rev-parse", branch], in: path).standardOutput
+    }
+
+    static func branch(in path: String) async throws -> String {
+        try await TestSupport.runGit(["branch", "--show-current"], in: path)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     @Test
     func `a stack is every branch on this one's line of descent, in order`() async throws {
@@ -274,14 +308,14 @@ struct BranchStackIntegrationTests {
             path: repository.path,
         )
         try await Self.signable(repository.path)
-        try await Self.commit("first", in: repository.path)
+        try await Self.signedCommit("first", in: repository.path)
         for branch in ["lower", "upper"] {
             _ = try await TestSupport.runGit(["checkout", "-b", branch], in: repository.path)
-            try await Self.commit(branch + " work", in: repository.path)
+            try await Self.signedCommit(branch + " work", in: repository.path)
         }
         // The lower branch gains a commit, leaving the upper behind.
         _ = try await TestSupport.runGit(["checkout", "lower"], in: repository.path)
-        try await Self.commit("more lower work", in: repository.path)
+        try await Self.signedCommit("more lower work", in: repository.path)
         _ = try await TestSupport.runGit(["checkout", "upper"], in: repository.path)
         let before = try await Self.tip(of: "upper", in: repository.path)
 
@@ -298,34 +332,5 @@ struct BranchStackIntegrationTests {
         // Nothing left to do, so nothing is renamed for nothing.
         let again = try await world.service.restack(worktree: worktree)
         #expect(again.isEmpty)
-    }
-
-    // MARK: Private
-
-    /// Gives the repository a signing key of its own, since a
-    /// restack signs everything it replays and the runner has no
-    /// key: SSH signing needs nothing but a keypair.
-    private static func signable(_ path: String) async throws {
-        let key = path + "/.signing-key"
-        _ = try await TestSupport.run(["/usr/bin/ssh-keygen", "-t", "ed25519", "-N", "", "-q", "-f", key])
-        _ = try await TestSupport.runGit(["config", "gpg.format", "ssh"], in: path)
-        _ = try await TestSupport.runGit(["config", "user.signingkey", key], in: path)
-    }
-
-    private static func commit(_ message: String, in path: String) async throws {
-        let file = path + "/" + message.replacing(" ", with: "_") + ".txt"
-        try message.write(toFile: file, atomically: true, encoding: .utf8)
-        _ = try await TestSupport.runGit(["add", "."], in: path)
-        _ = try await TestSupport.runGit(["commit", "--no-gpg-sign", "-m", message], in: path)
-    }
-
-    private static func tip(of branch: String, in path: String) async throws -> String {
-        try await TestSupport.runGit(["rev-parse", branch], in: path).standardOutput
-    }
-
-    private static func branch(in path: String) async throws -> String {
-        try await TestSupport.runGit(["branch", "--show-current"], in: path)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
