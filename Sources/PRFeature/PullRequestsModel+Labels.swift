@@ -1,5 +1,3 @@
-import AgentIDEData
-
 /// The selected pull request's labels: read on selection, toggled
 /// against GitHub. Split from the actions for length.
 extension PullRequestsModel {

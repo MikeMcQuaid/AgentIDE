@@ -112,7 +112,6 @@ public extension SessionService {
             name: pane.sessionName,
             agent: nil,
             status: pane.isFinished ? .finished : .running,
-            workingDirectory: pane.currentPath,
             paneID: pane.paneID,
             activity: pane.activity,
         )
@@ -176,7 +175,6 @@ public extension SessionService {
                     name: pane.sessionName,
                     agent: item.session?.agent ?? .claudeCode,
                     status: pane.isFinished ? .finished : .running,
-                    workingDirectory: pane.currentPath,
                     paneID: pane.paneID,
                     activity: pane.activity,
                     version: item.session?.version,
@@ -319,7 +317,6 @@ public extension SessionService {
                 name: pane.sessionName,
                 agent: agentKind(of: pane.sessionName),
                 status: pane.isFinished ? .finished : .running,
-                workingDirectory: pane.currentPath,
                 paneID: pane.paneID,
                 activity: pane.activity,
                 version: reading.metadata.agentVersions[pane.sessionName],

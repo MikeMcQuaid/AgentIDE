@@ -1,5 +1,3 @@
-import Foundation
-
 /// Labels: the repository's own, and reading and changing a pull
 /// request's, split from the client body for length.
 public extension GitHubClient {

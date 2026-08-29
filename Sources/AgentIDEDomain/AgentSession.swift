@@ -59,7 +59,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         name: String,
         agent: AgentKind?,
         status: SessionStatus,
-        workingDirectory: String?,
         paneID: String? = nil,
         activity: AgentActivity? = nil,
         version: String? = nil,
@@ -68,7 +67,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         self.name = name
         self.agent = agent
         self.status = status
-        self.workingDirectory = workingDirectory
         self.paneID = paneID
         self.activity = activity
     }
@@ -83,9 +81,6 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
 
     /// Whether the session's process is running or finished.
     public let status: SessionStatus
-
-    /// The pane's current working directory, when known.
-    public let workingDirectory: String?
 
     /// The herdr id of the workspace's pane, the target terminals
     /// attach to; nil when no live pane is known.
