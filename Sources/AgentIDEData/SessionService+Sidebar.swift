@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 // MARK: - SidebarReading
 
@@ -15,6 +16,9 @@ public struct SidebarReading: Sendable {
 /// joined with their sessions. Read in parallel at every level, since
 /// each worktree is a handful of git processes sharing nothing.
 public extension SessionService {
+    /// See `configureHerdrOnce`; process-wide on purpose.
+    private static let herdrConfigured: Mutex = .init(false)
+
     /// The full dashboard state: every repository's worktrees joined
     /// with their sessions, plus foreign sessions.
     /// `scope` says whose git is read this time; the others come
@@ -24,6 +28,7 @@ public extension SessionService {
         scope: GitReadScope = .all,
         kept: [RepositoryGroup] = [],
     ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
+        await configureHerdrOnce()
         let panes = await (try? herdr.panes()) ?? []
         let activity = spool.activity()
         let metadata = store.load()
@@ -83,6 +88,22 @@ public extension SessionService {
         // almost every tick.
         await backUpRunningConversations(groups)
         return (groups, foreign)
+    }
+
+    /// Once per run, on the first reading rather than the first
+    /// launch: a `herdr worktree create` typed into a terminal
+    /// should land right even before any session starts.
+    internal func configureHerdrOnce() async {
+        let first = Self.herdrConfigured.withLock { configured in
+            let was = configured
+            configured = true
+            return was == false
+        }
+        guard first else {
+            return
+        }
+
+        await herdr.configureWorktrees(directory: paths.worktreesDirectory)
     }
 
     /// A pane AgentIDE did not create, shown rather than hidden.
