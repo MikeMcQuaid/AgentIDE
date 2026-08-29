@@ -12,17 +12,29 @@ extension PullRequestsModel {
     /// between a stack's entries, which share all of it.
     func refreshWorktreeFacts(_ worktree: Worktree) async {
         await loadStack()
-        isTipSigned = await checkTipSigned(listedWorktree ?? worktree)
-        rebaseNeed = await fetchRebaseNeed(listedWorktree ?? worktree)
+        // Gather, then write only while still the newest read: an
+        // older reload landing stale signing facts over the rebase's
+        // fresh ones is how Push sometimes stayed locked until a
+        // second press ran a fresh read.
+        let generation = stacking.factsGeneration
+        let signed = await checkTipSigned(listedWorktree ?? worktree)
+        let need = await fetchRebaseNeed(listedWorktree ?? worktree)
         let template = await fetchTemplate(worktree.path)
+        let live = await fetchCurrentBranch(worktree.path)
+        guard generation == stacking.factsGeneration else {
+            return
+        }
+
+        isTipSigned = signed
+        rebaseNeed = need
         hasTemplate = template != nil
         originalTemplate = template ?? ""
         if prTemplate.isEmpty {
             prTemplate = originalTemplate
         }
         await prefillFromSingleCommit(worktree)
-        if let live = await fetchCurrentBranch(worktree.path) {
-            currentBranch = live
+        if let branch = live {
+            currentBranch = branch
         }
     }
 

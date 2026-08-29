@@ -1,41 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
 
-// MARK: - StackWork
-
-/// What the tab knows about the stack this branch belongs to: the
-/// stack itself, and the work it can be asked to do as a whole.
-struct StackWork {
-    var stack: BranchStack = .init(base: nil, branches: [], checkedOut: "")
-
-    /// The entry the tab is listing, always named rather than left
-    /// to the branch the worktree holds: reading up and down a stack
-    /// must survive the reload that asks git which branch is really
-    /// checked out, and where a local-only twin is checked out the
-    /// entry standing for it is a different name entirely.
-    var selected: String?
-
-    /// What each of the stack's two actions would actually do, so
-    /// a button with nothing to do says so by dimming.
-    var needsRestack = false
-    var needsPush = false
-
-    /// The branches with commits the remote lacks, bottom first.
-    var unpushedBranches: [String] = []
-
-    /// The branches whose tip is unsigned, which no push will take.
-    var unsignedBranches: [String] = []
-    var fetch: (Worktree) async -> BranchStack = { worktree in
-        BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)
-    }
-
-    var restack: (Worktree) async throws -> [String] = { _ in [] }
-    var push: (Worktree) async throws -> [String] = { _ in [] }
-    var pending: (Worktree) async -> Bool = { _ in false }
-    var unpushed: (Worktree) async -> [String] = { _ in [] }
-    var unsigned: (Worktree) async -> [String] = { _ in [] }
-}
-
 /// A stack of branches in one worktree, as the pull request tab sees
 /// it: which branch is listed, and the two things a stack is asked
 /// to do as a whole.
@@ -160,17 +125,29 @@ extension PullRequestsModel {
         }
     }
 
-    /// Reads the stack the worktree's branch belongs to.
+    /// Reads the stack the worktree's branch belongs to. Gathers
+    /// first and writes only while still the newest read, so a slow
+    /// pass cannot land stale answers over a fresher one's.
     func loadStack() async {
         guard let worktree = branchItem?.worktree else {
             return
         }
 
-        stacking.stack = await stacking.fetch(worktree)
-        stacking.needsRestack = await stacking.pending(worktree)
-        stacking.unpushedBranches = await stacking.unpushed(worktree)
-        stacking.unsignedBranches = await stacking.unsigned(worktree)
-        stacking.needsPush = stacking.unpushedBranches.isEmpty == false
+        stacking.factsGeneration += 1
+        let generation = stacking.factsGeneration
+        let derived = await stacking.fetch(worktree)
+        let needsRestack = await stacking.pending(worktree)
+        let unpushed = await stacking.unpushed(worktree)
+        let unsigned = await stacking.unsigned(worktree)
+        guard generation == stacking.factsGeneration else {
+            return
+        }
+
+        stacking.stack = derived
+        stacking.needsRestack = needsRestack
+        stacking.unpushedBranches = unpushed
+        stacking.unsignedBranches = unsigned
+        stacking.needsPush = unpushed.isEmpty == false
         // The entry in view: the one remembered for this worktree,
         // else the first that could have a pull request opened (the
         // top of a stack often cannot yet), else the checked-out
@@ -356,6 +333,15 @@ extension PullRequestsModel {
         defer { isBranchActionRunning = false }
         do {
             let moved = try await stacking.restack(worktree)
+            await loadStack()
+            await reload(keepingSelection: true)
+            // Done means Push agrees; reporting success with the
+            // stack still unsigned took a second press to notice.
+            if let unsigned = stacking.unsignedBranches.first {
+                report("Restacked, but " + unsigned + "'s tip still reads unsigned; "
+                    + "check the signing key and hit Rebase again")
+                return false
+            }
             setStatus(
                 moved.isEmpty ? "Already in order." : "Rebased and signed.",
                 detail: moved.isEmpty
@@ -363,8 +349,6 @@ extension PullRequestsModel {
                     : "Rebased and signed " + moved.joined(separator: ", ") + ".",
             )
             Self.requestSidebarRefresh()
-            await loadStack()
-            await reload(keepingSelection: true)
             return true
         } catch {
             report(error.localizedDescription)

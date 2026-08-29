@@ -54,9 +54,16 @@ extension PullRequestsModel {
                         + error.localizedDescription)
                 }
             }
+            await reload(keepingSelection: true)
+            // Done means Push agrees; reporting success with the tip
+            // still unsigned took a second press to notice.
+            if isTipSigned == false {
+                report("Rebased, but the tip still reads unsigned; check the signing key "
+                    + "and hit Rebase again")
+                return false
+            }
             setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
             Self.requestSidebarRefresh()
-            await reload(keepingSelection: true)
             return true
         } catch {
             report(error.localizedDescription)
