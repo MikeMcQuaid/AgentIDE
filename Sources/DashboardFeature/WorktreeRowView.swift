@@ -234,7 +234,10 @@ struct WorktreeRowView: View {
                     .hoverHelp("The agent's process exited; the conversation stays resumable")
 
             case nil:
-                Octicon("octicon-git-branch", colour: .secondary)
+                // The one deliberate difference from a worktree row:
+                // the repository's own checkout rests green, home
+                // rather than idle.
+                Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
                     .hoverHelp(isMainCheckout
                         ? "The repository's own checkout, where merged work lands"
                         : "A worktree with no session running")
