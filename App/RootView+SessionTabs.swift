@@ -243,6 +243,7 @@ extension RootView {
                 HStack(spacing: Self.stripSpacing) {
                     agentMark(for: session)
                         .padding(.leading, Self.tabHorizontalPadding)
+                    stateGlyph(for: session)
                     Spacer(minLength: 0)
                     closeSessionButton(session, in: item)
                         .padding(.trailing, Self.tabHorizontalPadding)
@@ -299,6 +300,51 @@ extension RootView {
             Image(systemName: "questionmark.circle")
                 .accessibilityLabel("Unknown agent")
                 .hoverHelp("An agent this app does not recognise: " + state)
+        }
+    }
+
+    /// The activity glyph beside the mark, the sidebar's vocabulary
+    /// at strip size; only working moves, because only working is
+    /// happening right now.
+    @ViewBuilder
+    private func stateGlyph(for session: AgentSession) -> some View {
+        switch (session.status, session.activity) {
+        case (.finished, _):
+            Image(systemName: "stop.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Exited")
+                .hoverHelp("The process exited; the conversation stays resumable")
+
+        case (.running, .working):
+            Image(systemName: "play.circle.fill")
+                .foregroundStyle(.green)
+                .symbolEffect(.pulse)
+                .accessibilityLabel("Working")
+                .hoverHelp("The agent is working on its turn")
+
+        case (.running, .done):
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .accessibilityLabel("Done")
+                .hoverHelp("The turn is done; the answer is waiting")
+
+        case (.running, .idle):
+            Image(systemName: "pause.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Idle")
+                .hoverHelp("At rest: nothing asked, or the turn was interrupted")
+
+        case (.running, .blocked):
+            Image(systemName: "questionmark.circle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityLabel("Needs input")
+                .hoverHelp("The agent asked a question or wants an approval")
+
+        case (.running, nil):
+            Image(systemName: "circle.dotted")
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Undetected")
+                .hoverHelp("Running, but herdr cannot tell what the agent is doing")
         }
     }
 

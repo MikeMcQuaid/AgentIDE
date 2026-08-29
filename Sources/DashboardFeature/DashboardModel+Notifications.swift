@@ -19,11 +19,13 @@ extension DashboardModel {
 
             let body = "\(item.worktree.repositoryName): \(item.worktree.branch)"
             let exited = previous.session?.status == .running && session.status != .running
-            let completedTurn = previous.session?.activity == .working && session.activity == .idle
-            if exited || completedTurn {
-                post(.finished, title: "Agent finished", body: body)
+            let completedTurn = previous.session?.activity == .working && session.activity == .done
+            if exited {
+                post(.finished, title: "Agent exited", body: body)
+            } else if completedTurn {
+                post(.done, title: "Agent finished", body: body)
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
-                post(.needsInput, title: "Agent needs input", body: body)
+                post(.blocked, title: "Agent needs input", body: body)
             } else if previous.hasUnread == false, item.hasUnread {
                 post(.output, title: "Agent output", body: body)
             }
@@ -33,13 +35,23 @@ extension DashboardModel {
 
     // MARK: Private
 
-    /// The Dock badge counts the worktrees needing attention: an
-    /// agent waiting on input, or one whose output ended unseen.
-    /// Output still streaming is not attention; it is work.
+    /// The Dock badge counts the worktrees needing attention, each
+    /// contribution behind its Settings toggle: an agent waiting on
+    /// input, a done or exited turn not yet viewed, or unread
+    /// output anywhere but the selected worktree of the focused
+    /// window, the one pane demonstrably being read.
     private func updateDockBadge(for groups: [RepositoryGroup]) {
+        let focusedPath = NSApp.isActive ? selection?.worktree.path : nil
         let attention = groups.flatMap(\.items).count { item in
-            item.session?.activity == .blocked
-                || (item.hasUnread && item.session?.status != .running)
+            let unseen = item.hasUnread && item.worktree.path != focusedPath
+            let blocked = item.session?.activity == .blocked
+                && NotificationPreferences.badges(.blocked)
+            let doneUnseen = item.session?.activity == .done && unseen
+                && NotificationPreferences.badges(.done)
+            let exitedUnseen = item.session?.status == .finished && unseen
+                && NotificationPreferences.badges(.finished)
+            let outputUnseen = unseen && NotificationPreferences.badges(.output)
+            return blocked || doneUnseen || exitedUnseen || outputUnseen
         }
         NSApp.dockTile.badgeLabel = attention > 0 ? String(attention) : nil
     }

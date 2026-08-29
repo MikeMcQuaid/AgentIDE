@@ -12,12 +12,14 @@ struct NotificationsSettingsPane: View {
 
     var body: some View {
         Form {
-            eventRow(.finished, title: "Agent finished", detail: "An agent exits or completes a turn.")
-            eventRow(.needsInput, title: "Agent needs input", detail: "An approval or question is waiting.")
+            eventRow(.done, title: "Agent finished", detail: "A turn completed; the answer is waiting.")
+            eventRow(.blocked, title: "Agent needs input", detail: "A question or approval is waiting.")
+            eventRow(.finished, title: "Agent exited", detail: "The agent's process ended.")
             eventRow(
                 .output,
                 title: "Agent output",
-                detail: "New output landed in a worktree you are not viewing.",
+                detail: "New output landed in a worktree you are not viewing. Never chimes: "
+                    + "it would sound per burst until the turn ended.",
             )
         }
         .formStyle(.grouped)
@@ -36,12 +38,15 @@ struct NotificationsSettingsPane: View {
         Section {
             HStack(spacing: Self.iconSpacing) {
                 statusIcon(for: event)
-                Toggle(title, isOn: enabledBinding(for: event))
+                Toggle(title, isOn: toggleBinding(key: event.enabledKey))
             }
+            Toggle("Count in the Dock badge", isOn: toggleBinding(key: event.badgeKey))
             Text(detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            SoundPicker(event: event)
+            if event.soundKey != nil {
+                SoundPicker(event: event)
+            }
         }
     }
 
@@ -50,17 +55,23 @@ struct NotificationsSettingsPane: View {
     @ViewBuilder
     private func statusIcon(for event: NotificationPreferences.Event) -> some View {
         switch event {
-        case .finished:
-            Image(systemName: "checkmark.circle")
-                .foregroundStyle(.secondary)
+        case .done:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
                 .accessibilityHidden(true)
-                .hoverHelp("The sidebar's finished icon")
+                .hoverHelp("The sidebar's turn-done icon")
 
-        case .needsInput:
-            Image(systemName: "exclamationmark.circle.fill")
+        case .blocked:
+            Image(systemName: "questionmark.circle.fill")
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
                 .hoverHelp("The sidebar's waiting-on-input icon")
+
+        case .finished:
+            Image(systemName: "stop.circle")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+                .hoverHelp("The sidebar's exited icon")
 
         case .output:
             Circle()
@@ -71,11 +82,14 @@ struct NotificationsSettingsPane: View {
         }
     }
 
-    /// Absence means on, matching the reader's default.
-    private func enabledBinding(for event: NotificationPreferences.Event) -> Binding<Bool> {
+    /// Absence means on, matching the readers' defaults.
+    private func toggleBinding(key: String) -> Binding<Bool> {
         Binding(
-            get: { NotificationPreferences.notifies(event) },
-            set: { UserDefaults.standard.set($0, forKey: event.enabledKey) },
+            get: {
+                UserDefaults.standard.object(forKey: key) == nil
+                    || UserDefaults.standard.bool(forKey: key)
+            },
+            set: { UserDefaults.standard.set($0, forKey: key) },
         )
     }
 }
@@ -134,7 +148,11 @@ private struct SoundPicker: View {
         Binding(
             get: { chosen },
             set: { path in
-                UserDefaults.standard.set(path, forKey: event.soundKey)
+                // The picker only renders for events with a sound
+                // slot, so the key is always there in practice.
+                if let key = event.soundKey {
+                    UserDefaults.standard.set(path, forKey: key)
+                }
                 generation += 1
                 CompletionSound.play(path: path)
             },

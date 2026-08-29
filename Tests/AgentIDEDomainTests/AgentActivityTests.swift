@@ -11,8 +11,9 @@ struct AgentActivityTests {
     }
 
     @Test
-    func `done is idle, since the app tracks seen itself`() {
-        #expect(AgentActivity(herdrStatus: "done") == .idle)
+    func `done is its own state: an answer is waiting, idle owes nothing`() {
+        #expect(AgentActivity(herdrStatus: "done") == .done)
+        #expect(AgentActivity(herdrStatus: "done") != AgentActivity(herdrStatus: "idle"))
     }
 
     @Test
