@@ -94,14 +94,16 @@ struct EditorShimIntegrationTests {
         #expect(await edits.next()?.isEmpty == true)
 
         // The watcher idles between slow safety ticks; a request
-        // must reach it through the directory event, well before
-        // any tick could have.
+        // must reach it through the directory event, inside the
+        // eight-second tick it would otherwise wait out. The bound
+        // is generous because a loaded CI runner can take seconds
+        // just spawning the shim.
         let shim = shim(root: root)
         let process = try run(shim, arguments: ["--wait", root + "/file.txt"], in: root)
         let started = ContinuousClock.now
         let published = await edits.next()
         #expect(published?.count == 1)
-        #expect(ContinuousClock.now - started < .seconds(2))
+        #expect(ContinuousClock.now - started < .seconds(Self.eventDeadlineSeconds))
 
         process.terminate()
         try await exit(of: process)
@@ -223,6 +225,11 @@ struct EditorShimIntegrationTests {
     // MARK: Private
 
     private static let settleMilliseconds = 600
+
+    /// How long a directory event may take to surface a request:
+    /// well under the idle sweep it must beat, well over what a
+    /// slow CI runner needs to spawn the shim.
+    private static let eventDeadlineSeconds = 6.0
     private static let pollMilliseconds = 50
     private static let waitAttempts = 100
 

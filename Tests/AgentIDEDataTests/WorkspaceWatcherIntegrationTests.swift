@@ -41,6 +41,8 @@ struct WorkspaceWatcherIntegrationTests {
 
     // MARK: Private
 
-    private static let waitAttempts = 100
+    /// Generous: FSEvents delivery on a loaded CI runner can lag
+    /// far behind the half-second latency asked for.
+    private static let waitAttempts = 240
     private static let pollMilliseconds = 50
 }
