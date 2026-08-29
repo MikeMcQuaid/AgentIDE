@@ -40,7 +40,7 @@ struct BranchSwitchPopover: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 6
-    private static let rowVerticalPadding: CGFloat = 3
+    private static let rowHeight: CGFloat = 24
     private static let padding: CGFloat = 10
     private static let minimumWidth: CGFloat = 220
     private static let listHeight: CGFloat = 240
@@ -67,12 +67,15 @@ struct BranchSwitchPopover: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.vertical, Self.rowVerticalPadding)
+                    .frame(height: Self.rowHeight)
                     .hoverHelp("git checkout " + branch + " in this worktree")
                 }
             }
         }
-        .frame(maxHeight: Self.listHeight)
+        // Sized to its rows exactly, capped at ten: a popover
+        // handed only a maximum height truncated the list to a row
+        // or two.
+        .frame(height: min(Self.listHeight, CGFloat(branches.count) * Self.rowHeight))
         .disabled(isSwitching)
     }
 }
