@@ -3,6 +3,8 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - DashboardView
+
 /// The sidebar listing worktrees grouped by repository and foreign
 /// sessions. Built on a plain scroll view rather than a list: the
 /// outline-backed list both crashed and ignored collapses when
@@ -31,32 +33,22 @@ public struct DashboardView: View {
                     }
                 }
                 foreignSection
+                NewRepositoryRow { model.showsRepositoryFinder = true }
             }
             .padding(Self.listPadding)
         }
-        // The traffic lights occupy the top-left; Open repository
-        // sits at the band's right end, and the inset spaces the
-        // first repository row beneath it.
+        // The traffic lights occupy the top-left band; the inset
+        // keeps the first repository row beneath it. Opening a
+        // repository lives at the list's end as its last row, not
+        // floating up here.
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack {
-                Spacer()
-                Button("Open repository", systemImage: "plus") { model.showsRepositoryFinder = true }
-                    .labelStyle(.iconOnly)
-                    // The glass bubble the split view's own floating
-                    // toggle used to draw.
-                    .buttonStyle(.glass)
-                    .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
-            }
-            .padding(.trailing, Self.listPadding)
-            .padding(.top, Self.headerTopPadding)
-            .padding(.bottom, Self.statusPadding)
+            Color.clear.frame(height: Self.titlebarClearance)
         }
     }
 
     // MARK: Private
 
     private static let statusPadding: CGFloat = 4
-    private static let headerTopPadding: CGFloat = 12
     private static let listPadding: CGFloat = 6
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
@@ -68,6 +60,9 @@ public struct DashboardView: View {
     private static let avatarSize: CGFloat = 14
     private static let avatarCornerRadius: CGFloat = 3
     private static let expandedChevronDegrees: Double = 90
+
+    /// Clears the traffic lights band now that no button sits in it.
+    private static let titlebarClearance: CGFloat = 40
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
@@ -326,4 +321,42 @@ public struct DashboardView: View {
             collapsedRepositories = collapsed.sorted().joined(separator: "\n")
         }
     }
+}
+
+// MARK: - NewRepositoryRow
+
+/// The sidebar's last row: opening a repository not listed yet. A
+/// row of the list rather than a button floating above it, with the
+/// trailing plus saying it adds rather than selects; its own view
+/// for the sidebar's type length.
+private struct NewRepositoryRow: View {
+    // MARK: Internal
+
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: Self.spacing) {
+                Text("New repository")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "plus")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, Self.verticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, Self.spacing)
+        .hoverHelp("Find a repository across your GitHub organisations; open it here or clone it")
+    }
+
+    // MARK: Private
+
+    private static let spacing: CGFloat = 4
+    private static let verticalPadding: CGFloat = 5
 }
