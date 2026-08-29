@@ -44,7 +44,7 @@ public struct DashboardView: View {
         // repository lives at the list's end as its last row, not
         // floating up here.
         .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: isFullScreen ? Self.fullScreenClearance : Self.titlebarClearance)
+            Color.clear.frame(height: isFullScreen ? Self.listPadding : Self.titlebarClearance)
         }
     }
 
@@ -65,9 +65,8 @@ public struct DashboardView: View {
 
     /// Clears the traffic lights alone, which is all that occupies
     /// the band now; fullscreen hides them entirely and keeps only
-    /// a breath of air, reclaiming the band for rows.
+    /// the list's own padding, reclaiming the band for rows.
     private static let titlebarClearance: CGFloat = 26
-    private static let fullScreenClearance: CGFloat = 6
 
     @AppStorage("collapsedRepositories")
     private var collapsedRepositories = ""
@@ -82,8 +81,10 @@ public struct DashboardView: View {
     @State private var pendingForceDelete: (path: String, refusal: SessionService.CleanupRefusal?)?
 
     /// The worktree whose stack is being looked over: a menu cannot
-    /// hold a popover, so the sidebar holds it.
+    /// hold a popover, so the sidebar holds it. The branch switcher
+    /// is held the same way.
     @State private var pendingStack: WorktreeItem?
+    @State private var pendingBranchSwitch: WorktreeItem?
 
     private let model: DashboardModel
 
@@ -211,8 +212,11 @@ public struct DashboardView: View {
         )
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
-        .popover(isPresented: stackBinding(for: item), arrowEdge: .trailing) {
+        .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
             StackPopover(item: item, model: model)
+        }
+        .popover(isPresented: pendingBinding($pendingBranchSwitch, for: item), arrowEdge: .trailing) {
+            BranchSwitchPopover(item: item, model: model) { pendingBranchSwitch = nil }
         }
         .confirmationDialog(
             forceDeleteTitle(for: item),
@@ -240,6 +244,7 @@ public struct DashboardView: View {
                 onCleanUp: { await cleanUpOrOffer(item) },
                 pendingForceDelete: $pendingForceDelete,
                 pendingStack: $pendingStack,
+                pendingBranchSwitch: $pendingBranchSwitch,
             )
         }
     }
@@ -251,12 +256,17 @@ public struct DashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
     }
 
-    private func stackBinding(for item: WorktreeItem) -> Binding<Bool> {
+    /// One shape serves both popovers: shown while the pending item
+    /// is this row's, cleared when its popover closes.
+    private func pendingBinding(
+        _ pending: Binding<WorktreeItem?>,
+        for item: WorktreeItem,
+    ) -> Binding<Bool> {
         Binding(
-            get: { pendingStack?.id == item.id },
+            get: { pending.wrappedValue?.id == item.id },
             set: { shown in
-                if shown == false, pendingStack?.id == item.id {
-                    pendingStack = nil
+                if shown == false, pending.wrappedValue?.id == item.id {
+                    pending.wrappedValue = nil
                 }
             },
         )

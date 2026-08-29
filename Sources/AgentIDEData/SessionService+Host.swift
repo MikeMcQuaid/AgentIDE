@@ -117,4 +117,20 @@ public extension SessionService {
         }
         return items
     }
+
+    /// The local branches a worktree could switch to: everything
+    /// but the branches some worktree of the repository, this one
+    /// included, already holds — git would refuse those anyway.
+    func availableBranches(worktree: Worktree) async -> [String] {
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        let held = await (try? git.worktrees(of: repository))?.map(\.branch) ?? [worktree.branch]
+        let all = await git.branches(worktreePath: worktree.path)
+        return all.filter { held.contains($0) == false }
+    }
+
+    /// Checks out another local branch in place; git reports a
+    /// conflicting dirty file rather than losing it.
+    func switchBranch(_ branch: String, worktree: Worktree) async throws {
+        try await git.checkout(branch: branch, worktreePath: worktree.path)
+    }
 }

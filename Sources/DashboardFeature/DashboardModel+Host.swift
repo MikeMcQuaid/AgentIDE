@@ -114,6 +114,24 @@ public extension DashboardModel {
         service.setStackExclusion(branch: branch, excluded: excluded, worktreePath: item.worktree.path)
     }
 
+    /// The local branches this worktree could switch to.
+    func availableBranches(for item: WorktreeItem) async -> [String] {
+        await service.availableBranches(worktree: item.worktree)
+    }
+
+    /// Checks out another branch in place, telling the row at once
+    /// the way the pull-default action does.
+    func switchBranch(_ branch: String, for item: WorktreeItem) async {
+        do {
+            try await service.switchBranch(branch, worktree: item.worktree)
+            ErrorLog.shared.note("Checked out " + branch + " in " + item.worktree.path + ".")
+            await rename(item, to: branch)
+            await refresh()
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
+    }
+
     /// Stops listing one; nothing on disk is touched.
     func forgetHostDirectory(_ item: WorktreeItem) async {
         if selection?.id == item.id {
