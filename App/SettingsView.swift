@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import DashboardFeature
 import SwiftUI
 import TerminalUI
@@ -54,13 +55,8 @@ private struct GeneralSettingsPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Pushing") {
-                Toggle("Require signed commits before pushing", isOn: $requireSignedCommits)
-                Text("Off, pushes skip the tip's signature check, for remotes without a "
-                    + "signing hook; rebases still sign.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            signingSection
+            linksSection
             Section("Sessions") {
                 Button("Manage Sessions…") {
                     NSApp.activate()
@@ -76,6 +72,18 @@ private struct GeneralSettingsPane: View {
 
     // MARK: Private
 
+    /// The apps registered for web links, by their shown names.
+    private static let browsers: [(name: String, path: String)] = {
+        guard let web = URL(string: "https://example.com") else {
+            return []
+        }
+
+        return NSWorkspace.shared
+            .urlsForApplications(toOpen: web)
+            .map { (name: FileManager.default.displayName(atPath: $0.path), path: $0.path) }
+            .sorted { $0.name < $1.name }
+    }()
+
     /// The same keys the new session form persists through, so the
     /// default set here is simply what the next form opens on.
     @AppStorage("agentKind")
@@ -86,12 +94,39 @@ private struct GeneralSettingsPane: View {
     private var agentEffort = ""
     @AppStorage(AppSettings.requireSignedCommitsKey)
     private var requireSignedCommits = true
+    @AppStorage(AppSettings.externalBrowserKey)
+    private var externalBrowser = ""
 
     private var agentBinding: Binding<AgentKind> {
         Binding(
             get: { AgentKind(rawValue: agentKindName) ?? .claudeCode },
             set: { agentKindName = $0.rawValue },
         )
+    }
+
+    private var signingSection: some View {
+        Section("Signing") {
+            Toggle("Require signed commits", isOn: $requireSignedCommits)
+            Text("Off, nothing signs or checks signatures: rebases stop passing "
+                + "--gpg-sign and pushes skip the tip check.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var linksSection: some View {
+        Section("Links") {
+            Picker("Cmd-click opens", selection: $externalBrowser) {
+                Text("Default browser").tag("")
+                ForEach(Self.browsers, id: \.path) { browser in
+                    Text(browser.name).tag(browser.path)
+                }
+            }
+            Text("Where a Cmd-clicked web link goes; a plain click stays in the "
+                + "embedded browser.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -145,21 +180,21 @@ private struct AdvancedSettingsPane: View {
 
     private var cadenceSection: some View {
         Section("Cadence") {
-            Stepper(
-                "Refresh every " + String(pollSeconds) + " s",
-                value: $pollSeconds,
-                in: Self.pollRange,
-            )
+            LabeledContent("Refresh every") {
+                Stepper(String(pollSeconds) + " s", value: $pollSeconds, in: Self.pollRange)
+            }
             Text("How often herdr, git and transcripts are re-read while the window is "
                 + "visible; hidden windows drop to a minute regardless.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Stepper(
-                "Re-derive stacks every " + String(Int(stackSeconds)) + " s",
-                value: $stackSeconds,
-                in: Self.stackRange,
-                step: Self.stackStep,
-            )
+            LabeledContent("Re-derive stacks every") {
+                Stepper(
+                    String(Int(stackSeconds)) + " s",
+                    value: $stackSeconds,
+                    in: Self.stackRange,
+                    step: Self.stackStep,
+                )
+            }
             Text("How long a derived branch stack is trusted; lone branches wait five "
                 + "times as long.")
                 .font(.caption)

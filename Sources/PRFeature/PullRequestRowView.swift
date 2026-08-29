@@ -69,7 +69,7 @@ struct PullRequestRowView: View {
                 Text("#" + String(summary.number)).font(.headline)
             }
             .buttonStyle(.plain)
-            .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the system browser")
+            .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
             // Light listings skip the status fields, so an unknown
             // check state shows nothing rather than pending.
             if summary.checks.isEmpty == false {
@@ -132,6 +132,6 @@ struct PullRequestRowView: View {
                 .accessibilityLabel("Open pull request in browser")
         }
         .buttonStyle(.glass)
-        .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the system browser")
+        .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
     }
 }

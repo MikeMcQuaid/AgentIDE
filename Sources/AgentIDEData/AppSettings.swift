@@ -22,6 +22,10 @@ public enum AppSettings {
     /// The external editor command's storage key.
     public static let externalEditorKey = "externalEditorCommand"
 
+    /// The Cmd-click browser's storage key, an application path;
+    /// empty means the system's default browser.
+    public static let externalBrowserKey = "externalBrowser"
+
     /// The monospace face's storage key.
     public static let codeFontNameKey = "codeFontName"
 

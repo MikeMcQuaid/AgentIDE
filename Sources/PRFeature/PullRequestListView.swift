@@ -267,7 +267,7 @@ struct PullRequestFooterView: View {
             Image(systemName: "exclamationmark.triangle")
                 .accessibilityLabel("Open failing checks")
         }
-        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the system browser")
+        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the Cmd-click browser")
     }
 }
 

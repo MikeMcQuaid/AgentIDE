@@ -40,7 +40,8 @@ public enum UtilityTabTarget {
 // MARK: - LinkOpener
 
 /// Opens web links: in the embedded Browser tab by default, in the
-/// system browser when the command key is held.
+/// browser Settings chose (the system default until set) when the
+/// command key is held.
 public enum LinkOpener {
     // MARK: Public
 
@@ -63,13 +64,24 @@ public enum LinkOpener {
     }
 
     /// Routes an address by the command key; only web links reach
-    /// the system browser, for the same reason as `action`.
+    /// the external browser, for the same reason as `action`.
     @preconcurrency
     @MainActor
     public static func open(_ address: String) {
         if NSEvent.modifierFlags.contains(.command) {
-            if let url = URL(string: address), isWeb(url) {
+            guard let url = URL(string: address), isWeb(url) else {
+                return
+            }
+
+            let chosen = UserDefaults.standard.string(forKey: "externalBrowser") ?? ""
+            if chosen.isEmpty {
                 NSWorkspace.shared.open(url)
+            } else {
+                NSWorkspace.shared.open(
+                    [url],
+                    withApplicationAt: URL(filePath: chosen),
+                    configuration: NSWorkspace.OpenConfiguration(),
+                )
             }
         } else {
             let defaults = UserDefaults.standard

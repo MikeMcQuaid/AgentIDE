@@ -94,9 +94,9 @@ before shipping.
   ship no audio files either)
 - **Configures** itself in one Settings window (Cmd-,): default agent,
   model and effort, per-event notifications and sounds, the external
-  editor, the shared monospace font, refresh cadences and whether
-  pushing requires signed commits (so preferences live where macOS
-  puts them rather than in menus and hidden defaults)
+  editor, the Cmd-click browser, the shared monospace font, refresh
+  cadences and whether commits must be signed at all (so preferences
+  live where macOS puts them rather than in menus and hidden defaults)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel

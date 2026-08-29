@@ -176,18 +176,22 @@ struct EditorSettingsPane: View {
         Form {
             Section("External editor") {
                 TextField("Command", text: $externalEditor, prompt: Text("e.g. zed --wait"))
-                Text("Runs with the file path appended; arguments split on spaces. "
-                    + "Empty keeps everything in the built-in editor.")
+                Text("Runs on Cmd-clicking a file in a diff, finder result or conversation, "
+                    + "with the file path appended; arguments split on spaces. Empty hands "
+                    + "Cmd-clicked files to the system's default app. A plain click always "
+                    + "opens the built-in editor.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Section("Monospace font") {
-                Picker("Font", selection: $fontName) {
-                    ForEach(Self.monospaceFontNames, id: \.self) { name in
+                Picker("Font", selection: familyBinding) {
+                    ForEach(families, id: \.self) { name in
                         Text(name).tag(name)
                     }
                 }
-                Stepper("Size " + String(Int(fontSize)), value: $fontSize, in: Self.sizeRange)
+                LabeledContent("Size") {
+                    Stepper(String(Int(fontSize)), value: $fontSize, in: Self.sizeRange)
+                }
                 Text("Shared by diffs, the editor, finder results and code blocks; "
                     + "terminals already open keep the font they started with.")
                     .font(.caption)
@@ -201,12 +205,18 @@ struct EditorSettingsPane: View {
 
     private static let sizeRange: ClosedRange<Double> = 9 ... 24
 
-    /// Every installed fixed-pitch face, the default first.
-    private static let monospaceFontNames: [String] = {
+    /// Every installed fixed-pitch family by its shown name, the
+    /// default first: faces would list SFMono-Regular where the
+    /// font panel says SF Mono.
+    private static let monospaceFamilies: [String] = {
         let fixed = NSFontManager.shared
-            .availableFontNames(with: .fixedPitchFontMask)?
-            .sorted() ?? []
-        return [CodeStyle.defaultFontName] + fixed.filter { $0 != CodeStyle.defaultFontName }
+            .availableFontFamilies
+            .filter { NSFont(name: $0, size: CodeStyle.defaultPointSize)?.isFixedPitch == true }
+            .sorted()
+        let preferred = "SF Mono"
+        return fixed.contains(preferred)
+            ? [preferred] + fixed.filter { $0 != preferred }
+            : fixed
     }()
 
     @AppStorage(AppSettings.externalEditorKey)
@@ -217,4 +227,23 @@ struct EditorSettingsPane: View {
     private var fontName = "SFMono-Regular"
     @AppStorage(AppSettings.codeFontSizeKey)
     private var fontSize = 13.0
+
+    /// The list with the current pick appended when it is no longer
+    /// installed, so the picker never shows blank.
+    private var families: [String] {
+        let current = familyBinding.wrappedValue
+        return Self.monospaceFamilies.contains(current)
+            ? Self.monospaceFamilies
+            : Self.monospaceFamilies + [current]
+    }
+
+    /// Reads the stored name as its family, so a face name written
+    /// by earlier versions selects the family it belongs to; picks
+    /// store the family, which AppKit resolves to its regular face.
+    private var familyBinding: Binding<String> {
+        Binding(
+            get: { NSFont(name: fontName, size: CodeStyle.defaultPointSize)?.familyName ?? fontName },
+            set: { fontName = $0 },
+        )
+    }
 }
