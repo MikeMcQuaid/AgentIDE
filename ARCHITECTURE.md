@@ -1080,11 +1080,14 @@ shim rather than a protocol:
    one lie that button could tell.
 8. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
-   agent, and one failing-checks button: a click copies the tail of
+   agent (each file named once above its threads, each thread opened
+   by its line), and one failing-checks button: a click copies the tail of
    every failing Actions run's failed-step log (`gh run view
    --log-failed`, the runs found in the failing checks' links, the
-   last two hundred lines of each under a heading, the button busy
-   until the clipboard has it), while a modifier read at the click
+   last two hundred lines of each condensed to what a prompt needs:
+   the job and step `gh` repeats on every line named once in a
+   heading, timestamps, byte order marks and colour codes stripped,
+   the button busy until the clipboard has it), while a modifier read at the click
    opens the one failing check or the checks page instead, Cmd in the
    browser and Shift in the Browser tab, the split `LinkOpener`
    already makes. Every

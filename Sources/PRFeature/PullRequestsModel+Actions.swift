@@ -109,7 +109,7 @@ extension PullRequestsModel {
     /// clipboard, ready for pasting into an agent or reply.
     func copyUnresolvedComments(_ summary: PullRequestSummary) async {
         let threads = await fetchThreads(summary.number).filter { $0.isResolved == false }
-        let text = threads.map(\.asText).joined(separator: "\n\n")
+        let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         note("Copied \(threads.count) unresolved conversations from #\(summary.number).")

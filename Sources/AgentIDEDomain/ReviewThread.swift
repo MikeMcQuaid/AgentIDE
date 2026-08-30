@@ -72,4 +72,26 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
         let body = comments.map { $0.author + ": " + $0.body }.joined(separator: "\n")
         return anchor + "\n" + body
     }
+
+    /// Several threads as one pasteable text, the file named once
+    /// above its threads and each thread opened by its line: what a
+    /// prompt needs without the path repeated per thread.
+    public static func digest(of threads: [Self]) -> String {
+        var order = [String]()
+        var byPath = [String: [Self]]()
+        for thread in threads {
+            if byPath[thread.path] == nil {
+                order.append(thread.path)
+            }
+            byPath[thread.path, default: []].append(thread)
+        }
+        return order.map { path in
+            let body = (byPath[path] ?? []).map { thread in
+                let anchor = thread.line.map { ":" + String($0) + " " } ?? ""
+                return anchor + thread.comments.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+            }
+            return path + "\n" + body.joined(separator: "\n")
+        }
+        .joined(separator: "\n\n")
+    }
 }
