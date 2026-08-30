@@ -411,6 +411,52 @@ alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
 export HERDR_SESSION=agentide
 ```
 
+### 📱 From a phone
+
+Sessions are reachable over SSH as the sandbox user, and
+[Moshi](https://getmoshi.app) is the client that just works with this
+flow: it speaks `mosh`, so a phone changing network keeps its session,
+and its keyboard has the keys agents ask for.
+
+1. Let the client's key in. sandvault builds the sandbox user's home
+   from a template it owns, so the key goes into that template and the
+   home is rebuilt. A Homebrew upgrade of sandvault replaces the
+   template, so keep this in your dotfiles or bootstrap if it must stay
+   automatic:
+
+   ```bash
+   client_key="${HOME}/Downloads/moshi.pub" # the key the client exported
+   guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
+   grep -Fqx "$(<"${client_key}")" "${guest_keys}" ||
+     printf '%s\n' "$(<"${client_key}")" >>"${guest_keys}"
+   chmod 600 "${guest_keys}"
+   sv --rebuild build
+   ```
+
+2. Confine that login to keys and to the sandbox user, and hand it the
+   shared workspace, in `/etc/ssh/sshd_config.d/000-agentide.conf` with
+   your own user name and workspace path, then turn Remote Login on in
+   System Settings, or off and on again so `sshd` rereads its
+   configuration:
+
+   ```text
+   Match User sandvault-mike
+       PubkeyAuthentication yes
+       PasswordAuthentication no
+       KbdInteractiveAuthentication no
+       AllowTcpForwarding no
+       AllowAgentForwarding no
+       X11Forwarding no
+       PermitTunnel no
+       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-mike
+   ```
+
+3. Connect as `sandvault-<you>` and run `herdr`: one attach presents
+   every agent workspace with its own navigation, and `an` starts a new
+   session from the phone. The `herdr` server runs outside the sandbox
+   profile but still reaches every agent launched inside it, so nothing
+   about a session changes when it is steered from the phone.
+
 ## 🚧 Status
 
 Unstable and changing daily. AgentIDE is being designed exclusively
