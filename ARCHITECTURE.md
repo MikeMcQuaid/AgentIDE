@@ -323,9 +323,11 @@ covers the host user and sessions inside the sandbox. No picker ships
 here: one `herdr` attach presents every workspace with herdr's own
 navigation, and a picker of ours would be a second implementation of
 something the server's UI already does. It needs only the session name,
-which sshd sets for that account (`SetEnv HERDR_SESSION=agentide`), since
-a login from outside the app inherits none of the sandbox's own
-environment.
+which the sandbox user's shell configuration exports
+(`export HERDR_SESSION=agentide`, synced into the sandbox home from the
+shared workspace's `user/` template), since a login from outside the app
+inherits none of the sandbox's own environment; sshd's own `SetEnv` hands
+that login the shared workspace path alone.
 
 Remote Login must be enabled in macOS settings first, for that account
 alone: the sandbox user is hidden, so it never appears in the Sharing
