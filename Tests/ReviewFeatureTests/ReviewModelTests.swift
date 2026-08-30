@@ -60,6 +60,15 @@ struct ReviewModelTests {
         #expect(await model.deleteFile(file))
         #expect(FileManager.default.fileExists(atPath: path + "/file.txt") == false)
         #expect(model.files.first?.deletions == 3)
+
+        // The scope chosen here is what a fresh model for the same
+        // worktree comes back to.
+        let again = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
+        #expect(again.scope == .uncommitted)
     }
 
     @Test

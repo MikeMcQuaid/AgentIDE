@@ -27,6 +27,7 @@ final class ReviewModel {
         self.worktreePath = worktreePath
         self.repositoryName = repositoryName
         self.git = git
+        scope = Self.rememberedScope(for: worktreePath)
         self.draftMessage = draftMessage
         self.baseRefProvider = baseRefProvider
         self.fetchThreads = fetchThreads
@@ -63,19 +64,13 @@ final class ReviewModel {
     /// it, so its messages say which repository they are about.
     let repositoryName: String
 
-    /// The review scope; per-line rejection and message amendment
-    /// only apply to the last commit.
-    var scope: Scope = .lastCommit
-
     /// The parsed diff files.
     private(set) var files: [DiffFile] = []
 
-    /// Whether any scope has loaded yet; before that the pane shows
-    /// progress rather than "No changes" it has not proven.
+    /// Whether any scope has loaded yet; before, progress shows.
     private(set) var hasLoaded = false
 
-    /// Whether the diff shows uncommitted changes (true) or the last
-    /// commit (false); rejection amends only in the latter mode.
+    /// Whether the diff shows uncommitted changes; rejection amends committed ones only.
     private(set) var showsUncommitted = false
 
     /// Set only by the find extension, which recounts them.
@@ -91,8 +86,7 @@ final class ReviewModel {
     /// The selected lines per file path.
     var selections: [String: Set<DiffSelection>] = [:]
 
-    /// Typing in a diff line, by the edits extension's key; in the
-    /// model since the formatter deletes an unread private `@State`.
+    /// Typing in a diff line, by the edits extension's key.
     var lineDrafts: [String: String] = [:]
 
     /// The last action's outcome, for display.
@@ -122,6 +116,12 @@ final class ReviewModel {
     var commitTarget: String?
 
     let worktreePath: String
+
+    /// The review scope; per-line rejection and message amendment
+    /// only apply to the last commit.
+    var scope: Scope = .lastCommit {
+        didSet { remember(scope) }
+    }
 
     /// Whether what is shown can only be read: a branch this
     /// worktree does not hold, or a commit further back than the

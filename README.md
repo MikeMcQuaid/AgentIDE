@@ -159,9 +159,10 @@ before shipping.
   tip and nothing else (so a branch of ten commits reviews commit by
   commit without leaving the pane)
 - **Rejects** individual lines to amend the commit, edits commit messages,
-  edits uncommitted work in place in its own diff (double-click any
-  line the file still holds; removed lines are history), deletes an
-  uncommitted file from its header after asking, and edits
+  edits uncommitted work in place in its own diff (click any line the
+  file still holds; removed lines are history), remembers which scope
+  each worktree was reviewed in, deletes a never-committed file from
+  its header after asking, and edits
   files directly in a built-in syntax-highlighted editor, with a
   Markdown file rendering inline at the press of its own button (so small
   fixes and reading what the agent wrote need no other app)

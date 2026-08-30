@@ -69,9 +69,6 @@ struct DiffFileView: View {
 
     static let statSpacing: CGFloat = 4
 
-    /// Double-click edits: a single click still selects text.
-    static let editClicks = 2
-
     let file: DiffFile
     let model: ReviewModel
     let isCollapsed: Bool
@@ -194,12 +191,12 @@ struct DiffFileView: View {
             }
             .buttonStyle(.borderless)
             .hoverHelp("Copy this file's path to the clipboard")
-            // Uncommitted work edits in place, line by line, and can
-            // be thrown away; a commit's diff is history, so its
-            // pencil opens the editor instead.
-            if model.showsUncommitted {
+            // Uncommitted work edits in place, line by line, and a
+            // file never committed can be thrown away; a commit's
+            // diff is history, so its pencil opens the editor instead.
+            if model.showsUncommitted, file.isNew {
                 deleteButton
-            } else {
+            } else if model.showsUncommitted == false {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                         .accessibilityLabel("Edit file")
@@ -210,8 +207,9 @@ struct DiffFileView: View {
         }
     }
 
-    /// Deletes the working file, asking first: the one action here
-    /// that cannot be undone by editing.
+    /// Deletes a file never committed, asking first: the one action
+    /// here that cannot be undone by editing, and the one a tracked
+    /// file never offers, since git holds its content anyway.
     private var deleteButton: some View {
         Button {
             isConfirmingDelete = true
@@ -220,7 +218,7 @@ struct DiffFileView: View {
                 .accessibilityLabel("Delete file")
         }
         .buttonStyle(.borderless)
-        .hoverHelp("Delete this file from the worktree; asks first")
+        .hoverHelp("Delete this never-committed file from the worktree; asks first")
         .confirmationDialog(
             "Delete " + file.path + " from the worktree?",
             isPresented: $isConfirmingDelete,
@@ -229,9 +227,7 @@ struct DiffFileView: View {
             Button("Delete", role: .destructive) { Task { await model.deleteFile(file) } }
             Button("Cancel", role: .cancel) { isConfirmingDelete = false }
         } message: {
-            Text(file.isNew
-                ? "The file was never committed, so this is the end of it."
-                : "Committed content stays in the last commit; the diff will show the deletion.")
+            Text("The file was never committed, so this is the end of it.")
         }
     }
 

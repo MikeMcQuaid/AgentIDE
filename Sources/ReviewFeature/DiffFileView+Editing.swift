@@ -10,9 +10,9 @@ import TerminalUI
 extension DiffFileView {
     /// One line's text: highlighted, and in the uncommitted scope
     /// live for every line the working file still holds, which is
-    /// every line but a removed one. A double-click turns the line
-    /// into a field; Enter or leaving it writes the file, Escape
-    /// lets the typing go. Typed newlines become new lines.
+    /// every line but a removed one. A click turns the line into a
+    /// field; Enter or leaving it writes the file, Escape lets the
+    /// typing go. Typed newlines become new lines.
     @ViewBuilder
     func lineView(_ entry: NumberedLine, key: EditKey) -> some View {
         if editing == key, let number = entry.new {
@@ -32,13 +32,13 @@ extension DiffFileView {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                .onTapGesture(count: Self.editClicks) {
+                .onTapGesture {
                     if model.showsUncommitted, entry.new != nil {
                         editing = key
                     }
                 }
                 .hoverHelp(model.showsUncommitted && entry.new != nil
-                    ? "Double-click to edit this line in the file; a removed line is history"
+                    ? "Click to edit this line in the file; a removed line is history"
                     : "")
         }
     }

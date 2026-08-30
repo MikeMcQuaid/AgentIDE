@@ -210,9 +210,7 @@ public struct ReviewView: View {
         scopeButton(
             .upstream,
             systemImage: "icloud.and.arrow.up",
-            help: model.hasUpstream
-                ? "Review commits not yet pushed to this branch's origin ref"
-                : "Dimmed until this branch has been pushed",
+            help: "Review the commits not yet on this branch's own origin ref; dimmed until the branch has been pushed",
             disabled: model.hasUpstream == false,
         )
         scopeButton(
@@ -234,7 +232,6 @@ public struct ReviewView: View {
             ReviewFileListView(
                 model: model,
                 worktreePath: worktreePath,
-                service: service,
                 hideAllByDefault: collapsedAll,
                 collapseOverrides: $collapseOverrides,
             )
