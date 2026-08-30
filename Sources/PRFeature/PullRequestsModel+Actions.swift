@@ -167,11 +167,13 @@ extension PullRequestsModel {
         isPushed || branchItem?.aheadOfUpstream == 0
     }
 
-    /// Fills the form's blank fields from the branch's commits: the
-    /// one commit's own message when there is only one, otherwise a
-    /// draft from the on-device model; false opens the errors
-    /// surface. Typed text is never overwritten.
-    func generateDescription() async -> Bool {
+    /// Fills the form from the branch's commits: the one commit's own
+    /// message when there is only one, otherwise a draft from the
+    /// on-device model given the branch name and every message; false
+    /// opens the errors surface. Blank fields fill either way; typed
+    /// text is replaced only when `replacing`, which the form asks
+    /// about first.
+    func generateDescription(replacing: Bool = false) async -> Bool {
         guard let worktree = actionWorktree else {
             return false
         }
@@ -183,16 +185,16 @@ extension PullRequestsModel {
         }
 
         if commits.count == 1, let only = commits.first {
-            apply(description: Self.description(splitFromMessage: only))
+            apply(description: Self.description(splitFromMessage: only), replacing: replacing)
         } else {
-            guard let drafted = await generateDescription(commits) else {
+            guard let drafted = await generateDescription(commits, listedBranch ?? worktree.branch) else {
                 report(
                     "The on-device model is unavailable; is Apple Intelligence enabled?",
                 )
                 return false
             }
 
-            apply(description: drafted)
+            apply(description: drafted, replacing: replacing)
         }
         // A repository template gets completed from the commits too;
         // an unhelpful or unavailable model leaves it untouched.

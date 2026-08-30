@@ -113,8 +113,8 @@ final class PullRequestsModel {
             let choices = service.launchChoices(for: agent)
             return (choices.models, service.defaultEffort(for: agent))
         }
-        generateDescription = { commits in
-            await service.draftPullRequestDescription(fromCommits: commits)
+        generateDescription = { commits, branch in
+            await service.draftPullRequestDescription(fromCommits: commits, branch: branch)
         }
         fillTemplate = { commits, template in
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
@@ -302,7 +302,7 @@ final class PullRequestsModel {
     /// How many commits the listed entry has of its own, which is
     /// what the push button counts.
     var fetchCommitCount: (Worktree, String?) async -> Int = { _, _ in 0 }
-    var generateDescription: ([String]) async -> (title: String, body: String)?
+    var generateDescription: ([String], String) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
     var performPostMergeCleanup: (Worktree, String) async -> Void

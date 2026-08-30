@@ -268,8 +268,11 @@ public extension SessionService {
 
     /// A pull request title and body drafted by the on-device model,
     /// nil when it is unavailable or unhelpful.
-    func draftPullRequestDescription(fromCommits commits: [String]) async -> (title: String, body: String)? {
-        await summariser.pullRequestDescription(fromCommits: commits)
+    func draftPullRequestDescription(
+        fromCommits commits: [String],
+        branch: String,
+    ) async -> (title: String, body: String)? {
+        await summariser.pullRequestDescription(fromCommits: commits, branch: branch)
     }
 
     /// A commit message drafted from a worktree's uncommitted diff,

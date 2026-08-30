@@ -230,9 +230,10 @@ before shipping.
   it (so working in someone else's repository needs no setup and no thinking
   about where the branch goes)
 - **Fills** a pull request's title and body from the branch's commits,
-  drafts them with the on-device model at the press of the sparkles
-  button, and resets them to the commit message from the button beside
-  it, asking first when something is typed, and toggles labels on an
+  drafts them with the on-device model from the branch name and every
+  commit's subject and body at the press of the sparkles button, or
+  resets them to the commit message from the button beside it, either
+  one asking first when something is typed, and toggles labels on an
   open pull request from its conversation (so the form is never stuck
   on a draft you no longer want)
 - **Discloses** the agent that wrote a branch whenever you press Fill

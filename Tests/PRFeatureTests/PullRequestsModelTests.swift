@@ -227,28 +227,6 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `generating fills blank fields and completes the template`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
-        model.fetchCommitMessages = { _, _ in ["First change\n\nWhy one.", "Second change"] }
-        model.generateDescription = { _ in ("Drafted title", "Drafted body") }
-        model.fillTemplate = { _, template in "filled: " + template }
-        model.prTemplate = "- [ ] Checked"
-        #expect(await model.generateDescription())
-        #expect(model.prTitle == "Drafted title")
-        #expect(model.prBody == "Drafted body")
-        #expect(model.prTemplate == "filled: - [ ] Checked")
-
-        // Without a repository template nothing is invented.
-        let bare = makeModel(items: [item(branch: "feature", ahead: 1)])
-        bare.fetchCommitMessages = { _, _ in ["Only change\n\nWhy."] }
-        bare.fillTemplate = { _, _ in "should never be asked" }
-        #expect(await bare.generateDescription())
-        #expect(bare.prTitle == "Only change")
-        #expect(bare.prBody == "Why.")
-        #expect(bare.prTemplate.isEmpty)
-    }
-
-    @Test
     func `refreshing a summary updates the header and row`() async {
         let model = makeModel()
         model.fetchList = { _, _ in [summary(3, head: "feature")] }

@@ -34,7 +34,7 @@ extension PullRequestsModelTests {
         }
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _, _ in [] }
-        model.generateDescription = { _ in nil }
+        model.generateDescription = { _, _ in nil }
         model.fillTemplate = { _, _ in nil }
         model.performMergeChange = { _ in
             // Succeeds without side effects.

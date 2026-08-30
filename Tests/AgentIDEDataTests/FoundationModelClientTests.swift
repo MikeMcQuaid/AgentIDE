@@ -42,8 +42,8 @@ struct FoundationModelClientTests {
             "Second change",
             "Third change\n\nA very long explanation of the third change's why.",
         ]
-        let full = FoundationModelClient.commitDigest(commits, limit: 1_000)
-        #expect(full.contains("Subjects:\nFirst change\nSecond change\nThird change"))
+        let full = FoundationModelClient.commitDigest(commits, branch: "fix_login", limit: 1_000)
+        #expect(full.hasPrefix("Branch: fix_login\n\nSubjects:\nFirst change\nSecond change\nThird change"))
         #expect(full.contains("Why the first change happened."))
         #expect(full.contains("A very long explanation"))
         // Body-less commits add nothing to the details section.
@@ -51,7 +51,7 @@ struct FoundationModelClientTests {
 
         // A tight budget keeps every subject and drops later bodies
         // rather than truncating the subject list.
-        let tight = FoundationModelClient.commitDigest(commits, limit: 120)
+        let tight = FoundationModelClient.commitDigest(commits, branch: nil, limit: 120)
         #expect(tight.contains("Subjects:\nFirst change\nSecond change\nThird change"))
         #expect(tight.contains("Why the first change happened."))
         #expect(tight.contains("A very long explanation") == false)
