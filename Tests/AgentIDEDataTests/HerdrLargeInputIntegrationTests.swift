@@ -1,0 +1,58 @@
+import AgentIDEData
+import AgentIDEDomain
+import Foundation
+import Testing
+
+/// A whole paste as one input command: herdr must deliver every
+/// byte to the pane's terminal, in order.
+struct HerdrLargeInputIntegrationTests {
+    @Test
+    func `a large input reaches the pane whole`() async throws {
+        let (herdr, home) = try TestSupport.makeHerdrClient()
+        let directory = try TestSupport.temporaryDirectory("large-input")
+        defer { TestSupport.stopServerSync(configHome: home) }
+
+        let output = directory + "/received.txt"
+        try await herdr.newSession(
+            name: "agentide--r--large--claude",
+            directory: directory,
+            command: "command cat > " + output,
+        )
+        let started = await TestSupport.poll {
+            let panes = await (try? herdr.panes()) ?? []
+            return panes.contains { $0.isFinished == false }
+        }
+        #expect(started)
+        let pane = try #require(try await herdr.panes().first)
+        let channel = HerdrTerminalChannel(command: herdr.attachCommand(paneID: pane.paneID))
+        let stream = try await channel.start()
+        channel.send(HerdrTerminal.resizeCommand(columns: 80, rows: 24))
+
+        // Numbered lines, so whatever survives says which part did.
+        let text = (1 ... 4_000)
+            .map { String(format: "line %04d ends here and this pads it out", $0) }
+            .joined(separator: "\n") + "\n"
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(15))
+            await channel.stop()
+        }
+        for await event in stream {
+            if case .frame = event {
+                channel.send(HerdrTerminal.inputCommand(bytes: Array(text.utf8)))
+                // End of input at a line start ends cat and flushes.
+                channel.send(HerdrTerminal.inputCommand(bytes: [0x04]))
+                break
+            }
+        }
+        let last = "line 4000 ends here and this pads it out\n"
+        let landed = await TestSupport.poll {
+            (try? String(contentsOfFile: output, encoding: .utf8))?.hasSuffix(last) == true
+        }
+        watchdog.cancel()
+        await channel.stop()
+        let received = (try? String(contentsOfFile: output, encoding: .utf8)) ?? ""
+        let sizes = "sent \(text.utf8.count) bytes, received \(received.utf8.count)"
+        #expect(landed, Comment(rawValue: sizes + "; starts: " + received.prefix(40)))
+        #expect(received == text)
+    }
+}
