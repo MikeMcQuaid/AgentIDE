@@ -253,6 +253,17 @@ public extension SessionService {
         return destination
     }
 
+    /// How much of a session's output a whole-output copy takes:
+    /// herdr's recent scrollback, which is what a person scrolled
+    /// through to want it.
+    static let copiedOutputLines = 5_000
+
+    /// A session's recent output, the hard wraps of the terminal's
+    /// width removed; nil when herdr cannot answer.
+    func readOutput(sessionName: String) async -> String? {
+        await herdr.readOutput(sessionName: sessionName, lines: Self.copiedOutputLines)
+    }
+
     /// Types text into a session's terminal, as pasted input.
     func typeText(_ text: String, sessionName: String) async throws {
         try await herdr.typeText(text, sessionName: sessionName)

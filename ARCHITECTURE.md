@@ -302,7 +302,7 @@ Two visually unmistakable terminal flavours:
   forever, so a pane that re-themed on a macOS appearance switch
   left the composer white on white; the pinned palette keeps the
   answer the agent cached true for the session's whole life,
-  relaunches of the app included. Copies from the agent pane are reflowed for pasting
+  relaunches of the app included. The agent pane's menu also copies its whole recent output, read back from herdr unwrapped (`pane read --source recent-unwrapped`), since the local buffer holds only the rendered screen and a selection can never reach what was scrolled past. Copies from the agent pane are reflowed for pasting
   into prose, block by block rather than by the copy as a whole: a
   paragraph loses the terminal's hard wraps, while a run of lines that
   opens like a command keeps every one of them, so an answer that

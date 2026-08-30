@@ -29,6 +29,12 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// drop is; nil leaves every paste to the terminal.
     var onPasteFiles: (([URL]) -> Bool)?
 
+    /// Reads the pane's whole recent output, for agent panes whose
+    /// local buffer holds only the rendered screen: a selection can
+    /// never cover what was scrolled past, this can. Nil hides the
+    /// menu item.
+    var onCopyAllOutput: (() async -> String?)?
+
     /// Keeps a selection while output arrives. SwiftTerm drops the
     /// selection on every line feed whenever mouse reporting is on,
     /// which it always is here so that an agent's own scrolling and
@@ -54,6 +60,12 @@ final class PaneTerminalView: LocalProcessTerminalView {
         let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "")
         pasteItem.target = self
         menu.addItem(pasteItem)
+        if onCopyAllOutput != nil {
+            menu.addItem(.separator())
+            let allItem = NSMenuItem(title: "Copy All Output", action: #selector(copyAllOutput(_:)), keyEquivalent: "")
+            allItem.target = self
+            menu.addItem(allItem)
+        }
         return menu
     }
 
@@ -81,6 +93,25 @@ final class PaneTerminalView: LocalProcessTerminalView {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
+    }
+
+    /// The whole recent output from herdr, reflowed like a selection
+    /// copy when this pane reflows, onto the clipboard.
+    @objc
+    func copyAllOutput(_: Any?) {
+        guard let onCopyAllOutput else {
+            return
+        }
+
+        Task { @MainActor in
+            guard let text = await onCopyAllOutput() else {
+                return
+            }
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(reflowsCopies ? PasteableText.reflow(text) : text, forType: .string)
+        }
     }
 
     /// Routes one wheel event to herdr when this pane owns the

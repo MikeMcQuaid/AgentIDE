@@ -101,6 +101,10 @@ before shipping.
   locations, the shared monospace font, refresh cadences and whether
   commits must be signed at all (so preferences
   live where macOS puts them rather than in menus and hidden defaults)
+- **Copies** an agent's whole recent output from the pane's menu, read
+  back from `herdr` with the terminal's hard wraps removed and reflowed
+  like any copy from that pane (so a long answer pastes whole, where a
+  drag-selection could only ever hold the screen)
 - **Renders** terminals locally from `herdr`'s terminal control stream, so
   selecting, copying and pasting behave like any other text on your Mac
   while the sessions keep running in `herdr` (so native terminal feel

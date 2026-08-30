@@ -29,6 +29,7 @@ public struct TerminalPaneView: View {
         isActive: Bool = true,
         fixedAppearance: TerminalAppearance? = nil,
         onPasteFiles: (([URL]) -> Bool)? = nil,
+        onCopyAllOutput: (() async -> String?)? = nil,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
     ) {
         transport = .control(command: command)
@@ -36,6 +37,7 @@ public struct TerminalPaneView: View {
         self.isActive = isActive
         self.fixedAppearance = fixedAppearance
         self.onPasteFiles = onPasteFiles
+        self.onCopyAllOutput = onCopyAllOutput
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -55,6 +57,7 @@ public struct TerminalPaneView: View {
         self.isActive = isActive
         fixedAppearance = nil
         onPasteFiles = nil
+        onCopyAllOutput = nil
         self.onProcessTerminated = onProcessTerminated
     }
 
@@ -67,6 +70,7 @@ public struct TerminalPaneView: View {
             isActive: isActive,
             fixedAppearance: fixedAppearance,
             onPasteFiles: onPasteFiles,
+            onCopyAllOutput: onCopyAllOutput,
             clearRequest: clearShellRequest,
             onProcessTerminated: onProcessTerminated,
         )
@@ -92,6 +96,9 @@ public struct TerminalPaneView: View {
 
     /// Where a paste of files or an image goes, for agent panes.
     private let onPasteFiles: (([URL]) -> Bool)?
+
+    /// Reads the whole recent output, for agent panes.
+    private let onCopyAllOutput: (() async -> String?)?
 
     private let onProcessTerminated: (@MainActor () -> Void)?
 }
@@ -121,6 +128,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     let fixedAppearance: TerminalAppearance?
 
     let onPasteFiles: (([URL]) -> Bool)?
+    let onCopyAllOutput: (() async -> String?)?
     let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
 
@@ -150,6 +158,7 @@ struct TerminalRepresentable: NSViewRepresentable {
         view.font = CodeStyle.nsFont
         view.reflowsCopies = reflowsCopies
         view.onPasteFiles = onPasteFiles
+        view.onCopyAllOutput = onCopyAllOutput
         context.coordinator.installBlockSelection(on: view)
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(transport, in: view)
