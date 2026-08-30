@@ -104,14 +104,6 @@ struct DiffFileView: View {
         .onChange(of: editing) { previous, _ in commitFocusLoss(from: previous) }
     }
 
-    /// A hunk's lines as the file holds them: the displayed text
-    /// stands a space in for a blank line so its change colour has
-    /// something to paint, and copying that would put a space where
-    /// the file has nothing at all.
-    static func copyText(of hunk: DiffHunk) -> String {
-        hunk.lines.map(\.content).joined(separator: "\n")
-    }
-
     static func pad(_ number: Int?) -> String {
         let text = number.map(String.init) ?? ""
         return String(repeating: " ", count: max(0, numberWidth - text.count)) + text
@@ -171,6 +163,11 @@ struct DiffFileView: View {
 
     /// Whether Delete is asking before removing the file.
     @State private var isConfirmingDelete = false
+
+    /// Whether this file's lines have become fields: a field per
+    /// line across every file made the pane drag, so a file arms on
+    /// the first click into it and stays armed.
+    @State private var isLive = false
 
     /// The file's name, its new-file marker, diffstat and the
     /// copy and edit actions.
@@ -247,11 +244,20 @@ struct DiffFileView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
-                HStack(alignment: .top, spacing: Self.gutterSpacing) {
-                    gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
-                        .hoverHelp("Click a changed line's number to select it for rejection")
-                    lineView(entry, key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex))
+            // Lazy: a long file's lines are built as they scroll in,
+            // not all at once when the file expands.
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
+                    HStack(alignment: .top, spacing: Self.gutterSpacing) {
+                        gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
+                            .hoverHelp("Click a changed line's number to select it for rejection")
+                        lineView(
+                            entry,
+                            key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex),
+                            arm: { isLive = true },
+                            isLive: isLive,
+                        )
+                    }
                 }
             }
         }

@@ -10,14 +10,15 @@ import TerminalUI
 extension DiffFileView {
     /// One line's text. In the uncommitted scope every line the
     /// working file still holds, which is every line but a removed
-    /// one, is a field as it stands: type into it and click away or
-    /// press Enter to write the file, typed newlines becoming new
-    /// lines. Elsewhere, and for removed lines, the highlighted
-    /// text; a selectable text swallows clicks, so a field that had
-    /// to be clicked into being never was.
+    /// one, is a field once the file is live: type into it and click
+    /// away or press Enter to write the file, typed newlines becoming
+    /// new lines. Before that, and everywhere else, the highlighted
+    /// text; a click on an uncommitted line arms its file and lands
+    /// in that line. Selection stays off those lines, since a
+    /// selectable text swallows the click.
     @ViewBuilder
-    func lineView(_ entry: NumberedLine, key: EditKey) -> some View {
-        if model.showsUncommitted, let number = entry.new {
+    func lineView(_ entry: NumberedLine, key: EditKey, arm: @escaping () -> Void, isLive: Bool) -> some View {
+        if model.showsUncommitted, isLive, let number = entry.new {
             TextField("", text: draftBinding(key, initial: entry.line.content), axis: .vertical)
                 .font(CodeStyle.font)
                 .textFieldStyle(.plain)
@@ -26,6 +27,16 @@ extension DiffFileView {
                 .background(entry.line.kind == .addition ? Color.green.opacity(Self.changeOpacity) : .clear)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hoverHelp("Edit the file here; Enter or clicking away writes it")
+        } else if model.showsUncommitted, entry.new != nil {
+            Text(lineText(entry.line))
+                .font(CodeStyle.font)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    arm()
+                    editing = key
+                }
+                .hoverHelp("Click to edit this file's lines here")
         } else {
             Text(lineText(entry.line))
                 .font(CodeStyle.font)
@@ -106,5 +117,13 @@ extension DiffFileView {
             }
             return NumberedLine(line: line, numbers: numbers, new: held)
         }
+    }
+
+    /// A hunk's lines as the file holds them: the displayed text
+    /// stands a space in for a blank line so its change colour has
+    /// something to paint, and copying that would put a space where
+    /// the file has nothing at all.
+    static func copyText(of hunk: DiffHunk) -> String {
+        hunk.lines.map(\.content).joined(separator: "\n")
     }
 }
