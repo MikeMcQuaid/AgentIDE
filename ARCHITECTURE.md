@@ -589,7 +589,11 @@ Sendable` and `nonisolated(unsafe)` are banned.
    reaches neither a hook nor a transcript no longer counts, a deliberate
    trade: the spool and transcripts already cover every agent message.
 4. herdr's agent lifecycle (working, idle and blocked, from its screen
-   detection) covers every agent equally, hooks or none: the sidebar
+   detection) covers every agent equally, hooks or none, and arrives
+   as events: the dashboard keeps one `herdr agent wait` per running
+   agent, asking for every state but the current one, so a change
+   refreshes the sidebar at once where the poll noticed it within its
+   interval; the poll stays for git and as the safety net. The sidebar
    flags an agent waiting on input, and notifications fire when an agent
    finishes a turn or needs input, each event with its own toggle
    and chime chosen in Settings' Notifications pane: the system's

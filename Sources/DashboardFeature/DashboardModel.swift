@@ -326,6 +326,10 @@ public final class DashboardModel {
     var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
 
+    /// One herdr waiter per running agent, keyed by pane; the
+    /// agent-watch extension file is the only thing that touches it.
+    var agentWatchers: [String: Task<Void, Never>] = [:]
+
     /// Every pull request question the sidebar asks goes through
     /// here, which holds both the answers and when they arrived.
     var pullRequests: PullRequestStore {

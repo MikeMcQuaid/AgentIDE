@@ -258,6 +258,20 @@ public extension SessionService {
         try await herdr.typeText(text, sessionName: sessionName)
     }
 
+    /// Waits until a session's agent changes state or the wait
+    /// times out; false means unchanged or no pane to watch.
+    func waitForAgentChange(session: AgentSession, timeoutMilliseconds: Int) async -> Bool {
+        guard let paneID = session.paneID else {
+            return false
+        }
+
+        return await herdr.waitForAgentChange(
+            paneID: paneID,
+            from: session.activity,
+            timeoutMilliseconds: timeoutMilliseconds,
+        )
+    }
+
     /// Waits for a just-launched session's agent to settle into a
     /// detected state, so the listing that follows finds it first
     /// time instead of polling half-second refreshes.
