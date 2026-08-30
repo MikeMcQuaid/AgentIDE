@@ -29,115 +29,118 @@ In workflow order; the loop from prompt to review repeats before shipping.
 
 ### 🚀 Start work
 
-- **Creates** or clones repositories into the shared workspace, symlinked
-  into your home directory, so you and the sandbox share one checkout
-- **Creates** a worktree and branch from a typed problem statement, an
-  issue or a pull request, narrating each step until the agent is up
-- **Starts** Claude Code or Codex CLI in `herdr` inside the sandbox, with
-  no permission prompts and no access to your credentials
-- **Starts** work from a terminal or a phone: `agentide new` asks for
-  repository, agent, effort, model and prompt, each defaulting to what was
-  last chosen, and attaches to the session it makes
-- **Answers** Shortcuts and Siri: Start Agent Session, Show Worktree, Open
-  Pull Requests and What Needs Me, so a Shortcut on your phone starts work
-  on the Mac with no SSH
+- Creates or clones repositories into the shared workspace, symlinked into
+  your home directory (so you and the sandbox share one checkout)
+- Creates a worktree and branch from a typed problem statement, an issue or
+  a pull request, narrating each step until the agent is up (so starting
+  work is one prompt, not a git ritual)
+- Starts Claude Code or Codex CLI in `herdr` inside the sandbox (so agents
+  run unattended, with no permission prompts and no access to your
+  credentials)
+- Starts work from a terminal or a phone with `agentide new`, which asks
+  for repository, agent, effort, model and prompt, each defaulting to the
+  last choice (so a thought away from the Mac becomes a branch)
+- Answers Shortcuts and Siri with Start Agent Session, Show Worktree, Open
+  Pull Requests and What Needs Me (so a Shortcut on your phone starts work
+  with no SSH)
 
 ### 👀 Watch and steer
 
-- **Shows** every agent's state, working, idle, done, waiting on input or
-  exited, straight from `herdr`'s own detection, in the sidebar and the
-  session strip
-- **Groups** worktrees by repository with unread activity, open pull
-  requests, merge conflicts, uncommitted work and how far each branch has
-  drifted from what was pushed; worktrees made outside the app are adopted
-- **Lists** directories of your own beside a repository's worktrees, for
-  work by hand that no agent ever runs in
-- **Says** what a pull request is doing in GitHub's own icons: state,
-  number, a CI dot, review verdict and unresolved conversations, with
-  in-flight checks and queued merges watched until they settle
-- **Notifies** you when an agent finishes or needs input, badges the Dock
-  and plays a chime per event, chosen in Settings
-- **Renders** terminals locally from `herdr`'s control stream, so
-  selection, copying and pasting behave like any other Mac text while the
-  sessions keep running elsewhere; copies of prose reflow for pasting, code
-  stays exactly as copied, and the pane's menu copies its whole output
-- **Takes** a pasted or dropped file or screenshot straight into the agent
-- **Commits** work an agent forgot to commit, clearly authored as such
-- **Configures** itself in one Settings window: default agent, model and
-  effort, notifications, the external editor and browser, locations,
-  fonts, cadences and whether commits must be signed
+- Shows every agent's state, working, idle, done, waiting on input or
+  exited, from `herdr`'s own detection (so one glance says who needs you)
+- Groups worktrees by repository with unread activity, open pull requests,
+  merge conflicts, uncommitted work and how far each branch has drifted from
+  what was pushed, and adopts worktrees made outside the app (so nothing
+  running is invisible)
+- Lists directories of your own beside a repository's worktrees (so work by
+  hand sits beside the agents' work, and no agent ever runs in it)
+- Says what a pull request is doing in GitHub's own icons, its checks and
+  queued merges watched until they settle (so the sidebar is the dashboard)
+- Notifies when an agent finishes or needs input, badges the Dock and plays
+  a chime per event (so you never sit polling a terminal)
+- Renders terminals locally from `herdr`'s control stream, reflows copied
+  prose while keeping code exact, and copies a pane's whole output from its
+  menu (so terminals feel native and answers paste whole)
+- Takes a pasted or dropped file or screenshot straight into the agent (so
+  Cmd-V after Cmd-Shift-4 is enough)
+- Commits work an agent forgot to commit, clearly authored as such (so
+  nothing is stranded in a worktree)
 
 ### 🔍 Review
 
-- **Presents** the conversation beside a pull-request-style diff, syntax
-  highlighted, generated files hidden, with the open pull request's
-  conversations inline under their files and resolvable there
-- **Reviews** uncommitted work, the last commit, what is not yet pushed or
-  the whole branch, and any single commit on its own
-- **Edits** uncommitted work in place in its diff (click into a file and
-  every line it still holds is a field; removed lines are history), and
-  deletes a never-committed file after asking
-- **Rejects** individual lines of the last commit to amend it, and edits
-  commit messages
-- **Edits** files in a built-in highlighted editor, Markdown rendered at
-  the press of a button, and takes over whatever a shell command opens
-  (`git rebase -i`, a commit message) through the bundled `agentide`
-  command
-- **Previews** web pages in an embedded browser that remembers each
-  worktree's page, and opens a shell running as your own user
-- **Finds** with Cmd-F everywhere, and never turns quotes curly or dashes
-  long
+- Presents the conversation beside a pull-request-style, syntax-highlighted
+  diff with generated files hidden and the pull request's conversations
+  inline under their files (so you review the way you would on GitHub)
+- Reviews uncommitted work, the last commit, what is not yet pushed, the
+  whole branch or any single commit (so a branch of ten commits reviews
+  commit by commit)
+- Edits uncommitted work in place in its diff, every line the file still
+  holds a field, and deletes a never-committed file after asking (so small
+  fixes need no other app)
+- Rejects individual lines of the last commit to amend it, and edits commit
+  messages (so a review verdict is one click, not a rebase)
+- Edits files in a built-in highlighted editor, renders Markdown, and takes
+  over whatever a shell command opens through the bundled `agentide`
+  command (so `git rebase -i` needs no terminal editor)
+- Previews web pages in an embedded browser and opens a shell running as
+  your own user (so verifying behaviour never leaves the window)
+- Finds with Cmd-F everywhere and never turns quotes curly or dashes long
+  (so code and commit messages survive being typed)
 
 ### 🚢 Ship
 
-- **Pushes** branches, showing what each push sends and whether a rebase
-  would move the base, sign commits or both; a rebase integrates a remote
-  that moved, and a rewritten one is replaced on the next push with no
-  terminal step
-- **Opens** pull requests from an in-app form: title and body drafted from
-  the branch's commits by the on-device model, the repository's template
-  filled in and its AI disclosure written, labels attached, and a fork
-  created and used when the repository is not yours to push to
-- **Stacks** branches in one worktree, derived from git rather than
-  recorded: each pull request opens against the branch below, the stack's
-  Rebase and Push put every branch back in place and push them bottom up,
-  and GitHub is told the stack it belongs to
-- **Copies** unresolved review comments and the failing CI runs' logs into
-  a prompt, condensed to what a fix needs; resolves conversations, changes
-  labels, resolves conflicts and merges or enables automerge, each with a
-  click
+- Pushes branches, saying what each push sends and whether a rebase would
+  move the base, sign commits or both; a rebase integrates a remote that
+  moved and a rewritten one is replaced on the next push (so no push ends
+  in a terminal)
+- Opens pull requests from an in-app form drafted from the branch's commits
+  by the on-device model, the repository's template filled in with its AI
+  disclosure, labels attached, and a fork used when the repository is not
+  yours (so shipping needs no retyping)
+- Stacks branches in one worktree, derived from git rather than recorded,
+  each pull request opening against the branch below and the stack rebased
+  and pushed bottom up (so a stack is one checkout and no bookkeeping)
+- Copies unresolved review comments and failing CI logs into a prompt,
+  condensed; resolves conversations, changes labels, resolves conflicts and
+  merges or enables automerge, each with a click (so the last mile is not
+  the slowest)
 
 ### 🧹 Tidy up
 
-- **Deletes** a worktree and its branch once its pull request merges,
-  wherever the merge happened
-- **Deletes** a repository's checkout, offered only while nothing in it
-  could be lost, and says what holds it back otherwise
-- **Keeps** every conversation a repository has ever run browsable and
-  resumable, even after its worktree is gone
+- Deletes a worktree and its branch once its pull request merges, wherever
+  the merge happened (so finished work disappears without ceremony)
+- Deletes a repository's checkout only while nothing in it could be lost,
+  saying what holds it back otherwise (so a repository leaves as easily as
+  a worktree, never with work in it)
+- Keeps every conversation a repository has ever run browsable and
+  resumable after its worktree is gone (so tidying up never loses one)
 
 ### 🛟 Resilience
 
-- **Survives** the app quitting, crashing or updating: sessions belong to
-  `herdr` and the sandbox user, not to the app
-- **Backs up** each worktree's newest conversation to iCloud Drive, so the
-  sandbox user is disposable
-- **Defers** idle sleep while agents run and resumes sessions that sleep
-  killed
-- **Shows** what every pane is waiting on until it has an answer, and an
-  empty state only once it has been proven empty
-- **Collects** every failure and status message into a Messages tab that
-  is always there
+- Keeps sessions in `herdr` under the sandbox user, not the app (so agents
+  survive the app quitting, crashing or updating)
+- Backs up each worktree's newest conversation to iCloud Drive (so the
+  sandbox user is disposable)
+- Defers idle sleep while agents run and resumes sessions that sleep killed
+  (so a long response survives you walking away)
+- Shows what a pane is waiting on until it has an answer, and an empty
+  state only once proven empty (so a blank pane is never a lie)
+- Collects every failure and status message into a Messages tab (so
+  nothing scrolls past unseen)
 
 ## 🚫 Out of Scope Features
 
-- Being a general-purpose IDE (the built-in editor is for review-time fixes)
+- A general-purpose IDE (use your preferred editor for long editing
+  sessions; the built-in one is for review-time fixes)
 - Windows or Linux support (being a native macOS app is the point)
 - Replacing sandvault (AgentIDE drives it; sandboxing policy stays there)
-- Running agents outside the sandbox
+- Running agents outside the sandbox (the agents' own flags exist if you
+  must)
 - Team, multi-user or hosted features (one developer, one Mac)
 - An agent marketplace or bundled models (bring your own agent CLI)
-- A native iOS app (remote access is SSH into `herdr`)
+- A native iOS app (SSH into `herdr` from any iOS client instead)
+- A built-in updater or a Mac App Store build (Homebrew's cask updates it;
+  the App Store sandbox forbids running agents as another user)
 
 ## 📋 Requirements
 
@@ -164,9 +167,7 @@ open /Applications/AgentIDE.app
 
 `script/bootstrap` installs the `Brewfile` dependencies and generates the
 gitignored Xcode project; `script/install` builds and copies the app into
-`/Applications`, so the copy you run survives rebuilds. Releases ship as a
-Homebrew cask, so `brew upgrade` moves the app on; there is no Mac App
-Store build, since its sandbox forbids running agents as another user.
+`/Applications`, so the copy you run survives rebuilds.
 
 A shell pane runs your login shell with `AGENTIDE=1` set and the bundled
 `agentide` command on `PATH`, so shell files can hand editing back to the
@@ -223,6 +224,43 @@ Connect as `sandvault-<you>` and run `herdr`: one attach presents every
 agent workspace, `an` starts a new session, and every agent launched
 inside the sandbox is reachable, so a session steered from the phone is
 the same session.
+
+## ⚙️ Configuration
+
+Everything a user changes lives in the Settings window (Cmd-,):
+
+- **General**: the agent, model and effort new sessions start on, whether
+  commits must be signed, the browser Cmd-click opens and the way to the
+  session manager
+- **Notifications**: for a finished turn, a question asked of you and
+  unread output, whether each notifies, counts in the Dock badge and what
+  it sounds like
+- **Editor**: the external editor command Cmd-click on a file runs, and
+  the monospace font and size every code surface shares
+- **Advanced**: where repositories and worktrees live, how often the
+  system is re-read, whether idle sleep is deferred and the performance log
+
+Two files in the shared workspace are the app's own: `user/` is the
+template sandvault syncs into the sandbox home, where the app keeps its
+agent hooks and where your keys and shell configuration go, and
+`agentide/session-defaults` remembers what the new session form and
+`agentide new` last chose. The app also keeps `[worktrees] directory` in
+`herdr`'s own configuration pointed at its layout, so `herdr worktree
+create` lands where the sidebar looks.
+
+Environment variables, for shell files and scripts:
+
+| Variable | Set by | Meaning |
+| --- | --- | --- |
+| `AGENTIDE` | the app, in shell panes | `1`, so shell files know they are inside the app |
+| `SHARED_WORKSPACE` | you, for remote logins | the shared workspace `agentide` reads, when a login did not inherit it |
+| `HERDR_SESSION` | your shell configuration | the `herdr` session name, `agentide` for the installed app |
+| `AGENTIDE_SESSION` | the app, per pane | the session's label, which the agent hooks attribute events by |
+| `AGENTIDE_EDITS` | the app, in shell panes | where `agentide --wait` spools the edit it is waiting on |
+| `AGENTIDE_COLOR` | you | forces colour in `agentide`'s output where no terminal is detected |
+| `AGENTIDE_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
+| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out |
+| `AGENTIDE_DRY_RUN` | you, running `agentide new` | prints what it would make instead of making it |
 
 ## 🚧 Status
 
