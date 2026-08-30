@@ -8,39 +8,47 @@ import TerminalUI
 /// the formatter deletes a private declaration nothing in its own
 /// file reads.
 extension DiffFileView {
-    /// One line's text: highlighted, and in the uncommitted scope
-    /// live for every line the working file still holds, which is
-    /// every line but a removed one. A click turns the line into a
-    /// field; Enter or leaving it writes the file, Escape lets the
-    /// typing go. Typed newlines become new lines.
+    /// One line's text. In the uncommitted scope every line the
+    /// working file still holds, which is every line but a removed
+    /// one, is a field as it stands: type into it and click away or
+    /// press Enter to write the file, typed newlines becoming new
+    /// lines. Elsewhere, and for removed lines, the highlighted
+    /// text; a selectable text swallows clicks, so a field that had
+    /// to be clicked into being never was.
     @ViewBuilder
     func lineView(_ entry: NumberedLine, key: EditKey) -> some View {
-        if editing == key, let number = entry.new {
+        if model.showsUncommitted, let number = entry.new {
             TextField("", text: draftBinding(key, initial: entry.line.content), axis: .vertical)
                 .font(CodeStyle.font)
                 .textFieldStyle(.plain)
                 .focused($editing, equals: key)
                 .onSubmit { commit(key, line: number) }
-                .onExitCommand {
-                    model.lineDrafts[draftID(key)] = nil
-                    editing = nil
-                }
+                .background(entry.line.kind == .addition ? Color.green.opacity(Self.changeOpacity) : .clear)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .hoverHelp("Edit the file here; Enter or clicking away writes it")
         } else {
             Text(lineText(entry.line))
                 .font(CodeStyle.font)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if model.showsUncommitted, entry.new != nil {
-                        editing = key
-                    }
-                }
-                .hoverHelp(model.showsUncommitted && entry.new != nil
-                    ? "Click to edit this line in the file; a removed line is history"
-                    : "")
         }
+    }
+
+    /// Writes whatever was typed into the line just left; the
+    /// focus change is what says it was left.
+    func commitFocusLoss(from previous: EditKey?) {
+        guard let previous, previous != editing,
+              file.hunks.indices.contains(previous.hunkIndex)
+        else {
+            return
+        }
+
+        let lines = numbered(file.hunks[previous.hunkIndex])
+        guard lines.indices.contains(previous.lineIndex), let number = lines[previous.lineIndex].new else {
+            return
+        }
+
+        commit(previous, line: number)
     }
 
     /// The draft's key in the model: this file, hunk and line.
@@ -57,16 +65,15 @@ extension DiffFileView {
     }
 
     /// Writes the typed line back when it changed; the reload that
-    /// follows redraws the row as the diff now has it.
+    /// follows redraws the row as the diff now has it. Nothing typed
+    /// is nothing to write.
     func commit(_ key: EditKey, line number: Int) {
         let id = draftID(key)
         guard let draft = model.lineDrafts[id] else {
-            editing = nil
             return
         }
 
         model.lineDrafts[id] = nil
-        editing = nil
         Task { await model.replaceLine(in: file, newLineNumber: number, with: draft) }
     }
 

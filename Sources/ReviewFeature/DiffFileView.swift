@@ -69,6 +69,8 @@ struct DiffFileView: View {
 
     static let statSpacing: CGFloat = 4
 
+    static let changeOpacity = 0.15
+
     let file: DiffFile
     let model: ReviewModel
     let isCollapsed: Bool
@@ -97,6 +99,9 @@ struct DiffFileView: View {
             }
         }
         .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
+        // Leaving a field is what writes it, and focus moving is
+        // what says a field was left.
+        .onChange(of: editing) { previous, _ in commitFocusLoss(from: previous) }
     }
 
     /// A hunk's lines as the file holds them: the displayed text
@@ -160,7 +165,6 @@ struct DiffFileView: View {
 
     /// Enough to find a match at a glance without hiding the code.
     private static let foundOpacity = 0.45
-    private static let changeOpacity = 0.15
     private static let selectedOpacity = 0.35
     private static let filePadding: CGFloat = 8
     private static let numberWidth = 4
