@@ -22,7 +22,8 @@ public extension DashboardModel {
         }
     }
 
-    /// Creates a session from a typed prompt.
+    /// Creates a session from a typed prompt; public for the App
+    /// Intents, which start work from Shortcuts and Siri.
     func createSession(
         repository: Repository,
         prompt: String,

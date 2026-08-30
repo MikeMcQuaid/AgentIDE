@@ -153,6 +153,15 @@ bare exit code.
   `XDG_CONFIG_HOME` into throwaway per-run scratch directories, so
   building, testing and development can never list or kill the installed
   app's sessions.
+- Shortcuts and Siri reach the same funnel through App Intents
+  (`App/AgentIDEShortcuts.swift`): repository and worktree entities resolve
+  from the dashboard's in-memory groups, so no git runs to answer a
+  query; Start Agent Session calls `DashboardModel.createSession` with
+  the model and effort last chosen anywhere; Show Worktree and Open
+  Pull Requests select the row and write the utility tab onto the
+  storage bus; What Needs Me answers without opening the app. The
+  intents reach the app through `AppDependencies.shared`, the one
+  instance, since the system invokes them outside any view.
 - A session can also be started from outside the app entirely:
   `agentide new`, the same command as the editor shim, asks for the
   repository, agent, effort, model and prompt, each defaulting to what

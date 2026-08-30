@@ -120,6 +120,11 @@ before shipping.
   survives a phone changing network, so nothing is needed on this side
   beyond Remote Login for the sandbox account (so you can steer or add
   context away from your Mac)
+- **Answers** Shortcuts and Siri through App Intents: Start Agent
+  Session, Show Worktree, Open Pull Requests and What Needs Me, the
+  last spoken without stealing focus, so a Shortcut on your phone
+  starts work on the Mac with no SSH at all (so the bus thought needs
+  neither keyboard nor terminal)
 - **Starts** work from a terminal or that phone: `agentide new` takes no
   arguments and asks for repository, agent, effort, model and prompt in
   turn, each offering what was last chosen in either place, so four taps
