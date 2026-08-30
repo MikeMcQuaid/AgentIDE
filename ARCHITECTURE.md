@@ -1498,6 +1498,30 @@ with, so AgentIDEData weak-links FoundationModels: a hard link aborted
 every test bundle at load over symbols the runner's OS lacks, while the
 client already guards every call on the model's availability.
 
+## Potential future plans
+
+Not scheduled, recorded so the pieces already built line up with
+them:
+
+- A CI fix loop: the pull request poll already sees checks change,
+  so a failure becoming a failure (a transition, never a repeat) can
+  gather the logs the copy button gathers, write them into a prompt
+  and hand it to the worktree's running agent through `herdr agent
+  prompt --wait`, or start a session when none runs; one attempt per
+  checks run, never on the default branch, the push always left to
+  the human. A setting decides ask-first or automatic per repository.
+- Copilot review comments addressed automatically: the unresolved
+  conversations the copy button already gathers, sent the same way
+  once the reviewer's comment lands, resolving each thread when the
+  agent's commit answers it.
+- Scheduled jobs: a per-repository list of cadence, agent and prompt
+  template, each run in a worktree named by date so a failed run is
+  inspectable and merge cleanup disposes of it; the agent's own
+  scheduled tasks surfaced for cadences inside a live session.
+- An Answer Agent intent, once herdr's key sending has a wrapper
+  beside `typeText`, so a blocked question can be answered from a
+  notification or a phone.
+
 ## Risks and open questions
 
 | # | Risk | Mitigation |
