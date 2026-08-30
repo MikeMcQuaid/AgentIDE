@@ -21,6 +21,20 @@ final class AgentIDEIntentTests: XCTestCase {
 
     // MARK: Internal
 
+    /// The intents run inside the app, so it is launched first: the
+    /// definitions resolve from the built product's metadata, but
+    /// running one needs the process the system hands it to.
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+        XCUIApplication().launch()
+    }
+
+    override func tearDown() {
+        XCUIApplication().terminate()
+        super.tearDown()
+    }
+
     func testWhatNeedsMeAnswersWithoutOpeningTheApp() async throws {
         let intent = try XCTUnwrap(definitions.intents["WhatNeedsMeIntent"])
         // A fresh machine has nothing running; a busy one has rows.
