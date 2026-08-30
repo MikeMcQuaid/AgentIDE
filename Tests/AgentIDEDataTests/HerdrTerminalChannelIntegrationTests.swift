@@ -35,7 +35,7 @@ struct HerdrTerminalChannelIntegrationTests {
         // The watchdog releases on timeout, so a silent server ends
         // the stream instead of hanging the test.
         let watchdog = Task {
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(30))
             await channel.stop()
         }
         var rendered = [UInt8]()

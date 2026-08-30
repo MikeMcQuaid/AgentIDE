@@ -4,10 +4,16 @@ import Foundation
 import Testing
 
 /// A whole paste as one command into a reader as slow as an agent
-/// redrawing between reads: herdr's write waits on the terminal
-/// rather than dropping, and nothing is lost at either end.
+/// redrawing between reads. It holds on an idle machine and fails
+/// under load with a kibibyte gone from the middle: the PTY master
+/// accepts a write only while the slave's input queue is under
+/// `TTYHOG - 2` (1,022 bytes), and herdr 0.8.2 takes a short write
+/// as a whole one, so the rest of that piece is dropped whenever
+/// the reader stalls long enough for the queue to fill. Kept as the
+/// reproduction for the upstream report; enable it again once herdr
+/// waits on the terminal or retries.
 struct HerdrSlowReaderIntegrationTests {
-    @Test
+    @Test(.disabled("herdr 0.8.2 drops the rest of a PTY write the kernel accepted partially"))
     func `a whole paste survives a slow raw-mode reader`() async throws {
         let (herdr, home) = try TestSupport.makeHerdrClient()
         let directory = try TestSupport.temporaryDirectory("slow-reader")

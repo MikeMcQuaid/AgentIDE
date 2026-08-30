@@ -285,7 +285,11 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   newline submitting the lines before it. `PaneTerminalView`
   wraps a paste in the bracketed-paste markers itself on those
   panes (`bracketsPastes`); a local shell pane sees the modes and
-  needs nothing.
+  needs nothing. herdr 0.8.2 also takes a short PTY write as a whole
+  one, so a reader stalled while a paste larger than the input queue
+  (1,022 bytes) is in flight loses about a kibibyte from the middle;
+  `HerdrSlowReaderIntegrationTests` reproduces it under load and stays
+  disabled until herdr waits or retries.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

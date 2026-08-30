@@ -185,10 +185,17 @@ the wheel as `terminal.scroll`. Rules that follow from that shape:
   submits at every newline. A herdr-backed pane wraps a paste in the
   bracketed-paste markers itself (`PaneTerminalView.bracketsPastes`)
   and sends it as one write; a local shell pane owns its PTY, sees the
-  modes and needs nothing. Do not pace or chunk a paste: herdr delivers
-  any size whole (`HerdrLargeInputIntegrationTests` and
-  `HerdrSlowReaderIntegrationTests` prove it) and chunking only moved
-  the loss.
+  modes and needs nothing. A paste goes to herdr whole
+  (`HerdrLargeInputIntegrationTests` pushes 180 KiB through one
+  command); chunking it as separate commands only moved the loss. The
+  remaining limit is herdr's: the PTY master accepts a write only while
+  the slave's input queue is under `TTYHOG - 2` (1,022 bytes), and
+  herdr 0.8.2 takes a short write as a whole one, so a reader that
+  stalls while a large paste is in flight loses about a kibibyte from
+  the middle (`HerdrSlowReaderIntegrationTests`, disabled until herdr
+  waits or retries). Agents drain fast enough that this has not been
+  seen in use; pacing the body inside one pair of markers would be the
+  in-app mitigation if it is.
 - **Scrollback lives in herdr.** The pane keeps none
   (`changeScrollback(nil)`), since a scroll answers with a repaint and a
   local history filled with replaced screens showed output three times
