@@ -295,20 +295,6 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file
   itself rather than resolving it against a worktree.
-- A stack of branches lives in one worktree and is derived from
-  ancestry, never recorded: branches sharing a fork point beyond
-  the default branch, ordered by where each forks. Two branches at
-  one commit are one entry, and the name the remote knows wins:
-  that is the one a pull request can be open on, and preferring the
-  checked-out name hid a pushed twin's pull request completely.
-  Reading one
-  needs no checkout, so the strip retargets panes and an entry
-  that is not checked out reviews read-only; restacking records
-  every tip first and rebases with `--onto <parent> <recorded
-  tip>`, signed, skipping a branch already in place. Only the last
-  step of submitting, `gh stack link`, belongs to GitHub's own
-  extension; it links pull requests this app opened and keeps no
-  local tracking, so nothing competes with the derivation.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
