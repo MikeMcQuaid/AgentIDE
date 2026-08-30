@@ -350,6 +350,23 @@ final class PullRequestsModel {
     var items: [WorktreeItem] {
         didSet {
             isPushed = false
+            // The sidebar's poll may have fetched a fresher summary
+            // into the shared cache since these rows were painted.
+            repaintFromCache()
+        }
+    }
+
+    /// Takes the cache's summary for the selected pull request and
+    /// every listed row, so what the sidebar just learnt shows here
+    /// too; the cache is written by whichever side fetched last.
+    func repaintFromCache() {
+        if let selected,
+           let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
+           cached != selected {
+            self.selected = cached
+        }
+        summaries = summaries.map { row in
+            pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row
         }
     }
 }

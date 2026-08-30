@@ -35,6 +35,11 @@ public enum UtilityTabTarget {
 
     /// The errors tab.
     public static let errors = "errors"
+
+    /// Bumped whenever a pull request summary is cached by the pane
+    /// that fetched it, so the sidebar's rows, which read the same
+    /// cache, repaint at once rather than on their next poll.
+    public static let pullRequestCacheKey = "pullRequestCacheGeneration"
 }
 
 // MARK: - LinkOpener

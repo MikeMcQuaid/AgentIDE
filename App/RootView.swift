@@ -1,6 +1,7 @@
 import AgentIDEDomain
 import DashboardFeature
 import SwiftUI
+import TerminalUI
 
 // MARK: - RootView
 
@@ -158,6 +159,11 @@ struct RootView: View {
         .onChange(of: dashboardRefreshRequest) {
             Task { await dependencies.dashboard.refresh() }
         }
+        // The pull request pane cached a changed state: the rows read
+        // the same cache and repaint on this bump, no reading needed.
+        .onChange(of: pullRequestCacheRequest) {
+            dependencies.dashboard.pullRequestCacheGeneration += 1
+        }
         // A destroyed worktree takes its shell and browser page with
         // it; a worktree the sidebar merely stopped listing keeps its
         // row, so nothing else closes a pane behind the user's back.
@@ -303,6 +309,10 @@ struct RootView: View {
     /// The push and rebase actions' immediate-refresh signal.
     @AppStorage("dashboardRefreshRequest")
     private var dashboardRefreshRequest = 0
+
+    /// The pull request pane's fresher-summary signal.
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var pullRequestCacheRequest = 0
 
     /// Worktrees whose browser has been opened, kept mounted.
     @State private var visitedBrowsers: Set<String> = []

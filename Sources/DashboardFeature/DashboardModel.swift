@@ -80,6 +80,10 @@ public final class DashboardModel {
     /// Worktrees mid-deletion, so their rows grey out instantly.
     public internal(set) var deletingPaths: Set<String> = []
 
+    /// Bumped when the pull request pane caches a fresher summary,
+    /// which every row's summary read observes.
+    public var pullRequestCacheGeneration = 0
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {

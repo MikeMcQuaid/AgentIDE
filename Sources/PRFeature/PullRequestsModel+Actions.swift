@@ -144,7 +144,20 @@ extension PullRequestsModel {
     /// Caches one enriched summary, so reopening the conversation
     /// or restarting the app paints its header instantly.
     func cacheEnriched(_ summary: PullRequestSummary) {
+        let before = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
         pullRequests.rememberSummary(repositoryPath: repository.path, summary: summary)
+        // The sidebar's row reads this same cache; a changed state
+        // tells it to look again now, not on its next poll.
+        if before.map({ Self.state(of: $0) }) != Self.state(of: summary) {
+            let key = UtilityTabTarget.pullRequestCacheKey
+            UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+        }
+    }
+
+    /// What the sidebar's row colours from, so only a change in it
+    /// asks the sidebar to repaint.
+    static func state(of summary: PullRequestSummary) -> [String] {
+        [summary.checks, summary.state, summary.mergeable, summary.reviewDecision, String(summary.isDraft)]
     }
 
     /// The stack size, following base branches that are other listed

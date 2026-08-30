@@ -12,9 +12,16 @@ extension DashboardModel {
     /// The pull request a worktree's branch is showing, when the
     /// last fetch found one.
     public func pullRequest(for item: WorktreeItem) -> PullRequestSummary? {
-        // flatMap flattens the dictionary's double optional.
+        // Read so a bump repaints every row: the pane that fetched a
+        // fresher summary bumps it through the storage bus.
+        _ = pullRequestCacheGeneration
+        // flatMap flattens the dictionary's double optional. The
+        // branch cache says which pull request; the shared summary
+        // cache, written by whichever side fetched last, says what
+        // state it is in, so the row and the pane never disagree.
         let cached = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
+            .map { pullRequests.cachedSummary(repositoryPath: item.worktree.repositoryPath, number: $0.number) ?? $0 }
         // Through the same choice the fetch makes, so a cache
         // holding a long-finished pull request stops speaking for
         // the branch the moment it is read, not at the next poll.

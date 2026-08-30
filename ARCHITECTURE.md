@@ -891,6 +891,11 @@ shim rather than a protocol:
    reloads that pushing and rebasing trigger cannot take back what is
    being written, and a commit message never refills a form whose draft
    was deliberately emptied. Open PR
+   The row and the pane never disagree about a pull request's state:
+   both read the one enriched-summary cache, written by whichever side
+   fetched last, the pane taking it up on every rows update and the
+   sidebar told to repaint at once, through the storage bus, whenever
+   the pane caches a changed state. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
    template appended below the body after an empty line and one
    `--label` per label picked from the repository's own (`gh label
