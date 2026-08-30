@@ -32,21 +32,6 @@ struct HerdrTerminalTests {
     }
 
     @Test
-    func `a large input goes as ordered commands no larger than the chunk`() throws {
-        let bytes = [UInt8](repeating: 0x61, count: HerdrTerminal.inputChunkBytes * 2 + 1)
-        let commands = HerdrTerminal.inputCommands(bytes: bytes)
-        #expect(commands.count == 3)
-        let decoded = try commands.map { line -> Data in
-            let object = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any]
-            let encoded = try #require(object?["bytes"] as? String)
-            return try #require(Data(base64Encoded: encoded))
-        }
-        #expect(decoded.map(\.count) == [HerdrTerminal.inputChunkBytes, HerdrTerminal.inputChunkBytes, 1])
-        #expect(Data(decoded.joined()) == Data(bytes))
-        #expect(HerdrTerminal.inputCommands(bytes: []).isEmpty)
-    }
-
-    @Test
     func `input travels as base64 so every byte arrives exactly`() throws {
         let bytes: [UInt8] = Array("pâté\r".utf8) + [0x1B, 0x5B, 0x41]
 
