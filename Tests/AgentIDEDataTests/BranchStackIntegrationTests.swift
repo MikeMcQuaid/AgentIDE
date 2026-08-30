@@ -16,6 +16,10 @@ struct BranchStackIntegrationTests {
         _ = try await TestSupport.run(["/usr/bin/ssh-keygen", "-t", "ed25519", "-N", "", "-q", "-f", key])
         _ = try await TestSupport.runGit(["config", "gpg.format", "ssh"], in: path)
         _ = try await TestSupport.runGit(["config", "user.signingkey", key], in: path)
+        // The host's global config may route SSH signing through a
+        // password manager that knows nothing of this key; the
+        // repository names the stock signer so the test signs alone.
+        _ = try await TestSupport.runGit(["config", "gpg.ssh.program", "ssh-keygen"], in: path)
         // Verification needs the allowed signers too, or every
         // signature reads as uncheckable and the restack treats
         // signed branches as unsigned forever.
