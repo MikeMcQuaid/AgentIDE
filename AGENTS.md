@@ -20,7 +20,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   changed, then build the app with xcodebuild
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds
-- `script/test`: run the unit and integration tests
+- `script/test`: run the unit and integration tests, then on the
+  host the App Intents tests through `xcodebuild` (a UI testing
+  bundle, since `AppIntentsTesting` drives the system's own runtime;
+  `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out)
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes

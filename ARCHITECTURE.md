@@ -161,7 +161,12 @@ bare exit code.
   Pull Requests select the row and write the utility tab onto the
   storage bus; What Needs Me answers without opening the app. The
   intents reach the app through `AppDependencies.shared`, the one
-  instance, since the system invokes them outside any view.
+  instance, since the system invokes them outside any view. They are
+  tested through `AppIntentsTesting` from the `AgentIDEIntentTests`
+  UI testing bundle (`Tests/AgentIDEIntentTests`), out of process the
+  way Siri reaches them: the reading intents run, the queries are
+  asked, and Start Agent Session is checked to exist with its
+  parameters rather than run, since a test must not launch an agent.
 - A session can also be started from outside the app entirely:
   `agentide new`, the same command as the editor shim, asks for the
   repository, agent, effort, model and prompt, each defaulting to what

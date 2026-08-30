@@ -18,4 +18,17 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   exec nice swift test --disable-sandbox --jobs 6
 fi
 
-exec swift test
+swift test
+
+# The App Intents run through the system's own runtime from a UI
+# testing bundle, which only xcodebuild can build and run: host and
+# CI, never the sandbox. AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
+if [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
+  xcodegen generate --use-cache
+  exec xcodebuild test \
+    -project AgentIDE.xcodeproj \
+    -scheme AgentIDEApp \
+    -only-testing:AgentIDEIntentTests \
+    -skipPackagePluginValidation \
+    -quiet
+fi
