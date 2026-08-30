@@ -9,13 +9,30 @@ import TerminalUI
 
 /// A repository as Shortcuts and Siri see it, resolved from the
 /// dashboard's in-memory groups so no git runs to answer.
-nonisolated struct RepositoryEntity: AppEntity {
+struct RepositoryEntity: AppEntity {
+    // MARK: Lifecycle
+
+    /// Labelled by the path, not the id: a memberwise-looking init
+    /// is one the formatter deletes, and the synthesised one wants
+    /// the property wrapper's own type.
+    init(path: String, name: String) {
+        id = path
+        self.name = name
+    }
+
+    // MARK: Internal
+
     static let typeDisplayRepresentation: TypeDisplayRepresentation = .init(name: "Repository")
     static let defaultQuery: RepositoryQuery = .init()
 
     /// The checkout path.
     let id: String
-    let name: String
+
+    /// Properties, not plain constants: that is what Shortcuts reads
+    /// off an entity in later actions, and what the testing
+    /// framework's lookups by name find.
+    @Property(title: "Name")
+    var name: String
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(name)")
@@ -51,14 +68,14 @@ nonisolated struct RepositoryQuery: EntityStringQuery {
     @MainActor
     private static func all() -> [RepositoryEntity] {
         (AppDependencies.shared?.dashboard.groups ?? [])
-            .map { RepositoryEntity(id: $0.repository.path, name: $0.repository.name) }
+            .map { RepositoryEntity(path: $0.repository.path, name: $0.repository.name) }
     }
 }
 
 // MARK: - WorktreeEntity
 
 /// A worktree row: repository, branch and what its agent is doing.
-nonisolated struct WorktreeEntity: AppEntity {
+struct WorktreeEntity: AppEntity {
     // MARK: Lifecycle
 
     @MainActor
@@ -76,9 +93,15 @@ nonisolated struct WorktreeEntity: AppEntity {
 
     /// The worktree path.
     let id: String
-    let repository: String
-    let branch: String
-    let state: String
+
+    @Property(title: "Repository")
+    var repository: String
+
+    @Property(title: "Branch")
+    var branch: String
+
+    @Property(title: "State")
+    var state: String
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(repository): \(branch)", subtitle: "\(state)")

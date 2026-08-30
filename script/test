@@ -25,10 +25,25 @@ swift test
 # CI, never the sandbox. AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
 if [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
   xcodegen generate --use-cache
-  exec xcodebuild test \
+  # Quiet, so the build's noise stays out, but a failure's reasons
+  # come back out of the result bundle: xcodebuild -quiet names the
+  # failing tests and nothing else.
+  results="${PWD}/.test-scratch/intent-tests.xcresult"
+  rm -rf "${results}"
+  if ! xcodebuild test \
     -project AgentIDE.xcodeproj \
     -scheme AgentIDEApp \
     -only-testing:AgentIDEIntentTests \
     -skipPackagePluginValidation \
-    -quiet
+    -resultBundlePath "${results}" \
+    -quiet; then
+    xcrun xcresulttool get test-results summary --path "${results}" 2>/dev/null |
+      python3 -c '
+import json, sys
+summary = json.load(sys.stdin)
+for failure in summary.get("testFailures", []):
+    print("FAIL " + failure.get("testName", "?") + ": " + failure.get("failureText", "").strip())
+' >&2 || true
+    exit 1
+  fi
 fi
