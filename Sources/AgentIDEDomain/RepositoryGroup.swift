@@ -14,6 +14,7 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         pastSessions: [TranscriptSession] = [],
         aheadOfDefault: Int? = nil,
         behindDefault: Int? = nil,
+        behindUpstream: Int? = nil,
         lastActivityAt: Int = 0,
     ) {
         self.worktree = worktree
@@ -23,6 +24,7 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         self.aheadOfUpstream = aheadOfUpstream
         self.aheadOfDefault = aheadOfDefault
         self.behindDefault = behindDefault
+        self.behindUpstream = behindUpstream
         self.hasUnread = hasUnread
         self.lastActivityAt = lastActivityAt
     }
@@ -50,6 +52,11 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
 
     /// Commits on the default branch missing from this branch.
     public let behindDefault: Int?
+
+    /// Commits on the upstream missing from this branch, nil without
+    /// one: with `aheadOfUpstream`, how far the branch and what was
+    /// pushed have drifted apart.
+    public let behindUpstream: Int?
 
     /// Whether the session has produced output since last seen.
     public var hasUnread: Bool

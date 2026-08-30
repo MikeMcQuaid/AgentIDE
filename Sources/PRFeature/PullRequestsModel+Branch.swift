@@ -85,7 +85,7 @@ extension PullRequestsModel {
         if selected.hasAutomerge {
             return hasMergeQueue ? "Dequeue" : "Cancel automerge"
         }
-        if selected.checks == "SUCCESS", selected.mergeable == "MERGEABLE" {
+        if Self.isReadyToMerge(selected) {
             return hasMergeQueue ? "Queue" : "Merge"
         }
         return "Automerge"

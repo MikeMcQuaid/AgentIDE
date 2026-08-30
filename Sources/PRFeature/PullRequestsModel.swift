@@ -72,6 +72,9 @@ final class PullRequestsModel {
         fetchLabels = {
             await github.labels(repositoryPath: repository.path)
         }
+        fetchFailedRunLog = { runID in
+            try await github.failedRunLog(repositoryPath: repository.path, runID: runID)
+        }
         fetchPullRequestLabels = { number in
             await github.pullRequestLabels(repositoryPath: repository.path, number: number)
         }
@@ -110,8 +113,8 @@ final class PullRequestsModel {
             let choices = service.launchChoices(for: agent)
             return (choices.models, service.defaultEffort(for: agent))
         }
-        generateDescription = { commits in
-            await service.draftPullRequestDescription(fromCommits: commits)
+        generateDescription = { commits, branch in
+            await service.draftPullRequestDescription(fromCommits: commits, branch: branch)
         }
         fillTemplate = { commits, template in
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
@@ -120,7 +123,7 @@ final class PullRequestsModel {
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
-            } else if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
+            } else if Self.isReadyToMerge(summary) {
                 try await github.merge(repositoryPath: repository.path, number: summary.number)
             } else {
                 try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
@@ -262,6 +265,9 @@ final class PullRequestsModel {
     /// first needs them.
     var fetchLabels: () async -> [String] = { [] }
 
+    /// One failing Actions run's failed-step log.
+    var fetchFailedRunLog: (Int) async throws -> String = { _ in "" }
+
     /// The selected pull request's labels, read on selection.
     var fetchPullRequestLabels: (Int) async -> [String] = { _ in [] }
 
@@ -296,7 +302,7 @@ final class PullRequestsModel {
     /// How many commits the listed entry has of its own, which is
     /// what the push button counts.
     var fetchCommitCount: (Worktree, String?) async -> Int = { _, _ in 0 }
-    var generateDescription: ([String]) async -> (title: String, body: String)?
+    var generateDescription: ([String], String) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
     var performPostMergeCleanup: (Worktree, String) async -> Void
@@ -344,6 +350,23 @@ final class PullRequestsModel {
     var items: [WorktreeItem] {
         didSet {
             isPushed = false
+            // The sidebar's poll may have fetched a fresher summary
+            // into the shared cache since these rows were painted.
+            repaintFromCache()
+        }
+    }
+
+    /// Takes the cache's summary for the selected pull request and
+    /// every listed row, so what the sidebar just learnt shows here
+    /// too; the cache is written by whichever side fetched last.
+    func repaintFromCache() {
+        if let selected,
+           let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
+           cached != selected {
+            self.selected = cached
+        }
+        summaries = summaries.map { row in
+            pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row
         }
     }
 }

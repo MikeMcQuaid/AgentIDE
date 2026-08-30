@@ -49,11 +49,11 @@ extension PullRequestsModel {
     }
 
     /// Fills only the blank fields, so typed text always wins.
-    func apply(description: (title: String, body: String)) {
-        if Self.isBlank(prTitle) {
+    func apply(description: (title: String, body: String), replacing: Bool = false) {
+        if replacing || Self.isBlank(prTitle) {
             prTitle = description.title
         }
-        if Self.isBlank(prBody) {
+        if replacing || Self.isBlank(prBody) {
             prBody = description.body
         }
     }

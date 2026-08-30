@@ -50,7 +50,7 @@ struct TranscriptLogView: View {
     private func row(_ entry: TranscriptEntry) -> some View {
         switch entry.role {
         case .user:
-            (Text("❯ ").bold().foregroundStyle(.blue) + Text(entry.text).bold())
+            Text("\(Text("❯ ").bold().foregroundStyle(.blue))\(Text(entry.text).bold())")
                 .font(.callout.monospaced())
                 .textSelection(.enabled)
 

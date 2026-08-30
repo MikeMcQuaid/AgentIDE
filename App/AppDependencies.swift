@@ -9,6 +9,7 @@ final class AppDependencies {
     // MARK: Lifecycle
 
     init() {
+        defer { Self.shared = self }
         let paths = WorkspacePaths.current()
         let runner = FoundationProcessRunner()
         let gitClient = GitClient(runner: runner)
@@ -56,6 +57,11 @@ final class AppDependencies {
     }
 
     // MARK: Internal
+
+    /// The one instance, for the App Intents, which the system
+    /// invokes outside any view: nil only before the app has built
+    /// itself.
+    private(set) static var shared: AppDependencies?
 
     let git: GitClient
     let github: GitHubClient

@@ -9,7 +9,7 @@ public enum HighlightedLine {
     public static func text(line: String, language: SyntaxLanguage?) -> Text {
         CodeHighlighter.tokens(for: line, language: language)
             .map { token in Text(token.text).foregroundStyle(colour(for: token.kind)) }
-            .reduce(Text(""), +)
+            .reduce(Text("")) { Text("\($0)\($1)") }
     }
 
     /// The one token colour mapping every code surface shares.

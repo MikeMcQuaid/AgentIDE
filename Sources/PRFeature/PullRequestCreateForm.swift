@@ -55,8 +55,10 @@ struct PullRequestCreateForm: View {
     /// typing it would then overwrite.
     @State private var isGenerating = false
 
-    /// Whether Reset is asking before throwing typed text away.
+    /// Whether Reset or Generate is asking before replacing typed
+    /// text; blank fields fill without a word.
     @State private var isConfirmingReset = false
+    @State private var isConfirmingGenerate = false
 
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage(UtilityTabTarget.key)
@@ -143,22 +145,18 @@ struct PullRequestCreateForm: View {
         }
     }
 
-    /// Sits inside the title field; drafting only ever fills empty
-    /// fields, so any typed content dims it.
+    /// Drafts from the branch name and every commit; typed text is
+    /// replaced only after asking, blank fields without a word.
     private var generateButton: some View {
         Button {
             guard isGenerating == false else {
                 return
             }
 
-            isGenerating = true
-            // Explicitly main-actor: the continuation after the
-            // await must not write view state from elsewhere.
-            Task { @MainActor in
-                if await model.generateDescription() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
-                isGenerating = false
+            if Self.hasText(model.prTitle) || Self.hasText(model.prBody) {
+                isConfirmingGenerate = true
+            } else {
+                generate(replacing: false)
             }
         } label: {
             if isGenerating {
@@ -169,17 +167,38 @@ struct PullRequestCreateForm: View {
             }
         }
         .buttonStyle(.borderless)
-        .disabled(isGenerating || Self.hasText(model.prTitle) || Self.hasText(model.prBody))
+        .disabled(isGenerating || isBlocked)
         .hoverHelp(
-            "Fill the empty fields from the branch's commits: one commit's own message "
-                + "directly, several summarised by the on-device model, and the template "
-                + "completed from the commits when the repository has one",
+            "Draft the title and body from the branch name and its commits: one commit's "
+                + "own message directly, several summarised by the on-device model, and the "
+                + "template completed from the commits when the repository has one; typed "
+                + "text is replaced only after asking",
         )
+        .confirmationDialog(
+            "Replace what you typed with a generated description?",
+            isPresented: $isConfirmingGenerate,
+            titleVisibility: .visible,
+        ) {
+            Button("Generate", role: .destructive) { generate(replacing: true) }
+            Button("Cancel", role: .cancel) { isConfirmingGenerate = false }
+        }
     }
 
     /// Whether a field holds anything worth keeping; whitespace
     /// alone is as good as empty, and generating replaces it.
     private static func hasText(_ text: String) -> Bool {
         PullRequestsModel.isBlank(text) == false
+    }
+
+    /// Runs the draft; explicitly main-actor, since the continuation
+    /// after the await must not write view state from elsewhere.
+    private func generate(replacing: Bool) {
+        isGenerating = true
+        Task { @MainActor in
+            if await model.generateDescription(replacing: replacing) == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+            isGenerating = false
+        }
     }
 }

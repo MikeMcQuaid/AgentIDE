@@ -15,12 +15,17 @@ extension RootView {
         // dropped one does. Bound first: as the call's last argument
         // the formatter would make it trailing, which fights SwiftLint.
         let pasteFiles: ([URL]) -> Bool = { urls in dropFiles(urls, into: session.name) }
+        // The whole recent output from herdr: the local buffer holds
+        // only the screen, so a selection can never reach what was
+        // scrolled past.
+        let readAll: () async -> String? = { await dependencies.service.readOutput(sessionName: session.name) }
         return TerminalPaneView(
             command: session.paneID.map(dependencies.service.attachCommand(paneID:)) ?? [],
             reflowsCopies: true,
             isActive: isActive,
             fixedAppearance: dependencies.service.launchAppearance(worktreePath: worktreePath),
             onPasteFiles: pasteFiles,
+            onCopyAllOutput: readAll,
         )
         // A hair of room either side: the agent's own frames draw to
         // their last column, which sat against the pane's edges.
@@ -74,7 +79,6 @@ extension RootView {
     }
 
     /// The non-terminal utility tabs' content.
-    @ViewBuilder
     func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
         let target = reviewTarget(for: item, conversationPath: conversationPath)
         // A directory of your own edits in the primary pane, so a

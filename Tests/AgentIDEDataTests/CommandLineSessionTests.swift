@@ -69,6 +69,15 @@ struct CommandLineSessionTests {
         #expect(kept.contains("claude-models=opus-5 sonnet-5"))
     }
 
+    @Test
+    func `a narrow terminal lists one option per line`() async throws {
+        let shared = try Self.makeWorkspace()
+        let narrow = try await Self.questions(answering: "\n\n\n\nhello\n", columns: 12, in: shared)
+        #expect(narrow.contains("1 AgentIDE\n2 brew\n"))
+        let wide = try await Self.questions(answering: "\n\n\n\nhello\n", columns: 200, in: shared)
+        #expect(wide.contains("1 AgentIDE  2 brew"))
+    }
+
     // MARK: Private
 
     /// The command in the checkout, which is the copy the app bundles
@@ -79,6 +88,22 @@ struct CommandLineSessionTests {
         .deletingLastPathComponent()
         .appending(path: "bin/agentide")
         .path
+
+    /// What the command asks, given a terminal width and answers.
+    private static func questions(answering answers: String, columns: Int, in shared: String) async throws -> String {
+        let script = "printf '%s' " + answers.shellQuoted + " | " + command.shellQuoted + " new"
+        let result = try await TestSupport.run([
+            "/usr/bin/env",
+            "SHARED_WORKSPACE=" + shared,
+            "AGENTIDE_DRY_RUN=1",
+            "COLUMNS=" + String(columns),
+            "/bin/sh",
+            "-c",
+            script,
+        ])
+        try #require(result.succeeded)
+        return result.standardError
+    }
 
     /// A shared workspace holding one repository and the defaults the
     /// app publishes from the window.

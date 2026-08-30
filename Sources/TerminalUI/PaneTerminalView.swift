@@ -29,6 +29,20 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// drop is; nil leaves every paste to the terminal.
     var onPasteFiles: (([URL]) -> Bool)?
 
+    /// Whether a paste is wrapped in bracketed-paste markers here
+    /// regardless of what the local terminal believes: a herdr pane's
+    /// frames carry the rendered screen and never the modes the agent
+    /// set, so the terminal never learns bracketed paste is on and a
+    /// paste went as keystrokes, every newline submitting what came
+    /// before it. Agents and shells alike accept the markers.
+    var bracketsPastes = false
+
+    /// Reads the pane's whole recent output, for agent panes whose
+    /// local buffer holds only the rendered screen: a selection can
+    /// never cover what was scrolled past, this can. Nil hides the
+    /// menu item.
+    var onCopyAllOutput: (() async -> String?)?
+
     /// Keeps a selection while output arrives. SwiftTerm drops the
     /// selection on every line feed whenever mouse reporting is on,
     /// which it always is here so that an agent's own scrolling and
@@ -54,6 +68,12 @@ final class PaneTerminalView: LocalProcessTerminalView {
         let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "")
         pasteItem.target = self
         menu.addItem(pasteItem)
+        if onCopyAllOutput != nil {
+            menu.addItem(.separator())
+            let allItem = NSMenuItem(title: "Copy All Output", action: #selector(copyAllOutput(_:)), keyEquivalent: "")
+            allItem.target = self
+            menu.addItem(allItem)
+        }
         return menu
     }
 
@@ -65,7 +85,16 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return
         }
 
-        super.paste(sender)
+        if bracketsPastes, getTerminal().bracketedPasteMode == false,
+           let text = NSPasteboard.general.string(forType: .string) {
+            // Three sends, gathered into one write by the coordinator,
+            // so the agent sees one paste and draws one.
+            send(data: Self.bracketedPasteStart[...])
+            send(txt: text)
+            send(data: Self.bracketedPasteEnd[...])
+            return
+        }
+        super.paste(sender as Any)
     }
 
     /// Native selection copy, reflowed for prose panes.
@@ -81,6 +110,25 @@ final class PaneTerminalView: LocalProcessTerminalView {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
+    }
+
+    /// The whole recent output from herdr, reflowed like a selection
+    /// copy when this pane reflows, onto the clipboard.
+    @objc
+    func copyAllOutput(_: Any?) {
+        guard let onCopyAllOutput else {
+            return
+        }
+
+        Task { @MainActor in
+            guard let text = await onCopyAllOutput() else {
+                return
+            }
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(reflowsCopies ? PasteableText.reflow(text) : text, forType: .string)
+        }
     }
 
     /// Routes one wheel event to herdr when this pane owns the
@@ -142,6 +190,11 @@ final class PaneTerminalView: LocalProcessTerminalView {
     }
 
     // MARK: Private
+
+    /// `ESC [ 200 ~` and `ESC [ 201 ~`, spelt here because SwiftTerm's
+    /// own are mutable statics strict concurrency refuses.
+    private static let bracketedPasteStart: Array = .init("\u{1B}[200~".utf8)
+    private static let bracketedPasteEnd: Array = .init("\u{1B}[201~".utf8)
 
     /// The last wheel event any pane handled, so a second monitor
     /// seeing the same event does nothing with it.

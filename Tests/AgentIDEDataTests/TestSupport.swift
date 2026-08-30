@@ -257,3 +257,23 @@ struct World {
         try? FileManager.default.removeItem(atPath: root)
     }
 }
+
+// MARK: - RecordingRunner
+
+/// Records every command and answers success.
+final class RecordingRunner: ProcessRunner, @unchecked Sendable {
+    // MARK: Lifecycle
+
+    deinit {
+        // Nothing to clean up.
+    }
+
+    // MARK: Internal
+
+    private(set) var commands: [[String]] = []
+
+    func run(_ arguments: [String], workingDirectory _: String?, environment _: [String: String]) -> ProcessResult {
+        commands.append(arguments)
+        return ProcessResult(status: 0, standardOutput: "", standardError: "")
+    }
+}

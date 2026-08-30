@@ -1,4 +1,3 @@
-import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
 import TerminalUI
@@ -12,7 +11,6 @@ struct ReviewFileListView: View {
 
     let model: ReviewModel
     let worktreePath: String
-    let service: SessionService
 
     /// Whether files start collapsed (the Hide All display mode);
     /// the per-file carets override it.
@@ -45,15 +43,12 @@ struct ReviewFileListView: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 8
-    private static let editorMinimumHeight: CGFloat = 240
-    private static let editorMaximumHeight: CGFloat = 420
 
     @ViewBuilder
     private func fileSection(_ file: DiffFile) -> some View {
         // Every scope leads with the diff, uncommitted included: it
         // once showed the whole file in an editor instead, which read
-        // as a broken diff. Uncommitted files keep that editor for
-        // fixing in place, below their diff.
+        // as a broken diff; uncommitted files edit in the diff itself.
         DiffFileView(
             file: file,
             model: model,
@@ -63,15 +58,6 @@ struct ReviewFileListView: View {
                 FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
             },
         )
-        if model.showsUncommitted, isCollapsed(file) == false, file.isNew == false {
-            FileEditorView(
-                worktreePath: worktreePath,
-                relativePath: file.path,
-                service: service,
-                showsClose: false,
-            )
-            .frame(minHeight: Self.editorMinimumHeight, maxHeight: Self.editorMaximumHeight)
-        }
         if isCollapsed(file) == false {
             ForEach(model.threads(for: file.path)) { thread in
                 ReviewThreadRow(

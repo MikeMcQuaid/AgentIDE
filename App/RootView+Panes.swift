@@ -8,6 +8,18 @@ import TerminalUI
 
 /// The shell tab's layers, split from the view for length.
 extension RootView {
+    /// Only a worktree with conversations to go back to shows the way
+    /// back. A method rather than a ternary at the call: the literal
+    /// takes the pane's Sendable closure type from the return type
+    /// here, where a ternary between nil and a literal loses it.
+    private func showConversationsAction(for item: WorktreeItem) -> (@MainActor @Sendable () -> Void)? {
+        guard item.pastSessions.isEmpty == false || item.worktree.path == item.worktree.repositoryPath else {
+            return nil
+        }
+
+        return { startingSession = nil }
+    }
+
     /// One conversations UI everywhere: a live session shows its
     /// terminal; anything else shows the conversation list, scoped
     /// to the worktree or covering the whole repository on its page;
@@ -41,8 +53,10 @@ extension RootView {
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged
                 // paths type into the agent.
+                // The drop-session overload answers nothing, so the
+                // staging's own verdict is let go here.
                 .dropDestination(for: URL.self) { urls, _ in
-                    dropFiles(urls, into: session.name)
+                    _ = dropFiles(urls, into: session.name)
                 }
         } else if item.worktree.path == item.worktree.repositoryPath, startingSession != item.worktree.path {
             repositoryConversations(for: item)
@@ -53,10 +67,7 @@ extension RootView {
                 worktree: item.worktree,
                 model: dependencies.dashboard,
                 canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
-                // Only a worktree with conversations to go back to
-                // shows the way back.
-                onShowConversations: item.pastSessions.isEmpty
-                    && item.worktree.path != item.worktree.repositoryPath ? nil : { startingSession = nil },
+                onShowConversations: showConversationsAction(for: item),
                 onResume: { await resumeLatest(in: item) },
                 onStarted: { await sessionStarted(in: item.worktree.path) },
             )
@@ -285,4 +296,6 @@ private struct StartShellButton: View {
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs until you close it or the app quits")
     }
+
+    // MARK: Private
 }

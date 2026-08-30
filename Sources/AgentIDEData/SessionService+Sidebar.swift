@@ -298,6 +298,7 @@ public extension SessionService {
             pastSessions: past,
             aheadOfDefault: known?.ahead,
             behindDefault: known?.behind,
+            behindUpstream: known?.behindUpstream,
             lastActivityAt: lastActivity,
         )
     }
@@ -331,10 +332,12 @@ public extension SessionService {
         async let counts = aheadBehind(of: worktree, baseRef: baseRef)
         async let committedAt = git.lastCommitDate(worktreePath: worktree.path)
         async let aheadOfUpstream = git.aheadOfUpstream(worktreePath: worktree.path)
+        async let behindUpstream = git.behindUpstream(worktreePath: worktree.path)
         return await BranchFacts(
             ahead: counts?.ahead,
             behind: counts?.behind,
             aheadOfUpstream: aheadOfUpstream,
+            behindUpstream: behindUpstream,
             committedAt: committedAt,
         )
     }

@@ -6,8 +6,7 @@ update them in the same commit when behaviour they describe changes.
 This repository is readme-driven: documentation leads, code follows.
 
 AgentIDE is a native SwiftUI macOS app for running, steering and
-reviewing sandboxed AI coding agents. See the Status section of
-`README.md` for the slice order.
+reviewing sandboxed AI coding agents.
 
 Write sentence-case imperative commit messages without
 conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
@@ -20,7 +19,12 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   changed, then build the app with xcodebuild
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds
-- `script/test`: run the unit and integration tests
+- `script/test`: run the unit and integration tests, then on the
+  host the App Intents tests through `xcodebuild` (a UI testing
+  bundle, since `AppIntentsTesting` drives the system's own runtime;
+  they need `AGENTIDE_DEVELOPMENT_TEAM` set to a real team id, since
+  the framework refuses a runner signed differently from the app, and
+  `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out regardless)
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
@@ -274,6 +278,18 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   theme setting does not control it; a forced dark palette proved
   worse than the default, so Codex follows the launch appearance
   like every other agent.
+- herdr's terminal frames carry the rendered screen (cursor moves,
+  colours, synchronised updates) and never the private modes the
+  agent set, so a herdr-backed pane's local terminal never learns
+  bracketed paste is on and sent a paste as keystrokes, every
+  newline submitting the lines before it. `PaneTerminalView`
+  wraps a paste in the bracketed-paste markers itself on those
+  panes (`bracketsPastes`); a local shell pane sees the modes and
+  needs nothing. herdr 0.8.2 also takes a short PTY write as a whole
+  one, so a reader stalled while a paste larger than the input queue
+  (1,022 bytes) is in flight loses about a kibibyte from the middle;
+  `HerdrSlowReaderIntegrationTests` reproduces it under load and stays
+  disabled until herdr waits or retries.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with
@@ -283,20 +299,6 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file
   itself rather than resolving it against a worktree.
-- A stack of branches lives in one worktree and is derived from
-  ancestry, never recorded: branches sharing a fork point beyond
-  the default branch, ordered by where each forks. Two branches at
-  one commit are one entry, and the name the remote knows wins:
-  that is the one a pull request can be open on, and preferring the
-  checked-out name hid a pushed twin's pull request completely.
-  Reading one
-  needs no checkout, so the strip retargets panes and an entry
-  that is not checked out reviews read-only; restacking records
-  every tip first and rebases with `--onto <parent> <recorded
-  tip>`, signed, skipping a branch already in place. Only the last
-  step of submitting, `gh stack link`, belongs to GitHub's own
-  extension; it links pull requests this app opened and keeps no
-  local tracking, so nothing competes with the derivation.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

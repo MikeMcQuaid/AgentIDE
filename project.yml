@@ -51,4 +51,23 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
     scheme:
-      testTargets: []
+      testTargets:
+        - AgentIDEIntentTests
+  # The App Intents exercised through the system's own runtime, out
+  # of process: a UI testing bundle is what AppIntentsTesting wants.
+  # Host and CI only, since xcodebuild cannot run in the sandbox.
+  AgentIDEIntentTests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - Tests/AgentIDEIntentTests
+    dependencies:
+      - target: AgentIDEApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"

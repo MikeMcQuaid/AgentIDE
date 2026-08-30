@@ -53,13 +53,33 @@ struct DiffStatText: View {
 struct DiffFileView: View {
     // MARK: Internal
 
+    /// One line of one hunk, which is what a field stands in for.
+    struct EditKey: Hashable {
+        let hunkIndex: Int
+        let lineIndex: Int
+    }
+
+    /// A diff line with its numbers drawn and the new-side number
+    /// kept, which is the line the working file holds.
+    struct NumberedLine {
+        let line: DiffLine
+        let numbers: String
+        let new: Int?
+    }
+
     static let statSpacing: CGFloat = 4
+
+    static let changeOpacity = 0.15
 
     let file: DiffFile
     let model: ReviewModel
     let isCollapsed: Bool
     let onToggleCollapse: () -> Void
     let onEdit: () -> Void
+
+    /// The line being typed into; what has been typed lives in the
+    /// model. Internal, since the editing extension file reads it.
+    @FocusState var editing: EditKey?
 
     /// The highlighter language for this file, judged by extension.
     var language: SyntaxLanguage? {
@@ -79,14 +99,52 @@ struct DiffFileView: View {
             }
         }
         .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
+        // Leaving a field is what writes it, and focus moving is
+        // what says a field was left.
+        .onChange(of: editing) { previous, _ in commitFocusLoss(from: previous) }
     }
 
-    /// A hunk's lines as the file holds them: the displayed text
-    /// stands a space in for a blank line so its change colour has
-    /// something to paint, and copying that would put a space where
-    /// the file has nothing at all.
-    static func copyText(of hunk: DiffHunk) -> String {
-        hunk.lines.map(\.content).joined(separator: "\n")
+    static func pad(_ number: Int?) -> String {
+        let text = number.map(String.init) ?? ""
+        return String(repeating: " ", count: max(0, numberWidth - text.count)) + text
+    }
+
+    /// One line's text: a whitespace tint covers tabs and the
+    /// trailing whitespace run, so whitespace-only changes stay
+    /// reviewable while copies remain character-exact (a background
+    /// rather than the substitute glyphs the editor uses).
+    func lineText(_ line: DiffLine) -> AttributedString {
+        let base: Color? =
+            switch line.kind {
+            case .addition:
+                Color.green.opacity(Self.changeOpacity)
+
+            case .deletion:
+                Color.red.opacity(Self.changeOpacity)
+
+            case .context:
+                nil
+            }
+        let trailingStart = line.content.count
+            - line.content.reversed().prefix { $0 == " " || $0 == "\t" }.count
+        var content = AttributedString()
+        var offset = 0
+        for token in CodeHighlighter.tokens(for: line.content, language: language) {
+            for run in Self.whitespaceRuns(of: token.text, from: offset, trailingStart: trailingStart) {
+                var piece = AttributedString(run.text)
+                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
+                piece.backgroundColor = run.isMarked ? CodeStyle.whitespaceColour : base
+                content += piece
+            }
+            offset += token.text.count
+        }
+        Self.markFound(model.findRanges(in: line.content), of: line.content, in: &content)
+        if content.characters.isEmpty {
+            var blank = AttributedString(" ")
+            blank.backgroundColor = base
+            content = blank
+        }
+        return content
     }
 
     // MARK: Private
@@ -99,10 +157,17 @@ struct DiffFileView: View {
 
     /// Enough to find a match at a glance without hiding the code.
     private static let foundOpacity = 0.45
-    private static let changeOpacity = 0.15
     private static let selectedOpacity = 0.35
     private static let filePadding: CGFloat = 8
     private static let numberWidth = 4
+
+    /// Whether Delete is asking before removing the file.
+    @State private var isConfirmingDelete = false
+
+    /// Whether this file's lines have become fields: a field per
+    /// line across every file made the pane drag, so a file arms on
+    /// the first click into it and stays armed.
+    @State private var isLive = false
 
     /// The file's name, its new-file marker, diffstat and the
     /// copy and edit actions.
@@ -127,12 +192,43 @@ struct DiffFileView: View {
             }
             .buttonStyle(.borderless)
             .hoverHelp("Copy this file's path to the clipboard")
-            Button(action: onEdit) {
-                Image(systemName: "pencil")
-                    .accessibilityLabel("Edit file")
+            // Uncommitted work edits in place, line by line, and a
+            // file never committed can be thrown away; a commit's
+            // diff is history, so its pencil opens the editor instead.
+            if model.showsUncommitted, file.isNew {
+                deleteButton
+            } else if model.showsUncommitted == false {
+                Button(action: onEdit) {
+                    Image(systemName: "pencil")
+                        .accessibilityLabel("Edit file")
+                }
+                .buttonStyle(.borderless)
+                .hoverHelp("Open this file in the built-in editor for review-time fixes")
             }
-            .buttonStyle(.borderless)
-            .hoverHelp("Open this file in the built-in editor for review-time fixes")
+        }
+    }
+
+    /// Deletes a file never committed, asking first: the one action
+    /// here that cannot be undone by editing, and the one a tracked
+    /// file never offers, since git holds its content anyway.
+    private var deleteButton: some View {
+        Button {
+            isConfirmingDelete = true
+        } label: {
+            Image(systemName: "trash")
+                .accessibilityLabel("Delete file")
+        }
+        .buttonStyle(.borderless)
+        .hoverHelp("Delete this never-committed file from the worktree; asks first")
+        .confirmationDialog(
+            "Delete " + file.path + " from the worktree?",
+            isPresented: $isConfirmingDelete,
+            titleVisibility: .visible,
+        ) {
+            Button("Delete", role: .destructive) { Task { await model.deleteFile(file) } }
+            Button("Cancel", role: .cancel) { isConfirmingDelete = false }
+        } message: {
+            Text("The file was never committed, so this is the end of it.")
         }
     }
 
@@ -148,14 +244,20 @@ struct DiffFileView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
-                HStack(alignment: .top, spacing: Self.gutterSpacing) {
-                    gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
-                        .hoverHelp("Click a changed line's number to select it for rejection")
-                    Text(lineText(entry.line))
-                        .font(CodeStyle.font)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            // Lazy: a long file's lines are built as they scroll in,
+            // not all at once when the file expands.
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
+                    HStack(alignment: .top, spacing: Self.gutterSpacing) {
+                        gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
+                            .hoverHelp("Click a changed line's number to select it for rejection")
+                        lineView(
+                            entry,
+                            key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex),
+                            arm: { isLive = true },
+                            isLive: isLive,
+                        )
+                    }
                 }
             }
         }
@@ -179,7 +281,7 @@ struct DiffFileView: View {
     private func gutterRow(
         hunkIndex: Int,
         lineIndex: Int,
-        entry: (line: DiffLine, numbers: String),
+        entry: NumberedLine,
     ) -> some View {
         let selected = isSelected(hunkIndex: hunkIndex, lineIndex: lineIndex)
         let label = Text(entry.numbers + " " + Self.marker(for: entry.line.kind))
@@ -230,11 +332,6 @@ struct DiffFileView: View {
         }
     }
 
-    private static func pad(_ number: Int?) -> String {
-        let text = number.map(String.init) ?? ""
-        return String(repeating: " ", count: max(0, numberWidth - text.count)) + text
-    }
-
     /// Splits a token into runs, marked when a character is a tab or
     /// sits in the line's trailing whitespace.
     private static func whitespaceRuns(
@@ -274,69 +371,6 @@ struct DiffFileView: View {
             }
 
             content[from ..< upTo].backgroundColor = .yellow.opacity(Self.foundOpacity)
-        }
-    }
-
-    /// One line's text: a whitespace tint covers tabs and the
-    /// trailing whitespace run, so whitespace-only changes stay
-    /// reviewable while copies remain character-exact (a background
-    /// rather than the substitute glyphs the editor uses).
-    private func lineText(_ line: DiffLine) -> AttributedString {
-        let base: Color? =
-            switch line.kind {
-            case .addition:
-                Color.green.opacity(Self.changeOpacity)
-
-            case .deletion:
-                Color.red.opacity(Self.changeOpacity)
-
-            case .context:
-                nil
-            }
-        let trailingStart = line.content.count
-            - line.content.reversed().prefix { $0 == " " || $0 == "\t" }.count
-        var content = AttributedString()
-        var offset = 0
-        for token in CodeHighlighter.tokens(for: line.content, language: language) {
-            for run in Self.whitespaceRuns(of: token.text, from: offset, trailingStart: trailingStart) {
-                var piece = AttributedString(run.text)
-                piece.foregroundColor = HighlightedLine.colour(for: token.kind)
-                piece.backgroundColor = run.isMarked ? CodeStyle.whitespaceColour : base
-                content += piece
-            }
-            offset += token.text.count
-        }
-        Self.markFound(model.findRanges(in: line.content), of: line.content, in: &content)
-        if content.characters.isEmpty {
-            var blank = AttributedString(" ")
-            blank.backgroundColor = base
-            content = blank
-        }
-        return content
-    }
-
-    /// Joins each line with its old and new line numbers; deletions
-    /// advance only the old side, additions only the new.
-    private func numbered(_ hunk: DiffHunk) -> [(line: DiffLine, numbers: String)] {
-        var old = hunk.oldStart
-        var new = hunk.newStart
-        return hunk.lines.map { line in
-            let numbers: String
-            switch line.kind {
-            case .context:
-                numbers = Self.pad(old) + " " + Self.pad(new)
-                old += 1
-                new += 1
-
-            case .deletion:
-                numbers = Self.pad(old) + " " + Self.pad(nil)
-                old += 1
-
-            case .addition:
-                numbers = Self.pad(nil) + " " + Self.pad(new)
-                new += 1
-            }
-            return (line, numbers)
         }
     }
 

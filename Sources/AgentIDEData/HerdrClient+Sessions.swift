@@ -300,6 +300,15 @@ public extension HerdrClient {
         return result?.succeeded == true
     }
 
+    /// A session's recent output, unwrapped; nil without a pane.
+    func readOutput(sessionName: String, lines: Int) async -> String? {
+        guard let row = try? await snapshotRows().first(where: { $0.sessionName == sessionName }) else {
+            return nil
+        }
+
+        return await readPane(paneID: row.paneID, lines: lines)
+    }
+
     /// Types literal text into a session's terminal.
     func typeText(_ text: String, sessionName: String) async throws {
         guard let row = try await snapshotRows().first(where: { $0.sessionName == sessionName }) else {

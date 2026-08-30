@@ -34,7 +34,7 @@ public extension SessionService {
         }
 
         try? await Task.sleep(for: .seconds(killGraceSeconds))
-        try? await herdr.killSession(name: name)
+        _ = try? await herdr.killSession(name: name)
     }
 
     /// Starts a session under a name, replacing whatever holds it
@@ -253,9 +253,34 @@ public extension SessionService {
         return destination
     }
 
+    /// How much of a session's output a whole-output copy takes:
+    /// herdr's recent scrollback, which is what a person scrolled
+    /// through to want it.
+    static let copiedOutputLines = 5_000
+
+    /// A session's recent output, the hard wraps of the terminal's
+    /// width removed; nil when herdr cannot answer.
+    func readOutput(sessionName: String) async -> String? {
+        await herdr.readOutput(sessionName: sessionName, lines: Self.copiedOutputLines)
+    }
+
     /// Types text into a session's terminal, as pasted input.
     func typeText(_ text: String, sessionName: String) async throws {
         try await herdr.typeText(text, sessionName: sessionName)
+    }
+
+    /// Waits until a session's agent changes state or the wait
+    /// times out; false means unchanged or no pane to watch.
+    func waitForAgentChange(session: AgentSession, timeoutMilliseconds: Int) async -> Bool {
+        guard let paneID = session.paneID else {
+            return false
+        }
+
+        return await herdr.waitForAgentChange(
+            paneID: paneID,
+            from: session.activity,
+            timeoutMilliseconds: timeoutMilliseconds,
+        )
     }
 
     /// Waits for a just-launched session's agent to settle into a

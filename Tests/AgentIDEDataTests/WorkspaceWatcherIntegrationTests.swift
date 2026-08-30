@@ -21,7 +21,12 @@ struct WorkspaceWatcherIntegrationTests {
         let watcher = WorkspaceWatcher(roots: [root])
         watcher.start()
         #expect(watcher.isWatching)
-        #expect(watcher.consumeChangedPaths().isEmpty)
+
+        // "Since now" still delivers the directories made a moment
+        // ago once the stream opens, the root among them; let those
+        // land and drain before the write under test.
+        try await Task.sleep(for: .seconds(Self.settleSeconds))
+        _ = watcher.consumeChangedPaths()
 
         try "changed".write(toFile: root + "/brew/Library/file.txt", atomically: true, encoding: .utf8)
         var changed = Set<String>()
@@ -45,4 +50,5 @@ struct WorkspaceWatcherIntegrationTests {
     /// far behind the half-second latency asked for.
     private static let waitAttempts = 240
     private static let pollMilliseconds = 50
+    private static let settleSeconds = 2
 }

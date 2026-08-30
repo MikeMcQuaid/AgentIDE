@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -261,13 +262,26 @@ struct PullRequestFooterView: View {
             await model.copyUnresolvedComments(selected)
         }
         .hoverHelp("Copy every unresolved review conversation to the clipboard")
-        Button {
-            model.openFailingChecks(selected)
-        } label: {
-            Image(systemName: "exclamationmark.triangle")
-                .accessibilityLabel("Open failing checks")
+        // One button for the failing checks: a click copies their
+        // logs, and a modifier opens them instead, since the
+        // modifier is read at the click and `LinkOpener` already
+        // sends Cmd to the browser and anything else to the tab.
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "exclamationmark.triangle",
+            accessibilityLabel: "Failing checks",
+            disabled: selected.failingCheckLinks.isEmpty,
+        ) {
+            if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
+                model.openFailingChecks(selected)
+            } else if await model.copyFailingLogs(selected) == false {
+                utilityTab = UtilityTabTarget.errors
+            }
         }
-        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the Cmd-click browser")
+        .hoverHelp("Copy the last " + String(PullRequestsModel.logTailLines)
+            + " lines of every failing Actions run's log; Cmd-click opens the failing check "
+            + "in your browser, Shift-click in the Browser tab; dimmed when nothing fails")
     }
 }
 
