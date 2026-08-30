@@ -175,7 +175,11 @@ bare exit code.
   taken, in Homebrew's own idiom of blue arrows, bold labels and green
   defaults, plain whenever the output is not a terminal. It then makes the worktree, writes the prompt file, creates the
   labelled workspace and attaches, which is how a phone over SSH starts
-  work. Run as the host user it runs itself as the sandbox user through
+  work; run from a pane already inside herdr (`HERDR_PANE_ID` set) it
+  focuses the new workspace instead, since herdr refuses a nested client.
+  Its option lists pack one row when it fits the terminal and go one per
+  line when it would wrap. Run as the host user it runs itself as the
+  sandbox user through
   the same sudo, `env -i` and `sandbox-exec` shape the app uses, since only
   that user can reach the server's socket, and it defaults the session to
   `agentide` so a terminal on the Mac needs no setup at all. A workspace
