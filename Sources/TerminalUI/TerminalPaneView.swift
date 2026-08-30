@@ -147,6 +147,7 @@ struct TerminalRepresentable: NSViewRepresentable {
             view.terminalDelegate = context.coordinator
             view.hideScroller()
             view.dropLocalScrollback()
+            view.bracketsPastes = true
         } else {
             view.processDelegate = context.coordinator
         }

@@ -29,6 +29,14 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// drop is; nil leaves every paste to the terminal.
     var onPasteFiles: (([URL]) -> Bool)?
 
+    /// Whether a paste is wrapped in bracketed-paste markers here
+    /// regardless of what the local terminal believes: a herdr pane's
+    /// frames carry the rendered screen and never the modes the agent
+    /// set, so the terminal never learns bracketed paste is on and a
+    /// paste went as keystrokes, every newline submitting what came
+    /// before it. Agents and shells alike accept the markers.
+    var bracketsPastes = false
+
     /// Reads the pane's whole recent output, for agent panes whose
     /// local buffer holds only the rendered screen: a selection can
     /// never cover what was scrolled past, this can. Nil hides the
@@ -77,6 +85,15 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return
         }
 
+        if bracketsPastes, getTerminal().bracketedPasteMode == false,
+           let text = NSPasteboard.general.string(forType: .string) {
+            // Three sends, gathered into one write by the coordinator,
+            // so the agent sees one paste and draws one.
+            send(data: Self.bracketedPasteStart[...])
+            send(txt: text)
+            send(data: Self.bracketedPasteEnd[...])
+            return
+        }
         super.paste(sender as Any)
     }
 
@@ -173,6 +190,11 @@ final class PaneTerminalView: LocalProcessTerminalView {
     }
 
     // MARK: Private
+
+    /// `ESC [ 200 ~` and `ESC [ 201 ~`, spelt here because SwiftTerm's
+    /// own are mutable statics strict concurrency refuses.
+    private static let bracketedPasteStart: Array = .init("\u{1B}[200~".utf8)
+    private static let bracketedPasteEnd: Array = .init("\u{1B}[201~".utf8)
 
     /// The last wheel event any pane handled, so a second monitor
     /// seeing the same event does nothing with it.

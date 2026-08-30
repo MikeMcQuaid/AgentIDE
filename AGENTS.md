@@ -279,6 +279,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   theme setting does not control it; a forced dark palette proved
   worse than the default, so Codex follows the launch appearance
   like every other agent.
+- herdr's terminal frames carry the rendered screen (cursor moves,
+  colours, synchronised updates) and never the private modes the
+  agent set, so a herdr-backed pane's local terminal never learns
+  bracketed paste is on and sent a paste as keystrokes, every
+  newline submitting the lines before it. `PaneTerminalView`
+  wraps a paste in the bracketed-paste markers itself on those
+  panes (`bracketsPastes`); a local shell pane sees the modes and
+  needs nothing.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with
