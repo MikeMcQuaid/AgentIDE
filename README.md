@@ -238,7 +238,8 @@ before shipping.
   written into the template's own AI section where there is one (so an
   honest disclosure is not a thing you retype, and ticking that box never
   leaves the section empty)
-- **Copies** unresolved review comments straight into a prompt, jumps to
+- **Copies** unresolved review comments straight into a prompt, copies
+  the tail of every failing Actions run's log the same way, jumps to
   the failing check (or the checks page when several fail), resolves
   conversations one by one, resolves merge conflicts and enables
   automerge or merges,

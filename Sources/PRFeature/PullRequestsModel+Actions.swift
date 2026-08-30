@@ -117,7 +117,7 @@ extension PullRequestsModel {
 
     /// Jumps to the one failing check, or to the checks page when
     /// several fail or the row has not been enriched with their
-    /// links yet; copying their logs proved too unreliable to trust.
+    /// links yet; the logs themselves copy from the button beside.
     func openFailingChecks(_ summary: PullRequestSummary) {
         let links = summary.failingCheckLinks
         LinkOpener.open(links.count == 1 ? links[0] : summary.url + "/checks")

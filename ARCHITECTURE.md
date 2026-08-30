@@ -1062,9 +1062,12 @@ shim rather than a protocol:
    one lie that button could tell.
 8. Each pull request row offers the last mile as small actions: copy the
    unresolved review conversations to the clipboard for pasting into an
-   agent, jump to the one failing check or, when several fail, the
-   checks page (copying failed step logs through `gh run view` proved
-   too unreliable to keep) and open the page in the Browser tab. Every
+   agent, copy the tail of every failing Actions run's failed-step log
+   (`gh run view --log-failed`, the runs found in the failing checks'
+   links, the last two hundred lines of each under a heading, the
+   button busy until the clipboard has it), jump to the one failing
+   check or, when several fail, the checks page, and open the page in
+   the Browser tab. Every
    in-app link,
    a markdown link in a conversation or pull request body included,
    takes one route (`LinkOpener.action`, installed as the window's

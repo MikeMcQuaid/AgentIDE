@@ -100,6 +100,7 @@ extension PullRequestsModelTests {
         state: String = "OPEN",
         mergeable: String = "",
         checks: String = "",
+        failingCheckLinks: [String] = [],
     ) -> PullRequestSummary {
         PullRequestSummary(
             number: number,
@@ -109,6 +110,7 @@ extension PullRequestsModelTests {
             mergeable: mergeable,
             reviewDecision: "",
             checks: checks,
+            failingCheckLinks: failingCheckLinks,
             baseBranch: base,
             state: state,
         )

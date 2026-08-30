@@ -261,6 +261,19 @@ struct PullRequestFooterView: View {
             await model.copyUnresolvedComments(selected)
         }
         .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        BusyButton(
+            "",
+            busy: "",
+            systemImage: "doc.text.magnifyingglass",
+            accessibilityLabel: "Copy failing logs",
+            disabled: PullRequestsModel.runIDs(in: selected.failingCheckLinks).isEmpty,
+        ) {
+            if await model.copyFailingLogs(selected) == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp("Copy the last " + String(PullRequestsModel.logTailLines)
+            + " lines of every failing Actions run's log to the clipboard; dimmed when no failing check is one")
         Button {
             model.openFailingChecks(selected)
         } label: {

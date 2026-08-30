@@ -72,6 +72,9 @@ final class PullRequestsModel {
         fetchLabels = {
             await github.labels(repositoryPath: repository.path)
         }
+        fetchFailedRunLog = { runID in
+            try await github.failedRunLog(repositoryPath: repository.path, runID: runID)
+        }
         fetchPullRequestLabels = { number in
             await github.pullRequestLabels(repositoryPath: repository.path, number: number)
         }
@@ -261,6 +264,9 @@ final class PullRequestsModel {
     /// The repository's labels, read once per model when the form
     /// first needs them.
     var fetchLabels: () async -> [String] = { [] }
+
+    /// One failing Actions run's failed-step log.
+    var fetchFailedRunLog: (Int) async throws -> String = { _ in "" }
 
     /// The selected pull request's labels, read on selection.
     var fetchPullRequestLabels: (Int) async -> [String] = { _ in [] }
