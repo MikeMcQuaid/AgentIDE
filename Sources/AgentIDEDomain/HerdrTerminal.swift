@@ -51,18 +51,6 @@ private struct HerdrTerminalInput: Encodable {
 public enum HerdrTerminal {
     // MARK: Public
 
-    /// How much of a paste goes to the pane at once, and the gap
-    /// between pieces. An agent in raw mode has cleared `IMAXBEL`, and
-    /// macOS's tty driver answers an input queue overflowing in that
-    /// state by flushing the whole queue: a large paste written at
-    /// once lost its head, every terminal paces pastes for this, and
-    /// the queue is a kibibyte deep. `cat` drained a whole paste
-    /// unpaced; an agent redrawing between reads does not.
-    public static let inputChunkBytes = 1_024
-
-    /// The pause between two pieces of one paste.
-    public static let inputChunkDelayMilliseconds = 8
-
     /// Parses one line of the stream. Unknown record types answer
     /// nil, so additions to the protocol never break the pane.
     public static func parse(line: String) -> HerdrTerminalEvent? {
@@ -91,14 +79,6 @@ public enum HerdrTerminal {
     /// exactly.
     public static func inputCommand(bytes: some Sequence<UInt8>) -> String {
         encode(HerdrTerminalInput(type: "terminal.input", bytes: Data(bytes).base64EncodedString()))
-    }
-
-    /// The commands that write bytes to the pane's terminal, in order,
-    /// none larger than `inputChunkBytes`.
-    public static func inputCommands(bytes: [UInt8]) -> [String] {
-        stride(from: 0, to: bytes.count, by: inputChunkBytes).map { start in
-            inputCommand(bytes: bytes[start ..< min(start + inputChunkBytes, bytes.count)])
-        }
     }
 
     /// The command that sets the controller's viewport size, which

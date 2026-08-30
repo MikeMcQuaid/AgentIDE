@@ -223,8 +223,6 @@ extension TerminalRepresentable {
         private var started = false
         private var seenClearRequest: Int?
         private var outgoing: [UInt8] = []
-        /// The send still going out, which the next one waits behind.
-        private var sending: Task<Void, Never>?
         private var flushScheduled = false
         private var startedTransport: TerminalTransport?
         private var blockMonitor: Any?
@@ -236,10 +234,6 @@ extension TerminalRepresentable {
 
         /// Ships everything gathered since the last turn as one
         /// input command, in order.
-        /// Ships the gathered bytes in paced pieces, one after another
-        /// behind whatever is still going out, so a paste never
-        /// overflows the pane's input queue and a keystroke typed
-        /// during one lands after it rather than inside it.
         private func flushOutgoing() {
             flushScheduled = false
             let bytes = outgoing
@@ -248,17 +242,7 @@ extension TerminalRepresentable {
                 return
             }
 
-            let commands = HerdrTerminal.inputCommands(bytes: bytes)
-            let previous = sending
-            sending = Task { [weak self] in
-                await previous?.value
-                for (index, command) in commands.enumerated() {
-                    self?.channel?.send(command)
-                    if index < commands.count - 1 {
-                        try? await Task.sleep(for: .milliseconds(HerdrTerminal.inputChunkDelayMilliseconds))
-                    }
-                }
-            }
+            channel?.send(HerdrTerminal.inputCommand(bytes: bytes))
         }
 
         /// Drops the running client and resets the conversation
