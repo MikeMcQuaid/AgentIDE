@@ -558,6 +558,13 @@ selects the worktree holding it, and `agentide new` starts a session.
   green and approved. Standing (`2/3`) comes from the pull request
   chain the store has cached, falling back to the worktree's derived
   stack. `gh stack view` knows only stacks it created; never read it.
+- **One merge button, one readiness rule.** `isReadyToMerge` (open,
+  not a draft, mergeable, checks green, review approved or none
+  required) decides whether the button says Merge or Queue; anything
+  short of it says Automerge and runs `gh pr merge --auto`, which is
+  what GitHub's own refusal asks for. Judging from checks and
+  mergeability alone offered Merge on a branch whose policy still
+  wanted a review, and `gh` refused it.
 - **Last mile buttons**: copy unresolved review threads grouped per
   file; one failing-checks button that copies the tail of every failing
   run's `gh run view --log-failed` condensed (job and step named once

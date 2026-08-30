@@ -123,7 +123,7 @@ final class PullRequestsModel {
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
-            } else if summary.checks == "SUCCESS", summary.mergeable == "MERGEABLE" {
+            } else if Self.isReadyToMerge(summary) {
                 try await github.merge(repositoryPath: repository.path, number: summary.number)
             } else {
                 try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)

@@ -345,8 +345,7 @@ extension PullRequestsModel {
             return
         }
 
-        let merges = selected.hasAutomerge == false
-            && selected.checks == "SUCCESS" && selected.mergeable == "MERGEABLE"
+        let merges = selected.hasAutomerge == false && Self.isReadyToMerge(selected)
         let succeeded = await act { try await performMergeChange(selected) }
         if succeeded, merges, let worktree = actionWorktree {
             await performPostMergeCleanup(worktree, selected.headBranch)
