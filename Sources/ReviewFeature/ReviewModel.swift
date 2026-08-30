@@ -91,8 +91,12 @@ final class ReviewModel {
     /// The selected lines per file path.
     var selections: [String: Set<DiffSelection>] = [:]
 
+    /// Typing in a diff line, by the edits extension's key; in the
+    /// model since the formatter deletes an unread private `@State`.
+    var lineDrafts: [String: String] = [:]
+
     /// The last action's outcome, for display.
-    private(set) var status: String?
+    var status: String?
 
     /// The branch scope's commits, newest first, one line each.
     private(set) var branchCommits: [String] = []
@@ -116,6 +120,8 @@ final class ReviewModel {
     /// the last-commit scope gives, with its message read-only
     /// because amending reaches the tip and nothing else.
     var commitTarget: String?
+
+    let worktreePath: String
 
     /// Whether what is shown can only be read: a branch this
     /// worktree does not hold, or a commit further back than the
@@ -293,7 +299,6 @@ final class ReviewModel {
     /// editor differs from it.
     private var originalMessage = ""
 
-    private let worktreePath: String
     private let git: GitClient
     private let draftMessage: () async -> String?
     private let baseRefProvider: () async -> String?

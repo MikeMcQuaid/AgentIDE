@@ -30,6 +30,39 @@ struct ReviewModelTests {
     // MARK: Internal
 
     @Test
+    func `a working line is replaced by the typed lines and the diff follows`() async throws {
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-edit-" + UUID().uuidString, isDirectory: true)
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+        try "a\nb\nc\n".write(toFile: path + "/file.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+        try await runGit(["commit", "-q", "-m", "Add file"], in: path)
+        try "a\nB\nc\n".write(toFile: path + "/file.txt", atomically: true, encoding: .utf8)
+        let model = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
+        model.scope = .uncommitted
+        await model.reload()
+        let file = try #require(model.files.first)
+        #expect(await model.replaceLine(in: file, newLineNumber: 2, with: "B2\nB3"))
+        #expect(try String(contentsOfFile: path + "/file.txt", encoding: .utf8) == "a\nB2\nB3\nc\n")
+        #expect(model.files.first?.additions == 2)
+        // A line the file no longer has is refused, and said so.
+        #expect(await model.replaceLine(in: file, newLineNumber: 9, with: "x") == false)
+        #expect(model.status?.contains("no longer") == true)
+
+        // Deleting the file shows as the deletion it now is.
+        #expect(await model.deleteFile(file))
+        #expect(FileManager.default.fileExists(atPath: path + "/file.txt") == false)
+        #expect(model.files.first?.deletions == 3)
+    }
+
+    @Test
     func `scopes show their own diffs even with uncommitted changes present`() async throws {
         // The user's temporary directory, per the no-bare-/tmp rule.
         let path = FileManager.default
