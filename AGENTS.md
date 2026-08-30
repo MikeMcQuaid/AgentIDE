@@ -6,8 +6,7 @@ update them in the same commit when behaviour they describe changes.
 This repository is readme-driven: documentation leads, code follows.
 
 AgentIDE is a native SwiftUI macOS app for running, steering and
-reviewing sandboxed AI coding agents. See the Status section of
-`README.md` for the slice order.
+reviewing sandboxed AI coding agents.
 
 Write sentence-case imperative commit messages without
 conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.

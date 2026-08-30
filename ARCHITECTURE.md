@@ -11,14 +11,14 @@ AgentIDE is a native SwiftUI macOS app (macOS 27 or later, Swift 6.4,
 AGPL-3.0) that runs, steers and reviews sandboxed AI coding agents in
 parallel git worktrees. Its user supervises rather than types, so the
 window is arranged around the agent loop, not around an editor, and one
-window covers what four apps used to. It is developed readme-first: this document describes
-the target system and slices of it land in the order given in the README's
-Status section.
+window covers what four apps used to. It is developed readme-first: the
+README describes behaviour before the code exists and this document
+describes the design that delivers it.
 
 The architectural thesis, referenced throughout: **AgentIDE holds no
 session-critical state**. Agents run as the sandvault sandbox user inside a
 [herdr](https://herdr.dev) server that AgentIDE introduces. The app derives
-its entire view of the world from herdr, `ps`, git, agent transcripts and
+its entire view of the world from herdr, git, agent transcripts and
 GitHub, and persists only its own metadata in SQLite. Killing, crashing or
 updating the app therefore loses nothing (Resilience).
 
@@ -29,7 +29,7 @@ flowchart LR
     ios["iOS SSH client"]
     subgraph mac["Mac"]
         subgraph host["Host user"]
-            app["AgentIDE.app<br/>gh token in memory only"]
+            app["AgentIDE.app<br/>gh credentials stay here"]
         end
         subgraph sandbox["Sandbox user (sandvault-&lt;user&gt;)"]
             herdr["herdr server"]
@@ -41,11 +41,11 @@ flowchart LR
 
     app -->|"sudo, env -i, sandbox-exec, zsh:<br/>the only privilege crossing"| herdr
     herdr --- agents
-    app -.->|"read-only observation:<br/>FSEvents, transcripts, ps"| sandbox
+    app -.->|"read-only observation:<br/>FSEvents, transcripts"| sandbox
     app <--> shared
     agents <--> shared
-    app -->|"GraphQL and REST via URLSession,<br/>gh CLI for one-shots"| github
-    agents -.->|"no credentials by default;<br/>optional read-only deploy key"| github
+    app -->|"gh CLI"| github
+    agents -.->|"no credentials"| github
     ios -->|"SSH as sandbox user,<br/>then herdr attach"| herdr
 ```
 
@@ -56,16 +56,15 @@ Boundary facts the design relies on:
   and keychains are denied.
 - The shared workspace is writable by both users through inheriting ACLs; it
   is the data plane for code, prompts and events.
-- The sandbox has no GitHub credentials: `gh` is unauthenticated there, agent
-  settings deny `git push` and the only remote access is an optional
-  per-repository read-only deploy key. Pushing and everything credentialled
+- The sandbox has no GitHub credentials: `gh` is unauthenticated there and
+  agent settings deny `git push`. Pushing and everything credentialled
   happens host-side.
 - Credentials never cross the boundary in either direction.
 
 ## Guiding principles
 
-1. **P1: Derive, don't own.** herdr, git, `ps`, transcripts and GitHub are
-   the sources of truth. The app reconciles from them on every launch.
+1. **P1: Derive, don't own.** herdr, git, transcripts and GitHub are the
+   sources of truth. The app reconciles from them on every launch.
 2. **P2: Unprivileged glue.** The only privilege crossing is the sudoers path
    sandvault already configured. AgentIDE never widens it.
 3. **P3: Compiler-enforced boundaries.** Clean architecture mapped onto SPM
@@ -75,8 +74,9 @@ Boundary facts the design relies on:
    tasks everywhere.
 5. **P5: Agents are pluggable.** One `AgentRunner` seam; agent-specific logic
    lives only in adapters. Sessions created elsewhere are still shown.
-6. **P6: Native for state, shell for one-shots.** Anything polled or rendered
-   uses native URLSession clients; fire-and-forget conveniences shell out.
+6. **P6: One client per external system.** git speaks through `GitClient`,
+   GitHub through `gh` in `GitHubClient` and herdr through `HerdrClient`;
+   nothing else shells out to them.
 7. **P7: Agent output is hostile input.** Every host-side touch of
    guest-writable data is hardened accordingly.
 
@@ -259,11 +259,15 @@ wheel pages through it whatever is on screen. Because the screen is
 rendered locally, selection, copying and pasting behave like a native
 text view while the sessions still outlive the app; agent panes
 additionally reflow multi-line copies for prose and Option-drag copies a
-rectangle with gutter marks trimmed. Pastes need no special path: the
-opening repaint restores bracketed paste state, so the local terminal
-knows whether the pane's application asked for the markers even when it
-attached mid-session, and wraps a paste itself exactly as a standalone
-terminal would. Scrollback never reaches the local buffer, so no
+rectangle with gutter marks trimmed. A paste is the one input the pane
+must shape itself: the frames carry the rendered screen and never the
+private modes the agent set, so the local terminal never learns that
+bracketed paste is on, and left alone it sent a paste as keystrokes,
+every newline submitting the lines before it. A herdr-backed pane
+therefore wraps a paste in the bracketed-paste markers itself
+(`PaneTerminalView.bracketsPastes`) and sends it as one write; a local
+shell pane owns its PTY, sees the modes and needs nothing. Scrollback
+never reaches the local buffer, so no
 scrollbar can exist for it; agent panes hide the scroll indicator for
 that reason, and SwiftTerm gives the reserved width back to the
 terminal. A known limitation follows from that: resizing a pane resizes
@@ -293,32 +297,34 @@ Two visually unmistakable terminal flavours:
   server-backed shells kept wedging their control clients. The pane a
   shell runs in stays mounted whatever else the window shows, as the
   panes section above describes, and the tab bar's Close shell ends
-  one instantly. Both
-  terminals share one theme (black on white in light mode, white on
-  black in dark), with one deliberate exception: an agent pane is
-  pinned to the appearance its session was launched under, recorded
-  in the metadata at launch. Agent TUIs read the terminal's colours
-  once at startup (OSC 10/11) and style their own chrome for them
-  forever, so a pane that re-themed on a macOS appearance switch
-  left the composer white on white; the pinned palette keeps the
-  answer the agent cached true for the session's whole life,
-  relaunches of the app included. A paste into a herdr-backed pane is wrapped in bracketed-paste markers by
-the pane itself: the frames carry the screen and never the modes the
-agent set, so left to the local terminal a paste went as keystrokes and
-every newline submitted what came before it. The agent pane's menu also copies its whole recent output, read back from herdr unwrapped (`pane read --source recent-unwrapped`), since the local buffer holds only the rendered screen and a selection can never reach what was scrolled past. Copies from the agent pane are reflowed for pasting
-  into prose, block by block rather than by the copy as a whole: a
-  paragraph loses the terminal's hard wraps, while a run of lines that
-  opens like a command keeps every one of them, so an answer that
-  explains, then gives a script, then explains again pastes with the
-  script still runnable. Option-drag copies a rectangle, and the
-  marquee is drawn on the character grid rather than at the pointer,
-  since half a character is neither in a selection nor out of it as
-  far as the eye can tell; what separates them visually is position, the agent
-  pane on the left and the shell in the utility pane. Cmd-K clears the
-  shell pane the way a terminal app's clear does, screen and local
-  scrollback wiped and the prompt redrawn; agent panes ignore it, so an
-  agent's conversation can never be cleared from view by a stray
-  shortcut.
+  one instantly.
+
+Both terminals share one theme (black on white in light mode, white on
+black in dark), with one deliberate exception: an agent pane is pinned
+to the appearance its session was launched under, recorded in the
+metadata at launch. Agent TUIs read the terminal's colours once at
+startup (OSC 10/11) and style their own chrome for them forever, so a
+pane that re-themed on a macOS appearance switch left the composer white
+on white; the pinned palette keeps the answer the agent cached true for
+the session's whole life, relaunches of the app included. What separates
+the two flavours visually is position, the agent pane on the left and
+the shell in the utility pane.
+
+The agent pane's menu also copies its whole recent output, read back
+from herdr unwrapped (`pane read --source recent-unwrapped`), since the
+local buffer holds only the rendered screen and a selection can never
+reach what was scrolled past. Copies from the agent pane are reflowed
+for pasting into prose, block by block rather than by the copy as a
+whole: a paragraph loses the terminal's hard wraps, while a run of lines
+that opens like a command keeps every one of them, so an answer that
+explains, then gives a script, then explains again pastes with the
+script still runnable. Option-drag copies a rectangle, and the marquee
+is drawn on the character grid rather than at the pointer, since half a
+character is neither in a selection nor out of it as far as the eye can
+tell. Cmd-K clears the shell pane the way a terminal app's clear does,
+screen and local scrollback wiped and the prompt redrawn; agent panes
+ignore it, so an agent's conversation can never be cleared from view by
+a stray shortcut.
 
 Remote access is SSH to the Mac as the sandbox user from an iOS client,
 which lands on the same herdr server the app drives; `script/attach`
@@ -343,10 +349,9 @@ processes stay confined either way.
 ### Reconciliation and notifications
 
 On every launch the app rebuilds state, in order, from: `herdr api
-snapshot` (through the launch shape, tolerating "no server running"), a
-`ps` scan for session
-ids in process arguments, `git worktree list` across tracked repositories,
-transcript directory scans and finally its own metadata store. Unmatched
+snapshot` (through the launch shape, tolerating "no server running"),
+`git worktree list` across tracked repositories, transcript directory
+scans and finally its own metadata store. Unmatched
 sessions stay off the sidebar: a row that cannot be entered and
 steered like a worktree's is noise rather than information. The
 session manager's pane listing is where everything the server runs,
@@ -388,76 +393,67 @@ flowchart TD
     Domain["AgentIDEDomain<br/>(pure)"]
 
     App --> Dashboard & Session & Review & PR & Data
-    Dashboard --> Domain
-    Session --> Domain
-    Review --> Domain
-    PR --> Domain
-    Session --> Terminal
-    Terminal --> Data
-    Dashboard -.->|ports| Data
-    Session -.->|ports| Data
-    Review -.->|ports| Data
-    PR -.->|ports| Data
+    Dashboard & Session & Review & PR --> Domain & Data & Terminal
+    Terminal --> Domain & Data
     Data --> Domain
 ```
 
-- **AgentIDEDomain**: entities (`Repository`, `Worktree`, `AgentSession`,
-  `AgentKind`, `SessionEvent`, `PullRequest`, `CheckRun`, `ReviewThread`,
-  `DiffFile`, `DiffHunk` and `DiffLine`) and pure logic (`DiffParser`,
-  `PatchBuilder`, `SessionName` and transcript event decoding). Foundation
-  value types (Date, URL and Data) are allowed; process, file, network and
+- **AgentIDEDomain**: entities (`Repository`, `Worktree`,
+  `RepositoryGroup`, `AgentSession`, `AgentKind`, `PullRequestSummary`,
+  `ReviewThread`, `BranchStack`, `TranscriptSession`, `DiffFile` with its
+  hunks and lines) and pure logic (`DiffParser`, `PatchBuilder`,
+  `SessionName`, `HerdrTerminal` frame decoding, `SyntaxHighlighter`'s
+  keyword tokenizer, `FuzzyMatcher` and `Wrapping`). Foundation value
+  types (Date, URL and Data) are allowed; process, file, network and
   database APIs are banned.
-- **AgentIDEData**: protocol ports with adapter implementations: `GitClient`,
-  `GitHubClient` (`gh` shell-outs today, native URLSession GraphQL for hot
-  paths later), `SandvaultLauncher`, `HerdrClient`, `HerdrTerminalChannel`
-  (a live `herdr terminal session control` client on pipes),
-  `TranscriptReader`,
-  `EventSpool`, `MetadataStore` (a JSON file today, GRDB when metadata
-  outgrows it), `ProcessRunner` (Foundation `Process` today, Subprocess
-  later), `FoundationModelClient` (the on-device Apple foundation model
-  behind one reusable summarisation seam) and `AgentRunner` with
-  `ClaudeCodeRunner` and `CodexRunner`. One module, split only if boundary
-  violations appear.
+- **AgentIDEData**: the adapters: `GitClient`, `GitHubClient` (every
+  GitHub question through the host user's `gh`), `SandvaultLauncher`,
+  `HerdrClient`, `HerdrTerminalChannel` (a live `herdr terminal session
+  control` client on pipes), `TranscriptReader` and `CodexTranscriptIndex`,
+  `EventSpool`, `MetadataStore` (one JSON file), `PullRequestStore`,
+  `ProcessRunner` (Foundation `Process`), `WorkspaceWatcher` (FSEvents),
+  `FoundationModelClient` (the on-device Apple foundation model behind one
+  reusable summarisation seam) and `AgentRunner` with `ClaudeCodeRunner`
+  and `CodexRunner`, composed by `SessionService`. One module, split only
+  if boundary violations appear.
 - **Feature targets** (`DashboardFeature`, `SessionFeature`, `ReviewFeature`
   and `PRFeature`): SwiftUI views and `@Observable` view models, MainActor by
-  default, given ports via injection. `SessionFeature` owns the WKWebView
-  preview; `ReviewFeature` owns the diff and editor surfaces (SwiftUI text
-  and an attributed NSTextView today, STTextView as the review slice
-  deepens).
+  default, given the service via injection. `SessionFeature` owns the
+  WKWebView browser, the transcript log and the session manager;
+  `ReviewFeature` owns the diff and editor surfaces (SwiftUI text and an
+  attributed NSTextView).
 - **TerminalUI**: shared UI components, not a feature: the SwiftTerm
   wrapper (a `herdr terminal session control` argv in, a locally rendered
-  pane out, via DataAccess's terminal channel), the AppKit-backed
-  tooltips and the syntax highlighting engine. Highlighting parses with
+  pane out, via DataAccess's terminal channel), markdown rendering, the
+  AppKit-backed tooltips, `LinkOpener`, `BusyButton`, `LaunchProgress`
+  and the syntax highlighting engine. Highlighting parses with
   tree-sitter grammars and falls back to a pure-Swift line tokenizer in
   the Domain for text without a loaded grammar, such as fragmentary diff
   lines the parser cannot classify.
-- **AgentIDEApp**: builds adapters, injects ports, owns navigation and the
-  activation-policy switch. No logic.
+- **AgentIDEApp**: builds adapters, injects the service, owns navigation,
+  Settings and the App Intents. No logic.
 
 Third-party imports are confined (P3):
 
 | Dependency | Only importable in |
 |---|---|
-| GRDB, Subprocess | AgentIDEData |
-| SwiftTerm | TerminalUI |
-| STTextView, SwiftTreeSitter and grammars | ReviewFeature |
+| SwiftTerm, swift-markdown, SwiftTreeSitter and grammars | TerminalUI |
 | WebKit | SessionFeature |
+| FoundationModels | AgentIDEData |
 
 ### The AgentRunner seam
 
-`AgentRunner` (P5) covers exactly: building the launch payload for a
-worktree, prompt file and optional resume token; locating and decoding the
-agent's transcript into `SessionEvent` values; detecting completion and
-stalls (capability flags `supportsHooks` and `supportsResume` select
-hook-based or polling strategies); building the resume command; and
-extracting the final message for review. Each runner also declares its
-model listing command: at startup the app asks the installed CLI what
-models it offers and falls back to a curated list when the command
-fails, so the pickers track the binaries rather than hardcoded names. `ClaudeCodeRunner` uses hooks and
-cwd-keyed JSONL transcripts; `CodexRunner` proves the seam with
-directory-based transcripts and silence-based detection. Discovering foreign
-sessions is reconciliation logic in `AgentIDEData`, deliberately outside the
-protocol.
+`AgentRunner` (P5) covers exactly: building the launch and resume
+commands for a prompt file, model, effort and extra arguments; locating
+the agent's transcripts (per working directory, or one flat tree an index
+attributes by the directory each rollout records); the models and efforts
+it offers, its version and its model listing command. At startup the app
+asks the installed CLI what models it offers and falls back to a curated
+list when the command fails, so the pickers track the binaries rather
+than hardcoded names. Whether an agent is working, idle, done or blocked
+comes from herdr's own detection, the same for every agent, so no runner
+detects anything. Discovering foreign sessions is reconciliation logic in
+`AgentIDEData`, deliberately outside the protocol.
 
 ## Concurrency model
 
@@ -472,18 +468,19 @@ All targets build with `SWIFT_DEFAULT_ACTOR_ISOLATION` set per the table,
 `SWIFT_APPROACHABLE_CONCURRENCY=YES` and the Swift 6 language mode.
 
 The nuance that matters most: under approachable concurrency, `nonisolated
-async` functions run on the caller's actor. Quick awaited I/O (URLSession and
-GRDB's async API) therefore stays plain `nonisolated async`; only CPU-bound
-or blocking leaf work (JSONL decoding, diff parsing and subprocess output
-pumping) is marked `@concurrent` to move off the caller.
+async` functions run on the caller's actor. Quick awaited I/O therefore
+stays plain `nonisolated async`; only CPU-bound or blocking leaf work
+(transcript decoding, diff parsing and subprocess output pumping) is
+marked `@concurrent` to move off the caller.
 
-Events flow as `AsyncStream`s (file watches, transcript tails, poll ticks and
-GitHub results) consumed by view models via `.task`, so cancellation follows
-view lifetime. Fan-out uses task groups. Unstructured `Task {}` appears only
-at enumerated app-lifecycle roots. Exactly one actor is sanctioned:
-`ProcessRegistry` in `AgentIDEData`, owning live PTY and child-process
-handles; any further actor needs a written justification here. `@unchecked
-Sendable` and `nonisolated(unsafe)` are banned.
+Events flow as `AsyncStream`s (file watches, herdr agent waits, poll ticks
+and GitHub results) consumed by view models via `.task`, so cancellation
+follows view lifetime. Fan-out uses task groups. Unstructured `Task {}`
+appears only at enumerated app-lifecycle roots. Three actors are
+sanctioned, each guarding one mutable resource: `HerdrTerminalChannel`
+(the pipes of one control client), `StackCache` and `RepositoryFacts`
+(memoised git answers); any further actor needs a written justification
+here. `@unchecked Sendable` and `nonisolated(unsafe)` are banned.
 
 ## Key data flows
 
@@ -551,9 +548,7 @@ Sendable` and `nonisolated(unsafe)` are banned.
 4. The prompt is written to
    `/Users/Shared/sv-<user>/agentide/prompts/<session>.md`, readable in the
    sandbox through the workspace ACLs.
-5. Deploy keys: none by default; the agent works offline against the local
-   clone. A per-repository opt-in provisions a read-only key through
-   sandvault's `sv-clone -k` mechanism. Write keys are never provisioned;
+5. Deploy keys: none; the agent works offline against the local clone and
    pushing is host-side.
 6. `AgentRunner` builds the agent command, with any per-session extra
    arguments appended verbatim (sandvault's wrappers add the agent's
@@ -589,10 +584,9 @@ Sendable` and `nonisolated(unsafe)` are banned.
    outside AgentIDE feed the dashboard too, and it no-ops when neither is
    set. Appends are single-writer and small; the reader tolerates a torn
    last line.
-3. Host-side, `EventSpool` watches the events directory with FSEvents and
-   tails each file from its stored offset, emitting `SessionEvent` values
-   that drive unread state and notifications (on Stop and
-   PermissionRequest). A worktree is unread when its spool events or its
+3. Host-side, `EventSpool` reads each session's file modification time
+   on every poll, the one fact the spool feeds in: when the agent last
+   did anything. A worktree is unread when its spool events or its
    transcripts are newer than its per-worktree seen time; viewing it
    records that time, and a context menu marks it unread again until next
    viewed. herdr keeps no output timestamp, so raw terminal output that
@@ -618,8 +612,7 @@ Sendable` and `nonisolated(unsafe)` are banned.
    badge counts the worktrees needing attention, each contribution
    behind its own Settings toggle: waiting on input, a done turn
    not yet viewed, or unread output anywhere but the
-   pane being read. Foreign sessions keep the transcript-mtime timeout on a
-   30 second tick for stalls.
+   pane being read.
 5. If the app is fully quit, events accumulate in the spool and notifications
    arrive on next launch.
 
@@ -636,9 +629,8 @@ Sendable` and `nonisolated(unsafe)` are banned.
    (`git show`), which the pane then reviews with its message shown
    read-only: only the tip can be amended, and a listing that stayed
    one text block keeps selection running across its lines.
-2. Generated files are hidden by default via
-   `git check-attr linguist-generated` plus heuristics (lockfiles and
-   per-repository generated globs), one click to reveal.
+2. Generated files (lockfiles and the like, by path fragment) are hidden
+   by default, one click to reveal.
 3. Rendering highlights with tree-sitter grammars (Swift, Ruby, Bash,
    Python, JSON, TypeScript and JavaScript, C, C++, Go, Rust, Java, PHP,
    HTML, CSS, regular expressions and ERB), a word list for the formats
@@ -659,8 +651,10 @@ Sendable` and `nonisolated(unsafe)` are banned.
    `PatchBuilder` (pure, with recalculated hunk offsets), validates it with
    `git apply --check`, applies it with `git apply -R --index` so index and
    worktree stay consistent, then runs `git commit --amend` (with `-m` when
-   the message was edited too). Failed validation degrades to whole-hunk
-   rejection. Uncommitted changes skip the amend.
+   the message was edited too). Uncommitted changes skip the amend, and
+   their lines can be edited in place instead: the diff's context and
+   added lines are text fields, a removed line is history and is not,
+   and a file that was never committed can be deleted after a prompt.
 5. Manual edits happen in the same editor surface; saves trigger a diff
    refresh via file watches. Every text surface in the app has macOS text
    substitution turned off, in the app's own defaults for the SwiftUI fields
@@ -673,8 +667,6 @@ Sendable` and `nonisolated(unsafe)` are banned.
    menu falls back to the storage bus and the review pane opens its own bar:
    it tints every match in place and walks the hunks holding one, since a
    hunk is the smallest thing the list can scroll to.
-7. The pre-amend commit remains in the reflog and is surfaced as "revert last
-   rejection".
 
 ### Panes that outlive what is on screen (Review)
 
@@ -774,8 +766,8 @@ shim rather than a protocol:
 
 ### Pull request dashboard (Ship)
 
-1. The token comes from a one-shot `gh auth token`, held in memory only and
-   refreshed on 401 (P6).
+1. Every GitHub question goes through the host user's `gh`, so the app
+   never holds a token of its own (P6).
 2. Each worktree branch is polled with its own narrow query for its pull
    request's mergeable state, review decision and check rollup;
    repository-wide queries timed out GitHub's gateway on very large
@@ -877,10 +869,7 @@ shim rather than a protocol:
    chevron merely dimmed in the list, so opening and closing one moves
    no text; the entries of a stack are warmed as soon as one of them
    loads, so moving between its pull requests is a paint, never a load.
-4. Native versus shell: polling, dashboards and review threads are native
-   URLSession; `gh pr create`, `gh pr merge --auto` and other one-shots
-   shell out as the host user.
-5. Pushing asks GitHub what the viewer may do here (`viewerPermission`)
+4. Pushing asks GitHub what the viewer may do here (`viewerPermission`)
    before choosing a remote. Write access pushes to the repository; anything
    less pushes to the viewer's own fork, created with its remote on first
    use by `gh repo fork`, which picks whatever protocol the checkout already
@@ -895,12 +884,11 @@ shim rather than a protocol:
    own. A saved draft only ever fills a field that is empty, so the
    reloads that pushing and rebasing trigger cannot take back what is
    being written, and a commit message never refills a form whose draft
-   was deliberately emptied. Open PR
-   The row and the pane never disagree about a pull request's state:
-   both read the one enriched-summary cache, written by whichever side
-   fetched last, the pane taking it up on every rows update and the
-   sidebar told to repaint at once, through the storage bus, whenever
-   the pane caches a changed state. Open PR
+   was deliberately emptied. The row and the pane never disagree about
+   a pull request's state: both read the one enriched-summary cache,
+   written by whichever side fetched last, the pane taking it up on
+   every rows update and the sidebar told to repaint at once, through
+   the storage bus, whenever the pane caches a changed state. Open PR
    dims until the branch is pushed, then runs `gh pr create` with the
    template appended below the body after an empty line and one
    `--label` per label picked from the repository's own (`gh label
@@ -1117,7 +1105,7 @@ shim rather than a protocol:
    page and inline on the review tab under the files they anchor to,
    each entry naming its file and line; resolving refreshes the pull
    request's header and row immediately.
-8. Pushing a branch whose history has been rewritten, by an amend or a
+9. Pushing a branch whose history has been rewritten, by an amend or a
    rebase, leases the push (`--force-with-lease`) rather than being
    refused as a non-fast-forward. The lease is what makes that safe: it
    still refuses if the remote moved since the last fetch. A branch whose
@@ -1132,7 +1120,7 @@ shim rather than a protocol:
    an explicit lease naming that tip, which is exactly the
    confirmation the check exists to demand. Fetch and Rebase, then
    Push; never a terminal step.
-9. Push and rebase together enforce that every pushed commit is GPG
+10. Push and rebase together enforce that every pushed commit is GPG
    signed: agents in the sandbox cannot sign or push and a local hook
    blocks unsigned pushes, so the host is where signatures happen. Push
    dims until the tip commit verifies and the service refuses regardless.
@@ -1345,9 +1333,8 @@ already hold the first and the second is not ours to put in anyone's cloud.
 | Code, branches, diffs, worktrees | git in the shared workspace | operate host-side, hardened |
 | Conversation history, final message | agent transcripts | read-only tail |
 | Pull request, CI and review state | GitHub | poll, cache in memory |
-| Agent process existence | `ps` | scan |
 | Earlier conversations per worktree | agent transcript directories | list and parse read-only |
-| Unread markers, spool offsets, prompt history, per-repository settings, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store (GRDB) | sole owner |
+| Unread markers, spool offsets, prompt history, per-repository settings, per-worktree session names and resume ids, window state, last sidebar snapshot for instant launch | metadata store | sole owner |
 
 The metadata store lives at
 `~/Library/Application Support/AgentIDE/state.json`, one JSON file
@@ -1408,13 +1395,12 @@ Trust boundaries, numbered:
 1. **Host to sandbox**: the sudoers surface is exactly `/bin/zsh`,
    `/usr/bin/env` and `/usr/bin/true` as the sandbox user, plus root-level
    whole-user teardown (`launchctl bootout` of the sandbox uid and `pkill -9`
-   of the sandbox user). AgentIDE uses the zsh path for everything; the
-   teardown pair backs a confirmed "Emergency stop all agents" action only.
-2. **Sandbox to network**: no GitHub credentials, `git push` denied by agent
-   settings and optional read-only per-repository deploy keys as the only
-   remote path.
-3. **App to GitHub**: token from `gh auth token`, in memory only, never on
-   disk and never in any launch environment.
+   of the sandbox user). AgentIDE uses the zsh path for everything and
+   never the teardown pair.
+2. **Sandbox to network**: no GitHub credentials and `git push` denied by
+   agent settings.
+3. **App to GitHub**: `gh`'s own credentials, read by `gh` alone, never
+   in any launch environment.
 4. **Host to guest-written data** (P7): every host git invocation goes
    through `GitClient`, which always prepends
    `-c core.fsmonitor= -c core.sshCommand= -c core.hooksPath=/dev/null -c
@@ -1449,12 +1435,10 @@ official language or project organisation.
 | Package | Role | Note |
 |---|---|---|
 | SwiftTerm | terminal emulator views | |
-| GRDB | metadata store | planned; a JSON file serves today |
-| STTextView | diff and editor text surface | TextKit 2; planned |
+| swift-markdown | markdown parsing | official-organisation exception (swiftlang) |
 | swift-tree-sitter | syntax highlighting runtime | official-organisation exception |
 | tree-sitter-* grammars (ruby, bash, python, json, typescript, c, cpp, go, rust, java, php, html, css, regex, embedded-template) | syntax highlighting | official organisation, each pinned to the latest ABI 14 release the runtime accepts, except Swift, as below |
 | tree-sitter-swift (alex-pinkus) | Swift grammar | the grammar the tree-sitter ecosystem standardises on; no official-organisation build exists |
-| swift-subprocess | process spawning | official-organisation exception (swiftlang); planned, Foundation `Process` serves today |
 
 System frameworks (WebKit, UserNotifications and FSEvents) and runtime tools
 (herdr, installed by Homebrew and never linked) sit outside the table. There
@@ -1479,10 +1463,13 @@ full Xcode toolchain selected via xcode-select; CommandLineTools alone cannot
 load SourceKit.
 
 Scripts follow the `script/` convention: `bootstrap` (Homebrew dependencies,
-then XcodeGen project generation), `build` (the app via xcodebuild),
-`test` (unit and integration tests via `swift test`), `analyze` (static
-analysis), `style [--fix]` (all linters) and `attach <session>` (attach the
-current terminal to the sandboxed herdr session). Agent-driven builds inside the
+then XcodeGen project generation), `build` (the app via xcodebuild, or
+`swift build` in the sandbox), `install` (build, then copy into
+/Applications), `test` (unit and integration tests via `swift test`, then
+the App Intents bundle on the host), `analyze` (static analysis),
+`style [--fix]` (all linters), `performance-log` (the installed app's
+process log on or off) and `attach [workspace]` (attach the current
+terminal to the sandboxed herdr session). Agent-driven builds inside the
 sandbox cannot nest macOS sandboxes, so build scripts gate on `SV_SESSION_ID`
 and pass `SWIFTPM_DISABLE_SANDBOX=1`, `SWIFT_BUILD_USE_SANDBOX=0` and the
 `-IDEPackageSupportDisable*Sandbox` xcodebuild flags. They also disable
@@ -1552,13 +1539,8 @@ them:
 |---|---|---|
 | R1 | herdr is validated under sandbox-exec on this machine: headless server, owner-only sockets, named sessions, workspace and pane control, the terminal control stream with mode-restoring replay, takeover, process-tree kills on close and `XDG_CONFIG_HOME` isolation; it is pre-1.0, so releases may change behaviour | the socket protocol is versioned and schema'd; integration tests run against the real server so drift fails loudly; app-owned PTYs are not acceptable because they forfeit Resilience |
 | R2 | the `xcode-27` runner image is a public preview that may change or lag Xcode 27 betas | the build and test job asserts Xcode 27 and fails loudly rather than skipping; a self-hosted runner remains the fallback |
-| R3 | per-line selection and diff gutters on STTextView are non-trivial | prototype early in the Review slice; interim read-only diff |
 | R4 | agent transcript formats drift across releases | tolerant decoders, per-release fixtures and adapter capability flags |
-| R5 | sandvault updates could change paths, profile or sudoers | pin the sandvault version; `SandvaultLauncher` is the single construction point; bootstrap asserts the expected shape |
+| R5 | sandvault updates could change paths, profile or sudoers | `SandvaultLauncher` is the single construction point, so a changed shape is one edit |
 | R6 | event spool append atomicity | small single-writer lines; readers tolerate a torn tail |
 | R7 | older worktrees live in the uuid layout inherited from retired tooling | everything derives from `git worktree list`, so both layouts work; new worktrees use the owned `worktrees/<repository>/<branch>` shape |
 | R8 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree pointing at the old transcript |
-
-Open questions: the default branch template,
-notification preference granularity and how deep stacked pull request
-support goes in v1.
