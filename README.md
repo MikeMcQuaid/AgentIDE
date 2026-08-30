@@ -245,8 +245,9 @@ before shipping.
   honest disclosure is not a thing you retype, and ticking that box never
   leaves the section empty)
 - **Copies** unresolved review comments straight into a prompt, copies
-  the tail of every failing Actions run's log the same way, jumps to
-  the failing check (or the checks page when several fail), resolves
+  the tail of every failing Actions run's log the same way from one
+  failing-checks button (Cmd-click opens the check in your browser
+  instead, Shift-click in the Browser tab), resolves
   conversations one by one, resolves merge conflicts and enables
   automerge or merges,
   each with one click (so the last mile is not the slowest)

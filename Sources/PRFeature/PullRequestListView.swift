@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -261,26 +262,26 @@ struct PullRequestFooterView: View {
             await model.copyUnresolvedComments(selected)
         }
         .hoverHelp("Copy every unresolved review conversation to the clipboard")
+        // One button for the failing checks: a click copies their
+        // logs, and a modifier opens them instead, since the
+        // modifier is read at the click and `LinkOpener` already
+        // sends Cmd to the browser and anything else to the tab.
         BusyButton(
             "",
             busy: "",
-            systemImage: "doc.text.magnifyingglass",
-            accessibilityLabel: "Copy failing logs",
-            disabled: PullRequestsModel.runIDs(in: selected.failingCheckLinks).isEmpty,
+            systemImage: "exclamationmark.triangle",
+            accessibilityLabel: "Failing checks",
+            disabled: selected.failingCheckLinks.isEmpty,
         ) {
-            if await model.copyFailingLogs(selected) == false {
+            if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
+                model.openFailingChecks(selected)
+            } else if await model.copyFailingLogs(selected) == false {
                 utilityTab = UtilityTabTarget.errors
             }
         }
         .hoverHelp("Copy the last " + String(PullRequestsModel.logTailLines)
-            + " lines of every failing Actions run's log to the clipboard; dimmed when no failing check is one")
-        Button {
-            model.openFailingChecks(selected)
-        } label: {
-            Image(systemName: "exclamationmark.triangle")
-                .accessibilityLabel("Open failing checks")
-        }
-        .hoverHelp("Open the failing check, or the checks page when several fail; Cmd for the Cmd-click browser")
+            + " lines of every failing Actions run's log; Cmd-click opens the failing check "
+            + "in your browser, Shift-click in the Browser tab; dimmed when nothing fails")
     }
 }
 
