@@ -81,6 +81,7 @@ extension DashboardModel {
                     hasUnread: false,
                     aheadOfDefault: worktree.aheadOfDefault,
                     behindDefault: worktree.behindDefault,
+                    behindUpstream: worktree.behindUpstream,
                     lastActivityAt: worktree.lastActivityAt,
                 )
             }
@@ -132,6 +133,7 @@ extension DashboardModel {
                 worktree.aheadOfUpstream = item.aheadOfUpstream
                 worktree.aheadOfDefault = item.aheadOfDefault
                 worktree.behindDefault = item.behindDefault
+                worktree.behindUpstream = item.behindUpstream
                 worktree.lastActivityAt = item.lastActivityAt
                 worktree.hasSession = item.session != nil
                 if let stack = derivedStacks[item.worktree.path] {

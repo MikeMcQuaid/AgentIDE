@@ -176,16 +176,13 @@ public struct GitClient: Sendable {
     /// How many commits the worktree's branch is ahead of its
     /// upstream, nil when it has no upstream.
     public func aheadOfUpstream(worktreePath: String) async -> Int? {
-        let result = try? await git(
-            ["rev-list", "--count", "@{upstream}..HEAD"],
-            in: worktreePath,
-            allowFailure: true,
-        )
-        guard let result, result.succeeded else {
-            return nil
-        }
+        await upstreamCount(range: "@{upstream}..HEAD", worktreePath: worktreePath)
+    }
 
-        return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
+    /// Commits the upstream has that the checked-out branch lacks;
+    /// nil without an upstream.
+    public func behindUpstream(worktreePath: String) async -> Int? {
+        await upstreamCount(range: "HEAD..@{upstream}", worktreePath: worktreePath)
     }
 
     /// The one-based line numbers of a file changed against HEAD,
@@ -356,4 +353,13 @@ public struct GitClient: Sendable {
     ]
 
     private let runner: any ProcessRunner
+
+    private func upstreamCount(range: String, worktreePath: String) async -> Int? {
+        let result = try? await git(["rev-list", "--count", range], in: worktreePath, allowFailure: true)
+        guard let result, result.succeeded else {
+            return nil
+        }
+
+        return Int(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
 }

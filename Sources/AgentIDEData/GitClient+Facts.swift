@@ -13,6 +13,10 @@ public struct BranchFacts: Sendable {
     /// Commits the upstream lacks, nil when there is no upstream or
     /// it has gone.
     public let aheadOfUpstream: Int?
+
+    /// Commits the upstream has that this branch lacks, nil the
+    /// same way: what says a branch is behind what was pushed.
+    public let behindUpstream: Int?
     public let committedAt: Int
 }
 
@@ -85,28 +89,30 @@ public extension GitClient {
             facts[name] = BranchFacts(
                 ahead: distance.first,
                 behind: distance.dropFirst().first,
-                aheadOfUpstream: Self.aheadOfUpstream(upstream: upstream, track: track),
+                aheadOfUpstream: Self.upstreamCount("ahead", upstream: upstream, track: track),
+                behindUpstream: Self.upstreamCount("behind", upstream: upstream, track: track),
                 committedAt: Int(committed) ?? 0,
             )
         }
         return facts
     }
 
-    /// The commits an upstream lacks, read from `upstream:track`:
-    /// empty means level with it, `gone` means it was deleted, and
-    /// no upstream at all means there is nothing to count against.
-    static func aheadOfUpstream(upstream: String, track: String) -> Int? {
+    /// One side of a branch's distance from its upstream, read from
+    /// `upstream:track` (`ahead 2, behind 1`): empty means level
+    /// with it, `gone` means it was deleted, and no upstream at all
+    /// means there is nothing to count against.
+    static func upstreamCount(_ side: String, upstream: String, track: String) -> Int? {
         guard upstream.isEmpty == false, track.contains("gone") == false else {
             return nil
         }
-        guard let ahead = track
+        guard let count = track
             .components(separatedBy: ", ")
-            .first(where: { $0.hasPrefix("ahead ") })
+            .first(where: { $0.hasPrefix(side + " ") })
         else {
             return 0
         }
 
-        return Int(ahead.dropFirst("ahead ".count))
+        return Int(count.dropFirst(side.count + 1))
     }
 
     /// The repository's GitHub `owner/name`, parsed from the origin

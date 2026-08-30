@@ -39,16 +39,18 @@ struct WorktreeRowView: View {
     /// The agent's monochrome mark, sized to the caption line.
     private static let agentIconSize: CGFloat = 11
 
+    /// The branch against what was pushed, the repository's own
+    /// checkout included (main against origin/main): level shows
+    /// nothing, so an arrow is always a branch and its upstream
+    /// having drifted apart. The default-branch distance stays in
+    /// the pull request footer's Rebase count, where it is acted on.
     private var counts: String {
         var parts = [String]()
-        if let ahead = item.aheadOfDefault, ahead > 0 {
-            parts.append("↑\(ahead)")
-        }
-        if let behind = item.behindDefault, behind > 0 {
-            parts.append("↓\(behind)")
-        }
         if let unpushed = item.aheadOfUpstream, unpushed > 0 {
-            parts.append("⇡\(unpushed)")
+            parts.append("↑\(unpushed)")
+        }
+        if let unpulled = item.behindUpstream, unpulled > 0 {
+            parts.append("↓\(unpulled)")
         }
         if item.isDirty {
             parts.append("±")
@@ -74,8 +76,9 @@ struct WorktreeRowView: View {
 
     private var countsExplanation: String {
         """
-        ↑ commits ahead of the default branch, ↓ behind it, \
-        ⇡ committed but not pushed, ± uncommitted changes
+        ↑ commits not yet pushed to the branch's upstream, ↓ commits on \
+        the upstream not yet pulled, ± uncommitted changes; nothing means \
+        level with what was pushed
         """
     }
 
@@ -261,6 +264,13 @@ struct WorktreeRowView: View {
                 // they are history, and the state icon says it all.
                 if pullRequest.state == "OPEN" {
                     checksDot(for: pullRequest)
+                }
+                // Conflicts with the base branch: the one state a
+                // pull request cannot leave on its own.
+                if pullRequest.state == "OPEN", pullRequest.mergeable == "CONFLICTING",
+                   let conflict = ChecksStyle.mergeableOcticonName(for: pullRequest.mergeable) {
+                    Octicon(conflict, colour: ChecksStyle.mergeableColour(for: pullRequest.mergeable))
+                        .hoverHelp("Merge conflicts with the base branch; rebase to resolve them")
                 }
                 if let review = reviewIcon(for: pullRequest) {
                     Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))

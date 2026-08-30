@@ -252,6 +252,8 @@ struct GitClientIntegrationTests {
         #expect(parsed["gone-branch"]?.ahead == 2)
         #expect(parsed["gone-branch"]?.behind == 3)
         #expect(parsed["ahead-branch"]?.aheadOfUpstream == 2)
+        #expect(parsed["ahead-branch"]?.behindUpstream == 1)
+        #expect(parsed["gone-branch"]?.behindUpstream == nil)
         #expect(parsed["ahead-branch"]?.committedAt == 200)
     }
 

@@ -69,8 +69,10 @@ before shipping.
   selects it (so the places you work on by hand live beside the ones
   agents work on, and no agent ever runs in them)
 - **Groups** worktrees by repository, showing unread terminal and agent activity
-  since each was last viewed, open pull requests, mergeability and
-  uncommitted or unpushed work, and a worktree can be marked unread to
+  since each was last viewed, open pull requests, merge conflicts,
+  uncommitted work and how far each branch (the checkout's own
+  included) has drifted from what was pushed, level showing nothing,
+  and a worktree can be marked unread to
   revisit, with a right-click Refresh that asks GitHub about that
   repository's branches at once; worktrees agents made for themselves
   in the same containers are adopted on the next poll, ready for

@@ -30,6 +30,7 @@ public struct CachedWorktree: Codable, Hashable, Sendable {
     public var aheadOfUpstream: Int?
     public var aheadOfDefault: Int?
     public var behindDefault: Int?
+    public var behindUpstream: Int?
     public var lastActivityAt = 0
     public var hasSession = false
 
