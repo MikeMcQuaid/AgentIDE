@@ -259,7 +259,8 @@ Environment variables, for shell files and scripts:
 | `AGENTIDE_EDITS` | the app, in shell panes | where `agentide --wait` spools the edit it is waiting on |
 | `AGENTIDE_COLOR` | you | forces colour in `agentide`'s output where no terminal is detected |
 | `AGENTIDE_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
-| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out |
+| `AGENTIDE_DEVELOPMENT_TEAM` | you, running `script/test` | the Apple team id that signs the app and the App Intents test runner alike, which the framework requires; unset, the bundle is skipped |
+| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out even with a team set |
 | `AGENTIDE_DRY_RUN` | you, running `agentide new` | prints what it would make instead of making it |
 
 ## 🚧 Status

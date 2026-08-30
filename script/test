@@ -23,7 +23,13 @@ swift test
 # The App Intents run through the system's own runtime from a UI
 # testing bundle, which only xcodebuild can build and run: host and
 # CI, never the sandbox. AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
-if [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
+# The framework refuses a runner signed differently from the app
+# ("does not have permission to perform this"), so both sign with one
+# real team, named in the environment; without one the bundle is left
+# out, which is what CI has.
+if [[ -z "${AGENTIDE_DEVELOPMENT_TEAM:-}" ]]; then
+  echo "AGENTIDE_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
+elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
   xcodegen generate --use-cache
   # Quiet, so the build's noise stays out, but a failure's reasons
   # come back out of the result bundle: xcodebuild -quiet names the
@@ -36,6 +42,9 @@ if [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null
     -only-testing:AgentIDEIntentTests \
     -skipPackagePluginValidation \
     -resultBundlePath "${results}" \
+    CODE_SIGN_STYLE=Automatic \
+    CODE_SIGN_IDENTITY="Apple Development" \
+    DEVELOPMENT_TEAM="${AGENTIDE_DEVELOPMENT_TEAM}" \
     -quiet; then
     xcrun xcresulttool get test-results summary --path "${results}" 2>/dev/null |
       python3 -c '

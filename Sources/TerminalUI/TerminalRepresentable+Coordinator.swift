@@ -242,7 +242,9 @@ extension TerminalRepresentable {
                 return
             }
 
-            channel?.send(HerdrTerminal.inputCommand(bytes: bytes))
+            for command in HerdrTerminal.inputCommands(bytes: bytes) {
+                channel?.send(command)
+            }
         }
 
         /// Drops the running client and resets the conversation

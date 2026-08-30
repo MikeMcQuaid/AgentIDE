@@ -51,6 +51,12 @@ private struct HerdrTerminalInput: Encodable {
 public enum HerdrTerminal {
     // MARK: Public
 
+    /// How much one input command carries at most: a paste of a whole
+    /// log went as one command and arrived cut, so it goes as several
+    /// in order, the way a terminal feeds a pseudo-terminal in
+    /// pieces; keystrokes never come near it.
+    public static let inputChunkBytes = 4_096
+
     /// Parses one line of the stream. Unknown record types answer
     /// nil, so additions to the protocol never break the pane.
     public static func parse(line: String) -> HerdrTerminalEvent? {
@@ -79,6 +85,14 @@ public enum HerdrTerminal {
     /// exactly.
     public static func inputCommand(bytes: some Sequence<UInt8>) -> String {
         encode(HerdrTerminalInput(type: "terminal.input", bytes: Data(bytes).base64EncodedString()))
+    }
+
+    /// The commands that write bytes to the pane's terminal, in order,
+    /// none larger than `inputChunkBytes`.
+    public static func inputCommands(bytes: [UInt8]) -> [String] {
+        stride(from: 0, to: bytes.count, by: inputChunkBytes).map { start in
+            inputCommand(bytes: bytes[start ..< min(start + inputChunkBytes, bytes.count)])
+        }
     }
 
     /// The command that sets the controller's viewport size, which
