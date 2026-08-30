@@ -77,7 +77,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return
         }
 
-        super.paste(sender)
+        super.paste(sender as Any)
     }
 
     /// Native selection copy, reflowed for prose panes.

@@ -79,7 +79,6 @@ extension RootView {
     }
 
     /// The non-terminal utility tabs' content.
-    @ViewBuilder
     func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
         let target = reviewTarget(for: item, conversationPath: conversationPath)
         // A directory of your own edits in the primary pane, so a

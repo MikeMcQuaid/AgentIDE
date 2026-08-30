@@ -62,7 +62,7 @@ struct ErrorsPane: View {
         // Failures keep the monospaced command-output look; status
         // notes read as prose.
         let font: Font = entry.isError ? .callout.monospaced() : .callout
-        return (mark(entry) + stamp(entry.date) + Text(Self.linked(entry.message)).font(font))
+        return Text("\(mark(entry))\(stamp(entry.date))\(Text(Self.linked(entry.message)).font(font))")
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -92,17 +92,17 @@ struct ErrorsPane: View {
         // The glyph reads as part of the message rather than as an
         // image of its own, so the label goes on the text.
         // swiftlint:disable:next accessibility_label_for_image
-        return Text(Image(systemName: "exclamationmark.triangle.fill"))
+        let glyph = Text(Image(systemName: "exclamationmark.triangle.fill"))
             .font(.caption)
             .foregroundStyle(.red)
-            + Text(" ")
+        return Text("\(glyph) ")
     }
 
     private func stamp(_ date: Date) -> Text {
-        Text(date, format: .dateTime.hour().minute().second())
+        let time = Text(date, format: .dateTime.hour().minute().second())
             .font(.caption)
             .foregroundStyle(.secondary)
-            + Text(" ")
+        return Text("\(time) ")
     }
 
     private func copyAll() {

@@ -125,7 +125,7 @@ public extension DashboardModel {
         do {
             try await service.switchBranch(branch, worktree: item.worktree)
             ErrorLog.shared.note("Checked out " + branch + " in " + item.worktree.path + ".")
-            await rename(item, to: branch)
+            rename(item, to: branch)
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

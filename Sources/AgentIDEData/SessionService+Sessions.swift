@@ -34,7 +34,7 @@ public extension SessionService {
         }
 
         try? await Task.sleep(for: .seconds(killGraceSeconds))
-        try? await herdr.killSession(name: name)
+        _ = try? await herdr.killSession(name: name)
     }
 
     /// Starts a session under a name, replacing whatever holds it

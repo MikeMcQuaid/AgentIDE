@@ -231,7 +231,7 @@ public struct GitClient: Sendable {
             }
             try await git(arguments + [ref, branch], in: worktreePath)
         } catch {
-            try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
+            _ = try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error
         }
     }

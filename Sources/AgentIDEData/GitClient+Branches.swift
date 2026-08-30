@@ -214,7 +214,7 @@ public extension GitClient {
                 in: worktreePath,
             )
         } catch {
-            try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
+            _ = try? await git(["rebase", "--abort"], in: worktreePath, allowFailure: true)
             throw error
         }
     }

@@ -16,7 +16,7 @@ public struct CreateSessionPane: View {
         worktree: Worktree,
         model: DashboardModel,
         canResume: Bool,
-        onShowConversations: (@MainActor () -> Void)? = nil,
+        onShowConversations: (@MainActor @Sendable () -> Void)? = nil,
         onResume: @escaping @MainActor () async -> Void,
         onStarted: @escaping @MainActor () async -> Void,
     ) {
@@ -74,7 +74,7 @@ public struct CreateSessionPane: View {
     /// Instant feedback while a resume launches.
     @State private var isResuming = false
 
-    private let onShowConversations: (@MainActor () -> Void)?
+    private let onShowConversations: (@MainActor @Sendable () -> Void)?
     private let worktree: Worktree
     private let model: DashboardModel
     private let canResume: Bool

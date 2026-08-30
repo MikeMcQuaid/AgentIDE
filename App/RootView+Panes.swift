@@ -41,8 +41,10 @@ extension RootView {
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged
                 // paths type into the agent.
+                // The drop-session overload answers nothing, so the
+                // staging's own verdict is let go here.
                 .dropDestination(for: URL.self) { urls, _ in
-                    dropFiles(urls, into: session.name)
+                    _ = dropFiles(urls, into: session.name)
                 }
         } else if item.worktree.path == item.worktree.repositoryPath, startingSession != item.worktree.path {
             repositoryConversations(for: item)
