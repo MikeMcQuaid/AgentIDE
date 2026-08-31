@@ -131,6 +131,27 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `a symlink is resolved to its target before it is asked for`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-link")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+        let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let target = root + "/real.md"
+        try "real\n".write(toFile: target, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(
+            atPath: root + "/alias.md",
+            withDestinationPath: "real.md",
+        )
+
+        // The editor saves atomically, which would replace the link
+        // itself with a plain file; the target is what is edited.
+        let process = try run(shim, arguments: ["alias.md"], in: root)
+        try await exit(of: process)
+        #expect(process.terminationStatus == 0)
+        #expect(spool.pending().first?.path == target)
+    }
+
+    @Test
     func `anywhere inside a worktree selects it, and outside the workspace is refused`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-select")
         defer { try? FileManager.default.removeItem(atPath: root) }

@@ -408,6 +408,12 @@ for file in "$@"; do
   kind=open
   [ "${wait_for_answer}" = no ] || kind=edit
   request_cwd="${cwd}"
+  # A symlinked file resolves to its target: the editor saves
+  # atomically, which would otherwise replace the link itself with
+  # a plain file. A path that does not exist yet stays as typed.
+  if [ ! -d "${path}" ] && [ -e "${path}" ]; then
+    path="$(realpath "${path}" 2>/dev/null || printf '%s' "${path}")"
+  fi
   if [ -d "${path}" ]; then
     # A directory is a place to go to, and only a checkout or a
     # worktree of the shared workspace is one the app can show.

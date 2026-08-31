@@ -510,7 +510,10 @@ request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
 a dispatch source, opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
-saved, non-zero cancelled, which aborts a rebase). A request whose
+saved, non-zero cancelled, which aborts a rebase). A symlinked file
+resolves to its target before it is asked for: the editor saves
+atomically, which would otherwise replace the link itself with a
+plain file. A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
 spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
