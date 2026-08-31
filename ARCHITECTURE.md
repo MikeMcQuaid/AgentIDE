@@ -513,7 +513,11 @@ writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A symlinked file
 resolves to its target before it is asked for: the editor saves
 atomically, which would otherwise replace the link itself with a
-plain file. A request whose
+plain file. On `.open` the shim
+runs `open` on the bundle it shipped in, bringing the app forward: the
+terminal's own child may ask that of the system where the app asking
+for itself is refused by cooperative activation, and the copy outside
+any bundle (the shared workspace's, for SSH) skips it. A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
 spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory

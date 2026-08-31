@@ -9,6 +9,17 @@ import Testing
 struct EditorShimIntegrationTests {
     // MARK: Internal
 
+    static let pollMilliseconds = 50
+    static let waitAttempts = 100
+    /// The shim as shipped, run straight from the repository: under
+    /// test there is no app bundle to find it in.
+    static let shimDirectory = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("bin")
+        .path
+
     @Test
     func `a waiting command blocks until the file is saved and closed`() async throws {
         let root = try TestSupport.temporaryDirectory("shim")
@@ -251,68 +262,4 @@ struct EditorShimIntegrationTests {
     /// well under the idle sweep it must beat, well over what a
     /// slow CI runner needs to spawn the shim.
     private static let eventDeadlineSeconds = 6.0
-    private static let pollMilliseconds = 50
-    private static let waitAttempts = 100
-
-    /// The shim as shipped, run straight from the repository: under
-    /// test there is no app bundle to find it in.
-    private static let shimDirectory = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appendingPathComponent("bin")
-        .path
-
-    private func shim(root: String) -> EditorShim {
-        EditorShim(paths: paths(root: root), directory: Self.shimDirectory)
-    }
-
-    private func paths(root: String) -> WorkspacePaths {
-        WorkspacePaths(
-            hostUser: "test",
-            sharedWorkspace: root + "/shared",
-            sandboxHome: root + "/home",
-            metadataFile: root + "/state.json",
-            appDirectory: root + "/app",
-        )
-    }
-
-    private func run(
-        _ shim: EditorShim,
-        arguments: [String],
-        in directory: String,
-        sharedWorkspace: String? = nil,
-    ) throws -> Process {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: shim.path)
-        process.arguments = arguments
-        process.currentDirectoryURL = URL(fileURLWithPath: directory)
-        var environment = shim.environment
-        // The command judges a directory against this workspace, and
-        // the tests own one of their own; without it the checkout's
-        // real workspace would judge the scratch directories.
-        environment["SHARED_WORKSPACE"] = sharedWorkspace ?? (directory + "/nowhere")
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-        try process.run()
-        return process
-    }
-
-    /// The first spooled request, waiting for the shim to write it.
-    private func firstEdit(in spool: ExternalEditSpool) async -> ExternalEdit? {
-        for _ in 0 ..< Self.waitAttempts {
-            if let edit = spool.pending().first {
-                return edit
-            }
-
-            try? await Task.sleep(for: .milliseconds(Self.pollMilliseconds))
-        }
-        return nil
-    }
-
-    private func exit(of process: Process) async throws {
-        for _ in 0 ..< Self.waitAttempts where process.isRunning {
-            try await Task.sleep(for: .milliseconds(Self.pollMilliseconds))
-        }
-        #expect(process.isRunning == false)
-    }
 }

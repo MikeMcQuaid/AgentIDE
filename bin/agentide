@@ -364,6 +364,16 @@ fi
 # the installed app's shells; anything else means the installed one.
 spool="${AGENTIDE_EDITS:-${HOME}/.agentide/edits}"
 
+# The app bundle this command shipped in: bin sits at
+# Contents/Resources/bin, so three directories up is the app. The
+# copy in the shared workspace (for SSH) lives outside any bundle
+# and stays empty, which skips the foregrounding below.
+app_bundle="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd -P || true)"
+case "${app_bundle}" in
+  *.app) ;;
+  *) app_bundle="" ;;
+esac
+
 # How long to wait for the app to take a request, as a count of
 # polls: long enough to cover a busy app, short enough that a shell
 # without one says so rather than hanging.
@@ -497,6 +507,10 @@ for file in "$@"; do
     tries=$((tries + 1))
     sleep "${poll_seconds}"
   done
+  # The file is on screen: bring the app forward. The terminal's own
+  # child may ask that of the system where the app asking for itself
+  # is refused by cooperative activation.
+  [ -z "${app_bundle}" ] || open "${app_bundle}" 2>/dev/null || true
   while [ ! -e "${spool}/${id}.done" ]; do
     sleep "${poll_seconds}"
   done
