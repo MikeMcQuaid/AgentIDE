@@ -133,7 +133,11 @@ public nonisolated enum ChecksStyle {
 
     /// The colour for a mergeability verdict.
     public static func mergeableColour(for mergeable: String) -> Color {
-        mergeable == "MERGEABLE" ? .green : .red
+        if mergeable == "MERGEABLE" {
+            .green
+        } else {
+            .red
+        }
     }
 
     /// A short display name for a GitHub login: the code review bot

@@ -107,6 +107,7 @@ struct ErrorsPane: View {
 
     private func copyAll() {
         let text = log.entries
+            .lazy
             .map { $0.date.formatted(.dateTime.hour().minute().second()) + " " + $0.message }
             .joined(separator: "\n\n")
         NSPasteboard.general.clearContents()

@@ -37,7 +37,7 @@ extension PullRequestsModel {
             // pull request and the rest list the body, which is what
             // Submit stack writes for a stack entry.
             let subjects = commits.map { Self.description(splitFromMessage: $0).title }
-            let rest = subjects.dropFirst().map { "- " + $0 }.joined(separator: "\n")
+            let rest = subjects.dropFirst().lazy.map { "- " + $0 }.joined(separator: "\n")
             apply(description: (Self.description(splitFromMessage: first).title, rest))
         }
     }

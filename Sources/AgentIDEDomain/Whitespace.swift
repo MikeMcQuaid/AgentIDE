@@ -5,6 +5,7 @@ public enum Whitespace {
     public static func strippingTrailingWhitespace(_ text: String) -> String {
         text
             .split(separator: "\n", omittingEmptySubsequences: false)
+            .lazy
             .map { line in
                 var trimmed = line
                 while trimmed.last == " " || trimmed.last == "\t" {

@@ -7,40 +7,6 @@ import TerminalUI
 /// The footer's branch actions, split from the model body for
 /// length.
 extension PullRequestsModel {
-    /// What the worktree itself says: its stack, signing, rebase
-    /// need, template and checked-out branch. Skipped when moving
-    /// between a stack's entries, which share all of it.
-    func refreshWorktreeFacts(_ worktree: Worktree) async {
-        await loadStack()
-        // Gather, then write only while still the newest read: an
-        // older reload landing stale signing facts over the rebase's
-        // fresh ones is how Push sometimes stayed locked until a
-        // second press ran a fresh read.
-        stacking.factsGeneration += 1
-        let generation = stacking.factsGeneration
-        let signed = await checkTipSigned(listedWorktree ?? worktree)
-        let need = await fetchRebaseNeed(listedWorktree ?? worktree)
-        let template = await fetchTemplate(worktree.path)
-        let live = await fetchCurrentBranch(worktree.path)
-        let labels = availableLabels.isEmpty ? await fetchLabels() : availableLabels
-        guard generation == stacking.factsGeneration else {
-            return
-        }
-
-        isTipSigned = signed
-        rebaseNeed = need
-        availableLabels = labels
-        hasTemplate = template != nil
-        originalTemplate = template ?? ""
-        if prTemplate.isEmpty {
-            prTemplate = originalTemplate
-        }
-        await prefillFromSingleCommit(worktree)
-        if let branch = live {
-            currentBranch = branch
-        }
-    }
-
     /// Refreshes one pull request's header wherever it shows, so
     /// actions like resolving conversations reflect immediately in
     /// the selected conversation and its listed row.
@@ -51,7 +17,7 @@ extension PullRequestsModel {
 
         cacheEnriched(full)
         if selected?.number == number {
-            selected = full
+            selected = withCachedUnresolved(full)
         }
         if let index = summaries.firstIndex(where: { $0.number == number }) {
             summaries[index] = full
@@ -127,18 +93,41 @@ extension PullRequestsModel {
     /// instantly, then refreshes it; the open scope's light rows
     /// gain their status icons here.
     func select(_ summary: PullRequestSummary) {
-        selected = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
-            ?? summary
+        let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
+        selected = withCachedUnresolved(cached ?? summary)
         Task { await loadSelectedLabels(summary.number) }
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
                 cacheEnriched(full)
                 if selected?.number == full.number {
-                    selected = full
+                    selected = withCachedUnresolved(full)
                 }
             }
         }
+    }
+
+    /// The conversation pane counted its unresolved threads: keep
+    /// the open summary level with it, which is what enables the
+    /// footer's copy button the moment there is something to copy.
+    func updateUnresolved(_ count: Int, number: Int) {
+        guard selected?.number == number else {
+            return
+        }
+
+        selected?.unresolvedComments = count
+    }
+
+    /// A summary with its unresolved-conversation count from the
+    /// threads cache: no listing or summary query carries the count,
+    /// so what the conversation pane last cached stands in, the way
+    /// the sidebar rows count theirs.
+    private func withCachedUnresolved(_ summary: PullRequestSummary) -> PullRequestSummary {
+        let key = AppMetadata.threadsKey(repositoryPath: repository.path, number: summary.number)
+        let threads = store.load().threadsCache[key]?.threads ?? []
+        var stamped = summary
+        stamped.unresolvedComments = threads.count { $0.isResolved == false }
+        return stamped
     }
 
     /// Caches one enriched summary, so reopening the conversation
@@ -293,6 +282,22 @@ extension PullRequestsModel {
 
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
+        // The button dims on what the last read knew, and a tip
+        // amended since then must never reach the service's refusal
+        // as an error: the signature is read again at the click, and
+        // a failed check declines in the footer instead, with Rebase
+        // relit to sign.
+        guard await checkTipSigned(worktree) else {
+            tipSignature = .unsigned
+            rebaseNeed = await fetchRebaseNeed(worktree)
+            setStatus(
+                "Not pushed: the tip commit is unsigned.",
+                detail: "The tip commit of " + worktree.branch
+                    + " is not GPG signed; Rebase on origin signs the branch, then Push.",
+            )
+            return true
+        }
+
         do {
             let destination = try await performPush(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)

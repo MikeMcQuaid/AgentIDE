@@ -84,8 +84,10 @@ public struct BranchStackStrip: View {
     }
 
     private func help(for branch: String) -> String {
-        branch == stack.checkedOut
-            ? "The branch this worktree holds; its diff is the one you can change"
-            : "Show this branch's own changes; checking it out is a separate step"
+        if branch == stack.checkedOut {
+            "The branch this worktree holds; its diff is the one you can change"
+        } else {
+            "Show this branch's own changes; checking it out is a separate step"
+        }
     }
 }

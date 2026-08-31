@@ -337,7 +337,7 @@ nonisolated struct WhatNeedsMeIntent: AppIntent {
             return .result(value: [], dialog: "Nothing needs you.")
         }
 
-        let spoken = needing.map { $0.repository + " " + $0.branch + ", " + $0.state }.joined(separator: "; ")
+        let spoken = needing.lazy.map { $0.repository + " " + $0.branch + ", " + $0.state }.joined(separator: "; ")
         return .result(value: needing, dialog: "\(needing.count) need you: \(spoken).")
     }
 }

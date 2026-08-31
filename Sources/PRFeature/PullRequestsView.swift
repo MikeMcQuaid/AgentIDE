@@ -134,7 +134,11 @@ public struct PullRequestsView: View {
     /// The worktree scope names the branch itself when the pane
     /// drives from the main checkout, where no worktree exists.
     private var worktreeScopeTitle: String {
-        isMainCheckout ? "Branch" : "Worktree"
+        if isMainCheckout {
+            "Branch"
+        } else {
+            "Worktree"
+        }
     }
 
     private var listView: some View {
@@ -163,6 +167,7 @@ public struct PullRequestsView: View {
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onOpenChecks: { model.openFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },
+            onThreadsChanged: { model.updateUnresolved($0, number: summary.number) },
             onToggleLabel: { _ = await model.toggleLabel($0) },
             labels: model.selectedLabels,
             availableLabels: model.availableLabels,

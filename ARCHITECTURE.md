@@ -426,9 +426,13 @@ page resumes any past conversation into a fresh worktree.
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
   accessibility flash apply; its completion handler must be formed in a
-  nonisolated context or the executor check traps). An exit posts
-  nothing. The Dock badge counts worktrees needing attention, each
-  contribution behind a toggle.
+  nonisolated context or the executor check traps). A chime sleep
+  interrupted mid-play loses its completion and the audio daemon
+  replays it in a loop after wake, so wake disposes every sound whose
+  completion never ran; whoever removes a sound from that registry
+  owns its disposal, so a drain and a late completion never dispose
+  one twice. An exit posts nothing. The Dock badge counts worktrees
+  needing attention, each contribution behind a toggle.
 - **Git reads are driven by the file system.** One FSEvents stream
   over the repository and worktree roots (`WorkspaceWatcher`) remembers
   what changed, and a reading asks git only about repositories
@@ -473,11 +477,32 @@ page resumes any past conversation into a fresh worktree.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
+The **editor** is one `EditorPane` implementation filling two slots:
+the utility pane's Editor tab and, when chosen, the centre pane. A
+directory of your own is pinned to the centre slot; a worktree or
+repository page opens it from an Editor button on its conversations
+view, and the primary pane's branch order is what guarantees a live
+session always outranks the centre editor, so one can never cover the
+other. Each slot persists its own finder and open file under
+role-suffixed defaults keys; open-file and finder-focus requests
+travel the shared keys and the window routes each to the preferred
+slot: the side editor unless the centre editor is on screen, and
+always the slot already holding the requested file, so one file never
+opens in both. A move button on the open file sends it to the other
+slot, and a session appearing in a worktree whose centre held the
+editor (`agentide new`, a phone, a resume) moves the open file to the
+side editor. Buffers survive every such displacement because an editor
+saves on its way off screen; the Close button is the one deliberate
+discard, and a file a command waits on is never written behind its
+back. The two slots mounting together share one ripgrep file listing
+per worktree (`FileListings`), joining a run in flight rather than
+spawning a second.
+
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
 request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
-a dispatch source, opens the file in the utility pane's editor and
+a dispatch source, opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
@@ -525,7 +550,12 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing
-  passes `--no-gpg-sign`. The signed rebase picks the branch's own
+  passes `--no-gpg-sign`. Verification is proof, never trust: Push
+  dims until the current tip has been read as signed, fresh worktree
+  counts re-read it (an agent's commits arrive between reloads), and
+  the click reads it once more, declining in the footer with Rebase
+  relit to sign; the service's own refusal stays as the backstop no
+  user path reaches. The signed rebase picks the branch's own
   origin ref when it is still an ancestor and every commit unique to
   the branch verifies, else origin/HEAD. The ancestor test keeps an
   amended branch out of that path (its pushed commit is a stale twin,
@@ -566,10 +596,17 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability alone offered Merge on a branch whose policy still
   wanted a review, and `gh` refused it.
 - **Last mile buttons**: copy unresolved review threads grouped per
-  file; one failing-checks button that copies the tail of every failing
-  run's `gh run view --log-failed` condensed (job and step named once
-  in a heading, timestamps and colour stripped), Cmd opening the check
-  in the browser and Shift in the Browser tab.
+  file, dimmed until one is unresolved (the count comes from the
+  threads the conversation pane has read, since no listing query
+  carries it); one failing-checks button, dimmed until the rollup is
+  red,
+  that copies the tail of every failing run's `gh run view
+  --log-failed` condensed (job and step named once in a heading,
+  timestamps and colour stripped), Cmd opening the check in the
+  browser and Shift in the Browser tab. A run still in progress has
+  no whole-run log, so its already-failed jobs answer with their own
+  (`--json jobs`, then `--job <id> --log-failed` each) rather than
+  failing while the rest of the run decides.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses

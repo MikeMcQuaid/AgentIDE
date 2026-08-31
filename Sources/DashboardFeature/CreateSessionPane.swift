@@ -9,18 +9,21 @@ public struct CreateSessionPane: View {
 
     /// Creates the pane; `canResume` offers `onResume` for the
     /// worktree's most recent conversation, `onStarted` runs after a
-    /// successful launch and `onShowConversations`, when given, goes
-    /// back to the list this form was reached from.
+    /// successful launch, `onShowConversations`, when given, goes
+    /// back to the list this form was reached from and
+    /// `onOpenEditor` offers the centre editor in this pane's place.
     @preconcurrency
     public init(
         worktree: Worktree,
         model: DashboardModel,
         canResume: Bool,
         onShowConversations: (@MainActor @Sendable () -> Void)? = nil,
+        onOpenEditor: (@MainActor @Sendable () -> Void)? = nil,
         onResume: @escaping @MainActor () async -> Void,
         onStarted: @escaping @MainActor () async -> Void,
     ) {
         self.onShowConversations = onShowConversations
+        self.onOpenEditor = onOpenEditor
         self.worktree = worktree
         self.model = model
         self.canResume = canResume
@@ -34,26 +37,8 @@ public struct CreateSessionPane: View {
     /// pane's top like the repository page.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack {
-                Text("Start an agent in \(target)")
-                    .font(.subheadline.weight(.semibold))
-                if isResuming {
-                    ProgressView().controlSize(.small)
-                }
-                Spacer()
-                if let onShowConversations {
-                    Button("Conversations", action: onShowConversations)
-                        .controlSize(.small)
-                        .hoverHelp("Back to this worktree's past conversations")
-                }
-                if canResume {
-                    Button("Resume last session") { resume() }
-                        .controlSize(.small)
-                        .disabled(isResuming)
-                        .hoverHelp("Continue this worktree's most recent conversation instead of starting fresh")
-                }
-            }
-            .padding(.top, Self.headerTopPadding)
+            header
+                .padding(.top, Self.headerTopPadding)
             AgentSessionForm(
                 model: model,
                 repository: repository,
@@ -75,6 +60,7 @@ public struct CreateSessionPane: View {
     @State private var isResuming = false
 
     private let onShowConversations: (@MainActor @Sendable () -> Void)?
+    private let onOpenEditor: (@MainActor @Sendable () -> Void)?
     private let worktree: Worktree
     private let model: DashboardModel
     private let canResume: Bool
@@ -87,6 +73,35 @@ public struct CreateSessionPane: View {
 
     private var target: String {
         worktree.repositoryName + ": " + worktree.branch
+    }
+
+    /// The title and header buttons, out of the body so its closure
+    /// stays within the length limit.
+    private var header: some View {
+        HStack {
+            Text("Start an agent in \(target)")
+                .font(.subheadline.weight(.semibold))
+            if isResuming {
+                ProgressView().controlSize(.small)
+            }
+            Spacer()
+            if let onOpenEditor {
+                Button("Editor", action: onOpenEditor)
+                    .controlSize(.small)
+                    .hoverHelp("Edit this worktree's files in this pane without starting an agent")
+            }
+            if let onShowConversations {
+                Button("Conversations", action: onShowConversations)
+                    .controlSize(.small)
+                    .hoverHelp("Back to this worktree's past conversations")
+            }
+            if canResume {
+                Button("Resume last session") { resume() }
+                    .controlSize(.small)
+                    .disabled(isResuming)
+                    .hoverHelp("Continue this worktree's most recent conversation instead of starting fresh")
+            }
+        }
     }
 
     private func resume() {

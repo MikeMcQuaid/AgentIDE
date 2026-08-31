@@ -144,6 +144,11 @@ public struct SessionService: Sendable {
     /// untouched.
     let overwriteTips: OverwriteTips = .init()
 
+    /// See `FileListings`; a default so the public init is
+    /// untouched, and a class so every copy of the service shares
+    /// one set of in-flight listings.
+    let fileListings: FileListings = .init()
+
     func runner(for agent: AgentKind) -> any AgentRunner {
         runners.first { $0.kind == agent } ?? ClaudeCodeRunner()
     }

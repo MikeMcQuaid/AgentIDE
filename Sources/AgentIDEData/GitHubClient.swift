@@ -45,6 +45,7 @@ public struct GitHubClient: Sendable {
     /// without one.
     public static func pullRequestTemplate(in worktreePath: String) -> String? {
         templatePaths
+            .lazy
             .map { worktreePath + "/" + $0 }
             .first { FileManager.default.fileExists(atPath: $0) }
             .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }

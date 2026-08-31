@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import DashboardFeature
+import ReviewFeature
 import SwiftUI
 import TerminalUI
 
@@ -37,6 +38,17 @@ struct RootView: View {
     var sidebarWidth = 300.0
     @AppStorage("utilityPaneWidth")
     var utilityPaneWidth = 480.0
+
+    /// Focus requests from the finder menu items, cleared at launch
+    /// so a request from the previous run cannot fire; internal so
+    /// the routing extension can read the counter it consumes.
+    @AppStorage("finderFocusRequest")
+    var finderFocusRequest = 0
+
+    /// Open-file requests from the openers, routed to an editor slot
+    /// by the extension file; internal for the same reason.
+    @AppStorage("editorFileRequest")
+    var editorFileRequest = 0
 
     /// The worktree whose conversation is being resumed, so its pane
     /// shows the resume's progress rather than a terminal bound to
@@ -76,11 +88,46 @@ struct RootView: View {
     /// and the browsers already opened; internal accessors because
     /// the extension files cannot see the view's own state.
     var conversationWorktree: String? {
-        conversationWorktreePath
+        get { conversationWorktreePath }
+        nonmutating set { conversationWorktreePath = newValue }
     }
 
     var visitedBrowserPaths: [String] {
         visitedBrowsers.sorted()
+    }
+
+    /// Each worktree's last utility tab; writing persists the choice
+    /// as path-tab-name lines, so the extension file's pane can
+    /// remember without seeing the stored state.
+    var tabMemory: [String: String] {
+        get { rememberedTabs }
+        nonmutating set {
+            rememberedTabs = newValue
+            worktreeTabs = newValue
+                .map { $0.key + "\t" + $0.value }
+                .sorted()
+                .joined(separator: "\n")
+        }
+    }
+
+    /// What the window is now, which the panes are fitted to;
+    /// internal and settable so the extension file's fitting can
+    /// write it back.
+    var currentWindowWidth: CGFloat {
+        get { windowWidth }
+        nonmutating set { windowWidth = newValue }
+    }
+
+    /// The worktrees whose centre pane is the editor rather than
+    /// conversations; internal and settable because the extension
+    /// files that route requests cannot see the view's own state.
+    /// Writing persists the set as newline-joined path lines.
+    var centreEditorPaths: Set<String> {
+        get { centreEditors }
+        nonmutating set {
+            centreEditors = newValue
+            centreEditorLines = newValue.sorted().joined(separator: "\n")
+        }
     }
 
     /// The worktree showing its new session form rather than its
@@ -128,15 +175,29 @@ struct RootView: View {
         .sheet(isPresented: sessionManagerBinding) { sessionManager }
         .task {
             FlavourIcon.apply()
+            // Focus counters from the previous run must not fire on
+            // this one's first mount.
             finderFocusRequest = 0
+            for role in EditorPane.Role.allCases {
+                UserDefaults.standard.set(0, forKey: role.key("finderFocusRequest"))
+            }
             rememberedTabs = Self.decodeTabs(worktreeTabs)
+            centreEditors = Set(centreEditorLines.split(separator: "\n").map(String.init))
             await dependencies.dashboard.poll()
         }
         // A shell command waiting on an editor is stopped until this
         // window shows it the file, so it is watched for separately
         // from the dashboard's own slower poll.
         .task {
-            await waiting.watch(service: dependencies.service, dashboard: dependencies.dashboard)
+            // Bound first: as a labelled final argument the closure
+            // trips the trailing-closure rule, and trailing it after
+            // a multiline call trips the formatter.
+            let prefersCentre: @MainActor (String) -> Bool = { prefersCentreEditor(at: $0) }
+            await waiting.watch(
+                service: dependencies.service,
+                dashboard: dependencies.dashboard,
+                prefersCentreEditor: prefersCentre,
+            )
         }
         // Sleep sometimes kills the sandbox herdr server; sessions
         // running at sleep that are gone at wake resume themselves,
@@ -145,6 +206,9 @@ struct RootView: View {
             sessionsBeforeSleep = runningWorktreePaths
         }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+            // A chime sleep interrupted mid-play loops from the
+            // audio daemon after wake until it is disposed.
+            CompletionSound.stopLingering()
             let snapshot = sessionsBeforeSleep
             sessionsBeforeSleep = []
             Task { await resumeKilled(sleepSnapshot: snapshot) }
@@ -170,6 +234,19 @@ struct RootView: View {
         .onChange(of: dependencies.dashboard.worktreePaths) { _, paths in
             runningShells.formIntersection(paths)
             visitedBrowsers.formIntersection(paths)
+            centreEditorPaths.formIntersection(paths)
+        }
+        // Open-file and finder-focus requests land on shared keys;
+        // the window is what knows which editor slot should take
+        // each, so it routes them here.
+        .onChange(of: editorFileRequest) { routeOpenFileRequest() }
+        .onChange(of: finderFocusRequest) { routeFinderFocusRequest() }
+        // A session appearing in a worktree whose centre pane held
+        // the editor (from `agentide new`, a phone or a resume): the
+        // session always wins the centre, so the open file moves to
+        // the side editor.
+        .onChange(of: runningWorktreePaths) { _, running in
+            displaceCentreEditors(nowRunning: running)
         }
         // Reopening the app resumes the restored worktree's most
         // recent conversation: the default workflow is picking up
@@ -194,14 +271,6 @@ struct RootView: View {
             // so the conversation list never flashes first.
             resumingWorktree = item.worktree.path
             Task { await resumeLatest(in: item) }
-        }
-    }
-
-    @ViewBuilder var coveringPage: some View {
-        if dependencies.dashboard.showsNewSession {
-            NewSessionPane(model: dependencies.dashboard)
-        } else if dependencies.dashboard.showsRepositoryFinder {
-            RepositoryFinderPane(model: dependencies.dashboard)
         }
     }
 
@@ -250,25 +319,6 @@ struct RootView: View {
         runningShells.remove(path)
     }
 
-    /// Narrows the panes to what the window can hold. The widths
-    /// are written back, so the dividers keep dragging from where
-    /// the panes actually are.
-    func fitPanes(to width: CGFloat) {
-        windowWidth = width
-        let layout = PaneLayout(
-            width: width,
-            sidebar: sidebarWidth,
-            utility: utilityPaneWidth,
-            showsUtility: showsUtilityPane,
-        )
-        if layout.sidebar != sidebarWidth {
-            sidebarWidth = layout.sidebar
-        }
-        if layout.utility != utilityPaneWidth {
-            utilityPaneWidth = layout.utility
-        }
-    }
-
     // MARK: Private
 
     /// The selected conversation's worktree on the repository page,
@@ -297,11 +347,6 @@ struct RootView: View {
     /// Blocks idle sleep while agents or shells run, since sleeping
     /// mid-response cuts agents off.
     @State private var sleepInhibitor: SleepInhibitor = .init()
-
-    /// Focus requests from the finder menu items, cleared at launch
-    /// so a request from the previous run cannot fire.
-    @AppStorage("finderFocusRequest")
-    private var finderFocusRequest = 0
 
     @AppStorage("resizePanesRequest")
     private var resizePanesRequest = 0
@@ -333,67 +378,18 @@ struct RootView: View {
     private var worktreeTabs = ""
     @State private var rememberedTabs: [String: String] = [:]
 
+    /// The worktrees showing the centre editor, persisted as path
+    /// lines so the choice survives restarts; directories of your
+    /// own are pinned to it and never recorded here.
+    @AppStorage("centreEditorWorktrees")
+    private var centreEditorLines = ""
+    @State private var centreEditors: Set<String> = []
+
     /// What the window is now, which the panes are fitted to.
     @State private var windowWidth: CGFloat = 0
 
     /// Whether anything is running that idle sleep would interrupt.
     private var hasLiveWork: Bool {
         runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
-    }
-
-    /// The middle pages, never sheets, cover the primary pane
-    /// rather than replacing it: unmounting takes the panes with it,
-    /// and a pane can hold a running agent or shell, which only
-    /// destroying its worktree should end. They cover that pane
-    /// alone, so the utility pane stays where it was: the window
-    /// keeps one shape whatever it is showing.
-    private var detail: some View {
-        ZStack {
-            if let item = dependencies.dashboard.selection {
-                split(for: item)
-            } else {
-                unselectedSplit
-            }
-        }
-    }
-
-    private func split(for item: WorktreeItem) -> some View {
-        HStack(spacing: 0) {
-            primaryColumn(for: item)
-            if showsUtility {
-                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false)
-                    .ignoresSafeArea(.container, edges: .top)
-                utilityPane(for: item)
-                    .frame(width: utilityPaneWidth)
-                    .frame(maxHeight: .infinity)
-                    .ignoresSafeArea(.container, edges: .top)
-            }
-        }
-        .ignoresSafeArea(.container, edges: .top)
-    }
-
-    /// The utility pane: the shared tab header over the content, so
-    /// the current tab is always visible whichever tab shows.
-    /// Restores the worktree's remembered tab whenever the selection
-    /// changes, so each worktree keeps its own pane.
-    private func utilityPane(for item: WorktreeItem) -> some View {
-        VStack(spacing: 0) {
-            utilityHeader(for: item)
-            Divider()
-            utilityContent(for: item)
-        }
-        .task(id: item.worktree.path) {
-            // A stale conversation focus must not survive switching
-            // to another sidebar item.
-            conversationWorktreePath = nil
-            utilityTabName = rememberedTabs[item.worktree.path] ?? utilityTabName
-        }
-        .onChange(of: utilityTabName) {
-            rememberedTabs[item.worktree.path] = utilityTabName
-            worktreeTabs = rememberedTabs
-                .map { $0.key + "\t" + $0.value }
-                .sorted()
-                .joined(separator: "\n")
-        }
     }
 }

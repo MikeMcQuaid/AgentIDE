@@ -72,7 +72,8 @@ public extension SessionService {
     /// signing path.
     func push(worktree: Worktree) async throws -> PushDestination {
         if AppSettings.requiresSignedCommits,
-           await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false {
+           await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false
+        {
             throw SessionServiceError(
                 "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
             )

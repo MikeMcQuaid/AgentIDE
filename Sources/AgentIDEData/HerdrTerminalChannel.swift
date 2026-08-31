@@ -104,6 +104,7 @@ public actor HerdrTerminalChannel {
         // wedged server, whose state and age then matter most.
         pids += Self.outputLines("/usr/bin/pgrep", ["-x", "herdr"]).filter { pids.contains($0) == false }
         return Self.outputLines("/bin/ps", ["-o", "pid=,stat=,etime=,ucomm=", "-p", pids.joined(separator: ",")])
+            .lazy
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .joined(separator: " | ")
     }

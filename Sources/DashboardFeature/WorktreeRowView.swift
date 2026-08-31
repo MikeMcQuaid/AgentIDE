@@ -2,6 +2,8 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - WorktreeRowView
+
 /// One worktree row: branch, session state, commit counts against
 /// the default branch and upstream, and pull request state.
 struct WorktreeRowView: View {
@@ -31,7 +33,6 @@ struct WorktreeRowView: View {
 
     private static let unreadDotSize: CGFloat = 6
     private static let spacing: CGFloat = 4
-    private static let badgeSpacing: CGFloat = 2
     /// Sits the icon on the branch line's baseline rather than the
     /// row's very top.
     private static let iconDrop: CGFloat = 2
@@ -250,51 +251,78 @@ struct WorktreeRowView: View {
 
     @ViewBuilder private var pullRequestBadge: some View {
         if let pullRequest {
-            HStack(spacing: Self.badgeSpacing) {
-                Button {
-                    LinkOpener.open(pullRequest.url)
-                } label: {
-                    Text("#" + String(pullRequest.number))
-                }
-                .buttonStyle(.plain)
-                .hoverHelp("Open pull request #" + String(pullRequest.number)
-                    + " in the Browser tab; Cmd-click for the system browser")
-                // CI, reviews and conversations are what a pull
-                // request still needs; once it is merged or closed
-                // they are history, and the state icon says it all.
-                if pullRequest.state == "OPEN" {
-                    checksDot(for: pullRequest)
-                }
-                // Conflicts with the base branch: the one state a
-                // pull request cannot leave on its own.
-                if pullRequest.state == "OPEN", pullRequest.mergeable == "CONFLICTING",
-                   let conflict = ChecksStyle.mergeableOcticonName(for: pullRequest.mergeable) {
-                    Octicon(conflict, colour: ChecksStyle.mergeableColour(for: pullRequest.mergeable))
-                        .hoverHelp("Merge conflicts with the base branch; rebase to resolve them")
-                }
-                if let review = reviewIcon(for: pullRequest) {
-                    Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))
-                        .hoverHelp("Review: " + pullRequest.reviewDecision.lowercased())
-                }
-                if pullRequest.state == "OPEN", pullRequest.unresolvedComments > 0 {
-                    Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
-                        .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
-                }
-                if standing.isStacked {
-                    Octicon("octicon-stack", colour: .secondary)
-                        .hoverHelp(stackHelp)
-                    Text(String(standing.position) + "/" + String(standing.height))
-                        .hoverHelp(stackHelp)
-                }
-            }
-            // Badges keep their width: squeezed, the number and the
-            // stack marker broke into a column of digits.
-            .lineLimit(1)
-            .fixedSize()
+            PullRequestBadge(pullRequest: pullRequest, standing: standing, stackHelp: stackHelp)
         }
     }
 
-    private func checksDot(for pullRequest: PullRequestSummary) -> some View {
+    private func stateHelp(for pullRequest: PullRequestSummary) -> String {
+        if pullRequest.isQueued {
+            "In the merge queue"
+        } else if pullRequest.hasAutomerge {
+            "Set to merge automatically"
+        } else if pullRequest.isDraft {
+            "Draft pull request"
+        } else {
+            if pullRequest.state == "OPEN" {
+                "Open pull request"
+            } else {
+                pullRequest.state.capitalized + " pull request"
+            }
+        }
+    }
+}
+
+// MARK: - PullRequestBadge
+
+/// A row's pull request badges: number, CI dot, conflict, review,
+/// conversations and stack; its own view so the row's type body
+/// stays within the length limit.
+private struct PullRequestBadge: View {
+    // MARK: Internal
+
+    let pullRequest: PullRequestSummary
+    let standing: StackStanding
+    let stackHelp: String
+
+    var body: some View {
+        HStack(spacing: Self.badgeSpacing) {
+            Button {
+                LinkOpener.open(pullRequest.url)
+            } label: {
+                Text("#" + String(pullRequest.number))
+            }
+            .buttonStyle(.plain)
+            .hoverHelp("Open pull request #" + String(pullRequest.number)
+                + " in the Browser tab; Cmd-click for the system browser")
+            // CI, reviews and conversations are what a pull
+            // request still needs; once it is merged or closed
+            // they are history, and the state icon says it all.
+            if pullRequest.state == "OPEN" {
+                checksDot
+            }
+            stateBadges
+        }
+        // Badges keep their width: squeezed, the number and the
+        // stack marker broke into a column of digits.
+        .lineLimit(1)
+        .fixedSize()
+    }
+
+    // MARK: Private
+
+    private static let badgeSpacing: CGFloat = 2
+
+    /// The review badge, absent once the pull request is merged or
+    /// closed: its verdict stopped being something to act on.
+    private var reviewIcon: String? {
+        if pullRequest.state == "OPEN" {
+            ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision)
+        } else {
+            nil
+        }
+    }
+
+    private var checksDot: some View {
         Button {
             LinkOpener.open(pullRequest.checksClickURL)
         } label: {
@@ -309,21 +337,30 @@ struct WorktreeRowView: View {
         )
     }
 
-    /// The review badge, absent once the pull request is merged or
-    /// closed: its verdict stopped being something to act on.
-    private func reviewIcon(for pullRequest: PullRequestSummary) -> String? {
-        pullRequest.state == "OPEN" ? ChecksStyle.reviewOcticonName(for: pullRequest.reviewDecision) : nil
-    }
-
-    private func stateHelp(for pullRequest: PullRequestSummary) -> String {
-        if pullRequest.isQueued {
-            "In the merge queue"
-        } else if pullRequest.hasAutomerge {
-            "Set to merge automatically"
-        } else if pullRequest.isDraft {
-            "Draft pull request"
-        } else {
-            pullRequest.state == "OPEN" ? "Open pull request" : pullRequest.state.capitalized + " pull request"
+    /// The badges after the CI dot, out of the body so its closure
+    /// stays within the length limit.
+    @ViewBuilder private var stateBadges: some View {
+        // Conflicts with the base branch: the one state a pull
+        // request cannot leave on its own.
+        if pullRequest.state == "OPEN", pullRequest.mergeable == "CONFLICTING",
+           let conflict = ChecksStyle.mergeableOcticonName(for: pullRequest.mergeable)
+        {
+            Octicon(conflict, colour: ChecksStyle.mergeableColour(for: pullRequest.mergeable))
+                .hoverHelp("Merge conflicts with the base branch; rebase to resolve them")
+        }
+        if let review = reviewIcon {
+            Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))
+                .hoverHelp("Review: " + pullRequest.reviewDecision.lowercased())
+        }
+        if pullRequest.state == "OPEN", pullRequest.unresolvedComments > 0 {
+            Octicon(ChecksStyle.commentOcticonName, colour: .secondary)
+                .hoverHelp("\(pullRequest.unresolvedComments) unresolved review conversations")
+        }
+        if standing.isStacked {
+            Octicon("octicon-stack", colour: .secondary)
+                .hoverHelp(stackHelp)
+            Text(String(standing.position) + "/" + String(standing.height))
+                .hoverHelp(stackHelp)
         }
     }
 }

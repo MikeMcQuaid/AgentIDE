@@ -44,6 +44,7 @@ struct HerdrSlowReaderIntegrationTests {
         channel.send(HerdrTerminal.resizeCommand(columns: 80, rows: 24))
 
         let text = (1 ... 1_500)
+            .lazy
             .map { String(format: "line %04d ends here and this pads it out", $0) }
             .joined(separator: "\n") + "\n"
         let watchdog = Task {

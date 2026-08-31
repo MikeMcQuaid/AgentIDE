@@ -2,6 +2,8 @@
 import AgentIDEDomain
 import Testing
 
+// MARK: - GitHubClientTests
+
 /// Exercises the pure parsing and prompt composition around `gh`.
 struct GitHubClientTests {
     @Test
@@ -192,4 +194,85 @@ struct GitHubClientTests {
         #expect(models.contains("gpt-5.5"))
         #expect(models.contains("Available") == false)
     }
+
+    @Test
+    func `failed job ids parse from a run's jobs listing`() {
+        let json = """
+        {"jobs": [
+          {"databaseId": 11, "conclusion": "failure"},
+          {"databaseId": 12, "conclusion": null},
+          {"databaseId": 13, "conclusion": "success"}
+        ]}
+        """
+        #expect(GitHubClient.failedJobIDs(fromJSON: json) == [11])
+        #expect(GitHubClient.failedJobIDs(fromJSON: "").isEmpty)
+    }
+
+    @Test
+    func `failing logs fall back to failed jobs while a run runs`() async throws {
+        let jobs = #"{"jobs": [{"databaseId": 11, "conclusion": "failure"}, {"databaseId": 12, "conclusion": null}]}"#
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
+            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view --job 11 --log-failed": .success("job\tstep\tline\n"),
+        ])
+        let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
+        #expect(log == "job\tstep\tline")
+    }
+
+    @Test
+    func `a run in progress with no failed job keeps its own error`() async {
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
+            "gh run view 9 --json jobs": .success(#"{"jobs": [{"databaseId": 12, "conclusion": null}]}"#),
+        ])
+        await #expect(throws: Error.self) {
+            try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
+        }
+    }
+}
+
+// MARK: - ScriptedGitHubRunner
+
+/// Answers each expected command from a script; anything unexpected
+/// fails, naming itself.
+private final class ScriptedGitHubRunner: ProcessRunner, Sendable {
+    // MARK: Lifecycle
+
+    init(answers: [String: Answer]) {
+        self.answers = answers
+    }
+
+    deinit {
+        // Nothing to clean up.
+    }
+
+    // MARK: Internal
+
+    enum Answer {
+        case success(String)
+        case failure(String)
+    }
+
+    func run(
+        _ arguments: [String],
+        workingDirectory _: String?,
+        environment _: [String: String],
+    ) -> ProcessResult {
+        let command = arguments.joined(separator: " ")
+        return switch answers[command] {
+        case let .success(output):
+            ProcessResult(status: 0, standardOutput: output, standardError: "")
+
+        case let .failure(message):
+            ProcessResult(status: 1, standardOutput: "", standardError: message)
+
+        case nil:
+            ProcessResult(status: 1, standardOutput: "", standardError: "unscripted command: " + command)
+        }
+    }
+
+    // MARK: Private
+
+    private let answers: [String: Answer]
 }

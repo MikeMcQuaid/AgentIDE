@@ -10,7 +10,8 @@ struct FileEditorView: View {
     // MARK: Lifecycle
 
     /// Creates an editor for a file relative to the worktree,
-    /// optionally jumping to a line. `onClose` closes an embedding
+    /// optionally jumping to a line. `move` offers sending the file
+    /// to the other editor slot; `onClose` closes an embedding
     /// owner; `showsClose: false` suits inline embeddings that have
     /// nothing to close.
     init(
@@ -19,6 +20,7 @@ struct FileEditorView: View {
         service: SessionService,
         jumpToLine: Int? = nil,
         showsClose: Bool = true,
+        move: PaneMove? = nil,
         onClose: (() -> Void)? = nil,
     ) {
         // A hostile repository could put `../` in a diff path, so a
@@ -37,6 +39,7 @@ struct FileEditorView: View {
         changedLines = { await service.changedLineNumbers(worktreePath: worktreePath, file: relativePath) }
         self.jumpToLine = jumpToLine
         self.showsClose = showsClose
+        self.move = move
         self.onClose = onClose
         onFinish = nil
     }
@@ -53,11 +56,20 @@ struct FileEditorView: View {
         changedLines = nil
         jumpToLine = nil
         showsClose = false
+        move = nil
         onClose = nil
         self.onFinish = onFinish
     }
 
     // MARK: Internal
+
+    /// Sending the open file to the other editor slot: what the
+    /// button looks like and what it runs once the file is saved.
+    struct PaneMove {
+        let action: () -> Void
+        let icon: String
+        let help: String
+    }
 
     /// The editor under its header. Save enables only with unsaved
     /// changes and reports Saved after writing; a file some command
@@ -83,6 +95,17 @@ struct FileEditorView: View {
             }
         }
         .onAppear { load() }
+        // A displaced editor keeps its typing: the pane can go off
+        // screen without a close (a worktree switch, a session
+        // appearing, a move to the other slot), and losing the
+        // buffer there would be silent. The Close button stays the
+        // one deliberate discard, and a waiting file must never be
+        // written behind its command's back.
+        .onDisappear {
+            if onFinish == nil, closedWithoutSaving == false, hasChanges {
+                save()
+            }
+        }
         // Editing again invalidates the save report, but real error
         // messages stay until resolved.
         .onChange(of: content) {
@@ -104,6 +127,10 @@ struct FileEditorView: View {
     @State private var status: String?
     @State private var rendersMarkdown = false
 
+    /// Whether Close discarded the buffer, which the disappearing
+    /// autosave must honour rather than writing it anyway.
+    @State private var closedWithoutSaving = false
+
     @Environment(\.dismiss)
     private var dismiss
 
@@ -118,6 +145,7 @@ struct FileEditorView: View {
     private let changedLines: (() async -> Set<Int>)?
     private let jumpToLine: Int?
     private let showsClose: Bool
+    private let move: PaneMove?
     private let onClose: (() -> Void)?
 
     /// Releases the command waiting on this file, saved or not.
@@ -149,6 +177,7 @@ struct FileEditorView: View {
             if isMarkdown {
                 markdownToggle
             }
+            moveButton
             Button("Save", systemImage: "square.and.arrow.down") { save() }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
@@ -162,6 +191,22 @@ struct FileEditorView: View {
                     .hoverHelp("Close the editor without saving")
             }
             waitingActions
+        }
+    }
+
+    /// Sends the file to the other editor slot, but only once it has
+    /// reached the disk: the other slot re-reads it from there, so
+    /// moving an unsaved buffer would silently drop the typing.
+    @ViewBuilder private var moveButton: some View {
+        if let move {
+            Button("Move to other pane", systemImage: move.icon) {
+                if hasChanges == false || save() {
+                    move.action()
+                }
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .hoverHelp(move.help)
         }
     }
 
@@ -239,6 +284,7 @@ struct FileEditorView: View {
     }
 
     private func close() {
+        closedWithoutSaving = true
         if let onClose {
             onClose()
         } else {

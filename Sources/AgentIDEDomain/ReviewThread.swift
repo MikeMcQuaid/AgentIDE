@@ -69,7 +69,7 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
     /// The thread as pasteable text: anchor, then each comment.
     public var asText: String {
         let anchor = path + (line.map { ":" + String($0) } ?? "")
-        let body = comments.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+        let body = comments.lazy.map { $0.author + ": " + $0.body }.joined(separator: "\n")
         return anchor + "\n" + body
     }
 
@@ -85,13 +85,14 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
             }
             byPath[thread.path, default: []].append(thread)
         }
-        return order.map { path in
-            let body = (byPath[path] ?? []).map { thread in
-                let anchor = thread.line.map { ":" + String($0) + " " } ?? ""
-                return anchor + thread.comments.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+        return order.lazy
+            .map { path in
+                let body = (byPath[path] ?? []).map { thread in
+                    let anchor = thread.line.map { ":" + String($0) + " " } ?? ""
+                    return anchor + thread.comments.lazy.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+                }
+                return path + "\n" + body.joined(separator: "\n")
             }
-            return path + "\n" + body.joined(separator: "\n")
-        }
-        .joined(separator: "\n\n")
+            .joined(separator: "\n\n")
     }
 }

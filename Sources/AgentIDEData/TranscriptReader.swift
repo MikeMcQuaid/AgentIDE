@@ -24,6 +24,7 @@ public struct TranscriptReader: Sendable {
         let names = (try? manager.contentsOfDirectory(atPath: directory)) ?? []
         return names
             .filter { $0.hasSuffix(".jsonl") }
+            .lazy
             .map { name in
                 let path = directory + "/" + name
                 return (path: path, modifiedAt: modificationDate(path))

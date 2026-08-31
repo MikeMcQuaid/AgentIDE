@@ -22,15 +22,15 @@ extension RootView {
 
     /// One conversations UI everywhere: a live session shows its
     /// terminal; anything else shows the conversation list, scoped
-    /// to the worktree or covering the whole repository on its page;
-    /// a worktree with nothing to list offers the new session form.
+    /// to the worktree or covering the whole repository on its page,
+    /// or the centre editor when the worktree chose it; a worktree
+    /// with nothing to list offers the new session form.
     @ViewBuilder
     func primary(for item: WorktreeItem) -> some View {
         if item.worktree.isHostDirectory {
-            // The editor takes the pane an agent would have, and
-            // leaves the utility pane, so it is one editor with one
-            // set of shortcuts wherever it shows.
-            editorPane(for: item)
+            // The editor takes the pane an agent would have: a
+            // directory of your own is pinned to the centre slot.
+            editorPane(for: item, role: .centre)
         } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
@@ -58,6 +58,10 @@ extension RootView {
                 .dropDestination(for: URL.self) { urls, _ in
                     _ = dropFiles(urls, into: session.name)
                 }
+        } else if centreShowsEditor(for: item) {
+            // Chosen from the conversations page; the branches above
+            // are why a live session can never sit underneath it.
+            centreEditor(for: item)
         } else if item.worktree.path == item.worktree.repositoryPath, startingSession != item.worktree.path {
             repositoryConversations(for: item)
         } else if item.pastSessions.isEmpty == false, startingSession != item.worktree.path {
@@ -68,9 +72,38 @@ extension RootView {
                 model: dependencies.dashboard,
                 canResume: dependencies.service.hasRecordedSession(worktreePath: item.worktree.path),
                 onShowConversations: showConversationsAction(for: item),
+                // The form marker would otherwise outrank the editor
+                // and the click would change nothing on screen.
+                onOpenEditor: {
+                    startingSession = nil
+                    setCentreEditor(true, at: item.worktree.path)
+                },
                 onResume: { await resumeLatest(in: item) },
                 onStarted: { await sessionStarted(in: item.worktree.path) },
             )
+        }
+    }
+
+    /// The centre editor a worktree or repository page chose, under
+    /// a header whose button goes back to the conversations it
+    /// replaced; the header also keeps the pane's controls out of
+    /// the titlebar band, the way the conversations pages inset
+    /// theirs.
+    func centreEditor(for item: WorktreeItem) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Editor")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button("Conversations") { setCentreEditor(false, at: item.worktree.path) }
+                    .controlSize(.small)
+                    .hoverHelp("Back to the conversations this pane was showing")
+            }
+            .padding(.horizontal, Self.stripSpacing)
+            .padding(.top, Self.toggleRowHeight)
+            .padding(.bottom, Self.stripSpacing)
+            Divider()
+            editorPane(for: item, role: .centre)
         }
     }
 

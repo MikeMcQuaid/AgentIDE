@@ -177,6 +177,17 @@ final class PullRequestsModel {
 
     // MARK: Internal
 
+    /// What the last read said of the tip commit's signature:
+    /// unread until the current tip has been checked. Pushing
+    /// unsigned commits is never allowed, so Push waits for proof
+    /// rather than trusting a stale answer, and dims until Rebase
+    /// on origin signs the branch.
+    enum TipSignature {
+        case unread
+        case unsigned
+        case signed
+    }
+
     let repository: Repository
     let branch: String?
 
@@ -209,10 +220,7 @@ final class PullRequestsModel {
     /// its pull request carries, counted from the branch's base.
     var commitsAboveBase = 0
 
-    /// Whether the tip commit is GPG signed, refreshed on reload;
-    /// pushing unsigned commits is never allowed, so Push dims until
-    /// Rebase on origin signs the branch.
-    var isTipSigned = true
+    var tipSignature: TipSignature = .unread
 
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
@@ -353,6 +361,7 @@ final class PullRequestsModel {
             // The sidebar's poll may have fetched a fresher summary
             // into the shared cache since these rows were painted.
             repaintFromCache()
+            reverifyBranchFacts(from: oldValue)
         }
     }
 
@@ -362,7 +371,8 @@ final class PullRequestsModel {
     func repaintFromCache() {
         if let selected,
            let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
-           cached != selected {
+           cached != selected
+        {
             self.selected = cached
         }
         summaries = summaries.map { row in
