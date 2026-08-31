@@ -206,6 +206,9 @@ struct RootView: View {
             sessionsBeforeSleep = runningWorktreePaths
         }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
+            // A chime sleep interrupted mid-play loops from the
+            // audio daemon after wake until it is disposed.
+            CompletionSound.stopLingering()
             let snapshot = sessionsBeforeSleep
             sessionsBeforeSleep = []
             Task { await resumeKilled(sleepSnapshot: snapshot) }

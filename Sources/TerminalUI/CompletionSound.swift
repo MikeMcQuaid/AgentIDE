@@ -1,5 +1,6 @@
 import AppKit
 import AudioToolbox
+import Synchronization
 import UniformTypeIdentifiers
 
 /// The chime played when an agent finishes its work, stored on the
@@ -60,10 +61,33 @@ public enum CompletionSound {
             return
         }
 
+        lingering.withLock { _ = $0.insert(sound) }
         AudioServicesPlayAlertSoundWithCompletion(sound, Self.disposal(of: sound))
     }
 
+    /// Disposes every sound whose completion never ran, called on
+    /// wake: sleep can interrupt an alert mid-play and swallow its
+    /// completion, and the audio daemon then replays the undisposed
+    /// sound in a loop until something disposes it (playing any
+    /// other alert did too, which is why a Settings preview used to
+    /// stop the noise).
+    public static func stopLingering() {
+        let stuck = lingering.withLock { sounds in
+            let all = sounds
+            sounds = []
+            return all
+        }
+        for sound in stuck {
+            AudioServicesDisposeSystemSoundID(sound)
+        }
+    }
+
     // MARK: Internal
+
+    /// The sounds playing right now, each removed by whoever
+    /// disposes it, so a drain and a late completion can never
+    /// dispose one sound twice.
+    nonisolated static let lingering: Mutex<Set<SystemSoundID>> = .init([])
 
     /// Whether a file name carries an audio type playback accepts.
     static func isPlayable(_ name: String) -> Bool {
@@ -82,8 +106,16 @@ public enum CompletionSound {
     /// The completion runs on the sound service's own queue, so it
     /// must not be a main-actor closure: the runtime's executor
     /// check traps there. Formed in a nonisolated context it stays
-    /// free of any actor.
+    /// free of any actor. Only the closure that still finds its
+    /// sound registered disposes it; a wake drain may have got
+    /// there first.
     private nonisolated static func disposal(of sound: SystemSoundID) -> @Sendable () -> Void {
-        { AudioServicesDisposeSystemSoundID(sound) }
+        {
+            guard lingering.withLock({ $0.remove(sound) != nil }) else {
+                return
+            }
+
+            AudioServicesDisposeSystemSoundID(sound)
+        }
     }
 }

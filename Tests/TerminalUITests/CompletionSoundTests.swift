@@ -27,4 +27,25 @@ struct CompletionSoundTests {
         #expect(CompletionSound.isPlayable("movie.mov") == false)
         #expect(CompletionSound.isPlayable("no-extension") == false)
     }
+
+    @Test
+    func `waking disposes sounds whose completion never came`() {
+        // A sound sleep interrupted mid-play: its completion never
+        // ran, so its id is still registered. The stray id stands in
+        // for one the audio daemon holds; disposing an unknown id is
+        // a harmless error.
+        CompletionSound.lingering.withLock { _ = $0.insert(9_999_999) }
+        CompletionSound.play(path: CompletionSound.defaultPath)
+
+        CompletionSound.stopLingering()
+        // Read outside the macro: the expansion cannot carry the
+        // non-copyable mutex.
+        let drained = CompletionSound.lingering.withLock(\.isEmpty)
+        #expect(drained)
+
+        // A drain with nothing playing is a quiet no-op.
+        CompletionSound.stopLingering()
+        let still = CompletionSound.lingering.withLock(\.isEmpty)
+        #expect(still)
+    }
 }

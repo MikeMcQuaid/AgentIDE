@@ -426,9 +426,13 @@ page resumes any past conversation into a fresh worktree.
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
   accessibility flash apply; its completion handler must be formed in a
-  nonisolated context or the executor check traps). An exit posts
-  nothing. The Dock badge counts worktrees needing attention, each
-  contribution behind a toggle.
+  nonisolated context or the executor check traps). A chime sleep
+  interrupted mid-play loses its completion and the audio daemon
+  replays it in a loop after wake, so wake disposes every sound whose
+  completion never ran; whoever removes a sound from that registry
+  owns its disposal, so a drain and a late completion never dispose
+  one twice. An exit posts nothing. The Dock badge counts worktrees
+  needing attention, each contribution behind a toggle.
 - **Git reads are driven by the file system.** One FSEvents stream
   over the repository and worktree roots (`WorkspaceWatcher`) remembers
   what changed, and a reading asks git only about repositories
