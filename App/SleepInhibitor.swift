@@ -21,7 +21,8 @@ final class SleepInhibitor {
                 reason: "Agent sessions or shells are running",
             )
         } else if hasLiveWork == false || AppSettings.inhibitsSleep == false,
-                  let current = activity {
+                  let current = activity
+        {
             ProcessInfo.processInfo.endActivity(current)
             activity = nil
         }

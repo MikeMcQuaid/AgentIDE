@@ -4,7 +4,11 @@ public extension GitClient {
     /// Arguments shared by every diff: `-w` drops whitespace-only
     /// changes when the review asks for it.
     private func diffOptions(ignoringWhitespace: Bool) -> [String] {
-        ignoringWhitespace ? ["-w"] : []
+        if ignoringWhitespace {
+            ["-w"]
+        } else {
+            []
+        }
     }
 
     /// The worktree's uncommitted diff against `HEAD`.

@@ -177,19 +177,7 @@ struct FileEditorView: View {
             if isMarkdown {
                 markdownToggle
             }
-            if let move {
-                // Only a file that reached the disk moves: the other
-                // slot re-reads it from there, so moving an unsaved
-                // buffer would silently drop the typing.
-                Button("Move to other pane", systemImage: move.icon) {
-                    if hasChanges == false || save() {
-                        move.action()
-                    }
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .hoverHelp(move.help)
-            }
+            moveButton
             Button("Save", systemImage: "square.and.arrow.down") { save() }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
@@ -203,6 +191,22 @@ struct FileEditorView: View {
                     .hoverHelp("Close the editor without saving")
             }
             waitingActions
+        }
+    }
+
+    /// Sends the file to the other editor slot, but only once it has
+    /// reached the disk: the other slot re-reads it from there, so
+    /// moving an unsaved buffer would silently drop the typing.
+    @ViewBuilder private var moveButton: some View {
+        if let move {
+            Button("Move to other pane", systemImage: move.icon) {
+                if hasChanges == false || save() {
+                    move.action()
+                }
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .hoverHelp(move.help)
         }
     }
 

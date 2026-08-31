@@ -43,7 +43,11 @@ struct ReviewFooterView: View {
 
     /// Rejoins the fields with the blank separator git expects.
     static func message(subject: String, body: String) -> String {
-        body.isEmpty ? subject : subject + "\n\n" + body
+        if body.isEmpty {
+            subject
+        } else {
+            subject + "\n\n" + body
+        }
     }
 
     // MARK: Private

@@ -117,7 +117,8 @@ public extension GitClient {
         do {
             try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
         } catch let error as CommandError
-            where error.result.standardError.contains("remote ref updated since checkout") {
+            where error.result.standardError.contains("remote ref updated since checkout")
+        {
             throw leaseRefusal(error, branch: branch, remote: remote)
         }
     }

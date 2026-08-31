@@ -30,6 +30,7 @@ struct HerdrLargeInputIntegrationTests {
 
         // Numbered lines, so whatever survives says which part did.
         let text = (1 ... 4_000)
+            .lazy
             .map { String(format: "line %04d ends here and this pads it out", $0) }
             .joined(separator: "\n") + "\n"
         let watchdog = Task {

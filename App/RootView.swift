@@ -39,6 +39,17 @@ struct RootView: View {
     @AppStorage("utilityPaneWidth")
     var utilityPaneWidth = 480.0
 
+    /// Focus requests from the finder menu items, cleared at launch
+    /// so a request from the previous run cannot fire; internal so
+    /// the routing extension can read the counter it consumes.
+    @AppStorage("finderFocusRequest")
+    var finderFocusRequest = 0
+
+    /// Open-file requests from the openers, routed to an editor slot
+    /// by the extension file; internal for the same reason.
+    @AppStorage("editorFileRequest")
+    var editorFileRequest = 0
+
     /// The worktree whose conversation is being resumed, so its pane
     /// shows the resume's progress rather than a terminal bound to
     /// the pane the resume is replacing; internal and settable
@@ -77,11 +88,34 @@ struct RootView: View {
     /// and the browsers already opened; internal accessors because
     /// the extension files cannot see the view's own state.
     var conversationWorktree: String? {
-        conversationWorktreePath
+        get { conversationWorktreePath }
+        nonmutating set { conversationWorktreePath = newValue }
     }
 
     var visitedBrowserPaths: [String] {
         visitedBrowsers.sorted()
+    }
+
+    /// Each worktree's last utility tab; writing persists the choice
+    /// as path-tab-name lines, so the extension file's pane can
+    /// remember without seeing the stored state.
+    var tabMemory: [String: String] {
+        get { rememberedTabs }
+        nonmutating set {
+            rememberedTabs = newValue
+            worktreeTabs = newValue
+                .map { $0.key + "\t" + $0.value }
+                .sorted()
+                .joined(separator: "\n")
+        }
+    }
+
+    /// What the window is now, which the panes are fitted to;
+    /// internal and settable so the extension file's fitting can
+    /// write it back.
+    var currentWindowWidth: CGFloat {
+        get { windowWidth }
+        nonmutating set { windowWidth = newValue }
     }
 
     /// The worktrees whose centre pane is the editor rather than
@@ -155,16 +189,10 @@ struct RootView: View {
         // window shows it the file, so it is watched for separately
         // from the dashboard's own slower poll.
         .task {
-            // Bound first: the formatter rewrites a trailing closure
-            // after a multiline call.
-            let prefersCentre: @MainActor (String) -> Bool = { path in
-                let items = dependencies.dashboard.groups.flatMap(\.items)
-                guard let item = items.first(where: { $0.worktree.path == path }) else {
-                    return false
-                }
-
-                return centreShowsEditor(for: item)
-            }
+            // Bound first: as a labelled final argument the closure
+            // trips the trailing-closure rule, and trailing it after
+            // a multiline call trips the formatter.
+            let prefersCentre: @MainActor (String) -> Bool = { prefersCentreEditor(at: $0) }
             await waiting.watch(
                 service: dependencies.service,
                 dashboard: dependencies.dashboard,
@@ -243,14 +271,6 @@ struct RootView: View {
         }
     }
 
-    @ViewBuilder var coveringPage: some View {
-        if dependencies.dashboard.showsNewSession {
-            NewSessionPane(model: dependencies.dashboard)
-        } else if dependencies.dashboard.showsRepositoryFinder {
-            RepositoryFinderPane(model: dependencies.dashboard)
-        }
-    }
-
     /// The file a command is waiting on in a worktree, which its
     /// editor pane shows instead of the finder.
     func waitingEdit(in worktreePath: String) -> ExternalEdit? {
@@ -296,25 +316,6 @@ struct RootView: View {
         runningShells.remove(path)
     }
 
-    /// Narrows the panes to what the window can hold. The widths
-    /// are written back, so the dividers keep dragging from where
-    /// the panes actually are.
-    func fitPanes(to width: CGFloat) {
-        windowWidth = width
-        let layout = PaneLayout(
-            width: width,
-            sidebar: sidebarWidth,
-            utility: utilityPaneWidth,
-            showsUtility: showsUtilityPane,
-        )
-        if layout.sidebar != sidebarWidth {
-            sidebarWidth = layout.sidebar
-        }
-        if layout.utility != utilityPaneWidth {
-            utilityPaneWidth = layout.utility
-        }
-    }
-
     // MARK: Private
 
     /// The selected conversation's worktree on the repository page,
@@ -343,17 +344,6 @@ struct RootView: View {
     /// Blocks idle sleep while agents or shells run, since sleeping
     /// mid-response cuts agents off.
     @State private var sleepInhibitor: SleepInhibitor = .init()
-
-    /// Focus requests from the finder menu items, cleared at launch
-    /// so a request from the previous run cannot fire; internal so
-    /// the routing extension can read the counter it consumes.
-    @AppStorage("finderFocusRequest")
-    var finderFocusRequest = 0
-
-    /// Open-file requests from the openers, routed to an editor slot
-    /// by the extension file; internal for the same reason.
-    @AppStorage("editorFileRequest")
-    var editorFileRequest = 0
 
     @AppStorage("resizePanesRequest")
     private var resizePanesRequest = 0
@@ -398,61 +388,5 @@ struct RootView: View {
     /// Whether anything is running that idle sleep would interrupt.
     private var hasLiveWork: Bool {
         runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
-    }
-
-    /// The middle pages, never sheets, cover the primary pane
-    /// rather than replacing it: unmounting takes the panes with it,
-    /// and a pane can hold a running agent or shell, which only
-    /// destroying its worktree should end. They cover that pane
-    /// alone, so the utility pane stays where it was: the window
-    /// keeps one shape whatever it is showing.
-    private var detail: some View {
-        ZStack {
-            if let item = dependencies.dashboard.selection {
-                split(for: item)
-            } else {
-                unselectedSplit
-            }
-        }
-    }
-
-    private func split(for item: WorktreeItem) -> some View {
-        HStack(spacing: 0) {
-            primaryColumn(for: item)
-            if showsUtility {
-                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false)
-                    .ignoresSafeArea(.container, edges: .top)
-                utilityPane(for: item)
-                    .frame(width: utilityPaneWidth)
-                    .frame(maxHeight: .infinity)
-                    .ignoresSafeArea(.container, edges: .top)
-            }
-        }
-        .ignoresSafeArea(.container, edges: .top)
-    }
-
-    /// The utility pane: the shared tab header over the content, so
-    /// the current tab is always visible whichever tab shows.
-    /// Restores the worktree's remembered tab whenever the selection
-    /// changes, so each worktree keeps its own pane.
-    private func utilityPane(for item: WorktreeItem) -> some View {
-        VStack(spacing: 0) {
-            utilityHeader(for: item)
-            Divider()
-            utilityContent(for: item)
-        }
-        .task(id: item.worktree.path) {
-            // A stale conversation focus must not survive switching
-            // to another sidebar item.
-            conversationWorktreePath = nil
-            utilityTabName = rememberedTabs[item.worktree.path] ?? utilityTabName
-        }
-        .onChange(of: utilityTabName) {
-            rememberedTabs[item.worktree.path] = utilityTabName
-            worktreeTabs = rememberedTabs
-                .map { $0.key + "\t" + $0.value }
-                .sorted()
-                .joined(separator: "\n")
-        }
     }
 }

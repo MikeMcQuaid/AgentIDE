@@ -30,7 +30,11 @@ extension ReviewModel {
 
     /// The hunk the diff should be showing, nil when nothing matches.
     var currentFindTarget: String? {
-        findTargets.indices.contains(currentFind) ? findTargets[currentFind].id : nil
+        if findTargets.indices.contains(currentFind) {
+            findTargets[currentFind].id
+        } else {
+            nil
+        }
     }
 
     /// Whether a line has anything to highlight, so the renderer

@@ -64,7 +64,8 @@ public enum PerformanceLog {
     public static var isEnabled: Bool {
         let now = ContinuousClock.now
         if let state = enabledState.withLock({ $0 }),
-           now - state.checkedAt < .seconds(enabledRecheckSeconds) {
+           now - state.checkedAt < .seconds(enabledRecheckSeconds)
+        {
             return state.value
         }
 

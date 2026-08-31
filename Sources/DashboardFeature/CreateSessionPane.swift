@@ -37,31 +37,8 @@ public struct CreateSessionPane: View {
     /// pane's top like the repository page.
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack {
-                Text("Start an agent in \(target)")
-                    .font(.subheadline.weight(.semibold))
-                if isResuming {
-                    ProgressView().controlSize(.small)
-                }
-                Spacer()
-                if let onOpenEditor {
-                    Button("Editor", action: onOpenEditor)
-                        .controlSize(.small)
-                        .hoverHelp("Edit this worktree's files in this pane without starting an agent")
-                }
-                if let onShowConversations {
-                    Button("Conversations", action: onShowConversations)
-                        .controlSize(.small)
-                        .hoverHelp("Back to this worktree's past conversations")
-                }
-                if canResume {
-                    Button("Resume last session") { resume() }
-                        .controlSize(.small)
-                        .disabled(isResuming)
-                        .hoverHelp("Continue this worktree's most recent conversation instead of starting fresh")
-                }
-            }
-            .padding(.top, Self.headerTopPadding)
+            header
+                .padding(.top, Self.headerTopPadding)
             AgentSessionForm(
                 model: model,
                 repository: repository,
@@ -96,6 +73,35 @@ public struct CreateSessionPane: View {
 
     private var target: String {
         worktree.repositoryName + ": " + worktree.branch
+    }
+
+    /// The title and header buttons, out of the body so its closure
+    /// stays within the length limit.
+    private var header: some View {
+        HStack {
+            Text("Start an agent in \(target)")
+                .font(.subheadline.weight(.semibold))
+            if isResuming {
+                ProgressView().controlSize(.small)
+            }
+            Spacer()
+            if let onOpenEditor {
+                Button("Editor", action: onOpenEditor)
+                    .controlSize(.small)
+                    .hoverHelp("Edit this worktree's files in this pane without starting an agent")
+            }
+            if let onShowConversations {
+                Button("Conversations", action: onShowConversations)
+                    .controlSize(.small)
+                    .hoverHelp("Back to this worktree's past conversations")
+            }
+            if canResume {
+                Button("Resume last session") { resume() }
+                    .controlSize(.small)
+                    .disabled(isResuming)
+                    .hoverHelp("Continue this worktree's most recent conversation instead of starting fresh")
+            }
+        }
     }
 
     private func resume() {

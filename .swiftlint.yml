@@ -9,8 +9,13 @@ analyzer_rules:
   # positives; periphery handles dead-code detection instead.
   - unused_import
 disabled_rules:
-  # Conflicts with opening_brace and SwiftFormat's brace style.
+  # Conflicts with SwiftFormat's brace style, which keeps braces on
+  # the declaration line except after multiline conditions.
   - contrasted_opening_brace
+  # Conflicts with SwiftFormat 0.63's wrapMultilineStatementBraces,
+  # which wraps the brace after a multiline condition onto its own
+  # line; SwiftFormat owns brace placement.
+  - opening_brace
   # Conflicts with redundant_type_annotation.
   - explicit_type_interface
   # Conflict with SwiftFormat's redundantInternal rule.

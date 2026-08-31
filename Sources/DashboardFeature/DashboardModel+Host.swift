@@ -23,7 +23,8 @@ public extension DashboardModel {
         )
         for index in groups.indices
             where groups[index].repository.path == repository.path
-            && groups[index].items.contains(where: { $0.worktree.path == path }) == false {
+            && groups[index].items.contains(where: { $0.worktree.path == path }) == false
+        {
             groups[index].items.append(row)
         }
         await refresh()

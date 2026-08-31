@@ -8,6 +8,7 @@ public enum HighlightedLine {
     /// Unknown languages come back plain.
     public static func text(line: String, language: SyntaxLanguage?) -> Text {
         CodeHighlighter.tokens(for: line, language: language)
+            .lazy
             .map { token in Text(token.text).foregroundStyle(colour(for: token.kind)) }
             .reduce(Text("")) { Text("\($0)\($1)") }
     }

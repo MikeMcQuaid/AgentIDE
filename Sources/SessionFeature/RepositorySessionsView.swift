@@ -123,50 +123,54 @@ public struct RepositorySessionsView: View {
             )
             .font(.subheadline.weight(.semibold))
             Spacer()
-            // The editor is a sideways move rather than session
-            // work, so it comes first; then starting fresh before
-            // continuing something, in the order the two are read,
-            // with resuming the prominent one, since it is why the
-            // list is here.
-            if let onOpenEditor {
-                Button("Editor", action: onOpenEditor)
-                    .controlSize(.small)
-                    .hoverHelp(
-                        model.worktreePath == nil
-                            ? "Edit files in this repository's main checkout, in this pane"
-                            : "Edit this worktree's files in this pane; this list is a click away",
-                    )
-            }
-            if let onNewSession {
-                Button(model.worktreePath == nil ? "Start session" : "New session", action: onNewSession)
-                    .controlSize(.small)
-                    .hoverHelp(
-                        model.worktreePath == nil
-                            ? "Start an agent session on the default branch, in this checkout without a new worktree"
-                            : "Start a fresh agent session in this worktree instead of continuing one",
-                    )
-            }
-            // One resume button: in place when the conversation's
-            // worktree still exists, into a fresh worktree only when
-            // it is gone and that is all that can be done.
-            if model.selected == nil || model.selectedWorktreePath != nil {
-                Button("Resume here") { model.resumeSelectedHere(onResumed: onResumed) }
-                    .controlSize(.small)
-                    .disabled(model.selectedWorktreePath == nil)
-                    .hoverHelp("Continue the selected conversation in the worktree it ran in")
-            } else {
-                Button("Resume in new worktree") { model.resumeSelected(onResumed: onResumed) }
-                    .controlSize(.small)
-                    .hoverHelp(
-                        "This conversation's worktree is gone; continue it in a fresh worktree and branch",
-                    )
-            }
+            headerButtons
         }
         // The embedding pane owns the top inset; only a hairline of
         // breathing room is added here.
         .padding(.horizontal, Self.padding)
         .padding(.top, Self.headerBottomPadding)
         .padding(.bottom, Self.headerBottomPadding)
+    }
+
+    /// The editor is a sideways move rather than session work, so it
+    /// comes first; then starting fresh before continuing something,
+    /// in the order the two are read, with resuming the prominent
+    /// one, since it is why the list is here. Out of the header so
+    /// its closure stays within the length limit.
+    @ViewBuilder private var headerButtons: some View {
+        if let onOpenEditor {
+            Button("Editor", action: onOpenEditor)
+                .controlSize(.small)
+                .hoverHelp(
+                    model.worktreePath == nil
+                        ? "Edit files in this repository's main checkout, in this pane"
+                        : "Edit this worktree's files in this pane; this list is a click away",
+                )
+        }
+        if let onNewSession {
+            Button(model.worktreePath == nil ? "Start session" : "New session", action: onNewSession)
+                .controlSize(.small)
+                .hoverHelp(
+                    model.worktreePath == nil
+                        ? "Start an agent session on the default branch, in this checkout without a new worktree"
+                        : "Start a fresh agent session in this worktree instead of continuing one",
+                )
+        }
+        // One resume button: in place when the conversation's
+        // worktree still exists, into a fresh worktree only when
+        // it is gone and that is all that can be done.
+        if model.selected == nil || model.selectedWorktreePath != nil {
+            Button("Resume here") { model.resumeSelectedHere(onResumed: onResumed) }
+                .controlSize(.small)
+                .disabled(model.selectedWorktreePath == nil)
+                .hoverHelp("Continue the selected conversation in the worktree it ran in")
+        } else {
+            Button("Resume in new worktree") { model.resumeSelected(onResumed: onResumed) }
+                .controlSize(.small)
+                .hoverHelp(
+                    "This conversation's worktree is gone; continue it in a fresh worktree and branch",
+                )
+        }
     }
 
     private var list: some View {

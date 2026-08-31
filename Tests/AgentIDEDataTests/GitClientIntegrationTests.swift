@@ -101,7 +101,7 @@ struct GitClientIntegrationTests {
         defer { try? FileManager.default.removeItem(atPath: root) }
         let repoPath = root + "/repo"
         try await TestSupport.makeRepository(at: repoPath)
-        let base = (1 ... 40).map { "line\($0)" }.joined(separator: "\n") + "\n"
+        let base = (1 ... 40).lazy.map { "line\($0)" }.joined(separator: "\n") + "\n"
         try base.write(toFile: repoPath + "/f.txt", atomically: true, encoding: .utf8)
         try await TestSupport.runGit(["add", "-A"], in: repoPath)
         try await TestSupport.runGit(["commit", "-q", "-m", "Base"], in: repoPath)
@@ -135,7 +135,7 @@ struct GitClientIntegrationTests {
         defer { try? FileManager.default.removeItem(atPath: root) }
         let repoPath = root + "/repo"
         try await TestSupport.makeRepository(at: repoPath)
-        let base = (1 ... 40).map { "line\($0)" }.joined(separator: "\n") + "\n"
+        let base = (1 ... 40).lazy.map { "line\($0)" }.joined(separator: "\n") + "\n"
         try base.write(toFile: repoPath + "/f.txt", atomically: true, encoding: .utf8)
         try await TestSupport.runGit(["add", "-A"], in: repoPath)
         try await TestSupport.runGit(["commit", "-q", "-m", "Base"], in: repoPath)

@@ -55,9 +55,11 @@ public struct RepositoryFinderPane: View {
     private let model: DashboardModel
 
     private var fieldPrompt: String {
-        owner == nil
-            ? "Organisation or user; return also accepts any typed owner"
-            : "Find a repository"
+        if owner == nil {
+            "Organisation or user; return also accepts any typed owner"
+        } else {
+            "Find a repository"
+        }
     }
 
     private var results: [String] {

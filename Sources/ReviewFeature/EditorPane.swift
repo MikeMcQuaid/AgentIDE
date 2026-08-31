@@ -42,31 +42,6 @@ public struct EditorPane: View {
 
     // MARK: Public
 
-    /// The slot an editor pane fills. Each slot keeps its own finder
-    /// and open file under key-suffixed defaults, so two mounted
-    /// editors never answer one request twice; the window routes
-    /// requests between them by these names.
-    public enum Role: String, CaseIterable, Sendable {
-        // The case names are the persisted key suffixes (SwiftFormat
-        // strips explicit raw values); keep names stable or migrate
-        // deliberately. Centre first: a file open in both slots
-        // routes to the visible centre before the side.
-        // swiftlint:disable explicit_enum_raw_value
-        case centre
-        case utility
-        // swiftlint:enable explicit_enum_raw_value
-
-        /// The slot's defaults key for one of the shared base names.
-        public func key(_ base: String) -> String {
-            base + "." + rawValue
-        }
-
-        /// The other slot, where a moved file lands.
-        public var other: Role {
-            self == .centre ? .utility : .centre
-        }
-    }
-
     /// The pinned finder field over results, over the embedded
     /// editor. Arrow keys move the highlight and return opens it.
     public var body: some View {
@@ -97,29 +72,16 @@ public struct EditorPane: View {
 
     // MARK: Private
 
-    /// One row of the result list: a file, or a content match with
-    /// the matched line's text.
-    private struct Result: Identifiable, Hashable {
-        let file: String
-        let line: Int?
-        var preview: String?
-
-        var id: String {
-            file + ":" + String(line ?? 0)
-        }
-    }
-
     private static let padding: CGFloat = 6
     private static let fieldTopPadding: CGFloat = 4
     private static let fileResultLimit = 12
     private static let contentQueryMinimum = 3
-    private static let resultsHeight: CGFloat = 180
     private static let fieldCornerRadius: CGFloat = 6
     private static let fieldBackgroundOpacity = 0.5
 
     @State private var files: [String] = []
-    @State private var results: [Result] = []
-    @State private var target: Result?
+    @State private var results: [FinderResult] = []
+    @State private var target: FinderResult?
     @State private var highlighted = 0
     @State private var handledFocusRequest = 0
 
@@ -157,7 +119,11 @@ public struct EditorPane: View {
     /// the answer takes a moment to reach the spool and come back,
     /// and the pane must not flash the file again in between.
     private var blockingEdit: ExternalEdit? {
-        waitingEdit?.id == finishedEdit ? nil : waitingEdit
+        if waitingEdit?.id == finishedEdit {
+            nil
+        } else {
+            waitingEdit
+        }
     }
 
     /// The finder over its results over the file being edited. Arrow
@@ -238,30 +204,10 @@ public struct EditorPane: View {
     }
 
     private var resultsList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
-                        FinderResultRow(
-                            file: result.file,
-                            line: result.line,
-                            preview: result.preview,
-                            isHighlighted: index == highlighted,
-                        )
-                        .onTapGesture { pick(result) }
-                        .id(index)
-                    }
-                }
-            }
-            // Arrowing past the visible rows scrolls the highlight
-            // into view rather than moving it off screen.
-            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
-        }
-        .frame(maxHeight: Self.resultsHeight)
-        .hoverHelp("Arrows move the highlight; return or a click opens")
+        FinderResultsList(results: results, highlighted: highlighted) { pick($0) }
     }
 
-    private func editor(for result: Result) -> some View {
+    private func editor(for result: FinderResult) -> some View {
         FileEditorView(
             worktreePath: worktreePath,
             relativePath: result.file,
@@ -277,7 +223,7 @@ public struct EditorPane: View {
 
     /// The move-to-other-pane action for the open file, which clears
     /// this slot before handing the file over.
-    private func paneMove(for result: Result) -> FileEditorView.PaneMove? {
+    private func paneMove(for result: FinderResult) -> FileEditorView.PaneMove? {
         onMoveFile.map { move in
             // The closure stays a non-final argument: the formatter
             // rewrites a trailing one after a multiline call.
@@ -302,7 +248,7 @@ public struct EditorPane: View {
             return
         }
 
-        target = Result(file: editorFilePath, line: editorFileLine > 0 ? editorFileLine : nil)
+        target = FinderResult(file: editorFilePath, line: editorFileLine > 0 ? editorFileLine : nil)
     }
 
     /// Releases the command waiting on the file and returns the
@@ -341,7 +287,7 @@ public struct EditorPane: View {
 
     /// Every open routes through the opener: the Editor tab by
     /// default, the external editor on Cmd-click.
-    private func pick(_ result: Result?) {
+    private func pick(_ result: FinderResult?) {
         guard let result else {
             return
         }
@@ -355,7 +301,7 @@ public struct EditorPane: View {
         guard searchesContents else {
             let matches = FuzzyMatcher.rank(files, query: query)
                 .prefix(Self.fileResultLimit)
-                .map { Result(file: $0, line: nil) }
+                .map { FinderResult(file: $0, line: nil) }
             results = Array(matches)
             return
         }
@@ -372,7 +318,7 @@ public struct EditorPane: View {
             }
 
             results = hits.map { hit in
-                Result(
+                FinderResult(
                     file: hit.file,
                     line: hit.line,
                     preview: hit.text.trimmingCharacters(in: .whitespaces),
@@ -380,46 +326,4 @@ public struct EditorPane: View {
             }
         }
     }
-}
-
-// MARK: - FinderResultRow
-
-/// One finder result row; its own view so the pane's type body
-/// stays within the length limit.
-private struct FinderResultRow: View {
-    // MARK: Internal
-
-    let file: String
-    let line: Int?
-    let preview: String?
-    let isHighlighted: Bool
-
-    var body: some View {
-        HStack(spacing: Self.padding) {
-            Image(systemName: line == nil ? "doc.text" : "text.magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(file + (line.map { ":" + String($0) } ?? ""))
-                .font(CodeStyle.font)
-                .lineLimit(1)
-            if let preview {
-                Text(preview)
-                    .font(CodeStyle.font)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, Self.padding)
-        .padding(.vertical, Self.rowVerticalPadding)
-        .background(isHighlighted ? Color.accentColor.opacity(Self.highlightOpacity) : .clear)
-        .contentShape(Rectangle())
-    }
-
-    // MARK: Private
-
-    private static let padding: CGFloat = 6
-    private static let highlightOpacity = 0.25
-    private static let rowVerticalPadding: CGFloat = 2
 }

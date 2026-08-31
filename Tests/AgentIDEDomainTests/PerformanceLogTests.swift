@@ -14,7 +14,7 @@ struct PerformanceLogTests {
 
     @Test
     func `trimming keeps the newest whole lines that fit`() {
-        let text = (1 ... 10).map { "line-" + String($0) }.joined(separator: "\n") + "\n"
+        let text = (1 ... 10).lazy.map { "line-" + String($0) }.joined(separator: "\n") + "\n"
 
         // Each line is seven bytes and a newline: a budget of
         // twenty-four holds three of them, newest last.

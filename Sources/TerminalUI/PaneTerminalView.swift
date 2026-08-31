@@ -86,7 +86,8 @@ final class PaneTerminalView: LocalProcessTerminalView {
         }
 
         if bracketsPastes, getTerminal().bracketedPasteMode == false,
-           let text = NSPasteboard.general.string(forType: .string) {
+           let text = NSPasteboard.general.string(forType: .string)
+        {
             // Three sends, gathered into one write by the coordinator,
             // so the agent sees one paste and draws one.
             send(data: Self.bracketedPasteStart[...])
