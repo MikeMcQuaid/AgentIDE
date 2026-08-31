@@ -151,7 +151,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
         let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
         layoutManager.addTextContainer(container)
-        let view = NSTextView(frame: .zero, textContainer: container)
+        let view = EditingTextView(frame: .zero, textContainer: container)
+        view.language = language
         view.autoresizingMask = .width
         view.isVerticallyResizable = true
         view.minSize = NSSize(width: 0, height: 0)

@@ -15,4 +15,20 @@ public enum Whitespace {
             }
             .joined(separator: "\n")
     }
+
+    /// Guarantees exactly one newline ends the text, the shape every
+    /// POSIX tool expects: stray blank lines at the end are trimmed
+    /// to it, a missing one is added, and an empty file stays empty
+    /// rather than gaining a blank line.
+    public static func ensuringTrailingNewline(_ text: String) -> String {
+        guard text.isEmpty == false else {
+            return text
+        }
+
+        var trimmed = Substring(text)
+        while trimmed.hasSuffix("\n") {
+            trimmed = trimmed.dropLast()
+        }
+        return trimmed + "\n"
+    }
 }

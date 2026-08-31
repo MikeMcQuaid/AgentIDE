@@ -270,7 +270,7 @@ struct FileEditorView: View {
         }
 
         do {
-            content = Whitespace.strippingTrailingWhitespace(content)
+            content = Whitespace.ensuringTrailingNewline(Whitespace.strippingTrailingWhitespace(content))
             try content.write(toFile: path, atomically: true, encoding: .utf8)
             saved = content
             status = Self.savedStatus
