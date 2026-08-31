@@ -84,9 +84,10 @@ In workflow order; the loop from prompt to review repeats before shipping.
   command (so `git rebase -i` needs no terminal editor)
 - Speaks editor shorthand: Cmd-/ toggles the language's line comment, Tab
   and Shift-Tab indent and dedent at the file's own unit (tabs where the
-  file uses tabs), Option-Up and Option-Down move lines, and saving strips
-  trailing whitespace and guarantees a final newline (so review-time fixes
-  type the way your editor taught you)
+  file uses tabs), Return carries the line's indentation, Option-Up and
+  Option-Down move lines, Cmd-D duplicates them, Cmd-Shift-K deletes
+  them, and saving strips trailing whitespace and guarantees a final
+  newline (so review-time fixes type the way your editor taught you)
 - Opens that editor beside the diff or, from any conversations page,
   filling the centre pane, and moves the open file between the two; an
   agent session always wins the centre back, its file stepping aside

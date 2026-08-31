@@ -37,11 +37,36 @@ final class EditingTextView: NSTextView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "/" {
+        let chosen = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        switch (chosen, event.charactersIgnoringModifiers?.lowercased()) {
+        case (.command, "/"):
             toggleComment()
             return true
+
+        case (.command, "d"):
+            duplicateLines()
+            return true
+
+        case ([.command, .shift], "k"):
+            deleteLines()
+            return true
+
+        default:
+            return super.performKeyEquivalent(with: event)
         }
-        return super.performKeyEquivalent(with: event)
+    }
+
+    override func insertNewline(_: Any?) {
+        // The new line starts where the old one did: its leading
+        // whitespace travels, and a caret still inside the indent
+        // carries only what sits before it, leaving the split
+        // line's own indentation whole.
+        let text = string as NSString
+        let caret = selectedRange().location
+        let line = text.lineRange(for: NSRange(location: caret, length: 0))
+        let head = text.substring(with: NSRange(location: line.location, length: caret - line.location))
+        let indent = head.prefix { $0 == " " || $0 == "\t" }
+        insertText("\n" + indent, replacementRange: selectedRange())
     }
 
     override func keyDown(with event: NSEvent) {
@@ -68,6 +93,32 @@ final class EditingTextView: NSTextView {
         }
 
         transformSelectedLines { LineEditing.toggledComment($0, prefix: prefix) }
+    }
+
+    /// Duplicates the selected lines below themselves, the caret or
+    /// selection carried onto the copy.
+    func duplicateLines() {
+        let text = string as NSString
+        let paragraphs = text.lineRange(for: selectedRange())
+        let block = text.substring(with: paragraphs)
+        let selection = selectedRange()
+        let joiner = block.hasSuffix("\n") ? "" : "\n"
+        replace(paragraphs, with: block + joiner + block)
+        let offset = paragraphs.length + (joiner as NSString).length
+        setSelectedRange(NSRange(location: selection.location + offset, length: selection.length))
+        scrollRangeToVisible(selectedRange())
+    }
+
+    /// Deletes the selected lines whole; the last line takes the
+    /// newline before it with it, so no blank line is left behind.
+    func deleteLines() {
+        let text = string as NSString
+        var paragraphs = text.lineRange(for: selectedRange())
+        if text.substring(with: paragraphs).hasSuffix("\n") == false, paragraphs.location > 0 {
+            paragraphs = NSRange(location: paragraphs.location - 1, length: paragraphs.length + 1)
+        }
+        replace(paragraphs, with: "")
+        setSelectedRange(NSRange(location: min(paragraphs.location, (string as NSString).length), length: 0))
     }
 
     /// Moves the selected lines one line up or down, keeping them

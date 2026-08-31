@@ -498,9 +498,11 @@ back. The two slots mounting together share one ripgrep file listing
 per worktree (`FileListings`), joining a run in flight rather than
 spawning a second. The editing shortcuts (Cmd-/ comment toggling per
 language, Tab and Shift-Tab at the file's own indentation unit,
-Option-arrow line moves) are pure `LineEditing` rules the text view
-maps selections onto, each one undoable edit; saving strips trailing
-whitespace and guarantees one final newline (`Whitespace`).
+Option-arrow line moves, Cmd-D duplication, Cmd-Shift-K deletion and
+Return carrying the line's indentation) are pure `LineEditing` rules
+and whole-line range plumbing the text view maps selections onto,
+each one undoable edit; saving strips trailing whitespace and
+guarantees one final newline (`Whitespace`).
 
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON

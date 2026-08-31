@@ -63,6 +63,59 @@ struct EditingTextViewTests {
     }
 
     @Test
+    func `return carries the line's indentation to the new line`() {
+        let view = makeView("  one\n", language: .swift)
+        view.setSelectedRange(NSRange(location: 5, length: 0))
+        view.insertNewline(nil)
+        #expect(view.string == "  one\n  \n")
+        #expect(view.selectedRange() == NSRange(location: 8, length: 0))
+
+        // A caret inside the indent carries only what is before it,
+        // which leaves the split line's own indentation whole.
+        let shallow = makeView("    x\n", language: .swift)
+        shallow.setSelectedRange(NSRange(location: 2, length: 0))
+        shallow.insertNewline(nil)
+        #expect(shallow.string == "  \n    x\n")
+        #expect(shallow.selectedRange() == NSRange(location: 5, length: 0))
+    }
+
+    @Test
+    func `duplicating carries the caret onto the copy`() {
+        let view = makeView("one\ntwo\n", language: .swift)
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+        view.duplicateLines()
+        #expect(view.string == "one\none\ntwo\n")
+        #expect(view.selectedRange() == NSRange(location: 5, length: 0))
+
+        // A selection duplicates every line it touches and stays on
+        // the copy.
+        let block = makeView("one\ntwo", language: .swift)
+        block.setSelectedRange(NSRange(location: 0, length: 7))
+        block.duplicateLines()
+        #expect(block.string == "one\ntwo\none\ntwo")
+        #expect(block.selectedRange() == NSRange(location: 8, length: 7))
+    }
+
+    @Test
+    func `deleting takes whole lines and the last line's newline too`() {
+        let view = makeView("one\ntwo\nthree\n", language: .swift)
+        view.setSelectedRange(NSRange(location: 5, length: 0))
+        view.deleteLines()
+        #expect(view.string == "one\nthree\n")
+        #expect(view.selectedRange() == NSRange(location: 4, length: 0))
+
+        let tail = makeView("one\ntwo", language: .swift)
+        tail.setSelectedRange(NSRange(location: 6, length: 0))
+        tail.deleteLines()
+        #expect(tail.string == "one")
+
+        let all = makeView("only\n", language: .swift)
+        all.setSelectedRange(NSRange(location: 2, length: 0))
+        all.deleteLines()
+        #expect(all.string.isEmpty)
+    }
+
+    @Test
     func `moving the last line up preserves the missing final newline`() {
         let view = makeView("one\ntwo", language: .swift)
         view.setSelectedRange(NSRange(location: 5, length: 0))
