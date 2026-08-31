@@ -535,6 +535,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   running or queued is asked every half minute, back to its tier after
   an hour (a stalled run or an outage must not be polled at that rate).
   A push looks again a minute later, where the run it started shows.
+  An agent's finished turn forgets its own branch's stamps, on the
+  assumption the turn committed, so the same reading's pull request
+  pass re-asks at once rather than waiting out the tier.
   Acting on a pull request clears its stamp; looking never does.
 - **Row and pane never disagree**: both read the one enriched-summary
   cache, the sidebar repainted through the storage bus whenever the
