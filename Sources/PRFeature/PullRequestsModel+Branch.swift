@@ -6,6 +6,59 @@ import AgentIDEDomain
 /// and what it moves are not always the branch the worktree holds.
 /// Split from the actions for length.
 extension PullRequestsModel {
+    /// What the worktree itself says: its stack, signing, rebase
+    /// need, template and checked-out branch. Skipped when moving
+    /// between a stack's entries, which share all of it.
+    func refreshWorktreeFacts(_ worktree: Worktree) async {
+        await loadStack()
+        // Gather, then write only while still the newest read: an
+        // older reload landing stale signing facts over the rebase's
+        // fresh ones is how Push sometimes stayed locked until a
+        // second press ran a fresh read.
+        stacking.factsGeneration += 1
+        let generation = stacking.factsGeneration
+        let signed = await checkTipSigned(listedWorktree ?? worktree)
+        let need = await fetchRebaseNeed(listedWorktree ?? worktree)
+        let template = await fetchTemplate(worktree.path)
+        let live = await fetchCurrentBranch(worktree.path)
+        let labels = availableLabels.isEmpty ? await fetchLabels() : availableLabels
+        guard generation == stacking.factsGeneration else {
+            return
+        }
+
+        tipSignature = signed ? .signed : .unsigned
+        rebaseNeed = need
+        availableLabels = labels
+        hasTemplate = template != nil
+        originalTemplate = template ?? ""
+        if prTemplate.isEmpty {
+            prTemplate = originalTemplate
+        }
+        await prefillFromSingleCommit(worktree)
+        if let branch = live {
+            currentBranch = branch
+        }
+    }
+
+    /// Fresh counts can mean fresh commits, and nobody has read the
+    /// new tip: the signing and rebase facts follow the item, so
+    /// Push can never light up on a tip the last read never saw.
+    func reverifyBranchFacts(from oldItems: [WorktreeItem]) {
+        guard let current = branchItem else {
+            return
+        }
+
+        let previous = oldItems.first { $0.worktree.path == current.worktree.path }
+        guard previous?.aheadOfUpstream != current.aheadOfUpstream
+            || previous?.isDirty != current.isDirty
+        else {
+            return
+        }
+
+        tipSignature = .unread
+        Task { await refreshWorktreeFacts(current.worktree) }
+    }
+
     /// The rebase button's label names exactly what it would do.
     var rebaseTitle: String {
         guard AppSettings.requiresSignedCommits else {
@@ -61,7 +114,7 @@ extension PullRequestsModel {
             await reload(keepingSelection: true)
             // Done means Push agrees; reporting success with the tip
             // still unsigned took a second press to notice.
-            if isTipSigned == false {
+            if tipSignature != .signed {
                 report("Rebased, but the tip still reads unsigned; check the signing key "
                     + "and hit Rebase again")
                 return false
@@ -112,12 +165,15 @@ extension PullRequestsModel {
     }
 
     /// Push makes sense with unpushed commits that this tab has not
-    /// already pushed and a GPG-signed tip; nil upstream means
-    /// nothing was ever pushed. In a stack it is the listed entry's
-    /// own commits that are counted, since the worktree's counts
-    /// describe whichever branch it has checked out.
+    /// already pushed and a tip proven GPG signed; an unread tip
+    /// dims the button rather than trusting the last answer, since
+    /// a click on unverified commits could only end in a refusal.
+    /// Nil upstream means nothing was ever pushed. In a stack it is
+    /// the listed entry's own commits that are counted, since the
+    /// worktree's counts describe whichever branch it has checked
+    /// out.
     var canPush: Bool {
-        guard branchItem != nil, isPushed == false, isTipSigned else {
+        guard branchItem != nil, isPushed == false, tipSignature == .signed else {
             return false
         }
 
@@ -142,11 +198,17 @@ extension PullRequestsModel {
         guard branchItem != nil, isPushed == false, hasUnpushedCommits else {
             return "Everything is already pushed"
         }
-        guard isTipSigned else {
-            return "The tip commit is not GPG signed; Rebase on origin signs the branch first"
-        }
 
-        return "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
+        return switch tipSignature {
+        case .unread:
+            "Checking that the tip commit is GPG signed; Push enables once it proves to be"
+
+        case .unsigned:
+            "The tip commit is not GPG signed; Rebase on origin signs the branch first"
+
+        case .signed:
+            "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"
+        }
     }
 
     /// The branch item's worktree with the checked-out branch

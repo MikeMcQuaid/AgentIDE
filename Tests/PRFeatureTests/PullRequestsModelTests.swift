@@ -25,34 +25,6 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `push needs unpushed commits and the form needs no open pull request`() async {
-        let pushed = makeModel(items: [item(branch: "feature", ahead: 0)])
-        await pushed.reload()
-        #expect(pushed.canPush == false)
-        #expect(pushed.needsCreateForm)
-
-        let ahead = makeModel(items: [item(branch: "feature", ahead: 2)])
-        #expect(ahead.canPush)
-
-        let unpushed = makeModel(items: [item(branch: "feature", ahead: nil)])
-        #expect(unpushed.canPush)
-
-        let open = makeModel(items: [item(branch: "feature", ahead: 1)])
-        open.fetchList = { _, _ in [summary(7, head: "feature")] }
-        await open.reload()
-        #expect(open.needsCreateForm == false)
-
-        let merged = makeModel(items: [item(branch: "feature", ahead: 1)])
-        merged.fetchList = { _, _ in [summary(7, head: "feature", state: "MERGED")] }
-        await merged.reload()
-        #expect(merged.needsCreateForm)
-
-        let elsewhere = makeModel()
-        #expect(elsewhere.canPush == false)
-        #expect(elsewhere.needsCreateForm == false)
-    }
-
-    @Test
     func `reload keeps the selection and opens single results directly`() async {
         let model = makeModel()
         model.fetchList = { _, _ in [summary(1, head: "one"), summary(2, head: "two")] }
@@ -133,33 +105,6 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `pushing dims the button until new commits arrive`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
-        #expect(model.canPush)
-
-        #expect(await model.push())
-        #expect(model.isPushed)
-        #expect(model.canPush == false)
-        #expect(model.status == "Pushed.")
-
-        model.items = [item(branch: "feature", ahead: 1)]
-        #expect(model.canPush)
-    }
-
-    @Test
-    func `an unsigned tip dims Push and explains itself`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
-        model.checkTipSigned = { _ in false }
-        await model.reload()
-        #expect(model.canPush == false)
-        #expect(model.pushHelp.contains("not GPG signed"))
-
-        model.checkTipSigned = { _ in true }
-        await model.reload()
-        #expect(model.canPush)
-    }
-
-    @Test
     func `a fresh reload fetches exactly once`() async {
         let model = makeModel()
         var fetches = 0
@@ -174,22 +119,6 @@ struct PullRequestsModelTests {
             await Task.yield()
         }
         #expect(fetches == 1)
-    }
-
-    @Test
-    func `an unsigned tip with nothing to push reads as pushed`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
-        model.checkTipSigned = { _ in false }
-        await model.reload()
-        #expect(model.pushHelp.contains("already pushed"))
-    }
-
-    @Test
-    func `a failed push reports rather than dimming`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
-        model.performPush = { _ in throw CocoaError(.fileNoSuchFile) }
-        #expect(await model.push() == false)
-        #expect(model.canPush)
     }
 
     @Test

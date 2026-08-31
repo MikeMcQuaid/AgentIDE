@@ -546,7 +546,12 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing
-  passes `--no-gpg-sign`. The signed rebase picks the branch's own
+  passes `--no-gpg-sign`. Verification is proof, never trust: Push
+  dims until the current tip has been read as signed, fresh worktree
+  counts re-read it (an agent's commits arrive between reloads), and
+  the click reads it once more, declining in the footer with Rebase
+  relit to sign; the service's own refusal stays as the backstop no
+  user path reaches. The signed rebase picks the branch's own
   origin ref when it is still an ancestor and every commit unique to
   the branch verifies, else origin/HEAD. The ancestor test keeps an
   amended branch out of that path (its pushed commit is a stale twin,
