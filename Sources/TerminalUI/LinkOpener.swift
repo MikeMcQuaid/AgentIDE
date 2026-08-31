@@ -123,10 +123,12 @@ public enum LinkOpener {
 
 // MARK: - FileOpener
 
-/// Opens files: in the Editor tab by default, in an external editor
-/// when the command key is held. The external command comes from the
-/// `externalEditorCommand` default (space-separated argv), falling
-/// back to the system's default application.
+/// Opens files: in the built-in editor by default, in an external
+/// editor when the command key is held. The built-in request lands
+/// on the shared keys; the window routes it to the centre or side
+/// editor and reveals whichever it picked. The external command
+/// comes from the `externalEditorCommand` default (space-separated
+/// argv), falling back to the system's default application.
 public enum FileOpener {
     // MARK: Public
 
@@ -141,7 +143,6 @@ public enum FileOpener {
         defaults.set(line ?? 0, forKey: "editorFileLine")
         defaults.set(worktreePath, forKey: "editorFileWorktree")
         defaults.set(defaults.integer(forKey: "editorFileRequest") + 1, forKey: "editorFileRequest")
-        defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
     }
 
     /// Routes a worktree-relative file by the command key. Paths
@@ -159,7 +160,6 @@ public enum FileOpener {
             defaults.set(line ?? 0, forKey: "editorFileLine")
             defaults.set(worktreePath, forKey: "editorFileWorktree")
             defaults.set(defaults.integer(forKey: "editorFileRequest") + 1, forKey: "editorFileRequest")
-            defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
             return
         }
 

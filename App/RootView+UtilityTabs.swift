@@ -51,16 +51,26 @@ extension RootView {
         )
     }
 
-    /// The one editor, wherever it shows: the utility pane for a
-    /// worktree, the primary pane for a directory of your own.
-    func editorPane(for item: WorktreeItem) -> EditorPane {
-        EditorPane(
-            worktreePath: item.worktree.path,
+    /// The one editor implementation, filling whichever slot asked:
+    /// the utility pane's Editor tab or the centre pane. The file a
+    /// command waits on goes only to the preferred slot, so it can
+    /// never take over both, and the move button is offered only
+    /// while the other slot could take the file.
+    func editorPane(for item: WorktreeItem, role: EditorPane.Role) -> EditorPane {
+        let path = item.worktree.path
+        let prefersCentre = centreShowsEditor(for: item)
+        let canMove = role == .centre || centreCanShowEditor(for: item)
+        return EditorPane(
+            worktreePath: path,
             service: dependencies.service,
+            role: role,
+            onMoveFile: canMove
+                ? { file, line in receiveMoved(file: file, line: line, at: path, into: role.other) }
+                : nil,
             // The closure stays a non-final argument: the formatter
             // rewrites a trailing one after a multiline call.
             onFinishedWaiting: { finishedWaitingEdit() },
-            waitingEdit: waitingEdit(in: item.worktree.path),
+            waitingEdit: (role == .centre) == prefersCentre ? waitingEdit(in: path) : nil,
         )
     }
 
@@ -81,15 +91,11 @@ extension RootView {
     /// The non-terminal utility tabs' content.
     func switchedUtility(for item: WorktreeItem, conversationPath: String?) -> some View {
         let target = reviewTarget(for: item, conversationPath: conversationPath)
-        // A directory of your own edits in the primary pane, so a
-        // request for the editor here, from opening a file in the
-        // diff or from the tab it was last on, shows the diff
-        // instead of a second editor.
         // Review, the editor and the pull requests stay mounted and
         // hide, rather than being rebuilt on every tab switch: each
         // costs a git or GitHub read to come back, and flipping
         // between them showed a loading state every time.
-        let shown = utilityTab == .editor && item.worktree.isHostDirectory ? UtilityTab.review : utilityTab
+        let shown = utilityTab
         // Top-aligned, as each of these was before they shared a
         // stack: a pane with nothing in it belongs at the top of the
         // pane, not floating in the middle of it.
@@ -101,7 +107,7 @@ extension RootView {
                 service: dependencies.service,
             )
             .hidden(shown != .review)
-            editorPane(for: item)
+            editorPane(for: item, role: .utility)
                 .hidden(shown != .editor)
             PullRequestsView(
                 repository: Repository(

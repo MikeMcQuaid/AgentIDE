@@ -11,22 +11,61 @@ import TerminalUI
 public struct EditorPane: View {
     // MARK: Lifecycle
 
-    /// Creates the pane for a worktree. `waitingEdit` is a file some
-    /// command outside the app is blocked on, which takes the pane
-    /// over until it is dealt with.
+    /// Creates the pane for a worktree. `role` names the slot this
+    /// instance fills, whose persisted state stays its own;
+    /// `onMoveFile`, when given, offers sending the open file to the
+    /// other slot; `waitingEdit` is a file some command outside the
+    /// app is blocked on, which takes the pane over until it is
+    /// dealt with.
     public init(
         worktreePath: String,
         service: SessionService,
+        role: Role = .utility,
+        onMoveFile: ((_ file: String, _ line: Int?) -> Void)? = nil,
         onFinishedWaiting: (() -> Void)? = nil,
         waitingEdit: ExternalEdit? = nil,
     ) {
         self.worktreePath = worktreePath
         self.service = service
+        self.role = role
+        self.onMoveFile = onMoveFile
         self.waitingEdit = waitingEdit
         self.onFinishedWaiting = onFinishedWaiting
+        _query = AppStorage(wrappedValue: "", role.key("finderQuery"))
+        _searchesContents = AppStorage(wrappedValue: false, role.key("finderSearchesContents"))
+        _finderFocusRequest = AppStorage(wrappedValue: 0, role.key("finderFocusRequest"))
+        _editorFileRequest = AppStorage(wrappedValue: 0, role.key("editorFileRequest"))
+        _editorFilePath = AppStorage(wrappedValue: "", role.key("editorFilePath"))
+        _editorFileLine = AppStorage(wrappedValue: 0, role.key("editorFileLine"))
+        _editorFileWorktree = AppStorage(wrappedValue: "", role.key("editorFileWorktree"))
     }
 
     // MARK: Public
+
+    /// The slot an editor pane fills. Each slot keeps its own finder
+    /// and open file under key-suffixed defaults, so two mounted
+    /// editors never answer one request twice; the window routes
+    /// requests between them by these names.
+    public enum Role: String, CaseIterable, Sendable {
+        // The case names are the persisted key suffixes (SwiftFormat
+        // strips explicit raw values); keep names stable or migrate
+        // deliberately. Centre first: a file open in both slots
+        // routes to the visible centre before the side.
+        // swiftlint:disable explicit_enum_raw_value
+        case centre
+        case utility
+        // swiftlint:enable explicit_enum_raw_value
+
+        /// The slot's defaults key for one of the shared base names.
+        public func key(_ base: String) -> String {
+            base + "." + rawValue
+        }
+
+        /// The other slot, where a moved file lands.
+        public var other: Role {
+            self == .centre ? .utility : .centre
+        }
+    }
 
     /// The pinned finder field over results, over the embedded
     /// editor. Arrow keys move the highlight and return opens it.
@@ -88,27 +127,27 @@ public struct EditorPane: View {
     /// the finder as soon as the buttons are pressed.
     @State private var finishedEdit: String?
 
-    /// The query, mode and open file persist across restarts.
-    @AppStorage("finderQuery")
-    private var query = ""
-    @AppStorage("finderSearchesContents")
-    private var searchesContents = false
-    @AppStorage("finderFocusRequest")
-    private var finderFocusRequest = 0
-    @AppStorage("editorFileRequest")
-    private var editorFileRequest = 0
-    @AppStorage("editorFilePath")
-    private var editorFilePath = ""
-    @AppStorage("editorFileLine")
-    private var editorFileLine = 0
-    @AppStorage("editorFileWorktree")
-    private var editorFileWorktree = ""
+    /// The query, mode and open file persist across restarts, each
+    /// under the slot's own keys, set in the initialiser from the
+    /// role.
+    @AppStorage private var query: String
+    @AppStorage private var searchesContents: Bool
+    @AppStorage private var finderFocusRequest: Int
+    @AppStorage private var editorFileRequest: Int
+    @AppStorage private var editorFilePath: String
+    @AppStorage private var editorFileLine: Int
+    @AppStorage private var editorFileWorktree: String
 
     @FocusState private var finderFocused: Bool
 
     private let worktreePath: String
     private let service: SessionService
+    private let role: Role
     private let waitingEdit: ExternalEdit?
+
+    /// Sends the open file to the other slot; absent when the other
+    /// slot cannot take one right now.
+    private let onMoveFile: ((_ file: String, _ line: Int?) -> Void)?
 
     /// Told when a waiting file is dealt with, so the pane the
     /// command interrupted can come straight back.
@@ -228,11 +267,32 @@ public struct EditorPane: View {
             relativePath: result.file,
             service: service,
             jumpToLine: result.line,
+            move: paneMove(for: result),
         ) {
             target = nil
             editorFilePath = ""
         }
         .id(result.id)
+    }
+
+    /// The move-to-other-pane action for the open file, which clears
+    /// this slot before handing the file over.
+    private func paneMove(for result: Result) -> FileEditorView.PaneMove? {
+        onMoveFile.map { move in
+            // The closure stays a non-final argument: the formatter
+            // rewrites a trailing one after a multiline call.
+            FileEditorView.PaneMove(
+                action: {
+                    target = nil
+                    editorFilePath = ""
+                    move(result.file, result.line)
+                },
+                icon: role == .centre ? "arrow.right.square" : "arrow.left.square",
+                help: role == .centre
+                    ? "Save and move this file to the utility pane's editor"
+                    : "Save and move this file to the centre editor",
+            )
+        }
     }
 
     /// Opens the stored file when it belongs to this worktree; the

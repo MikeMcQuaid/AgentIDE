@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 // MARK: - AgentLaunchOptions
 
@@ -29,6 +30,15 @@ struct WorktreeSlot {
     let repository: Repository
     let branch: String
     let path: String
+}
+
+// MARK: - FileListings
+
+/// The file listings in flight, one per worktree at a time, so two
+/// editor panes mounting together share a single ripgrep run. A
+/// finished listing leaves at once; a later ask reads afresh.
+final class FileListings: Sendable {
+    let running = Mutex<[String: Task<[String], Never>]>([:])
 }
 
 // MARK: - Prompt sources and search
@@ -286,8 +296,28 @@ public extension SessionService {
     }
 
     /// The worktree's tracked and untracked files, gitignore aware,
-    /// for the fuzzy finder.
+    /// for the fuzzy finder. The centre and side editors mount
+    /// together, so a caller joins a listing already running for the
+    /// worktree rather than spawning a second ripgrep.
     func listFiles(worktreePath: String) async -> [String] {
+        let (listing, started) = fileListings.running.withLock { listings in
+            if let joined = listings[worktreePath] {
+                return (joined, false)
+            }
+
+            let listing = Task { await readFileList(worktreePath: worktreePath) }
+            listings[worktreePath] = listing
+            return (listing, true)
+        }
+        let files = await listing.value
+        if started {
+            fileListings.running.withLock { $0[worktreePath] = nil }
+        }
+        return files
+    }
+
+    /// One ripgrep listing of a worktree's files.
+    private func readFileList(worktreePath: String) async -> [String] {
         let result = try? await processes.run(
             ["rg", "--files", "--sort", "path"],
             workingDirectory: worktreePath,

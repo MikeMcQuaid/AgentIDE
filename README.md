@@ -82,6 +82,10 @@ In workflow order; the loop from prompt to review repeats before shipping.
 - Edits files in a built-in highlighted editor, renders Markdown, and takes
   over whatever a shell command opens through the bundled `agentide`
   command (so `git rebase -i` needs no terminal editor)
+- Opens that editor beside the diff or, from any conversations page,
+  filling the centre pane, and moves the open file between the two; an
+  agent session always wins the centre back, its file stepping aside
+  saved (so editing sits beside reviewing, and never over an agent)
 - Previews web pages in an embedded browser and opens a shell running as
   your own user (so verifying behaviour never leaves the window)
 - Finds with Cmd-F everywhere and never turns quotes curly or dashes long

@@ -15,9 +15,10 @@ public struct RepositorySessionsView: View {
     /// worktree,
     /// `onResumed` runs after a resume launches and
     /// `onWorktreeFocus` reports the selected conversation's still
-    /// existing worktree, so other panes can follow along, and
+    /// existing worktree, so other panes can follow along,
     /// `onNewSession`, when given, offers a fresh session in the
-    /// worktree the list is scoped to.
+    /// worktree the list is scoped to and `onOpenEditor` offers the
+    /// centre editor in this pane's place.
     @preconcurrency
     public init(
         repository: Repository,
@@ -26,10 +27,12 @@ public struct RepositorySessionsView: View {
         progress: LaunchProgress? = nil,
         onWorktreeFocus: (@MainActor (String?) -> Void)? = nil,
         onNewSession: (@MainActor () -> Void)? = nil,
+        onOpenEditor: (@MainActor () -> Void)? = nil,
         onResumed: @escaping @MainActor () async -> Void,
     ) {
         self.onWorktreeFocus = onWorktreeFocus
         self.onNewSession = onNewSession
+        self.onOpenEditor = onOpenEditor
         self.onResumed = onResumed
         self.progress = progress
         identity = repository.id + "#" + (worktreePath ?? "")
@@ -107,6 +110,7 @@ public struct RepositorySessionsView: View {
     private let progress: LaunchProgress?
     private let onWorktreeFocus: (@MainActor (String?) -> Void)?
     private let onNewSession: (@MainActor () -> Void)?
+    private let onOpenEditor: (@MainActor () -> Void)?
     private let onResumed: @MainActor () async -> Void
     private let makeModel: () -> RepositorySessionsModel
 
@@ -119,9 +123,20 @@ public struct RepositorySessionsView: View {
             )
             .font(.subheadline.weight(.semibold))
             Spacer()
-            // Starting fresh comes before continuing something, in
-            // the order the two are read; resuming stays the
-            // prominent one, since it is why the list is here.
+            // The editor is a sideways move rather than session
+            // work, so it comes first; then starting fresh before
+            // continuing something, in the order the two are read,
+            // with resuming the prominent one, since it is why the
+            // list is here.
+            if let onOpenEditor {
+                Button("Editor", action: onOpenEditor)
+                    .controlSize(.small)
+                    .hoverHelp(
+                        model.worktreePath == nil
+                            ? "Edit files in this repository's main checkout, in this pane"
+                            : "Edit this worktree's files in this pane; this list is a click away",
+                    )
+            }
             if let onNewSession {
                 Button(model.worktreePath == nil ? "Start session" : "New session", action: onNewSession)
                     .controlSize(.small)

@@ -34,7 +34,15 @@ final class WaitingEdits {
     /// each new request to the front and telling its shim the app
     /// has the file. Whatever the pane was showing comes back once
     /// nothing is waiting, so a rebase returns to its own shell.
-    func watch(service: SessionService, dashboard: DashboardModel) async {
+    /// `prefersCentreEditor` says whether a worktree's centre pane
+    /// is an editor, which then shows the file itself and the
+    /// utility pane is left alone.
+    func watch(
+        service: SessionService,
+        dashboard: DashboardModel,
+        prefersCentreEditor: @escaping @MainActor (String) -> Bool,
+    ) async {
+        self.prefersCentreEditor = prefersCentreEditor
         for await edits in service.pendingEdits() {
             // Only a waiting request holds a pane; the others are
             // acted on and dropped as they arrive.
@@ -76,6 +84,10 @@ final class WaitingEdits {
     /// interrupts once, and the tab to go back to afterwards.
     private var shown: String?
     private var previousTab: String?
+
+    /// Whether a worktree's centre pane is an editor, asked before
+    /// taking the utility pane over; set by `watch`.
+    private var prefersCentreEditor: @MainActor (String) -> Bool = { _ in false }
 
     /// A request nothing waits on: a directory selects its worktree
     /// or repository, a file selects the worktree holding it and
@@ -125,9 +137,16 @@ final class WaitingEdits {
         // the window really does come to the front.
         NSApp.activate()
         let items = dashboard.groups.flatMap(\.items)
-        if let item = items.first(where: { edit.belongs(toWorktree: $0.worktree.path) }) {
-            dashboard.select(item)
+        let holder = items.first { edit.belongs(toWorktree: $0.worktree.path) }
+        if let holder {
+            dashboard.select(holder)
         }
+        // A centre pane showing the editor takes the file itself;
+        // only the side editor needs the utility pane taken over.
+        if let path = (holder ?? dashboard.selection)?.worktree.path, prefersCentreEditor(path) {
+            return
+        }
+
         let defaults = UserDefaults.standard
         // A tab the user has never switched by hand is not in the
         // defaults at all, and without a name to go back to the pane

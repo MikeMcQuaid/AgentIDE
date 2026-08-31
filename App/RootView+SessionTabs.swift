@@ -43,7 +43,7 @@ extension RootView {
             // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip(hiding: item.worktree.isHostDirectory ? [.editor] : [])
+                    UtilityTabStrip()
                 }
             }
             Spacer(minLength: 0)
@@ -86,6 +86,7 @@ extension RootView {
             progress: dependencies.dashboard.launchProgress,
             onWorktreeFocus: { focusConversation(at: $0) },
             onNewSession: { startingSession = item.worktree.path },
+            onOpenEditor: { setCentreEditor(true, at: item.worktree.path) },
             onResumed: { await dependencies.dashboard.refresh() },
         )
         .padding(.top, Self.toggleRowHeight)
@@ -100,6 +101,7 @@ extension RootView {
             worktreePath: item.worktree.path,
             progress: dependencies.dashboard.launchProgress,
             onNewSession: { startingSession = item.worktree.path },
+            onOpenEditor: { setCentreEditor(true, at: item.worktree.path) },
             onResumed: { await sessionStarted(in: item.worktree.path) },
         )
         .padding(.top, Self.toggleRowHeight)

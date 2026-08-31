@@ -132,10 +132,10 @@ struct AppCommands: Commands {
         utilityTab = tab.rawValue
     }
 
-    /// Jumps to the editor tab's finder in the chosen mode; the pane
-    /// consumes the focus request once it is on screen.
+    /// Asks for an editor finder in the chosen mode; the window
+    /// routes the request to the centre or side editor, reveals it
+    /// and its pane consumes the focus once on screen.
     private func openFinder(searchingContents: Bool) {
-        show(.editor)
         finderSearchesContents = searchingContents
         finderFocusRequest += 1
     }

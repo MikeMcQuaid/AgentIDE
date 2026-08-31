@@ -473,11 +473,32 @@ page resumes any past conversation into a fresh worktree.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
+The **editor** is one `EditorPane` implementation filling two slots:
+the utility pane's Editor tab and, when chosen, the centre pane. A
+directory of your own is pinned to the centre slot; a worktree or
+repository page opens it from an Editor button on its conversations
+view, and the primary pane's branch order is what guarantees a live
+session always outranks the centre editor, so one can never cover the
+other. Each slot persists its own finder and open file under
+role-suffixed defaults keys; open-file and finder-focus requests
+travel the shared keys and the window routes each to the preferred
+slot: the side editor unless the centre editor is on screen, and
+always the slot already holding the requested file, so one file never
+opens in both. A move button on the open file sends it to the other
+slot, and a session appearing in a worktree whose centre held the
+editor (`agentide new`, a phone, a resume) moves the open file to the
+side editor. Buffers survive every such displacement because an editor
+saves on its way off screen; the Close button is the one deliberate
+discard, and a file a command waits on is never written behind its
+back. The two slots mounting together share one ripgrep file listing
+per worktree (`FileListings`), joining a run in flight rather than
+spawning a second.
+
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
 request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
-a dispatch source, opens the file in the utility pane's editor and
+a dispatch source, opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A request whose
 process has gone is swept. Nothing inside the sandbox can reach the

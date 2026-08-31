@@ -9,18 +9,21 @@ public struct CreateSessionPane: View {
 
     /// Creates the pane; `canResume` offers `onResume` for the
     /// worktree's most recent conversation, `onStarted` runs after a
-    /// successful launch and `onShowConversations`, when given, goes
-    /// back to the list this form was reached from.
+    /// successful launch, `onShowConversations`, when given, goes
+    /// back to the list this form was reached from and
+    /// `onOpenEditor` offers the centre editor in this pane's place.
     @preconcurrency
     public init(
         worktree: Worktree,
         model: DashboardModel,
         canResume: Bool,
         onShowConversations: (@MainActor @Sendable () -> Void)? = nil,
+        onOpenEditor: (@MainActor @Sendable () -> Void)? = nil,
         onResume: @escaping @MainActor () async -> Void,
         onStarted: @escaping @MainActor () async -> Void,
     ) {
         self.onShowConversations = onShowConversations
+        self.onOpenEditor = onOpenEditor
         self.worktree = worktree
         self.model = model
         self.canResume = canResume
@@ -41,6 +44,11 @@ public struct CreateSessionPane: View {
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
+                if let onOpenEditor {
+                    Button("Editor", action: onOpenEditor)
+                        .controlSize(.small)
+                        .hoverHelp("Edit this worktree's files in this pane without starting an agent")
+                }
                 if let onShowConversations {
                     Button("Conversations", action: onShowConversations)
                         .controlSize(.small)
@@ -75,6 +83,7 @@ public struct CreateSessionPane: View {
     @State private var isResuming = false
 
     private let onShowConversations: (@MainActor @Sendable () -> Void)?
+    private let onOpenEditor: (@MainActor @Sendable () -> Void)?
     private let worktree: Worktree
     private let model: DashboardModel
     private let canResume: Bool

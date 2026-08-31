@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import DashboardFeature
+import ReviewFeature
 import SwiftUI
 import TerminalUI
 
@@ -83,6 +84,18 @@ struct RootView: View {
         visitedBrowsers.sorted()
     }
 
+    /// The worktrees whose centre pane is the editor rather than
+    /// conversations; internal and settable because the extension
+    /// files that route requests cannot see the view's own state.
+    /// Writing persists the set as newline-joined path lines.
+    var centreEditorPaths: Set<String> {
+        get { centreEditors }
+        nonmutating set {
+            centreEditors = newValue
+            centreEditorLines = newValue.sorted().joined(separator: "\n")
+        }
+    }
+
     /// The worktree showing its new session form rather than its
     /// conversations, which is how a worktree that already has
     /// conversations starts a fresh session; internal and settable
@@ -128,15 +141,35 @@ struct RootView: View {
         .sheet(isPresented: sessionManagerBinding) { sessionManager }
         .task {
             FlavourIcon.apply()
+            // Focus counters from the previous run must not fire on
+            // this one's first mount.
             finderFocusRequest = 0
+            for role in EditorPane.Role.allCases {
+                UserDefaults.standard.set(0, forKey: role.key("finderFocusRequest"))
+            }
             rememberedTabs = Self.decodeTabs(worktreeTabs)
+            centreEditors = Set(centreEditorLines.split(separator: "\n").map(String.init))
             await dependencies.dashboard.poll()
         }
         // A shell command waiting on an editor is stopped until this
         // window shows it the file, so it is watched for separately
         // from the dashboard's own slower poll.
         .task {
-            await waiting.watch(service: dependencies.service, dashboard: dependencies.dashboard)
+            // Bound first: the formatter rewrites a trailing closure
+            // after a multiline call.
+            let prefersCentre: @MainActor (String) -> Bool = { path in
+                let items = dependencies.dashboard.groups.flatMap(\.items)
+                guard let item = items.first(where: { $0.worktree.path == path }) else {
+                    return false
+                }
+
+                return centreShowsEditor(for: item)
+            }
+            await waiting.watch(
+                service: dependencies.service,
+                dashboard: dependencies.dashboard,
+                prefersCentreEditor: prefersCentre,
+            )
         }
         // Sleep sometimes kills the sandbox herdr server; sessions
         // running at sleep that are gone at wake resume themselves,
@@ -170,6 +203,19 @@ struct RootView: View {
         .onChange(of: dependencies.dashboard.worktreePaths) { _, paths in
             runningShells.formIntersection(paths)
             visitedBrowsers.formIntersection(paths)
+            centreEditorPaths.formIntersection(paths)
+        }
+        // Open-file and finder-focus requests land on shared keys;
+        // the window is what knows which editor slot should take
+        // each, so it routes them here.
+        .onChange(of: editorFileRequest) { routeOpenFileRequest() }
+        .onChange(of: finderFocusRequest) { routeFinderFocusRequest() }
+        // A session appearing in a worktree whose centre pane held
+        // the editor (from `agentide new`, a phone or a resume): the
+        // session always wins the centre, so the open file moves to
+        // the side editor.
+        .onChange(of: runningWorktreePaths) { _, running in
+            displaceCentreEditors(nowRunning: running)
         }
         // Reopening the app resumes the restored worktree's most
         // recent conversation: the default workflow is picking up
@@ -299,9 +345,15 @@ struct RootView: View {
     @State private var sleepInhibitor: SleepInhibitor = .init()
 
     /// Focus requests from the finder menu items, cleared at launch
-    /// so a request from the previous run cannot fire.
+    /// so a request from the previous run cannot fire; internal so
+    /// the routing extension can read the counter it consumes.
     @AppStorage("finderFocusRequest")
-    private var finderFocusRequest = 0
+    var finderFocusRequest = 0
+
+    /// Open-file requests from the openers, routed to an editor slot
+    /// by the extension file; internal for the same reason.
+    @AppStorage("editorFileRequest")
+    var editorFileRequest = 0
 
     @AppStorage("resizePanesRequest")
     private var resizePanesRequest = 0
@@ -332,6 +384,13 @@ struct RootView: View {
     @AppStorage("worktreeTabs")
     private var worktreeTabs = ""
     @State private var rememberedTabs: [String: String] = [:]
+
+    /// The worktrees showing the centre editor, persisted as path
+    /// lines so the choice survives restarts; directories of your
+    /// own are pinned to it and never recorded here.
+    @AppStorage("centreEditorWorktrees")
+    private var centreEditorLines = ""
+    @State private var centreEditors: Set<String> = []
 
     /// What the window is now, which the panes are fitted to.
     @State private var windowWidth: CGFloat = 0
