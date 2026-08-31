@@ -21,6 +21,9 @@ struct PullRequestConversationPane: View {
     let onOpenChecks: @MainActor () async -> Void
     let onResolvedChanged: @MainActor () async -> Void
 
+    /// See `PullRequestConversationView.onThreadsChanged`.
+    let onThreadsChanged: @MainActor (Int) -> Void
+
     /// Toggles one label against GitHub the moment a menu item is
     /// clicked; declared before the lists so the call site's
     /// closure is never its final argument, which SwiftFormat
@@ -60,6 +63,7 @@ struct PullRequestConversationPane: View {
                 seededBody: summary.body,
                 store: store,
                 onResolvedChanged: onResolvedChanged,
+                onThreadsChanged: onThreadsChanged,
             )
         }
     }
@@ -139,6 +143,11 @@ struct PullRequestConversationView: View {
     /// refresh immediately.
     let onResolvedChanged: @MainActor () async -> Void
 
+    /// Told how many conversations are unresolved whenever the
+    /// threads change, which keeps the footer's copy button level
+    /// with the timeline.
+    let onThreadsChanged: @MainActor (Int) -> Void
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
@@ -173,6 +182,9 @@ struct PullRequestConversationView: View {
             events = cached.events
             threads = cached.threads
             await refresh()
+        }
+        .onChange(of: threads) { _, threads in
+            onThreadsChanged(threads.count { $0.isResolved == false })
         }
     }
 

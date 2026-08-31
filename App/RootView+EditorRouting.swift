@@ -31,6 +31,18 @@ extension RootView {
             || (centreEditorPaths.contains(item.worktree.path) && centreCanShowEditor(for: item))
     }
 
+    /// Whether the worktree at a path shows its centre editor, for
+    /// the waiting-edit takeover, which must leave the utility pane
+    /// alone when the centre slot will show the file.
+    func prefersCentreEditor(at path: String) -> Bool {
+        let items = dependencies.dashboard.groups.flatMap(\.items)
+        guard let item = items.first(where: { $0.worktree.path == path }) else {
+            return false
+        }
+
+        return centreShowsEditor(for: item)
+    }
+
     /// Sets a worktree's centre pane to its editor or back to its
     /// conversations.
     func setCentreEditor(_ shows: Bool, at path: String) {
@@ -52,6 +64,15 @@ extension RootView {
         }
 
         let role = preferredEditorRole(file: file, worktreePath: worktree)
+        // An off-screen centre slot still remembering this file
+        // would reopen it beside the routed copy when it next
+        // shows; the file lives in one slot only.
+        let other = role.other
+        if defaults.string(forKey: other.key("editorFilePath")) == file,
+           defaults.string(forKey: other.key("editorFileWorktree")) == worktree
+        {
+            defaults.set("", forKey: other.key("editorFilePath"))
+        }
         defaults.set(file, forKey: role.key("editorFilePath"))
         defaults.set(defaults.integer(forKey: "editorFileLine"), forKey: role.key("editorFileLine"))
         defaults.set(worktree, forKey: role.key("editorFileWorktree"))
@@ -127,7 +148,8 @@ extension RootView {
         if let file, file.isEmpty == false, let worktreePath {
             for role in EditorPane.Role.allCases
                 where defaults.string(forKey: role.key("editorFilePath")) == file
-                && defaults.string(forKey: role.key("editorFileWorktree")) == worktreePath {
+                && defaults.string(forKey: role.key("editorFileWorktree")) == worktreePath
+            {
                 // A file held by a centre slot that is not on screen
                 // must not route into the void.
                 if role == .utility || centreVisible {

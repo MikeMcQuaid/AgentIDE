@@ -362,7 +362,8 @@ final class PullRequestsModel {
     func repaintFromCache() {
         if let selected,
            let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
-           cached != selected {
+           cached != selected
+        {
             self.selected = cached
         }
         summaries = summaries.map { row in

@@ -112,6 +112,14 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// the count is remembered.
     public var unresolvedComments: Int
 
+    /// Whether the checks rollup is red: something has concluded
+    /// failing, even while the rest still runs. Pending and green
+    /// rollups say no, which is what greys the failing-logs button
+    /// until there is a failure to read.
+    public var hasFailingChecks: Bool {
+        checks == "FAILURE"
+    }
+
     /// The pull request's checks page.
     public var checksPageURL: String {
         url + "/checks"
@@ -120,7 +128,11 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// Where a click on the check state should go: the one failing
     /// run when there is exactly one, otherwise the checks page.
     public var checksClickURL: String {
-        failingCheckLinks.count == 1 ? failingCheckLinks[0] : checksPageURL
+        if failingCheckLinks.count == 1 {
+            failingCheckLinks[0]
+        } else {
+            checksPageURL
+        }
     }
 
     /// The stable identity, the pull request number.

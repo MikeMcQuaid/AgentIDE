@@ -51,7 +51,7 @@ extension PullRequestsModel {
 
         cacheEnriched(full)
         if selected?.number == number {
-            selected = full
+            selected = withCachedUnresolved(full)
         }
         if let index = summaries.firstIndex(where: { $0.number == number }) {
             summaries[index] = full
@@ -127,18 +127,41 @@ extension PullRequestsModel {
     /// instantly, then refreshes it; the open scope's light rows
     /// gain their status icons here.
     func select(_ summary: PullRequestSummary) {
-        selected = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
-            ?? summary
+        let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
+        selected = withCachedUnresolved(cached ?? summary)
         Task { await loadSelectedLabels(summary.number) }
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
                 cacheEnriched(full)
                 if selected?.number == full.number {
-                    selected = full
+                    selected = withCachedUnresolved(full)
                 }
             }
         }
+    }
+
+    /// The conversation pane counted its unresolved threads: keep
+    /// the open summary level with it, which is what enables the
+    /// footer's copy button the moment there is something to copy.
+    func updateUnresolved(_ count: Int, number: Int) {
+        guard selected?.number == number else {
+            return
+        }
+
+        selected?.unresolvedComments = count
+    }
+
+    /// A summary with its unresolved-conversation count from the
+    /// threads cache: no listing or summary query carries the count,
+    /// so what the conversation pane last cached stands in, the way
+    /// the sidebar rows count theirs.
+    private func withCachedUnresolved(_ summary: PullRequestSummary) -> PullRequestSummary {
+        let key = AppMetadata.threadsKey(repositoryPath: repository.path, number: summary.number)
+        let threads = store.load().threadsCache[key]?.threads ?? []
+        var stamped = summary
+        stamped.unresolvedComments = threads.count { $0.isResolved == false }
+        return stamped
     }
 
     /// Caches one enriched summary, so reopening the conversation

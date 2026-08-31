@@ -587,10 +587,17 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability alone offered Merge on a branch whose policy still
   wanted a review, and `gh` refused it.
 - **Last mile buttons**: copy unresolved review threads grouped per
-  file; one failing-checks button that copies the tail of every failing
-  run's `gh run view --log-failed` condensed (job and step named once
-  in a heading, timestamps and colour stripped), Cmd opening the check
-  in the browser and Shift in the Browser tab.
+  file, dimmed until one is unresolved (the count comes from the
+  threads the conversation pane has read, since no listing query
+  carries it); one failing-checks button, dimmed until the rollup is
+  red,
+  that copies the tail of every failing run's `gh run view
+  --log-failed` condensed (job and step named once in a heading,
+  timestamps and colour stripped), Cmd opening the check in the
+  browser and Shift in the Browser tab. A run still in progress has
+  no whole-run log, so its already-failed jobs answer with their own
+  (`--json jobs`, then `--job <id> --log-failed` each) rather than
+  failing while the rest of the run decides.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses

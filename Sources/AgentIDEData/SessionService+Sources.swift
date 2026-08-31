@@ -38,7 +38,15 @@ struct WorktreeSlot {
 /// editor panes mounting together share a single ripgrep run. A
 /// finished listing leaves at once; a later ask reads afresh.
 final class FileListings: Sendable {
-    let running = Mutex<[String: Task<[String], Never>]>([:])
+    // MARK: Lifecycle
+
+    deinit {
+        // Nothing to clean up: tasks remove themselves.
+    }
+
+    // MARK: Internal
+
+    let running: Mutex<[String: Task<[String], Never>]> = .init([:])
 }
 
 // MARK: - Prompt sources and search
@@ -298,22 +306,25 @@ public extension SessionService {
     /// The worktree's tracked and untracked files, gitignore aware,
     /// for the fuzzy finder. The centre and side editors mount
     /// together, so a caller joins a listing already running for the
-    /// worktree rather than spawning a second ripgrep.
+    /// worktree rather than spawning a second ripgrep. The task is
+    /// unstructured on purpose, so a joined listing never dies with
+    /// whichever pane started it, and it removes itself on
+    /// completion, so cleanup depends on no caller getting there.
     func listFiles(worktreePath: String) async -> [String] {
-        let (listing, started) = fileListings.running.withLock { listings in
+        let listing = fileListings.running.withLock { listings -> Task<[String], Never> in
             if let joined = listings[worktreePath] {
-                return (joined, false)
+                return joined
             }
 
-            let listing = Task { await readFileList(worktreePath: worktreePath) }
+            let listing = Task {
+                let files = await readFileList(worktreePath: worktreePath)
+                fileListings.running.withLock { $0[worktreePath] = nil }
+                return files
+            }
             listings[worktreePath] = listing
-            return (listing, true)
+            return listing
         }
-        let files = await listing.value
-        if started {
-            fileListings.running.withLock { $0[worktreePath] = nil }
-        }
-        return files
+        return await listing.value
     }
 
     /// One ripgrep listing of a worktree's files.
