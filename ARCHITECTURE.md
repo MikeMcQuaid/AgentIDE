@@ -626,7 +626,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   browser and Shift in the Browser tab. A run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than
-  failing while the rest of the run decides.
+  failing while the rest of the run decides; gh gates even a
+  finished job's view behind the run, so a refused job falls back to
+  the plain REST job log, named once in front since that log carries
+  no job column, and a job with no log to give yet is skipped rather
+  than fatal.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses

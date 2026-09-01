@@ -196,16 +196,17 @@ struct GitHubClientTests {
     }
 
     @Test
-    func `failed job ids parse from a run's jobs listing`() {
+    func `failed jobs parse from a run's jobs listing`() {
         let json = """
         {"jobs": [
-          {"databaseId": 11, "conclusion": "failure"},
-          {"databaseId": 12, "conclusion": null},
-          {"databaseId": 13, "conclusion": "success"}
+          {"databaseId": 11, "name": "style", "conclusion": "failure"},
+          {"databaseId": 12, "name": "test", "conclusion": null},
+          {"databaseId": 13, "name": "build", "conclusion": "success"}
         ]}
         """
-        #expect(GitHubClient.failedJobIDs(fromJSON: json) == [11])
-        #expect(GitHubClient.failedJobIDs(fromJSON: "").isEmpty)
+        #expect(GitHubClient.failedJobs(fromJSON: json).map(\.databaseId) == [11]) // swiftformat:disable:this acronyms
+        #expect(GitHubClient.failedJobs(fromJSON: json).map(\.name) == ["style"])
+        #expect(GitHubClient.failedJobs(fromJSON: "").isEmpty)
     }
 
     @Test
@@ -218,6 +219,60 @@ struct GitHubClientTests {
         ])
         let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
         #expect(log == "job\tstep\tline")
+    }
+
+    @Test
+    func `a job gh still refuses answers from the plain job log`() async throws {
+        // gh refuses even a completed job's view while its run is in
+        // progress; the REST log has no such gate.
+        let jobs = #"{"jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}"#
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
+            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
+            "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("2026-09-01T10:00:00Z it broke\n"),
+        ])
+        let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
+        #expect(log == "[job style]\n2026-09-01T10:00:00Z it broke")
+    }
+
+    @Test
+    func `a job with no log yet is skipped rather than fatal`() async throws {
+        let jobs = #"""
+        {"jobs": [{"databaseId": 11, "name": "early", "conclusion": "failure"},
+                  {"databaseId": 12, "name": "late", "conclusion": "failure"}]}
+        """#
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
+            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view --job 11 --log-failed": .success("early\tstep\tbroke here\n"),
+            "gh run view --job 12 --log-failed": .failure("run 9 is still in progress"),
+            "gh api repos/{owner}/{repo}/actions/jobs/12/logs": .failure("still uploading"),
+        ])
+        let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
+        #expect(log == "early\tstep\tbroke here")
+    }
+
+    @Test
+    func `an answer that is not log text is dropped rather than pasted`() async {
+        #expect(GitHubClient.isText("2026-09-01T10:00:00Z it broke"))
+        #expect(GitHubClient.isText("") == false)
+        #expect(GitHubClient.isText("PK\u{3}\u{4}rubbish") == false)
+        #expect(GitHubClient.isText("some\0bytes") == false)
+
+        // A job whose log comes back as anything but text leaves the
+        // run's own refusal standing, rather than a prompt full of
+        // an archive's innards.
+        let jobs = #"{"jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}"#
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
+            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
+            "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("PK\u{3}\u{4}archive"),
+        ])
+        await #expect(throws: Error.self) {
+            try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
+        }
     }
 
     @Test
