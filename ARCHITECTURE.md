@@ -245,7 +245,11 @@ Deriving is not trusting one reading: a listing can fail, and
 rebase. A row the newest reading dropped is kept while its directory
 exists; only removal from disk removes the row. This is a display rule,
 not a cache. It matters because a row holds its worktree's panes open,
-and a pane holds a running shell.
+and a pane holds a running shell. The same tolerance applies the other
+way round: a mounted pane whose worktree vanished mid-read (a branch
+renamed away, cleanup after a merge) reports nothing, since that is
+the workspace changing rather than a failure, and the sidebar drops
+the row on its own.
 
 There is no windowless resident mode: the app quits with its last
 window. Sessions keep running; the event spool is durable files, so a

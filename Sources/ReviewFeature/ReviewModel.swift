@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import Observation
 import TerminalUI
 
@@ -54,11 +55,6 @@ final class ReviewModel {
         /// open pull request's base branch, or the default branch.
         case branch
     }
-
-    /// Path fragments treated as generated and hidden by default.
-    static let generatedFragments = [
-        ".pbxproj", "Package.resolved", ".lock", "Gemfile.lock", ".xcassets",
-    ]
 
     /// The repository this worktree belongs to, as the sidebar names
     /// it, so its messages say which repository they are about.
@@ -117,6 +113,11 @@ final class ReviewModel {
 
     let worktreePath: String
 
+    /// Test seam: whether the worktree's directory still exists,
+    /// which decides if a reload failure is worth reporting; the
+    /// real file system by default.
+    var worktreeExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
     var scope: Scope = .lastCommit {
@@ -143,11 +144,6 @@ final class ReviewModel {
         commitMessage != originalMessage
     }
 
-    /// The conversations anchored to one file.
-    func threads(for path: String) -> [ReviewThread] {
-        threads.filter { $0.path == path }
-    }
-
     /// Flips one conversation's resolved state on GitHub, then
     /// refreshes the inline listing.
     func toggleResolved(_ thread: ReviewThread) async {
@@ -158,11 +154,6 @@ final class ReviewModel {
             report(error.localizedDescription)
         }
         hasLoaded = true
-    }
-
-    /// Whether a path looks generated.
-    func isGenerated(_ path: String) -> Bool {
-        Self.generatedFragments.contains { path.contains($0) }
     }
 
     /// Loads the scope's diff.
@@ -222,7 +213,14 @@ final class ReviewModel {
             }
             threads = await fetchThreads()
         } catch {
-            report(error.localizedDescription)
+            // A worktree can vanish between the poll that mounted
+            // this pane and the reload that reads it (a branch
+            // renamed away, cleanup after a merge): that is the
+            // workspace changing, not a failure, and the sidebar
+            // drops the row on its own.
+            if worktreeExists(worktreePath) {
+                report(error.localizedDescription)
+            }
         }
         hasLoaded = true
     }
