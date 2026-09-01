@@ -38,7 +38,67 @@ struct FileListingTests {
         _ = await service.listFiles(worktreePath: world.repository.path)
         #expect(runner.runCount == 2)
     }
+
+    @Test
+    func `search finds matches with ripgrep`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let target = world.repository.path + "/needle.swift"
+        try "let haystack = 1\nlet needleValue = 2\n".write(toFile: target, atomically: true, encoding: .utf8)
+
+        let hits = await world.service.search(worktreePath: world.repository.path, query: "needleValue")
+        let hit = try #require(hits.first)
+        #expect(hit.file == "needle.swift")
+        #expect(hit.line == 2)
+        #expect(hit.text.contains("needleValue"))
+        #expect(await world.service.search(worktreePath: world.repository.path, query: "").isEmpty)
+
+        // Hidden files are part of the project (workflows, dot
+        // configurations) and search like any other.
+        try "hiddenNeedle here\n".write(
+            toFile: world.repository.path + "/.hidden.yml",
+            atomically: true,
+            encoding: .utf8,
+        )
+        let hidden = await world.service.search(worktreePath: world.repository.path, query: "hiddenNeedle")
+        #expect(hidden.first?.file == ".hidden.yml")
+    }
+
+    @Test
+    func `lists files for the fuzzy finder`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        try FileManager.default.createDirectory(
+            atPath: world.repository.path + "/deep",
+            withIntermediateDirectories: true,
+        )
+        try "x\n".write(toFile: world.repository.path + "/deep/nested.swift", atomically: true, encoding: .utf8)
+
+        let files = await world.service.listFiles(worktreePath: world.repository.path)
+        #expect(files.contains("deep/nested.swift"))
+        #expect(files.contains("README.md"))
+
+        // Hidden files list too; git's own machinery never does.
+        try FileManager.default.createDirectory(
+            atPath: world.repository.path + "/.github/workflows",
+            withIntermediateDirectories: true,
+        )
+        try "on: push\n".write(
+            toFile: world.repository.path + "/.github/workflows/ci.yml",
+            atomically: true,
+            encoding: .utf8,
+        )
+        let withHidden = await world.service.listFiles(worktreePath: world.repository.path)
+        #expect(withHidden.contains(".github/workflows/ci.yml"))
+        #expect(withHidden.contains { $0.hasPrefix(".git/") } == false)
+    }
 }
+
+// MARK: - RepositoryPageIntegrationTests
+
+/// The repository page's conversation browser and unread state, which
+/// span worktrees rather than one session.
+struct RepositoryPageIntegrationTests {}
 
 // MARK: - SlowCountingRunner
 
