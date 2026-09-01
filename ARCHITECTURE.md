@@ -496,7 +496,13 @@ saves on its way off screen; the Close button is the one deliberate
 discard, and a file a command waits on is never written behind its
 back. The two slots mounting together share one ripgrep file listing
 per worktree (`FileListings`), joining a run in flight rather than
-spawning a second.
+spawning a second. The editing shortcuts (Cmd-/ comment toggling per
+language, Tab and Shift-Tab at the file's own indentation unit,
+Option-arrow line moves, Cmd-D duplication, Cmd-Shift-K deletion and
+Return carrying the line's indentation) are pure `LineEditing` rules
+and whole-line range plumbing the text view maps selections onto,
+each one undoable edit; saving strips trailing whitespace and
+guarantees one final newline (`Whitespace`).
 
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
@@ -504,7 +510,14 @@ request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
 a dispatch source, opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
-saved, non-zero cancelled, which aborts a rebase). A request whose
+saved, non-zero cancelled, which aborts a rebase). A symlinked file
+resolves to its target before it is asked for: the editor saves
+atomically, which would otherwise replace the link itself with a
+plain file. On `.open` the shim
+runs `open` on the bundle it shipped in, bringing the app forward: the
+terminal's own child may ask that of the system where the app asking
+for itself is refused by cooperative activation, and the copy outside
+any bundle (the shared workspace's, for SSH) skips it. A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
 spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
@@ -531,6 +544,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   running or queued is asked every half minute, back to its tier after
   an hour (a stalled run or an outage must not be polled at that rate).
   A push looks again a minute later, where the run it started shows.
+  An agent's finished turn forgets its own branch's stamps, on the
+  assumption the turn committed, so the same reading's pull request
+  pass re-asks at once rather than waiting out the tier.
   Acting on a pull request clears its stamp; looking never does.
 - **Row and pane never disagree**: both read the one enriched-summary
   cache, the sidebar repainted through the storage bus whenever the

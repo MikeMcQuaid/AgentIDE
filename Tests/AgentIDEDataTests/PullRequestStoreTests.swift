@@ -117,6 +117,25 @@ struct PullRequestStoreTests {
     }
 
     @Test
+    func `a finished turn forgets one branch's stamps and no other's`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-turn") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("other"))
+        #expect(runner.calls == 2)
+
+        // The agent's turn ended, so the branch is assumed to carry
+        // fresh commits: its next look asks GitHub now rather than
+        // waiting out the interval, and the other branch waits on.
+        store.invalidateBranch(repositoryPath: "/repo", branch: "work")
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("other"))
+        #expect(runner.calls == 3)
+    }
+
+    @Test
     func `an entity tag is not sent back once the listing it stamped has gone`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-etag") + "/state.json"
         let runner = CountingRunner()

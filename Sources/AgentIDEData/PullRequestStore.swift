@@ -267,6 +267,24 @@ public struct PullRequestStore: Sendable {
         }
     }
 
+    /// Forgets one branch's listing stamp and its pull requests'
+    /// summary stamps, for what an agent's finished turn is assumed
+    /// to have changed: the next look asks GitHub now rather than
+    /// waiting out the branch's interval, while every other branch
+    /// waits on. The cached answers stay, so the rows keep painting
+    /// until the fresh ones land.
+    public func invalidateBranch(repositoryPath: String, branch: String) {
+        let listing = Self.listingKey(repositoryPath: repositoryPath, scope: .branch(branch))
+        store.update { metadata in
+            metadata.fetchedAt.removeValue(forKey: listing)
+            for summary in metadata.pullRequestListsCache[listing]?.summaries ?? [] {
+                metadata.fetchedAt.removeValue(
+                    forKey: Self.summaryKey(repositoryPath: repositoryPath, number: summary.number),
+                )
+            }
+        }
+    }
+
     /// Forgets a repository's listings, for what pushing a branch or
     /// opening a pull request has just changed.
     public func invalidateListings(repositoryPath: String) {

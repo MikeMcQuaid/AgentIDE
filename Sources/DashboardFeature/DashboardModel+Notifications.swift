@@ -22,6 +22,14 @@ extension DashboardModel {
             let completedTurn = previous.session?.activity == .working && session.activity == .done
             if completedTurn {
                 post(.done, title: "Agent finished", body: body)
+                // The turn is assumed to have committed, so the
+                // branch's pull request stamps are forgotten here,
+                // just before this same reading's pull request pass:
+                // it re-asks at once instead of waiting out the tier.
+                pullRequests.invalidateBranch(
+                    repositoryPath: item.worktree.repositoryPath,
+                    branch: item.worktree.branch,
+                )
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
                 post(.blocked, title: "Agent needs input", body: body)
             } else if previous.hasActionableUnread == false, item.hasActionableUnread {

@@ -257,6 +257,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   move and told nobody anything. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
+- A window changing screens can leave an `NSViewRepresentable`'s
+  AppKit view on the old screen's geometry while the SwiftUI chrome
+  around it lays out correctly (seen: the editor's text bleeding
+  across the window under the sidebar). The editor's coordinator
+  watches the screen-change notifications and snaps its scroll view
+  back onto its hosting container, a no-op while frames agree.
 - The utility pane's review, editor and pull request surfaces stay
   mounted and hide rather than being rebuilt on a tab switch: each
   costs a git or GitHub read to come back, and flipping between

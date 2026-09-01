@@ -23,8 +23,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
             self.language = language
         }
 
-        deinit {
-            // Nothing to clean up.
+        // Isolated: the observer tokens are main-actor state, and
+        // AppKit releases coordinators on the main thread anyway.
+        isolated deinit {
+            for observer in observers {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
 
         // MARK: Internal
@@ -57,6 +61,47 @@ struct HighlightingTextEditor: NSViewRepresentable {
             view.selectedRanges = selection
         }
 
+        /// Watches for the window changing screens and the display
+        /// arrangement changing: either can leave the scroll view on
+        /// the old screen's geometry while SwiftUI's chrome lays out
+        /// correctly, the editor's text then bleeding across the
+        /// window under its neighbours.
+        func watchDisplayChanges(of scroll: NSScrollView) {
+            scrollView = scroll
+            let names: [Notification.Name] = [
+                NSWindow.didChangeScreenNotification,
+                NSApplication.didChangeScreenParametersNotification,
+            ]
+            for name in names {
+                observers.append(NotificationCenter.default.addObserver(
+                    forName: name,
+                    object: nil,
+                    queue: .main,
+                ) { [weak self] _ in
+                    // A turn later, once the switch's own layout has
+                    // settled; the explicit isolation is what lets
+                    // the snap touch AppKit frames.
+                    Task { @MainActor in
+                        self?.realignAfterDisplayChange()
+                    }
+                })
+            }
+        }
+
+        /// Snaps the scroll view back onto its hosting container,
+        /// SwiftUI's own view and therefore the truth about where
+        /// the editor belongs; frames already agreeing make this a
+        /// no-op, so a healthy layout is never disturbed.
+        func realignAfterDisplayChange() {
+            guard let scroll = scrollView, let container = scroll.superview,
+                  scroll.frame != container.bounds
+            else {
+                return
+            }
+
+            scroll.frame = container.bounds
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? NSTextView else {
                 return
@@ -67,6 +112,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
         }
 
         // MARK: Private
+
+        private weak var scrollView: NSScrollView?
+        private var observers: [NSObjectProtocol] = []
 
         private static func colour(for kind: SyntaxToken.Kind) -> NSColor {
             switch kind {
@@ -103,7 +151,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
         let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
         layoutManager.addTextContainer(container)
-        let view = NSTextView(frame: .zero, textContainer: container)
+        let view = EditingTextView(frame: .zero, textContainer: container)
+        view.language = language
         view.autoresizingMask = .width
         view.isVerticallyResizable = true
         view.minSize = NSSize(width: 0, height: 0)
@@ -136,6 +185,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         scroll.verticalRulerView = ruler
         scroll.rulersVisible = true
         Coordinator.highlight(view, language: language)
+        context.coordinator.watchDisplayChanges(of: scroll)
         return scroll
     }
 
