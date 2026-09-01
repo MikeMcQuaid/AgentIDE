@@ -569,9 +569,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.
   Acting on a pull request clears its stamp; looking never does.
-- **Row and pane never disagree**: both read the one enriched-summary
-  cache, the sidebar repainted through the storage bus whenever the
-  pane caches a changed state.
+- **Row and pane never disagree**: both read the same two caches
+  through `PullRequestStore`, the per-branch summary (which pull
+  request a branch has) and the enriched summary (what state it is
+  in), with the sidebar repainted through the storage bus whenever the
+  pane writes either. So a pull request opened in the pane is on its
+  row at once, without the poll having heard of it: the form records
+  what it opened where the row already looks, GitHub's own listing
+  where it has caught up and the bare facts the form knows otherwise,
+  which the next fetch replaces.
 - **Pushing** asks `viewerPermission` first: write access pushes to the
   repository, anything less to the viewer's fork (`gh repo fork` on
   first use) and the pull request names `owner:branch`. Rewritten

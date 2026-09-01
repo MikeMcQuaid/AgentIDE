@@ -38,6 +38,12 @@ public struct PullRequestStore: Sendable {
     /// How often a listing nobody is looking at is asked for.
     public static let backgroundInterval: TimeInterval = 300
 
+    /// The key both sides have always used, so a cache written by an
+    /// earlier release still paints.
+    public static func branchKey(repositoryPath: String, branch: String) -> String {
+        repositoryPath + "#" + branch
+    }
+
     /// A branch or scope's listing, fetched only when it is due;
     /// otherwise the last answer, which is what the tab paints.
     public func listing(
@@ -129,6 +135,31 @@ public struct PullRequestStore: Sendable {
             metadata.pullRequestListsCache[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] =
                 CachedPullRequestList(summaries: summaries)
             metadata.fetchedAt[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] = Date()
+        }
+    }
+
+    /// The pull request a branch is showing, as the sidebar's rows
+    /// and the pull request pane both read it: one structure, so a
+    /// pull request opened in the pane appears on the row without
+    /// either side telling the other.
+    public func branchSummary(repositoryPath: String, branch: String) -> PullRequestSummary? {
+        store.load().pullRequestCache[Self.branchKey(repositoryPath: repositoryPath, branch: branch)]
+    }
+
+    /// Records what a branch is showing; nil forgets it, which is
+    /// what a branch whose pull request has gone gets.
+    public func rememberBranchSummary(
+        _ summary: PullRequestSummary?,
+        repositoryPath: String,
+        branch: String,
+    ) {
+        let key = Self.branchKey(repositoryPath: repositoryPath, branch: branch)
+        store.update { metadata in
+            if let summary {
+                metadata.pullRequestCache[key] = summary
+            } else {
+                metadata.pullRequestCache.removeValue(forKey: key)
+            }
         }
     }
 

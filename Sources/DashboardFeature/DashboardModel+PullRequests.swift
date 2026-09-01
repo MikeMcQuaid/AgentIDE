@@ -19,8 +19,16 @@ extension DashboardModel {
         // branch cache says which pull request; the shared summary
         // cache, written by whichever side fetched last, says what
         // state it is in, so the row and the pane never disagree.
-        let cached = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
+        // The pane writes the same per-branch cache, so a pull
+        // request opened there is on the row before this model's own
+        // poll has heard of it.
+        let known = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
+            ?? pullRequests.branchSummary(
+                repositoryPath: item.worktree.repositoryPath,
+                branch: item.worktree.branch,
+            )
+        let cached = known
             .map { pullRequests.cachedSummary(repositoryPath: item.worktree.repositoryPath, number: $0.number) ?? $0 }
         // Through the same choice the fetch makes, so a cache
         // holding a long-finished pull request stops speaking for
@@ -134,7 +142,11 @@ extension DashboardModel {
                     }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
-                    persist(summary, key: key)
+                    persist(
+                        summary,
+                        repositoryPath: item.worktree.repositoryPath,
+                        branch: item.worktree.branch,
+                    )
                     await cleanUpIfMerged(item, previous: previous, fresh: summaries)
                     ServiceStatus.shared.recordSuccess()
                 } catch {
@@ -351,14 +363,8 @@ extension DashboardModel {
         }
     }
 
-    private func persist(_ summary: PullRequestSummary?, key: String) {
-        store.update { metadata in
-            if let summary {
-                metadata.pullRequestCache[key] = summary
-            } else {
-                metadata.pullRequestCache.removeValue(forKey: key)
-            }
-        }
+    private func persist(_ summary: PullRequestSummary?, repositoryPath: String, branch: String) {
+        pullRequests.rememberBranchSummary(summary, repositoryPath: repositoryPath, branch: branch)
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {
