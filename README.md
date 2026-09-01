@@ -94,6 +94,9 @@ In workflow order; the loop from prompt to review repeats before shipping.
   saved (so editing sits beside reviewing, and never over an agent)
 - Previews web pages in an embedded browser and opens a shell running as
   your own user (so verifying behaviour never leaves the window)
+- Selects like a document: a drag crosses lines in a history diff's hunks,
+  copies leaving the line numbers behind, and crosses messages in the
+  Messages tab (so several lines land in a prompt or report in one go)
 - Finds with Cmd-F everywhere and never turns quotes curly or dashes long
   (so code and commit messages survive being typed)
 

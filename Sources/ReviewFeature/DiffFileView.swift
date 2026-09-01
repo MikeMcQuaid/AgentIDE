@@ -71,6 +71,10 @@ struct DiffFileView: View {
 
     static let changeOpacity = 0.15
 
+    /// Internal, since the selectable extension file tints its
+    /// gutters with it.
+    static let selectedOpacity = 0.35
+
     let file: DiffFile
     let model: ReviewModel
     let isCollapsed: Bool
@@ -132,8 +136,14 @@ struct DiffFileView: View {
         for token in CodeHighlighter.tokens(for: line.content, language: language) {
             for run in Self.whitespaceRuns(of: token.text, from: offset, trailingStart: trailingStart) {
                 var piece = AttributedString(run.text)
+                // Both scopes: Text reads the SwiftUI attributes and
+                // the selectable hunk's conversion keeps only the
+                // AppKit ones.
                 piece.foregroundColor = HighlightedLine.colour(for: token.kind)
-                piece.backgroundColor = run.isMarked ? CodeStyle.whitespaceColour : base
+                piece.appKit.foregroundColor = NSColor(HighlightedLine.colour(for: token.kind))
+                let background = run.isMarked ? CodeStyle.whitespaceColour : base
+                piece.backgroundColor = background
+                piece.appKit.backgroundColor = background.map(NSColor.init)
                 content += piece
             }
             offset += token.text.count
@@ -142,9 +152,17 @@ struct DiffFileView: View {
         if content.characters.isEmpty {
             var blank = AttributedString(" ")
             blank.backgroundColor = base
+            blank.appKit.backgroundColor = base.map(NSColor.init)
             content = blank
         }
         return content
+    }
+
+    /// Internal, since the selectable extension file colours its
+    /// gutters from it too.
+    func isSelected(hunkIndex: Int, lineIndex: Int) -> Bool {
+        model.selections[file.path]?
+            .contains(DiffSelection(hunkIndex: hunkIndex, lineIndex: lineIndex)) ?? false
     }
 
     // MARK: Private
@@ -157,7 +175,7 @@ struct DiffFileView: View {
 
     /// Enough to find a match at a glance without hiding the code.
     private static let foundOpacity = 0.45
-    private static let selectedOpacity = 0.35
+
     private static let filePadding: CGFloat = 8
     private static let numberWidth = 4
 
@@ -244,21 +262,29 @@ struct DiffFileView: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            // Lazy: a long file's lines are built as they scroll in,
-            // not all at once when the file expands.
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
-                    HStack(alignment: .top, spacing: Self.gutterSpacing) {
-                        gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
-                            .hoverHelp("Click a changed line's number to select it for rejection")
-                        lineView(
-                            entry,
-                            key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex),
-                            arm: { isLive = true },
-                            isLive: isLive,
-                        )
+            if model.showsUncommitted {
+                // Line by line, since these lines become fields on a
+                // click; only Copy hunk takes several at once here.
+                // Lazy: a long file's lines are built as they scroll
+                // in, not all at once when the file expands.
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
+                        HStack(alignment: .top, spacing: Self.gutterSpacing) {
+                            gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
+                                .hoverHelp("Click a changed line's number to select it for rejection")
+                            lineView(
+                                entry,
+                                key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex),
+                                arm: { isLive = true },
+                                isLive: isLive,
+                            )
+                        }
                     }
                 }
+            } else {
+                // History never edits, so its hunk is one text and a
+                // drag selects across lines.
+                selectableHunk(hunkIndex: hunkIndex, hunk: hunk)
             }
         }
         .contextMenu { copyHunkAction(hunk) }
@@ -305,33 +331,6 @@ struct DiffFileView: View {
         }
     }
 
-    private static func marker(for kind: DiffLine.Kind) -> String {
-        switch kind {
-        case .context:
-            " "
-
-        case .addition:
-            "+"
-
-        case .deletion:
-            "-"
-        }
-    }
-
-    private static func background(for kind: DiffLine.Kind, selected: Bool) -> Color {
-        let opacity = selected ? Self.selectedOpacity : Self.changeOpacity
-        switch kind {
-        case .context:
-            return .clear
-
-        case .addition:
-            return .green.opacity(opacity)
-
-        case .deletion:
-            return .red.opacity(opacity)
-        }
-    }
-
     /// Splits a token into runs, marked when a character is a tab or
     /// sits in the line's trailing whitespace.
     private static func whitespaceRuns(
@@ -371,11 +370,7 @@ struct DiffFileView: View {
             }
 
             content[from ..< upTo].backgroundColor = .yellow.opacity(Self.foundOpacity)
+            content[from ..< upTo].appKit.backgroundColor = NSColor(Color.yellow.opacity(Self.foundOpacity))
         }
-    }
-
-    private func isSelected(hunkIndex: Int, lineIndex: Int) -> Bool {
-        model.selections[file.path]?
-            .contains(DiffSelection(hunkIndex: hunkIndex, lineIndex: lineIndex)) ?? false
     }
 }

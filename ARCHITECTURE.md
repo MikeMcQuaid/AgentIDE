@@ -304,7 +304,8 @@ flowchart TD
   `NSTextView`).
 - **TerminalUI**: shared components, not a feature: the SwiftTerm
   wrapper, markdown rendering, tooltips, `LinkOpener`, `BusyButton`,
-  `LaunchProgress` and syntax highlighting (tree-sitter grammars, with
+  `LaunchProgress`, `SelectableTextView` (read-only document-style
+  selection) and syntax highlighting (tree-sitter grammars, with
   the Domain's tokenizer as fallback for fragmentary text).
 - **AgentIDEApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
@@ -476,8 +477,15 @@ page resumes any past conversation into a fresh worktree.
 5. Every text surface has macOS text substitution off: curly quotes and
    em dashes are wrong in code and commit messages.
 6. Cmd-F goes to whatever holds focus; `NSTextView` and terminals get
-   the system find bar, and the diff (a list of views, not one text
-   view) opens its own bar through the storage bus.
+   the system find bar, and the diff opens its own bar through the
+   storage bus. History's hunks each draw as one selectable text
+   (`DiffHunkTextView`): a drag crosses lines, a copy strips the
+   embedded gutter so it pastes as code, gutter clicks still toggle
+   rejection, and the view declines the find action so Cmd-F falls
+   through to the review bar. Uncommitted hunks stay line by line,
+   since their lines become fields on a click, and there Copy hunk
+   is what takes several lines. The messages pane is one selectable
+   document the same way (`SelectableTextView` over the whole log).
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
