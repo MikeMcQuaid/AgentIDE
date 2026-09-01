@@ -16,6 +16,21 @@ public enum Whitespace {
             .joined(separator: "\n")
     }
 
+    /// The text as saving should write it: trailing whitespace
+    /// stripped and one final newline guaranteed, unless the file's
+    /// `.editorconfig` says otherwise. Silence keeps the app's own
+    /// tidying, which is what code review wants.
+    public static func cleanedForSaving(_ text: String, settings: EditorConfigSettings) -> String {
+        var cleaned = text
+        if settings.trimsTrailingWhitespace != .disabled {
+            cleaned = strippingTrailingWhitespace(cleaned)
+        }
+        if settings.insertsFinalNewline != .disabled {
+            cleaned = ensuringTrailingNewline(cleaned)
+        }
+        return cleaned
+    }
+
     /// Guarantees exactly one newline ends the text, the shape every
     /// POSIX tool expects: stray blank lines at the end are trimmed
     /// to it, a missing one is added, and an empty file stays empty

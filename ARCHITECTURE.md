@@ -514,7 +514,16 @@ Option-arrow line moves, Cmd-D duplication, Cmd-Shift-K deletion and
 Return carrying the line's indentation) are pure `LineEditing` rules
 and whole-line range plumbing the text view maps selections onto,
 each one undoable edit; saving strips trailing whitespace and
-guarantees one final newline (`Whitespace`).
+guarantees one final newline (`Whitespace`). The file's
+`.editorconfig` chain overrides both: the Domain parses and merges it
+(`EditorConfig`, nearest file and latest section winning, `root = true`
+stopping the walk, `unset` clearing a property), the data layer reads
+the files from the file's own directory up to the worktree root, and
+the editor takes its indentation unit, its tab width and whether to
+tidy on save from the answer. Silence keeps the app's own judgement,
+so an unconfigured project behaves as it did. The glob subset (`*`,
+`**`, `?`, classes and `{a,b}`) is the app's own: no Swift package for
+the format meets the dependency rule below.
 
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON

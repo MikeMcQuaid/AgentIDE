@@ -23,6 +23,25 @@ struct EditingTextViewTests {
     }
 
     @Test
+    func `a configured indentation unit beats the file's own shape`() {
+        // Two-space file, four-space configuration: the file's own
+        // shape loses to what `.editorconfig` says.
+        let view = makeView("def a\n  one\n", language: .ruby)
+        view.configuredIndentUnit = "    "
+        view.setSelectedRange(NSRange(location: 6, length: 6))
+        view.insertTab(nil)
+        #expect(view.string == "def a\n      one\n")
+
+        view.insertBacktab(nil)
+        #expect(view.string == "def a\n  one\n")
+
+        // Silence leaves the file deciding, as before.
+        view.configuredIndentUnit = nil
+        view.insertTab(nil)
+        #expect(view.string == "def a\n    one\n")
+    }
+
+    @Test
     func `tab at a caret types the unit and tab files keep tabs`() {
         let view = makeView("\tone\n", language: .golang)
         view.setSelectedRange(NSRange(location: 0, length: 0))
