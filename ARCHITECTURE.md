@@ -147,7 +147,14 @@ build.
   `INITIAL_DIR` are workspace environment. A finished agent leaves the
   shell at its prompt with the scrollback inspectable; whether an agent
   runs comes from herdr's detection confirmed by the pane's foreground
-  process, never from exit codes.
+  process, never from exit codes. The confirming matters most across a
+  reboot, which herdr's own records outlive: a workspace it still says
+  holds an agent comes back as a pane sat at its login shell, and
+  believing it left the app attaching to that shell instead of
+  resuming. A claim this run has not confirmed is checked once against
+  the pane's foreground; a pane this run launched is confirmed as it
+  starts, so steady state pays nothing and a new agent is never caught
+  in the instant before its process registers.
 - Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`
   (`SessionName`): slugs collapse `-` runs so `--` stays unambiguous,
   collisions append `-2`, `.` and `:` are replaced. Labels are a
@@ -245,7 +252,11 @@ Deriving is not trusting one reading: a listing can fail, and
 rebase. A row the newest reading dropped is kept while its directory
 exists; only removal from disk removes the row. This is a display rule,
 not a cache. It matters because a row holds its worktree's panes open,
-and a pane holds a running shell.
+and a pane holds a running shell. The same tolerance applies the other
+way round: a mounted pane whose worktree vanished mid-read (a branch
+renamed away, cleanup after a merge) reports nothing, since that is
+the workspace changing rather than a failure, and the sidebar drops
+the row on its own.
 
 There is no windowless resident mode: the app quits with its last
 window. Sessions keep running; the event spool is durable files, so a
@@ -300,7 +311,8 @@ flowchart TD
   `NSTextView`).
 - **TerminalUI**: shared components, not a feature: the SwiftTerm
   wrapper, markdown rendering, tooltips, `LinkOpener`, `BusyButton`,
-  `LaunchProgress` and syntax highlighting (tree-sitter grammars, with
+  `LaunchProgress`, `SelectableTextView` (read-only document-style
+  selection) and syntax highlighting (tree-sitter grammars, with
   the Domain's tokenizer as fallback for fragmentary text).
 - **AgentIDEApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
@@ -472,8 +484,15 @@ page resumes any past conversation into a fresh worktree.
 5. Every text surface has macOS text substitution off: curly quotes and
    em dashes are wrong in code and commit messages.
 6. Cmd-F goes to whatever holds focus; `NSTextView` and terminals get
-   the system find bar, and the diff (a list of views, not one text
-   view) opens its own bar through the storage bus.
+   the system find bar, and the diff opens its own bar through the
+   storage bus. History's hunks each draw as one selectable text
+   (`DiffHunkTextView`): a drag crosses lines, a copy strips the
+   embedded gutter so it pastes as code, gutter clicks still toggle
+   rejection, and the view declines the find action so Cmd-F falls
+   through to the review bar. Uncommitted hunks stay line by line,
+   since their lines become fields on a click, and there Copy hunk
+   is what takes several lines. The messages pane is one selectable
+   document the same way (`SelectableTextView` over the whole log).
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
@@ -502,7 +521,16 @@ Option-arrow line moves, Cmd-D duplication, Cmd-Shift-K deletion and
 Return carrying the line's indentation) are pure `LineEditing` rules
 and whole-line range plumbing the text view maps selections onto,
 each one undoable edit; saving strips trailing whitespace and
-guarantees one final newline (`Whitespace`).
+guarantees one final newline (`Whitespace`). The file's
+`.editorconfig` chain overrides both: the Domain parses and merges it
+(`EditorConfig`, nearest file and latest section winning, `root = true`
+stopping the walk, `unset` clearing a property), the data layer reads
+the files from the file's own directory up to the worktree root, and
+the editor takes its indentation unit, its tab width and whether to
+tidy on save from the answer. Silence keeps the app's own judgement,
+so an unconfigured project behaves as it did. The glob subset (`*`,
+`**`, `?`, classes and `{a,b}`) is the app's own: no Swift package for
+the format meets the dependency rule below.
 
 The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
@@ -548,9 +576,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.
   Acting on a pull request clears its stamp; looking never does.
-- **Row and pane never disagree**: both read the one enriched-summary
-  cache, the sidebar repainted through the storage bus whenever the
-  pane caches a changed state.
+- **Row and pane never disagree**: both read the same two caches
+  through `PullRequestStore`, the per-branch summary (which pull
+  request a branch has) and the enriched summary (what state it is
+  in), with the sidebar repainted through the storage bus whenever the
+  pane writes either. So a pull request opened in the pane is on its
+  row at once, without the poll having heard of it: the form records
+  what it opened where the row already looks, GitHub's own listing
+  where it has caught up and the bare facts the form knows otherwise,
+  which the next fetch replaces.
 - **Pushing** asks `viewerPermission` first: write access pushes to the
   repository, anything less to the viewer's fork (`gh repo fork` on
   first use) and the pull request names `owner:branch`. Rewritten
@@ -622,7 +656,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   browser and Shift in the Browser tab. A run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than
-  failing while the rest of the run decides.
+  failing while the rest of the run decides; gh gates even a
+  finished job's view behind the run, so a refused job falls back to
+  the plain REST job log, named once in front since that log carries
+  no job column, and a job with no log to give yet is skipped rather
+  than fatal.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses

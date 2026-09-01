@@ -88,12 +88,19 @@ In workflow order; the loop from prompt to review repeats before shipping.
   Option-Down move lines, Cmd-D duplicates them, Cmd-Shift-K deletes
   them, and saving strips trailing whitespace and guarantees a final
   newline (so review-time fixes type the way your editor taught you)
+- Reads the project's `.editorconfig` and does what it says: the
+  indentation Tab inserts, the width tabs render at, and whether saving
+  tidies whitespace and final newlines (so a fix here matches the
+  project's own style, not this app's guess)
 - Opens that editor beside the diff or, from any conversations page,
   filling the centre pane, and moves the open file between the two; an
   agent session always wins the centre back, its file stepping aside
   saved (so editing sits beside reviewing, and never over an agent)
 - Previews web pages in an embedded browser and opens a shell running as
   your own user (so verifying behaviour never leaves the window)
+- Selects like a document: a drag crosses lines in a history diff's hunks,
+  copies leaving the line numbers behind, and crosses messages in the
+  Messages tab (so several lines land in a prompt or report in one go)
 - Finds with Cmd-F everywhere and never turns quotes curly or dashes long
   (so code and commit messages survive being typed)
 

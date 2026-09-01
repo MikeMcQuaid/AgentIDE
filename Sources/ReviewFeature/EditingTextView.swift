@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import AppKit
+import TerminalUI
 
 // NSTextView ranges are UTF-16 offsets, so NSString is the correct
 // arithmetic here, not String.
@@ -22,8 +23,13 @@ final class EditingTextView: NSTextView {
     /// prefix; set once at creation, like the file itself.
     var language: SyntaxLanguage?
 
+    /// What the file's `.editorconfig` says one Tab inserts; nil
+    /// leaves the file's own shape deciding, which is what an
+    /// unconfigured project gets.
+    var configuredIndentUnit: String?
+
     override func insertTab(_: Any?) {
-        let unit = LineEditing.indentationUnit(of: documentLines)
+        let unit = indentUnit
         guard selectedRange().length > 0 else {
             insertText(unit, replacementRange: selectedRange())
             return
@@ -33,7 +39,8 @@ final class EditingTextView: NSTextView {
     }
 
     override func insertBacktab(_: Any?) {
-        transformSelectedLines { LineEditing.dedented($0, unit: LineEditing.indentationUnit(of: documentLines)) }
+        let unit = indentUnit
+        transformSelectedLines { LineEditing.dedented($0, unit: unit) }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -83,6 +90,25 @@ final class EditingTextView: NSTextView {
         default:
             super.keyDown(with: event)
         }
+    }
+
+    /// Renders tabs at the configured width, both for the text
+    /// already shown and for whatever is typed next.
+    func applyTabWidth(_ width: Int?) {
+        guard let width, width > 0, let storage = textStorage else {
+            return
+        }
+
+        let style = NSMutableParagraphStyle()
+        style.tabStops = []
+        style.defaultTabInterval = CGFloat(width) * " ".size(withAttributes: [.font: CodeStyle.nsFont]).width
+        defaultParagraphStyle = style
+        typingAttributes[.paragraphStyle] = style
+        storage.addAttribute(
+            .paragraphStyle,
+            value: style,
+            range: NSRange(location: 0, length: storage.length),
+        )
     }
 
     /// Toggles the language's line comment across the selected
@@ -159,6 +185,12 @@ final class EditingTextView: NSTextView {
 
     private static let upArrowKey: UInt16 = 126
     private static let downArrowKey: UInt16 = 125
+
+    /// What one Tab press inserts: the configuration where there is
+    /// one, otherwise what the file's own lines already do.
+    private var indentUnit: String {
+        configuredIndentUnit ?? LineEditing.indentationUnit(of: documentLines)
+    }
 
     /// The document as lines, for the indentation unit.
     private var documentLines: [String] {

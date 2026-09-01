@@ -142,6 +142,10 @@ struct HighlightingTextEditor: NSViewRepresentable {
     let jumpToLine: Int?
     var changedLines: Set<Int> = []
 
+    /// What the file's `.editorconfig` says: the indentation Tab
+    /// inserts and the width tabs render at.
+    var settings: EditorConfigSettings = .init()
+
     func makeNSView(context: Context) -> NSScrollView {
         // A hand-built text stack, because the layout manager draws
         // whitespace itself in the shared light tone the diff uses.
@@ -153,6 +157,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         layoutManager.addTextContainer(container)
         let view = EditingTextView(frame: .zero, textContainer: container)
         view.language = language
+        view.configuredIndentUnit = settings.indentUnit
         view.autoresizingMask = .width
         view.isVerticallyResizable = true
         view.minSize = NSSize(width: 0, height: 0)
@@ -194,6 +199,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
             return
         }
 
+        // The configuration lands after the file, since it is read
+        // off the view while the text is already on screen.
+        if let editing = view as? EditingTextView {
+            editing.configuredIndentUnit = settings.indentUnit
+            editing.applyTabWidth(settings.tabWidth ?? settings.indentSize)
+        }
         if view.string != text {
             view.string = text
             Coordinator.highlight(view, language: language)

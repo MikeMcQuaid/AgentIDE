@@ -183,8 +183,20 @@ public extension HerdrClient {
         var panes = [HerdrPane]()
         for row in try await snapshotRows() {
             var foreground = Foreground(isShell: false, command: nil)
-            if row.agent == nil {
+            // herdr's own records outlive a reboot: a workspace it
+            // still says holds an agent can come back as a pane sat
+            // at its login shell, which read as a live session and
+            // left the app attaching to that shell rather than
+            // resuming. A claim this run has not confirmed is
+            // therefore checked against the pane's own foreground
+            // once, which is what the detection is meant to be
+            // confirmed by; a pane this run launched is confirmed
+            // already, so nothing pays for it at steady state.
+            if row.agent == nil || confirmations.isUnconfirmed(row.paneID) {
                 foreground = await self.foreground(paneID: row.paneID)
+                if row.agent != nil, foreground.isShell == false {
+                    confirmations.confirm(row.paneID)
+                }
             }
             panes.append(HerdrPane(
                 sessionName: row.sessionName,
@@ -250,6 +262,9 @@ public extension HerdrClient {
                 break
             }
         }
+        // Launched here, so its claim needs no confirming later:
+        // only records from before this run can be stale.
+        confirmations.confirm(paneID)
     }
 
     /// Closes every workspace holding a label, killing the process

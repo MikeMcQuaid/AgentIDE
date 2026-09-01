@@ -16,6 +16,23 @@ struct WhitespaceTests {
     }
 
     @Test
+    func `the save cleanup does what the configuration allows`() {
+        let messy = "line  \n\n"
+        // Silence keeps the app's own tidying.
+        #expect(Whitespace.cleanedForSaving(messy, settings: EditorConfigSettings()) == "line\n")
+
+        var refusing = EditorConfigSettings()
+        refusing.trimsTrailingWhitespace = .disabled
+        refusing.insertsFinalNewline = .disabled
+        #expect(Whitespace.cleanedForSaving(messy, settings: refusing) == messy)
+        #expect(Whitespace.cleanedForSaving("no newline", settings: refusing) == "no newline")
+
+        var trimmingOnly = EditorConfigSettings()
+        trimmingOnly.insertsFinalNewline = .disabled
+        #expect(Whitespace.cleanedForSaving(messy, settings: trimmingOnly) == "line\n\n")
+    }
+
+    @Test
     func `saving guarantees exactly one final newline, except in an empty file`() {
         #expect(Whitespace.ensuringTrailingNewline("line") == "line\n")
         #expect(Whitespace.ensuringTrailingNewline("line\n") == "line\n")

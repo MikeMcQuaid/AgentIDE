@@ -330,7 +330,9 @@ public extension SessionService {
     /// One ripgrep listing of a worktree's files.
     private func readFileList(worktreePath: String) async -> [String] {
         let result = try? await processes.run(
-            ["rg", "--files", "--sort", "path"],
+            // Hidden files are part of the project (workflows, dot
+            // configurations); git's own machinery is not.
+            ["rg", "--files", "--sort", "path", "--hidden", "--glob", "!.git/**"],
             workingDirectory: worktreePath,
             environment: [:],
         )
@@ -348,6 +350,8 @@ public extension SessionService {
 
         let arguments = [
             "rg", "--no-heading", "--line-number", "--color", "never",
+            // Hidden files search like any other; `.git` never does.
+            "--hidden", "--glob", "!.git/**",
             "--smart-case", "--max-count", "5", "--max-columns", "300", query, ".",
         ]
         let result = try? await processes.run(

@@ -33,10 +33,20 @@ struct FileEditorView: View {
         let target = relativePath.hasPrefix("/")
             ? URL(fileURLWithPath: relativePath).standardizedFileURL.path
             : URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
-        path = target == base || target.hasPrefix(base + "/") ? target : nil
+        let safe = target == base || target.hasPrefix(base + "/") ? target : nil
+        path = safe
         title = relativePath
         language = SyntaxLanguage.language(forPath: relativePath)
         changedLines = { await service.changedLineNumbers(worktreePath: worktreePath, file: relativePath) }
+        // The chain governing this file, read once when it opens:
+        // a handful of small files, and never during a view's body.
+        editorSettings = {
+            guard let safe else {
+                return EditorConfigSettings()
+            }
+
+            return await service.editorConfigSettings(worktreePath: worktreePath, filePath: safe)
+        }
         self.jumpToLine = jumpToLine
         self.showsClose = showsClose
         self.move = move
@@ -54,6 +64,9 @@ struct FileEditorView: View {
         title = edit.name
         language = SyntaxLanguage.language(forPath: edit.path)
         changedLines = nil
+        // A file a command waits on is regularly outside every
+        // worktree, so nothing governs it.
+        editorSettings = { EditorConfigSettings() }
         jumpToLine = nil
         showsClose = false
         move = nil
@@ -91,10 +104,13 @@ struct FileEditorView: View {
                     language: language,
                     jumpToLine: jumpToLine,
                     changedLines: markedLines,
+                    settings: settings,
                 )
             }
         }
         .onAppear { load() }
+        // Read off the view, so no body evaluation touches disk.
+        .task { settings = await editorSettings() }
         // A displaced editor keeps its typing: the pane can go off
         // screen without a close (a worktree switch, a session
         // appearing, a move to the other slot), and losing the
@@ -131,6 +147,11 @@ struct FileEditorView: View {
     /// autosave must honour rather than writing it anyway.
     @State private var closedWithoutSaving = false
 
+    /// What the file's `.editorconfig` chain asks for, read when
+    /// the file opens; silence until then, which is what an
+    /// unconfigured project keeps.
+    @State private var settings: EditorConfigSettings = .init()
+
     @Environment(\.dismiss)
     private var dismiss
 
@@ -143,6 +164,9 @@ struct FileEditorView: View {
     /// Which lines the gutter marks as uncommitted, absent for a
     /// file that belongs to no worktree.
     private let changedLines: (() async -> Set<Int>)?
+
+    /// The file's `.editorconfig` chain, resolved off the view.
+    private let editorSettings: () async -> EditorConfigSettings
     private let jumpToLine: Int?
     private let showsClose: Bool
     private let move: PaneMove?
@@ -270,7 +294,7 @@ struct FileEditorView: View {
         }
 
         do {
-            content = Whitespace.ensuringTrailingNewline(Whitespace.strippingTrailingWhitespace(content))
+            content = Whitespace.cleanedForSaving(content, settings: settings)
             try content.write(toFile: path, atomically: true, encoding: .utf8)
             saved = content
             status = Self.savedStatus

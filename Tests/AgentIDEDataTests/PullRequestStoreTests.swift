@@ -117,6 +117,34 @@ struct PullRequestStoreTests {
     }
 
     @Test
+    func `the branch cache is one structure both the row and the pane read`() throws {
+        let file = try TestSupport.temporaryDirectory("pr-branch") + "/state.json"
+        let metadata = MetadataStore(file: file)
+        let store = PullRequestStore(github: GitHubClient(runner: CountingRunner()), store: metadata)
+        let summary = PullRequestSummary(
+            number: 7,
+            title: "Work",
+            url: "https://example.invalid/7",
+            headBranch: "work",
+            mergeable: "",
+            reviewDecision: "",
+            checks: "",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+
+        #expect(store.branchSummary(repositoryPath: "/repo", branch: "work") == nil)
+        store.rememberBranchSummary(summary, repositoryPath: "/repo", branch: "work")
+        #expect(store.branchSummary(repositoryPath: "/repo", branch: "work")?.number == 7)
+
+        // The same field the sidebar's poll has always persisted, so
+        // a cache written by an earlier release still paints.
+        #expect(metadata.load().pullRequestCache["/repo#work"]?.number == 7)
+        store.rememberBranchSummary(nil, repositoryPath: "/repo", branch: "work")
+        #expect(store.branchSummary(repositoryPath: "/repo", branch: "work") == nil)
+    }
+
+    @Test
     func `a finished turn forgets one branch's stamps and no other's`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-turn") + "/state.json"
         let runner = CountingRunner()
