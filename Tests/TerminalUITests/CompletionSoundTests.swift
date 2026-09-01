@@ -29,6 +29,34 @@ struct CompletionSoundTests {
     }
 
     @Test
+    func `a machine going to sleep is played nothing at all`() {
+        CompletionSound.lingering.withLock { $0.removeAll() }
+        // Sleep is announced before it happens: a chime started now
+        // is the one that gets stuck across it, and nobody is there
+        // to hear it anyway.
+        CompletionSound.beginSleeping()
+        CompletionSound.play(path: CompletionSound.defaultPath)
+        let whileAsleep = CompletionSound.lingering.withLock(\.isEmpty)
+        #expect(whileAsleep)
+
+        // Waking gives the chimes back.
+        CompletionSound.endSleeping()
+        CompletionSound.play(path: CompletionSound.defaultPath)
+        let awake = CompletionSound.lingering.withLock(\.isEmpty)
+        #expect(awake == false)
+        CompletionSound.stopLingering()
+    }
+
+    @Test
+    func `sleep disposes whatever was mid-play`() {
+        CompletionSound.lingering.withLock { _ = $0.insert(9_999_998) }
+        CompletionSound.beginSleeping()
+        let drained = CompletionSound.lingering.withLock(\.isEmpty)
+        #expect(drained)
+        CompletionSound.endSleeping()
+    }
+
+    @Test
     func `waking disposes sounds whose completion never came`() {
         // A sound sleep interrupted mid-play: its completion never
         // ran, so its id is still registered. The stray id stands in

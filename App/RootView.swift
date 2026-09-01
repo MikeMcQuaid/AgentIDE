@@ -203,12 +203,14 @@ struct RootView: View {
         // running at sleep that are gone at wake resume themselves,
         // while surviving or deliberately closed ones are left alone.
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)) { _ in
+            // Nothing chimes into a sleeping machine: a sound still
+            // playing as it suspends is the one that comes back
+            // looping.
+            CompletionSound.beginSleeping()
             sessionsBeforeSleep = runningWorktreePaths
         }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
-            // A chime sleep interrupted mid-play loops from the
-            // audio daemon after wake until it is disposed.
-            CompletionSound.stopLingering()
+            CompletionSound.endSleeping()
             let snapshot = sessionsBeforeSleep
             sessionsBeforeSleep = []
             Task { await resumeKilled(sleepSnapshot: snapshot) }
