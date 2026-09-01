@@ -147,7 +147,14 @@ build.
   `INITIAL_DIR` are workspace environment. A finished agent leaves the
   shell at its prompt with the scrollback inspectable; whether an agent
   runs comes from herdr's detection confirmed by the pane's foreground
-  process, never from exit codes.
+  process, never from exit codes. The confirming matters most across a
+  reboot, which herdr's own records outlive: a workspace it still says
+  holds an agent comes back as a pane sat at its login shell, and
+  believing it left the app attaching to that shell instead of
+  resuming. A claim this run has not confirmed is checked once against
+  the pane's foreground; a pane this run launched is confirmed as it
+  starts, so steady state pays nothing and a new agent is never caught
+  in the instant before its process registers.
 - Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`
   (`SessionName`): slugs collapse `-` runs so `--` stays unambiguous,
   collisions append `-2`, `.` and `:` are replaced. Labels are a

@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 // MARK: - HerdrPane
 
@@ -28,6 +29,39 @@ public struct HerdrPane: Sendable {
 
     /// The pane's current working directory.
     public let currentPath: String
+}
+
+// MARK: - PaneConfirmations
+
+/// The panes whose agent claim this run has checked against the
+/// pane's own foreground. A reference type, so every copy of the
+/// client shares one answer.
+final class PaneConfirmations: Sendable {
+    // MARK: Lifecycle
+
+    init() {
+        // Nothing is confirmed until a pane proves it.
+    }
+
+    deinit {
+        // Nothing to clean up.
+    }
+
+    // MARK: Internal
+
+    /// Whether a pane's claim still has to be confirmed.
+    func isUnconfirmed(_ paneID: String) -> Bool {
+        confirmed.withLock { $0.contains(paneID) == false }
+    }
+
+    /// Records that a pane really is running what herdr says.
+    func confirm(_ paneID: String) {
+        confirmed.withLock { _ = $0.insert(paneID) }
+    }
+
+    // MARK: Private
+
+    private let confirmed: Mutex<Set<String>> = .init([])
 }
 
 // MARK: - HerdrClient
@@ -88,6 +122,11 @@ public struct HerdrClient: Sendable {
     }
 
     // MARK: Internal
+
+    /// The agent claims this run has confirmed against a pane's own
+    /// foreground; shared by every copy of the client, since they
+    /// all speak to one server.
+    let confirmations: PaneConfirmations = .init()
 
     /// Where launches narrate their steps.
     let progress: LaunchReporter
