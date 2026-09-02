@@ -617,6 +617,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   and when they conflict it sets the remote's version aside
   (`OverwriteTips`, rebasing onto origin/HEAD) so the next Push carries
   an explicit `--force-with-lease=<branch>:<tip>`. Never add `--force`.
+- **Pushed is a tip, not a flag.** A push records the branch and the
+  commit it sent, and Push stays dimmed with Open PR lit until that
+  branch's tip moves, read with the other branch facts. The mark used
+  to be a boolean any worktree refresh cleared, so counts gathered
+  before the push arrived after it and swapped the two buttons back
+  and forth until the next reading caught up.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing

@@ -50,12 +50,38 @@ extension PullRequestsModelTests {
         #expect(model.canPush == false)
         #expect(model.status == "Pushed.")
 
-        // Fresh counts can mean fresh commits nobody has verified:
-        // Push waits for the signature read the change kicked off.
+        // New commits move the tip, which is what a push has to
+        // send again; the signature read the change kicks off is
+        // what Push then waits on.
+        model.fetchTipCommit = { _ in "amended" }
         model.items = [item(branch: "feature", ahead: 1)]
         #expect(model.canPush == false)
         await model.reload()
         #expect(model.canPush)
+    }
+
+    @Test
+    func `a count gathered before the push cannot unpush the branch`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+        #expect(await model.push())
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // The sidebar's reading was in flight while the push ran, so
+        // it still says one commit is unpushed. Push and Open PR both
+        // stay as the push left them rather than swapping over until
+        // the next reading lands.
+        model.items = [item(branch: "feature", ahead: 1)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // And the reading that has caught up changes nothing either.
+        model.items = [item(branch: "feature", ahead: 0)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
     }
 
     @Test
@@ -107,6 +133,28 @@ extension PullRequestsModelTests {
         model.checkTipSigned = { _ in false }
         await model.reload()
         #expect(model.pushHelp.contains("already pushed"))
+    }
+
+    @Test
+    func `a tip that could not be read leaves the push mark alone`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+        #expect(await model.push())
+        #expect(model.isPushed)
+
+        // git answered nothing, which says the branch has moved
+        // nowhere: taking that as a moved tip relit Push exactly as
+        // the stale counts this mark exists to survive used to.
+        model.fetchTipCommit = { _ in nil }
+        model.items = [item(branch: "feature", ahead: 1)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // A tip that reads, and differs, still unpushes it.
+        model.fetchTipCommit = { _ in "moved" }
+        await model.reload()
+        #expect(model.canPush)
     }
 
     @Test
