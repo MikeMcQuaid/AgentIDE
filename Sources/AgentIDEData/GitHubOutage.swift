@@ -41,5 +41,13 @@ public enum GitHubOutage {
         "connection refused",
         "network is unreachable",
         "the internet connection appears to be offline",
+        // gh's own wording when it cannot reach GitHub at all,
+        // which carries no other marker: a machine off the network,
+        // a captive portal, or DNS not answering yet.
+        "error connecting to",
+        "check your internet connection",
+        // The app's own refusal when the path monitor says the
+        // machine has nowhere to send the request.
+        "no route to the network",
     ]
 }

@@ -1,5 +1,7 @@
+import AgentIDEData
 import Foundation
 @testable import PRFeature
+import TerminalUI
 import Testing
 
 /// The failing logs: Actions runs found in the check links, each
@@ -22,6 +24,55 @@ extension PullRequestsModelTests {
         #expect(text.hasPrefix("## Run 123\n[100 earlier lines cut]\nline 101\n"))
         #expect(text.hasSuffix("\n\n## Run 456\nshort"))
         #expect(text.contains("line 100\n") == false)
+    }
+
+    @Test
+    func `a run with nothing readable never sinks the ones that have logs`() async throws {
+        let links = [
+            "https://github.com/o/r/actions/runs/123/job/1",
+            "https://github.com/o/r/actions/runs/456/job/3",
+        ]
+        let model = makeModel()
+        // The first run has nothing to give yet; the second does,
+        // and that is what the prompt is for.
+        model.fetchFailedRunLog = { runID in
+            guard runID == 456 else {
+                throw GitHubClient.RunLogsUnavailable(failedJobs: 1)
+            }
+
+            return "it broke here"
+        }
+        let text = try await model.failingLogs(for: summary(1, head: "feature", failingCheckLinks: links))
+        #expect(text == "## Run 456\nit broke here")
+    }
+
+    @Test
+    func `only every run coming back empty is worth saying, in our words`() async {
+        let links = ["https://github.com/o/r/actions/runs/123/job/1"]
+        let model = makeModel()
+        model.fetchFailedRunLog = { _ in throw GitHubClient.RunLogsUnavailable(failedJobs: 2) }
+
+        #expect(await model.copyFailingLogs(summary(1, head: "feature", failingCheckLinks: links)) == false)
+        let message = ErrorLog.shared.entries.last?.message ?? ""
+        #expect(message.contains("2 failed jobs"))
+        // gh's own "still in progress" never reaches the pane.
+        #expect(message.contains("still in progress") == false)
+        #expect(message.contains("failed:") == false)
+    }
+
+    @Test
+    func `a failure waiting cannot cure is not reported as a wait`() async {
+        let links = ["https://github.com/o/r/actions/runs/123/job/1"]
+        let model = makeModel()
+        let refusal = NSError(domain: "gh", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "there is no route to the network right now",
+        ])
+        model.fetchFailedRunLog = { _ in throw refusal }
+
+        #expect(await model.copyFailingLogs(summary(1, head: "feature", failingCheckLinks: links)) == false)
+        let message = ErrorLog.shared.entries.last?.message ?? ""
+        #expect(message.contains("no route to the network"))
+        #expect(message.contains("yet") == false)
     }
 
     @Test

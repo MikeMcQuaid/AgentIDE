@@ -9,6 +9,44 @@ extension GitHubClient {
         let databaseId: Int // swiftformat:disable:this acronyms
         let name: String?
         let conclusion: String?
+
+        // A job's own steps, which conclude before it does. Absent
+        // rather than empty when the listing carried none, and a
+        // non-optional would fail the whole decode.
+        // swiftlint:disable:next discouraged_optional_collection
+        let steps: [RunStep]?
+    }
+
+    /// One step of a job; only its conclusion matters here.
+    struct RunStep: Decodable {
+        let conclusion: String?
+    }
+
+    /// Why a run handed over no log, in the app's own words: gh's
+    /// refusal names a run still in progress, which is neither what
+    /// happened nor anything to act on.
+    public struct RunLogsUnavailable: LocalizedError, Sendable {
+        // MARK: Lifecycle
+
+        /// Creates the refusal, naming how many jobs have failed.
+        public init(failedJobs: Int) {
+            self.failedJobs = failedJobs
+        }
+
+        // MARK: Public
+
+        /// How many of the run's jobs have failed so far.
+        public let failedJobs: Int
+
+        public var errorDescription: String? {
+            guard failedJobs > 0 else {
+                return "no job in this run has failed yet, so there is nothing to copy."
+            }
+
+            let jobs = failedJobs == 1 ? "1 failed job" : String(failedJobs) + " failed jobs"
+            return "GitHub has no logs for its " + jobs
+                + " yet; each one appears as its job finishes."
+        }
     }
 
     /// The failed steps' log of one Actions run, as `gh` prints it.
@@ -23,14 +61,18 @@ extension GitHubClient {
             return try await gh(["run", "view", String(runID), "--log-failed"], in: repositoryPath).standardOutput
         } catch {
             let jobs = try await gh(["run", "view", String(runID), "--json", "jobs"], in: repositoryPath)
+            let failed = Self.failedJobs(fromJSON: jobs.standardOutput)
             var logs = [String]()
-            for job in Self.failedJobs(fromJSON: jobs.standardOutput) {
+            for job in failed {
                 if let log = await jobLog(job, repositoryPath: repositoryPath) {
                     logs.append(log)
                 }
             }
             guard logs.isEmpty == false else {
-                throw error
+                // Never gh's own wording: it names a run still in
+                // progress, when what matters is whether any failed
+                // job has a log to give.
+                throw RunLogsUnavailable(failedJobs: failed.count)
             }
 
             return logs.joined(separator: "\n")
@@ -46,10 +88,22 @@ extension GitHubClient {
             return []
         }
 
-        return run.jobs.filter { ($0.conclusion ?? "").uppercased() == "FAILURE" }
+        return run.jobs.filter(Self.hasFailed)
     }
 
     // MARK: Private
+
+    /// Whether a job has failed. Its own conclusion says so once it
+    /// finishes, but a check goes red the moment a step fails and
+    /// the job runs on: waiting for the conclusion is what left
+    /// nothing to copy while a run was still going.
+    private static func hasFailed(_ job: RunJob) -> Bool {
+        let outcomes = [job.conclusion] + (job.steps ?? []).map(\.conclusion)
+        return outcomes.contains { Self.failedConclusions.contains(($0 ?? "").uppercased()) }
+    }
+
+    /// Every conclusion worth reading a log for.
+    private static let failedConclusions: Set<String> = ["FAILURE", "CANCELLED", "TIMED_OUT"]
 
     /// Whether an answer reads as the log text it should be: bytes
     /// that decode as nothing arrive as an empty string, and an

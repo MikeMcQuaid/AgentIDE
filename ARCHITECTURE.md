@@ -250,7 +250,12 @@ repositories, transcript directory scans and finally its own metadata.
 Deriving is not trusting one reading: a listing can fail, and
 `git worktree list` reports a worktree as detached for the whole of a
 rebase. A row the newest reading dropped is kept while its directory
-exists; only removal from disk removes the row. This is a display rule,
+exists; only removal from disk removes the row. The provisional row a
+new session draws (a `.pending` path, never a directory) is the one
+exception: it is kept until its repository gains a listed row, since
+the creation names the branch itself and the two never share a name,
+and keeping it any longer sat it beside its own worktree for the whole
+of the agent's launch. This is a display rule,
 not a cache. It matters because a row holds its worktree's panes open,
 and a pane holds a running shell. The same tolerance applies the other
 way round: a mounted pane whose worktree vanished mid-read (a branch
@@ -434,16 +439,31 @@ page resumes any past conversation into a fresh worktree.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
-  the safety net. Notifications fire for a finished turn and for input
+  the safety net. Whether the machine has a route out at all comes
+  from the system's own path monitor (`NetworkMonitor.shared`,
+  `NWPathMonitor`): without one every network call fails identically,
+  so the app says so once, holds that work rather than spawning
+  processes per branch per poll, and refreshes the moment the route is
+  back. One reading serves them all: `gh` refuses at its own funnel,
+  git refuses only the subcommands that reach a remote (`fetch`,
+  `push`, `pull`, `clone`, `ls-remote`) so reading a worktree still
+  works offline, and avatars keep what they have. Each refusal is one
+  `OfflineError`, which `GitHubOutage` reads as an outage, so it is
+  pooled rather than repeated. `ServiceStatus`
+  keeps that apart from GitHub itself being down, and reports nothing
+  at all while the machine is off the network.
+  Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
   accessibility flash apply; its completion handler must be formed in a
   nonisolated context or the executor check traps). A chime sleep
   interrupted mid-play loses its completion and the audio daemon
-  replays it in a loop after wake, so wake disposes every sound whose
-  completion never ran; whoever removes a sound from that registry
-  owns its disposal, so a drain and a late completion never dispose
-  one twice. An exit posts nothing. The Dock badge counts worktrees
+  replays it in a loop after wake, which disposing it afterwards did
+  not cure: nothing is played into a machine that has announced
+  sleep, and what was mid-play is disposed then rather than on the
+  way back. Wake still drains as a backstop; whoever removes a sound
+  from that registry owns its disposal, so a drain and a late
+  completion never dispose one twice. An exit posts nothing. The Dock badge counts worktrees
   needing attention, each contribution behind a toggle.
 - **Git reads are driven by the file system.** One FSEvents stream
   over the repository and worktree roots (`WorkspaceWatcher`) remembers
@@ -660,7 +680,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   finished job's view behind the run, so a refused job falls back to
   the plain REST job log, named once in front since that log carries
   no job column, and a job with no log to give yet is skipped rather
-  than fatal.
+  than fatal. A job counts as failed on its own conclusion or on any
+  failed step, since a check goes red the moment a step does while
+  the job runs on. A run that hands over nothing is skipped too, so
+  what the other runs have is still copied, and only every run
+  coming back empty is reported — in the app's own words, naming how
+  many jobs have failed and that their logs appear as each finishes,
+  never gh's "still in progress", which is neither what happened nor
+  anything to act on.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses
@@ -772,7 +799,7 @@ organisation.
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
 | tree-sitter-* grammars | highlighting | pinned to the latest ABI 14 release the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python's manifest needs the root `src/scanner.c` sentinel |
 
-System frameworks (WebKit, UserNotifications, FSEvents and
+System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
 No updater: releases ship as a Homebrew cask.

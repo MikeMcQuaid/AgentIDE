@@ -50,7 +50,12 @@ public enum CompletionSound {
     /// than an error: a missing sound must never break the
     /// notification it rode.
     public static func play(path: String) {
-        guard path.isEmpty == false else {
+        // A chime started as the machine suspends is the one that
+        // gets stuck: its completion never runs, the audio daemon
+        // holds it across the sleep, and it comes back looping until
+        // some other alert displaces it. Nobody is there to hear it
+        // either, so a sleeping machine is played nothing at all.
+        guard path.isEmpty == false, isSleeping.withLock({ $0 == false }) else {
             return
         }
 
@@ -63,6 +68,22 @@ public enum CompletionSound {
 
         lingering.withLock { _ = $0.insert(sound) }
         AudioServicesPlayAlertSoundWithCompletion(sound, Self.disposal(of: sound))
+    }
+
+    /// Stops chiming and disposes whatever is mid-play, called when
+    /// the machine announces sleep: what is not playing as the
+    /// machine suspends cannot be stuck across it, which curing
+    /// afterwards proved unable to do on its own.
+    public static func beginSleeping() {
+        isSleeping.withLock { $0 = true }
+        stopLingering()
+    }
+
+    /// Chimes again on wake, disposing anything the sleep left
+    /// behind as a backstop.
+    public static func endSleeping() {
+        isSleeping.withLock { $0 = false }
+        stopLingering()
     }
 
     /// Disposes every sound whose completion never ran, called on
@@ -88,6 +109,10 @@ public enum CompletionSound {
     /// disposes it, so a drain and a late completion can never
     /// dispose one sound twice.
     nonisolated static let lingering: Mutex<Set<SystemSoundID>> = .init([])
+
+    /// Whether the machine is asleep or on its way there, which is
+    /// the one time nothing is played.
+    nonisolated static let isSleeping: Mutex<Bool> = .init(false)
 
     /// Whether a file name carries an audio type playback accepts.
     static func isPlayable(_ name: String) -> Bool {

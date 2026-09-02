@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 
@@ -72,8 +73,20 @@ extension PullRequestsModel {
     /// run and, when it has only one job and step, those too.
     func failingLogs(for summary: PullRequestSummary) async throws -> String {
         var runs = [String]()
+        var unreadable: (any Error)?
         for runID in Self.runIDs(in: summary.failingCheckLinks) {
-            let sections = try await Self.condensed(log: fetchFailedRunLog(runID))
+            // A run with nothing to give is skipped, not fatal: what
+            // the other runs already have is what the prompt wants,
+            // and only every run coming back empty is worth saying.
+            let log: String
+            do {
+                log = try await fetchFailedRunLog(runID)
+            } catch {
+                unreadable = unreadable ?? error
+                continue
+            }
+
+            let sections = Self.condensed(log: log)
             let headed = sections.filter { $0.heading.isEmpty == false }
             if headed.count == 1, headed.count == sections.count, let only = sections.first {
                 let heading = "## Run " + String(runID) + " · " + only.heading
@@ -86,6 +99,10 @@ extension PullRequestsModel {
                 runs.append("## Run " + String(runID) + "\n" + body.joined(separator: "\n"))
             }
         }
+        guard runs.isEmpty == false else {
+            throw unreadable ?? GitHubClient.RunLogsUnavailable(failedJobs: 0)
+        }
+
         return runs.joined(separator: "\n\n")
     }
 
@@ -105,8 +122,14 @@ extension PullRequestsModel {
             NSPasteboard.general.setString(text, forType: .string)
             note("Copied the failing logs of " + String(runs.count) + " runs from #" + String(summary.number) + ".")
             return true
+        } catch let error as GitHubClient.RunLogsUnavailable {
+            // Only a run GitHub has yet to publish is a "yet".
+            report("Nothing to copy from #" + String(summary.number) + " yet: " + error.localizedDescription)
+            return false
         } catch {
-            report("Reading the failing logs of #" + String(summary.number) + " failed: " + error.localizedDescription)
+            // Anything else (no network, no `gh` credentials) is said
+            // as what it is: waiting will not cure it.
+            report("Could not read #" + String(summary.number) + "'s failing logs: " + error.localizedDescription)
             return false
         }
     }

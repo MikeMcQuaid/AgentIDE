@@ -151,6 +151,23 @@ extension RootView {
         return item.worktree.repositoryName + ": " + item.worktree.branch
     }
 
+    /// Watches whether the machine has a route out at all, from the
+    /// system's own path monitor: every GitHub question fails
+    /// identically without one, so the app says so once and holds
+    /// rather than spawning `gh` per branch per poll to be told
+    /// again, and refreshes the moment the route is back.
+    func watchNetwork() async {
+        for await isOnline in dependencies.network.changes() {
+            ServiceStatus.shared.networkChanged(isOnline: isOnline)
+            if isOnline {
+                // Straight away, rather than at the next tick: the
+                // rows have been stale for as long as the route was
+                // gone.
+                await dependencies.dashboard.refresh()
+            }
+        }
+    }
+
     /// Tells the dashboard whether anyone can see the window, and
     /// refreshes at once on coming back on screen rather than
     /// waiting out the slow tick the hidden window was on.

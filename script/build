@@ -38,30 +38,19 @@ BUILD_NUMBER="$(
 ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}")
 ACTIONS=(build)
 
-if [[ -n "${SV_SESSION_ID:-}" ]]; then
-  export SWIFTPM_DISABLE_SANDBOX=1
-  export SWIFT_BUILD_USE_SANDBOX=0
-  if [[ "$(defaults read com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox 2>/dev/null || true)" != 1 ]]; then
-    defaults write com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox -bool YES
-    ACTIONS=(clean build)
-  fi
-  # The literal $(inherited) is for xcodebuild, not the shell.
-  # shellcheck disable=SC2016
-  ARGS+=(
-    -IDEPackageSupportDisableManifestSandbox=1
-    -IDEPackageSupportDisablePackageSandbox=1
-    'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
-  )
-fi
-
 # Inside the sandbox this is the whole build: Xcode runs SwiftTerm's
 # build tool plugin under `sandbox-exec`, which cannot nest, so
 # `xcodebuild` cannot get past it here however its flags are set.
 # `swift build` runs the same plugin unsandboxed and compiles every
 # target, `App` included, through the `AgentIDEAppSources` target
 # that exists for exactly this. What it cannot make is the bundle:
-# the app itself is built on the host and by CI.
+# the app itself is built on the host and by CI. Nothing xcodebuild
+# needs is prepared first: the sandbox user's preferences daemon has
+# been unreachable after a reboot, and a `defaults` call that only
+# the host's build reads must not be what stops this one.
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
+  export SWIFTPM_DISABLE_SANDBOX=1
+  export SWIFT_BUILD_USE_SANDBOX=0
   echo "sandboxed: building every target with swift build" >&2
   echo "the app bundle itself is the host's and CI's to build" >&2
   exec swift build --disable-sandbox
