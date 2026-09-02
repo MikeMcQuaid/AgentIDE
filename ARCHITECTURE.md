@@ -250,7 +250,12 @@ repositories, transcript directory scans and finally its own metadata.
 Deriving is not trusting one reading: a listing can fail, and
 `git worktree list` reports a worktree as detached for the whole of a
 rebase. A row the newest reading dropped is kept while its directory
-exists; only removal from disk removes the row. This is a display rule,
+exists; only removal from disk removes the row. The provisional row a
+new session draws (a `.pending` path, never a directory) is the one
+exception: it is kept until its repository gains a listed row, since
+the creation names the branch itself and the two never share a name,
+and keeping it any longer sat it beside its own worktree for the whole
+of the agent's launch. This is a display rule,
 not a cache. It matters because a row holds its worktree's panes open,
 and a pane holds a running shell. The same tolerance applies the other
 way round: a mounted pane whose worktree vanished mid-read (a branch

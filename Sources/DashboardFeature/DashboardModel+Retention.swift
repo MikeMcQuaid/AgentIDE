@@ -27,11 +27,23 @@ public extension DashboardModel {
 
             var items = fresh.items
             let paths = Set(items.map(\.worktree.path))
-            // A creation placeholder has no directory yet and stays
-            // until the creation removes it.
+            // A creation placeholder has no directory yet, so it is
+            // kept until the work it stands for is listed. The two
+            // never share a name, since the creation names the
+            // branch itself, so what says the work has landed is the
+            // repository gaining a row at all: without this the
+            // pending row sat beside its own worktree for the whole
+            // of the agent's launch.
+            let landed = paths.subtracting(old.items.map(\.worktree.path)).isEmpty == false
             let lost = old.items.enumerated().filter { row in
-                paths.contains(row.element.worktree.path) == false
-                    && (row.element.isPlaceholder || stillExists(row.element.worktree.path))
+                guard paths.contains(row.element.worktree.path) == false else {
+                    return false
+                }
+                guard row.element.isPlaceholder else {
+                    return stillExists(row.element.worktree.path)
+                }
+
+                return landed == false
             }
             for (index, item) in lost {
                 // Back where it was, so a row the reading lost does

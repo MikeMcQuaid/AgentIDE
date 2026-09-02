@@ -32,6 +32,40 @@ struct RowRetentionTests {
     }
 
     @Test
+    func `the pending row goes the moment its worktree is listed`() throws {
+        let root = try makeDirectory()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repositoryPath = try makeDirectory(in: root, named: "repo")
+        let created = try makeDirectory(in: root, named: "fix_cache_homebrew")
+        let placeholder = repositoryPath + DashboardModel.placeholderMarker + "fix_this_in_this"
+
+        // The creation names the branch itself, so the pending row
+        // and the worktree never share a name: what says the work
+        // has landed is the repository gaining a row at all.
+        let previous = [group(repositoryPath: repositoryPath, paths: [repositoryPath, placeholder])]
+        let next = [group(repositoryPath: repositoryPath, paths: [repositoryPath, created])]
+
+        let merged = DashboardModel.retainingLostRows(of: previous, in: next)
+        #expect(merged.flatMap(\.items).map(\.worktree.path) == [repositoryPath, created])
+    }
+
+    @Test
+    func `the pending row stays while the creation is still working`() throws {
+        let root = try makeDirectory()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repositoryPath = try makeDirectory(in: root, named: "repo")
+        let placeholder = repositoryPath + DashboardModel.placeholderMarker + "fix_this_in_this"
+
+        // Nothing new listed yet, so the row a launch is drawing is
+        // all there is to show for it.
+        let previous = [group(repositoryPath: repositoryPath, paths: [repositoryPath, placeholder])]
+        let next = [group(repositoryPath: repositoryPath, paths: [repositoryPath])]
+
+        let merged = DashboardModel.retainingLostRows(of: previous, in: next)
+        #expect(merged.flatMap(\.items).map(\.worktree.path).contains(placeholder))
+    }
+
+    @Test
     func `keeps a row git stopped listing and drops a deleted one`() throws {
         let root = try makeDirectory()
         defer { try? FileManager.default.removeItem(atPath: root) }
