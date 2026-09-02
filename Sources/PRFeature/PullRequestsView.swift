@@ -49,8 +49,8 @@ public struct PullRequestsView: View {
             HStack {
                 PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
                 Spacer()
-                RefreshButton { await model.reload(keepingSelection: true) }
-                    .hoverHelp("Fetch the pull requests again")
+                RefreshButton { await model.refresh() }
+                    .hoverHelp("Read the pull requests and the branch again")
             }
             .padding(.trailing, Self.headerPadding)
             Divider()
@@ -163,6 +163,7 @@ public struct PullRequestsView: View {
             github: model.github,
             repositoryPath: model.repository.path,
             store: model.store,
+            reloadToken: model.conversationRefreshes,
             onBack: { model.selected = nil },
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onOpenChecks: { model.openFailingChecks(summary) },

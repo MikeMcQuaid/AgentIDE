@@ -86,6 +86,15 @@ public extension DashboardModel {
         }
     }
 
+    /// A refresh asked for by hand, which forces the repository in
+    /// view: an ordinary reading asks git only about repositories
+    /// the watcher flagged, so pressing Refresh could otherwise
+    /// answer with the counts it already had, and the pull request
+    /// pane's buttons gate on those counts.
+    func refreshSelected() async {
+        await refresh(forcing: selection?.worktree.repositoryPath)
+    }
+
     /// One whole reading of the system; only `refresh` runs it, one
     /// at a time. The selected worktree is on screen, so its
     /// activity counts as seen; a manual unread mark survives.

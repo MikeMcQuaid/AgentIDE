@@ -595,7 +595,16 @@ selects the worktree holding it, and `agentide new` starts a session.
   An agent's finished turn forgets its own branch's stamps, on the
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.
-  Acting on a pull request clears its stamp; looking never does.
+  Acting on a pull request clears its stamp; looking never does, and
+  so does pressing Refresh: the tab drops the stamps of its listing,
+  of the pull request in view and of that pull request's
+  conversation, asks the sidebar for a git reading forced on this
+  repository, and tells the conversation pane (which holds its
+  threads in its own state, keyed by number) to read them again.
+  Everything a refresh is pressed for -- checks finishing,
+  mergeability, a review or comment arriving, unpushed counts --
+  changes with nothing happening in the app, so the intervals that
+  keep an idle tab quiet must not answer a click.
 - **Row and pane never disagree**: both read the same two caches
   through `PullRequestStore`, the per-branch summary (which pull
   request a branch has) and the enriched summary (what state it is

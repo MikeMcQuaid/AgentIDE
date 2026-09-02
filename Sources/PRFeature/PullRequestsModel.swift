@@ -222,6 +222,12 @@ final class PullRequestsModel {
 
     var tipSignature: TipSignature = .unread
 
+    /// Bumped by a refresh asked for by hand, so the conversation
+    /// pane reads its threads and comments again: it holds them in
+    /// its own state, keyed by the pull request's number, and
+    /// nothing else would tell it that the answers have moved.
+    var conversationRefreshes = 0
+
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
 

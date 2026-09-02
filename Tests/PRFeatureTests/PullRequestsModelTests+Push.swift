@@ -158,6 +158,47 @@ extension PullRequestsModelTests {
     }
 
     @Test
+    func `refresh reads the counts the buttons gate on again`() async {
+        let key = "dashboardRefreshRequest"
+        let before = UserDefaults.standard.integer(forKey: key)
+        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
+
+        await model.refresh()
+
+        // The unpushed counts belong to the sidebar's reading, so the
+        // pane's own refresh has to ask for one; the listing and the
+        // branch facts it reads itself. Counted as a rise, not an
+        // exact step: the defaults are shared by every test running
+        // beside this one.
+        #expect(UserDefaults.standard.integer(forKey: key) > before)
+        #expect(model.hasLoaded)
+        #expect(model.canPush)
+    }
+
+    @Test
+    func `refresh asks GitHub again rather than waiting out the interval`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var listings = 0
+        model.fetchList = { _, _ in
+            listings += 1
+            return [summary(7, head: "feature")]
+        }
+        await model.reload()
+        let opened = listings
+        let conversations = model.conversationRefreshes
+
+        await model.refresh()
+
+        // Checks finishing, a branch going unmergeable and a review
+        // arriving are exactly what a refresh is pressed for, and
+        // none of them happen in the app: the stamps that keep an
+        // idle tab quiet are dropped first, and the conversation
+        // pane is told to read its own threads again.
+        #expect(listings > opened)
+        #expect(model.conversationRefreshes == conversations + 1)
+    }
+
+    @Test
     func `a failed push reports rather than dimming`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 2)])
         await model.reload()
