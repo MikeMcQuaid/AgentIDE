@@ -675,7 +675,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   finished job's view behind the run, so a refused job falls back to
   the plain REST job log, named once in front since that log carries
   no job column, and a job with no log to give yet is skipped rather
-  than fatal.
+  than fatal. A job counts as failed on its own conclusion or on any
+  failed step, since a check goes red the moment a step does while
+  the job runs on. A run that hands over nothing is skipped too, so
+  what the other runs have is still copied, and only every run
+  coming back empty is reported — in the app's own words, naming how
+  many jobs have failed and that their logs appear as each finishes,
+  never gh's "still in progress", which is neither what happened nor
+  anything to act on.
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses
