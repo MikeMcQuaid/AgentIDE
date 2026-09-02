@@ -174,6 +174,14 @@ build.
   workspace shapes or server behaviour needs the running session stopped
   (`herdr session stop <name>` as the sandbox user) to take effect.
 
+- A pane listing that could not be read is not a listing of nothing
+  (`LastPanes`). Taken as an empty one it emptied every session in the
+  app at once: every row lost its agent, every pane read as exited and
+  only relaunching brought them back, though herdr had lost nothing
+  and the agents were still working. The last answer stands for two
+  minutes of failures, after which an empty answer is believed, so a
+  herdr that really has gone still shows as gone.
+
 ### Terminals
 
 Agent panes attach to herdr as terminal controllers (`herdr terminal

@@ -9,13 +9,46 @@ cd "$(dirname "$0")/.."
 # into the real one; they log into their own scratch instead.
 export AGENTIDE_PERFORMANCE_LOG_DIRECTORY="${PWD}/.test-scratch/performance"
 
+# Stops the herdr servers a killed run left behind. Each test server
+# is bound to a socket under this checkout's .test-scratch, which is
+# what says it is ours; nothing else is ever signalled, least of all
+# the production server the app and its agents live in. A run the
+# system kills (resource pressure culls the sandbox user under load)
+# never reaches its own teardown, and every orphan then holds its
+# memory until the machine reboots, making the next kill likelier.
+sweep_test_servers() {
+  local scratch="${PWD}/.test-scratch/"
+  local pid socket
+  # Listed with ps rather than pgrep: pgrep does not see every
+  # herdr in this sandbox, and a sweep that cannot see a server
+  # cannot stop it.
+  for pid in $(ps -axo pid=,args= | awk '$2 == "herdr" && $3 == "server" { print $1 }'); do
+    socket="$(lsof -a -p "${pid}" -U -Fn 2>/dev/null |
+      sed -n 's/^n//p' | grep 'herdr\.sock$' | head -1)"
+    case "${socket}" in
+      "${scratch}"*) kill "${pid}" 2>/dev/null || true ;;
+    esac
+  done
+}
+
+# Before as well as after: a run killed outright leaves orphans no
+# trap of its own can reach.
+sweep_test_servers
+trap sweep_test_servers EXIT INT TERM
+find .test-scratch -mindepth 1 -maxdepth 1 -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
-  # Capped parallelism: full-width builds inside the sandbox have
-  # triggered resource kills that tore down the whole sandbox user,
-  # taking the production herdr server and its agents with it.
-  exec nice swift test --disable-sandbox --jobs 6
+  # Capped parallelism in the background band: full-width builds
+  # inside the sandbox have triggered resource kills that tore down
+  # the whole sandbox user, taking the production herdr server and
+  # its agents with it. `taskpolicy -b` puts the compiler where the
+  # system looks first when it needs memory back, so what gets culled
+  # is this run rather than the user's agents. Not exec'd: the sweep
+  # above runs on the way out.
+  taskpolicy -b nice swift test --disable-sandbox --jobs 6
+  exit
 fi
 
 swift test

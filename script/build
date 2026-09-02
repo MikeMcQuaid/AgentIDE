@@ -53,7 +53,12 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFT_BUILD_USE_SANDBOX=0
   echo "sandboxed: building every target with swift build" >&2
   echo "the app bundle itself is the host's and CI's to build" >&2
-  exec swift build --disable-sandbox
+  # The same cap and band as the sandbox's tests: this path never
+  # reached the job cap above, so it built at full width, which is
+  # what the comment beside that cap warns about. `taskpolicy -b`
+  # makes this run the first thing the system culls for memory
+  # rather than the herdr server holding the user's agents.
+  exec taskpolicy -b nice swift build --disable-sandbox --jobs "${JOBS}"
 fi
 
 # Package plugins are trusted everywhere: SwiftTerm 1.19 ships a

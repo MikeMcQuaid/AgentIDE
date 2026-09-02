@@ -332,6 +332,15 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file
   itself rather than resolving it against a worktree.
+- Building and testing inside the sandbox has to leave the user's
+  agents alone: both run capped (`--jobs 6`), niced and in the
+  background band (`taskpolicy -b`), so what the system culls when
+  memory runs short is the compiler rather than the herdr server
+  holding every agent. `script/test` also sweeps the herdr servers a
+  killed run orphaned, matching them by a socket under this
+  checkout's `.test-scratch` and never by name: a run the system
+  kills never reaches its own teardown, and seven orphaned servers
+  were found holding memory after one such kill.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
