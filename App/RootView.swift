@@ -185,6 +185,7 @@ struct RootView: View {
             centreEditors = Set(centreEditorLines.split(separator: "\n").map(String.init))
             await dependencies.dashboard.poll()
         }
+        .task { await watchNetwork() }
         // A shell command waiting on an editor is stopped until this
         // window shows it the file, so it is watched for separately
         // from the dashboard's own slower poll.

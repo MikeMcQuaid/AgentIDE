@@ -12,6 +12,12 @@ struct GitHubOutageTests {
             "HTTP 502: Bad gateway (https://api.github.com/graphql)",
             "gh api failed (1): HTTP 500: Internal server error",
             "error connecting to api.github.com: operation timed out",
+            // gh's own wording when the machine has no route out,
+            // which arrives with no other marker in it at all.
+            """
+            gh api repos/Homebrew/brew/pulls?state=all failed (1): error connecting to api.github.com
+            check your internet connection or https://githubstatus.com
+            """,
             "could not resolve host: api.github.com",
             "The Internet connection appears to be offline.",
         ]

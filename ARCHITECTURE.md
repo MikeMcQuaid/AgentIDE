@@ -434,7 +434,14 @@ page resumes any past conversation into a fresh worktree.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
-  the safety net. Notifications fire for a finished turn and for input
+  the safety net. Whether the machine has a route out at all comes
+  from the system's own path monitor (`NetworkMonitor`, `NWPathMonitor`):
+  without one every GitHub question fails identically, so the app says
+  so once, holds GitHub work rather than spawning `gh` per branch per
+  poll, and refreshes the moment the route is back. `ServiceStatus`
+  keeps that apart from GitHub itself being down, and reports nothing
+  at all while the machine is off the network.
+  Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
   accessibility flash apply; its completion handler must be formed in a
@@ -774,7 +781,7 @@ organisation.
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
 | tree-sitter-* grammars | highlighting | pinned to the latest ABI 14 release the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python's manifest needs the root `src/scanner.c` sentinel |
 
-System frameworks (WebKit, UserNotifications, FSEvents and
+System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
 No updater: releases ship as a Homebrew cask.

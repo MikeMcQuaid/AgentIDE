@@ -37,11 +37,22 @@ public final class ServiceStatus {
     /// shown state has been stale.
     public private(set) var unavailableSince: Date?
 
+    /// Whether the machine has a route out at all, which is a
+    /// different thing from GitHub being down and reads differently
+    /// in the messages pane.
+    public private(set) var hasNetwork = true
+
     /// Records a failure. An outage is announced once and then kept
     /// quiet; anything else is a real failure and always reported,
     /// since a broken request the user could fix must not be
     /// swallowed by an outage's silence.
     public func record(failure error: any Error, doing what: String) {
+        // A machine with no route explains every failure at once and
+        // has said so already: repeating it per branch per poll is
+        // what buried the pane.
+        guard hasNetwork else {
+            return
+        }
         guard GitHubOutage.isLikely(error) else {
             ErrorLog.shared.report(what + ": " + error.localizedDescription)
             return
@@ -56,6 +67,33 @@ public final class ServiceStatus {
             "GitHub is not answering, so pull request state is what was last fetched. "
                 + "Retrying quietly; the first success says so. (" + error.localizedDescription + ")",
         )
+    }
+
+    /// Told what the system's path monitor sees. Losing the network
+    /// is announced once and everything GitHub waits, since nothing
+    /// can succeed until it is back; regaining it clears the wait so
+    /// the next poll asks straight away.
+    public func networkChanged(isOnline: Bool) {
+        guard isOnline != hasNetwork else {
+            return
+        }
+
+        hasNetwork = isOnline
+        guard isOnline else {
+            isUnavailable = true
+            unavailableSince = unavailableSince ?? Date()
+            ErrorLog.shared.report(
+                "No network connection, so pull request state is what was last fetched. "
+                    + "It refreshes by itself the moment the network is back.",
+            )
+            return
+        }
+
+        let since = unavailableSince
+        isUnavailable = false
+        unavailableSince = nil
+        let waited = since.map { " after " + Self.duration(since: $0) } ?? ""
+        ErrorLog.shared.note("The network is back" + waited + "; pull request state is refreshing.")
     }
 
     /// Records a success, which ends an outage and says so once.
