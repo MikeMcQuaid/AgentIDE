@@ -8,7 +8,6 @@ import Foundation
 public struct GitHubClient: Sendable {
     // MARK: Lifecycle
 
-    /// Creates a client.
     /// Creates the client. `isOnline` is the shared reading of
     /// whether the machine has a route, which every GitHub call is
     /// refused without; tests replace it.

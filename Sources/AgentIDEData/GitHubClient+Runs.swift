@@ -61,8 +61,9 @@ extension GitHubClient {
             return try await gh(["run", "view", String(runID), "--log-failed"], in: repositoryPath).standardOutput
         } catch {
             let jobs = try await gh(["run", "view", String(runID), "--json", "jobs"], in: repositoryPath)
+            let failed = Self.failedJobs(fromJSON: jobs.standardOutput)
             var logs = [String]()
-            for job in Self.failedJobs(fromJSON: jobs.standardOutput) {
+            for job in failed {
                 if let log = await jobLog(job, repositoryPath: repositoryPath) {
                     logs.append(log)
                 }
@@ -71,7 +72,7 @@ extension GitHubClient {
                 // Never gh's own wording: it names a run still in
                 // progress, when what matters is whether any failed
                 // job has a log to give.
-                throw RunLogsUnavailable(failedJobs: Self.failedJobs(fromJSON: jobs.standardOutput).count)
+                throw RunLogsUnavailable(failedJobs: failed.count)
             }
 
             return logs.joined(separator: "\n")

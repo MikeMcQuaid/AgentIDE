@@ -61,6 +61,21 @@ extension PullRequestsModelTests {
     }
 
     @Test
+    func `a failure waiting cannot cure is not reported as a wait`() async {
+        let links = ["https://github.com/o/r/actions/runs/123/job/1"]
+        let model = makeModel()
+        let refusal = NSError(domain: "gh", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "there is no route to the network right now",
+        ])
+        model.fetchFailedRunLog = { _ in throw refusal }
+
+        #expect(await model.copyFailingLogs(summary(1, head: "feature", failingCheckLinks: links)) == false)
+        let message = ErrorLog.shared.entries.last?.message ?? ""
+        #expect(message.contains("no route to the network"))
+        #expect(message.contains("yet") == false)
+    }
+
+    @Test
     func `gh's per-line job, step, timestamp and colour are condensed away`() async throws {
         let stamp = "2026-08-30T12:40:20.1479947Z "
         let log = [

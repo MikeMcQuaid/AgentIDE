@@ -7,7 +7,6 @@ import Foundation
 public struct GitClient: Sendable {
     // MARK: Lifecycle
 
-    /// Creates a client.
     /// Creates the client. `isOnline` is the shared reading of
     /// whether the machine has a route, which the commands that
     /// reach a remote are refused without; tests replace it.

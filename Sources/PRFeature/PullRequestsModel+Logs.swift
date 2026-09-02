@@ -122,8 +122,14 @@ extension PullRequestsModel {
             NSPasteboard.general.setString(text, forType: .string)
             note("Copied the failing logs of " + String(runs.count) + " runs from #" + String(summary.number) + ".")
             return true
-        } catch {
+        } catch let error as GitHubClient.RunLogsUnavailable {
+            // Only a run GitHub has yet to publish is a "yet".
             report("Nothing to copy from #" + String(summary.number) + " yet: " + error.localizedDescription)
+            return false
+        } catch {
+            // Anything else (no network, no `gh` credentials) is said
+            // as what it is: waiting will not cure it.
+            report("Could not read #" + String(summary.number) + "'s failing logs: " + error.localizedDescription)
             return false
         }
     }

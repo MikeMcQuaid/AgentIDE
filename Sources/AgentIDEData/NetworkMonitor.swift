@@ -1,4 +1,3 @@
-import Foundation
 import Network
 import Synchronization
 
@@ -45,8 +44,8 @@ public final class NetworkMonitor: Sendable {
             let monitor = NWPathMonitor()
             monitor.pathUpdateHandler = { path in
                 let satisfied = path.status == .satisfied
-                // Nil is "never asked", so the first reading is news
-                // whichever way it goes.
+                // The held reading starts unknown, so the first
+                // answer is news whichever way it goes.
                 let seen: Reachability = satisfied ? .online : .offline
                 let isNews = self.online.withLock { held in
                     let changed = held != seen

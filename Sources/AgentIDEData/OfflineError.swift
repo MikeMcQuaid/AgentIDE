@@ -6,17 +6,17 @@ import Foundation
 /// pool: `GitHubOutage` reads it as an outage, so the messages pane
 /// says it once rather than once per branch per poll, and nothing is
 /// spawned that could only fail.
-public struct OfflineError: LocalizedError, Sendable {
+struct OfflineError: LocalizedError {
     // MARK: Lifecycle
 
     /// Creates the refusal, naming the work that wanted the network.
-    public init(doing what: String) {
+    init(doing what: String) {
         self.what = what
     }
 
-    // MARK: Public
+    // MARK: Internal
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         what + " needs the network, and there is no route to the network right now."
     }
 
