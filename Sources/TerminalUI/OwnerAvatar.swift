@@ -1,3 +1,4 @@
+import AgentIDEData
 import AppKit
 import SwiftUI
 
@@ -93,6 +94,12 @@ public final class OwnerAvatarStore {
     /// drawing the sidebar.
     @concurrent
     private nonisolated static func download(from url: URL, to file: URL) async -> Data? {
+        // The same reading every other network call takes: a
+        // machine with no route keeps the avatar it has rather than
+        // asking for one it cannot be given.
+        guard NetworkMonitor.shared.isOnline else {
+            return nil
+        }
         guard let (data, response) = try? await URLSession.shared.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == httpOK
         else {

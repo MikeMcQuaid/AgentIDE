@@ -24,6 +24,12 @@ public final class NetworkMonitor: Sendable {
 
     // MARK: Public
 
+    /// The one monitor every network call asks. A shared instance
+    /// because the answer is the machine's, not any one caller's:
+    /// the clients read it, the window watches it and the messages
+    /// pane reports it, all from the same reading.
+    public static let shared: NetworkMonitor = .init()
+
     /// Whether the machine had a route when the system last said.
     /// True until told otherwise, so nothing waits on a first
     /// answer to do its work.

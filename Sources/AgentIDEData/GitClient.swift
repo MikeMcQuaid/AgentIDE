@@ -8,8 +8,16 @@ public struct GitClient: Sendable {
     // MARK: Lifecycle
 
     /// Creates a client.
-    public init(runner: any ProcessRunner) {
+    /// Creates the client. `isOnline` is the shared reading of
+    /// whether the machine has a route, which the commands that
+    /// reach a remote are refused without; tests replace it.
+    @preconcurrency
+    public init(
+        runner: any ProcessRunner,
+        isOnline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOnline },
+    ) {
         self.runner = runner
+        self.isOnline = isOnline
     }
 
     // MARK: Public
@@ -325,6 +333,14 @@ public struct GitClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
+        // Only the commands that reach a remote need the network;
+        // reading the worktree must go on working without one,
+        // since a stale answer beats no answer while the route is
+        // gone.
+        if let remoteWork = arguments.first, Self.remoteCommands.contains(remoteWork), isOnline() == false {
+            throw OfflineError(doing: "git " + remoteWork)
+        }
+
         // `--no-optional-locks` so a read never takes the index
         // lock an agent's own git may be holding in the same
         // worktree, and never writes a refreshed index of its own.
@@ -352,7 +368,12 @@ public struct GitClient: Sendable {
         "-c", "diff.noprefix=false",
     ]
 
+    /// The subcommands that talk to a remote, and so are the only
+    /// ones a machine with no route is refused.
+    private static let remoteCommands: Set<String> = ["fetch", "push", "pull", "clone", "ls-remote"]
+
     private let runner: any ProcessRunner
+    private let isOnline: @Sendable () -> Bool
 
     private func upstreamCount(range: String, worktreePath: String) async -> Int? {
         let result = try? await git(["rev-list", "--count", range], in: worktreePath, allowFailure: true)

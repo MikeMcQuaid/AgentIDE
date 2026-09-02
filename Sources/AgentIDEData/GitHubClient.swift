@@ -9,8 +9,16 @@ public struct GitHubClient: Sendable {
     // MARK: Lifecycle
 
     /// Creates a client.
-    public init(runner: any ProcessRunner) {
+    /// Creates the client. `isOnline` is the shared reading of
+    /// whether the machine has a route, which every GitHub call is
+    /// refused without; tests replace it.
+    @preconcurrency
+    public init(
+        runner: any ProcessRunner,
+        isOnline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOnline },
+    ) {
         self.runner = runner
+        self.isOnline = isOnline
     }
 
     // MARK: Public
@@ -277,6 +285,14 @@ public struct GitHubClient: Sendable {
         in directory: String?,
         allowFailure: Bool = false,
     ) async throws -> ProcessResult {
+        // Every GitHub question comes through here, so this is
+        // where a machine with no route is told no: spawning `gh`
+        // to be told the same thing costs a process and fills the
+        // messages pane.
+        guard isOnline() else {
+            throw OfflineError(doing: "gh " + arguments.prefix(Self.loggedWords).joined(separator: " "))
+        }
+
         // `gh` is the app's network: the process funnel already
         // times it, and this line says which calls were GitHub's.
         let result = try await PerformanceLog.time(
@@ -334,6 +350,7 @@ public struct GitHubClient: Sendable {
     }
 
     private let runner: any ProcessRunner
+    private let isOnline: @Sendable () -> Bool
 
     private static func aggregateChecks(_ rows: [CheckRow]) -> String {
         let states = rows.map { ($0.conclusion ?? $0.state ?? "").uppercased() }

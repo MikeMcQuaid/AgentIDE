@@ -65,7 +65,8 @@ final class AppDependencies {
 
     /// Watches whether the machine has a route out at all, so
     /// GitHub work waits rather than failing per branch per poll.
-    let network: NetworkMonitor = .init()
+    /// The shared one, which every network call in the app reads.
+    let network: NetworkMonitor = .shared
 
     let git: GitClient
     let github: GitHubClient

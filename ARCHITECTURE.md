@@ -435,10 +435,16 @@ page resumes any past conversation into a fresh worktree.
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
   the safety net. Whether the machine has a route out at all comes
-  from the system's own path monitor (`NetworkMonitor`, `NWPathMonitor`):
-  without one every GitHub question fails identically, so the app says
-  so once, holds GitHub work rather than spawning `gh` per branch per
-  poll, and refreshes the moment the route is back. `ServiceStatus`
+  from the system's own path monitor (`NetworkMonitor.shared`,
+  `NWPathMonitor`): without one every network call fails identically,
+  so the app says so once, holds that work rather than spawning
+  processes per branch per poll, and refreshes the moment the route is
+  back. One reading serves them all: `gh` refuses at its own funnel,
+  git refuses only the subcommands that reach a remote (`fetch`,
+  `push`, `pull`, `clone`, `ls-remote`) so reading a worktree still
+  works offline, and avatars keep what they have. Each refusal is one
+  `OfflineError`, which `GitHubOutage` reads as an outage, so it is
+  pooled rather than repeated. `ServiceStatus`
   keeps that apart from GitHub itself being down, and reports nothing
   at all while the machine is off the network.
   Notifications fire for a finished turn and for input

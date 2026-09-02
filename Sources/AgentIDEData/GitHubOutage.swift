@@ -46,5 +46,8 @@ public enum GitHubOutage {
         // a captive portal, or DNS not answering yet.
         "error connecting to",
         "check your internet connection",
+        // The app's own refusal when the path monitor says the
+        // machine has nowhere to send the request.
+        "no route to the network",
     ]
 }
