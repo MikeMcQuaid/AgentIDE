@@ -168,11 +168,43 @@ struct PullRequestBadgeTests {
     func `a review shows its verdict, or that it is still waiting`() {
         #expect(ChecksStyle.reviewOcticonName(for: "APPROVED") == "octicon-check-circle-fill")
         #expect(ChecksStyle.reviewColour(for: "APPROVED") == .green)
-        #expect(ChecksStyle.reviewOcticonName(for: "CHANGES_REQUESTED") == "octicon-x-circle-fill")
+        #expect(ChecksStyle.reviewOcticonName(for: "CHANGES_REQUESTED") == "octicon-file-diff")
         #expect(ChecksStyle.reviewColour(for: "CHANGES_REQUESTED") == .red)
         // Required but not given is waiting, not failing.
         #expect(ChecksStyle.reviewOcticonName(for: "REVIEW_REQUIRED") == "clock")
         #expect(ChecksStyle.reviewColour(for: "REVIEW_REQUIRED") == .secondary)
         #expect(ChecksStyle.reviewOcticonName(for: "") == nil)
+    }
+
+    @Test
+    func `every red badge a row can carry has its own glyph`() {
+        // Failing checks, a reviewer asking for changes and a
+        // conflict are three unrelated facts, and a row can carry
+        // all three at once: sharing one crossed circle made the
+        // same badge appear three times saying nothing.
+        let red = [
+            ChecksStyle.checksOcticonName,
+            ChecksStyle.reviewOcticonName(for: "CHANGES_REQUESTED"),
+            ChecksStyle.mergeableOcticonName(for: "CONFLICTING"),
+        ]
+        #expect(Set(red.compactMap(\.self)).count == red.count)
+        #expect(ChecksStyle.mergeableOcticonName(for: "CONFLICTING") == "exclamationmark.triangle.fill")
+        #expect(ChecksStyle.mergeableColour(for: "CONFLICTING") == .red)
+        // A clean merge stays the merge glyph, so the pair reads as
+        // one fact in two states.
+        #expect(ChecksStyle.mergeableOcticonName(for: "MERGEABLE") == "octicon-git-merge")
+        #expect(ChecksStyle.mergeableOcticonName(for: "UNKNOWN") == nil)
+
+        // Each says what it is, since three red badges cannot be
+        // told apart by colour.
+        #expect(ChecksStyle.reviewHelp(for: "CHANGES_REQUESTED") == "A reviewer asked for changes")
+        #expect(ChecksStyle.mergeableHelp(for: "CONFLICTING").contains("Conflicts with the base branch"))
+
+        // Checks are the same dot in both rows, red or green: only
+        // the colour moves, so a run finishing never reshapes a row.
+        #expect(ChecksStyle.checksOcticonName == "octicon-dot-fill")
+        #expect(ChecksStyle.colour(for: "FAILURE") == .red)
+        #expect(ChecksStyle.colour(for: "SUCCESS") == .green)
+        #expect(ChecksStyle.colour(for: "PENDING") == .orange)
     }
 }

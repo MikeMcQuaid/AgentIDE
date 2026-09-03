@@ -613,6 +613,16 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **One glyph per fact** (`ChecksStyle`). A row can carry failing checks,
+  a reviewer asking for changes and a merge conflict at once, and all
+  three used to be the same red crossed circle, which said "something is
+  wrong" three times and which nothing was. Checks are a dot in both
+  rows, red, green or orange, so a run finishing recolours a row rather
+  than reshaping it; changes requested is GitHub's own diff glyph, since
+  a person has written on the code; a conflict is a warning triangle,
+  since it is nobody's verdict and the one state a pull request cannot
+  leave on its own. Each badge's hover help names what it is, because colour cannot
+  tell three red badges apart.
 - **Row and pane never disagree**: both read the same two caches
   through `PullRequestStore`, the per-branch summary (which pull
   request a branch has) and the enriched summary (what state it is
