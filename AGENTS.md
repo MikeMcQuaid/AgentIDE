@@ -321,8 +321,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   needs nothing. herdr 0.8.2 also takes a short PTY write as a whole
   one, so a reader stalled while a paste larger than the input queue
   (1,022 bytes) is in flight loses about a kibibyte from the middle;
-  `HerdrSlowReaderIntegrationTests` reproduces it under load and stays
-  disabled until herdr waits or retries.
+  `HerdrSlowReaderIntegrationTests` reproduces it under load, and
+  `HerdrLargeInputIntegrationTests` meets it whenever the run is
+  contended; both stay disabled until herdr waits or retries.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

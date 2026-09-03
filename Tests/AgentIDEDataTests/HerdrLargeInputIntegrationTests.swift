@@ -5,8 +5,16 @@ import Testing
 
 /// A whole paste as one input command: herdr must deliver every
 /// byte to the pane's terminal, in order.
+///
+/// The same herdr 0.8.2 bug `HerdrSlowReaderIntegrationTests`
+/// isolates: a short PTY write taken as a whole one loses about a
+/// kibibyte whenever the reader stalls with the queue full. It used
+/// to fail now and then; with the sandbox's run capped and put in
+/// the background band it stalls on every run, and a suite that
+/// always fails hides the failures worth reading. Enable it again
+/// once herdr waits on the terminal or retries.
 struct HerdrLargeInputIntegrationTests {
-    @Test
+    @Test(.disabled("herdr 0.8.2 drops the rest of a PTY write the kernel accepted partially"))
     func `a large input reaches the pane whole`() async throws {
         let (herdr, home) = try TestSupport.makeHerdrClient()
         let directory = try TestSupport.temporaryDirectory("large-input")
