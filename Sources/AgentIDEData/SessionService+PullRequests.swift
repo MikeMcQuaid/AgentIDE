@@ -195,6 +195,12 @@ public extension SessionService {
         await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch)
     }
 
+    /// The commit a worktree's branch points at, which is what a
+    /// push sends; nil when unreadable.
+    func tipCommit(worktree: Worktree) async -> String? {
+        await git.commitHash(of: worktree.branch, worktreePath: worktree.path)
+    }
+
     /// The branch actually checked out in a worktree, nil when
     /// detached or unreadable.
     func currentBranch(worktreePath: String) async -> String? {

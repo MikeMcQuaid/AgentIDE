@@ -39,6 +39,11 @@ public struct GitHubClient: Sendable {
     /// archive.
     public static let listLimit = 10
 
+    /// How many open issues or pull requests a source picker
+    /// offers: a menu to choose from, not a row's state, so wider
+    /// than `listLimit` and still one page of light fields.
+    public static let pickerLimit = 50
+
     /// Where a pull request template lives, in the order GitHub
     /// itself looks.
     public static let templatePaths = [

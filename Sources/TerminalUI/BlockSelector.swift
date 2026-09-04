@@ -143,7 +143,7 @@ final class BlockSelector {
             return nil
         }
 
-        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        let size = PaneTerminalView.cellSize(of: view)
         func row(_ vertical: CGFloat) -> Int {
             // The view's origin is at the bottom; rows from the top.
             min(max(Int((view.frame.height - vertical) / size.height), 0), terminal.rows - 1)
@@ -165,8 +165,7 @@ final class BlockSelector {
         of cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>),
         in view: PaneTerminalView,
     ) -> CGRect {
-        let terminal = view.getTerminal()
-        let size = cellSize(of: view, rows: terminal.rows, columns: terminal.cols)
+        let size = PaneTerminalView.cellSize(of: view)
         let height = CGFloat(cells.rows.count) * size.height
         return CGRect(
             x: CGFloat(cells.columns.lowerBound) * size.width,
@@ -174,27 +173,6 @@ final class BlockSelector {
             width: CGFloat(cells.columns.count) * size.width,
             height: height,
         )
-    }
-
-    /// One character cell, the size the terminal itself draws it.
-    /// Dividing the pane by its rows is not the same thing: the grid
-    /// is laid out from the top in whole cells of the font's own
-    /// size and whatever is left over sits unused at the bottom, so
-    /// a marquee measured against the pane drifted further from the
-    /// text with every row down the screen. The optimal frame is
-    /// exactly one cell by the grid, the scroller here being hidden.
-    private func cellSize(of view: PaneTerminalView, rows: Int, columns: Int) -> CGSize {
-        let optimal = view.getOptimalFrameSize().size
-        guard optimal.width > 0, optimal.height > 0 else {
-            return CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
-        }
-
-        // The optimal width includes a shell pane's scroller; the
-        // grid stops short of it, and measuring against the full
-        // width put every column a cell right and copied blanks.
-        let scroller = view.subviews.compactMap { $0 as? NSScroller }.first { $0.isHidden == false }
-        let gridWidth = optimal.width - (scroller?.frame.width ?? 0)
-        return CGSize(width: gridWidth / CGFloat(columns), height: optimal.height / CGFloat(rows))
     }
 
     private func update(to point: CGPoint, in view: PaneTerminalView) {

@@ -58,6 +58,23 @@ final class PaneTerminalView: LocalProcessTerminalView {
         }
     }
 
+    /// Rounds a drag's end to the boundary nearest the pointer.
+    /// SwiftTerm names the cell the pointer is inside and takes the
+    /// end as exclusive, so the character under the pointer was left
+    /// out of the highlight and the copy alike: every drag across a
+    /// word dropped its last letter unless it carried on into the
+    /// next one. A word or line drag (`clickCount` above one) picks
+    /// its own boundaries and is left alone.
+    override func mouseDragged(with event: NSEvent) {
+        super.mouseDragged(with: event)
+        roundSelectionEnd(at: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        roundSelectionEnd(at: event)
+    }
+
     /// The right-click menu: Copy and Paste, which terminals
     /// otherwise lack entirely.
     override func menu(for _: NSEvent) -> NSMenu? {
@@ -111,6 +128,29 @@ final class PaneTerminalView: LocalProcessTerminalView {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(PasteableText.reflow(text), forType: .string)
+    }
+
+    /// One character cell, the size the terminal itself draws it.
+    /// Dividing the pane by its rows is not the same thing: the grid
+    /// is laid out from the top in whole cells of the font's own
+    /// size and whatever is left over sits unused at the bottom, so
+    /// a measurement against the pane drifts further from the text
+    /// with every row down the screen. The optimal frame is exactly
+    /// one cell by the grid, plus the width SwiftTerm reserves for a
+    /// scroller it is showing; measuring against the full width put
+    /// every column a cell right and copied blanks.
+    static func cellSize(of view: PaneTerminalView) -> CGSize {
+        let terminal = view.getTerminal()
+        let rows = max(terminal.rows, 1)
+        let columns = max(terminal.cols, 1)
+        let optimal = view.getOptimalFrameSize().size
+        guard optimal.width > 0, optimal.height > 0 else {
+            return CGSize(width: view.frame.width / CGFloat(columns), height: view.frame.height / CGFloat(rows))
+        }
+
+        let scroller = view.subviews.compactMap { $0 as? NSScroller }.first { $0.isHidden == false }
+        let gridWidth = optimal.width - (scroller?.frame.width ?? 0)
+        return CGSize(width: gridWidth / CGFloat(columns), height: optimal.height / CGFloat(rows))
     }
 
     /// The whole recent output from herdr, reflowed like a selection
@@ -213,5 +253,27 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
         lastWheel = identity
         return true
+    }
+
+    /// See `mouseDragged`: the end column SwiftTerm chose, moved on
+    /// to the nearer boundary when the pointer is past the middle of
+    /// its cell. Never moved backwards, so this can only ever add the
+    /// character the pointer is on.
+    private func roundSelectionEnd(at event: NSEvent) {
+        guard event.clickCount <= 1, let selection, selection.active else {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        let terminal = getTerminal()
+        guard let column = TerminalSelection.endColumn(
+            across: point.x,
+            cellWidth: Self.cellSize(of: self).width,
+            columns: terminal.cols,
+        ), column > selection.end.col else {
+            return
+        }
+
+        selection.dragExtend(bufferPosition: Position(col: column, row: selection.end.row))
     }
 }

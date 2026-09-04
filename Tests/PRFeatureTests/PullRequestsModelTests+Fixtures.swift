@@ -49,6 +49,7 @@ extension PullRequestsModelTests {
             // Succeeds without side effects.
         }
         model.checkTipSigned = { _ in true }
+        model.fetchTipCommit = { _ in "tip" }
         return model
     }
 

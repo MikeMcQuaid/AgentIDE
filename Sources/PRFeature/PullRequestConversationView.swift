@@ -16,6 +16,10 @@ struct PullRequestConversationPane: View {
     let github: GitHubClient
     let repositoryPath: String
     let store: MetadataStore
+
+    /// See `PullRequestConversationView.reloadToken`.
+    let reloadToken: Int
+
     let onBack: () -> Void
     let onCopyComments: @MainActor () async -> Void
     let onOpenChecks: @MainActor () async -> Void
@@ -62,6 +66,7 @@ struct PullRequestConversationPane: View {
                 number: summary.number,
                 seededBody: summary.body,
                 store: store,
+                reloadToken: reloadToken,
                 onResolvedChanged: onResolvedChanged,
                 onThreadsChanged: onThreadsChanged,
             )
@@ -139,6 +144,12 @@ struct PullRequestConversationView: View {
 
     let store: MetadataStore
 
+    /// Changed by a refresh asked for by hand, which is what tells
+    /// this pane to read its threads and comments again: they are
+    /// its own state, and the number alone stays the same across a
+    /// refresh of the pull request in view.
+    let reloadToken: Int
+
     /// Runs after a resolve toggle, so the header and listed row
     /// refresh immediately.
     let onResolvedChanged: @MainActor () async -> Void
@@ -170,7 +181,7 @@ struct PullRequestConversationView: View {
         // seeded body is fresh from the listing, so only the events
         // need fetching. Failures and cancelled fetches change and
         // cache nothing, keeping the last good conversation.
-        .task(id: number) {
+        .task(id: [number, reloadToken]) {
             isLoading = true
             defer { isLoading = false }
             let cached = pullRequests.cachedConversation(

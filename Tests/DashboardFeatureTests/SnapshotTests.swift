@@ -44,6 +44,7 @@ struct SnapshotTests {
             item: item,
             pullRequest: pullRequest,
             standing: StackStanding(position: 1, height: 1),
+            load: nil,
         )
         .frame(width: width)
         .padding()

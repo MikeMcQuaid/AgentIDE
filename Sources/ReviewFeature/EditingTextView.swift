@@ -19,6 +19,20 @@ final class EditingTextView: NSTextView {
 
     // MARK: Internal
 
+    /// The page guides' width: one point, a rule rather than a line
+    /// of its own.
+    static let guideWidth: CGFloat = 1
+
+    /// The column most style guides ask code to stop at, marked the
+    /// way Xcode's page guide marks it.
+    static let narrowPageGuide = 80
+
+    /// The wider one, which a review diff still fits side by side.
+    static let widePageGuide = 118
+
+    /// Both guides, in the order they are drawn.
+    static let pageGuideColumns = [narrowPageGuide, widePageGuide]
+
     /// The open file's language, which is what knows the comment
     /// prefix; set once at creation, like the file itself.
     var language: SyntaxLanguage?
@@ -27,6 +41,28 @@ final class EditingTextView: NSTextView {
     /// leaves the file's own shape deciding, which is what an
     /// unconfigured project gets.
     var configuredIndentUnit: String?
+
+    /// Draws the page guides under the text. A monospaced advance is
+    /// what makes a column a distance at all, so a face that reports
+    /// none draws nothing rather than a rule in the wrong place.
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard let font, font.isFixedPitch else {
+            return
+        }
+
+        let advance = NSAttributedString(string: " ", attributes: [.font: font]).size().width
+        guard advance > 0 else {
+            return
+        }
+
+        let padding = textContainer?.lineFragmentPadding ?? 0
+        NSColor.separatorColor.setFill()
+        for column in Self.pageGuideColumns {
+            let position = textContainerOrigin.x + padding + advance * CGFloat(column)
+            NSRect(x: position, y: rect.minY, width: Self.guideWidth, height: rect.height).fill()
+        }
+    }
 
     override func insertTab(_: Any?) {
         let unit = indentUnit

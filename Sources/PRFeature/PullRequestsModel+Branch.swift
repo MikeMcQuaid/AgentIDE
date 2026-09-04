@@ -18,6 +18,7 @@ extension PullRequestsModel {
         stacking.factsGeneration += 1
         let generation = stacking.factsGeneration
         let signed = await checkTipSigned(listedWorktree ?? worktree)
+        let tip = await fetchTipCommit(listedWorktree ?? worktree)
         let need = await fetchRebaseNeed(listedWorktree ?? worktree)
         let template = await fetchTemplate(worktree.path)
         let live = await fetchCurrentBranch(worktree.path)
@@ -27,6 +28,14 @@ extension PullRequestsModel {
         }
 
         tipSignature = signed ? .signed : .unsigned
+        // Only the tip moving unpushes a branch: new commits, an
+        // amend or a rebase, all of which give the push something
+        // to send again. A tip that could not be read has moved
+        // nowhere, and clearing the mark on it would relight Push
+        // exactly as the stale counts used to.
+        if let mark = pushedTip, let tip, mark.branch == (listedBranch ?? worktree.branch), mark.commit != tip {
+            pushedTip = nil
+        }
         rebaseNeed = need
         availableLabels = labels
         hasTemplate = template != nil
@@ -162,6 +171,30 @@ extension PullRequestsModel {
         default:
             "Enabling automerge"
         }
+    }
+
+    /// What an in-app push sent, dimming Push and lighting Open PR
+    /// until the branch moves on. Written only by the actions
+    /// extension.
+    struct PushedTip: Equatable {
+        /// The branch pushed, so another entry of a stack never
+        /// inherits the mark.
+        let branch: String
+        /// The commit pushed, since only the tip moving makes a
+        /// push necessary again.
+        let commit: String
+    }
+
+    /// Whether the entry in view is pushed as it stands. A count
+    /// read before the push says otherwise for as long as it takes
+    /// the next reading to land, which is what flipped Push and
+    /// Open PR back and forth after a push.
+    var isPushed: Bool {
+        guard let mark = pushedTip, let branch = listedBranch ?? branchItem?.worktree.branch else {
+            return false
+        }
+
+        return mark.branch == branch
     }
 
     /// Push makes sense with unpushed commits that this tab has not

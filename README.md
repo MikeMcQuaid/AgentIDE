@@ -54,8 +54,16 @@ In workflow order; the loop from prompt to review repeats before shipping.
   running is invisible)
 - Lists directories of your own beside a repository's worktrees (so work by
   hand sits beside the agents' work, and no agent ever runs in it)
-- Says what a pull request is doing in GitHub's own icons, its checks and
-  queued merges watched until they settle (so the sidebar is the dashboard)
+- Says what a pull request is doing in GitHub's own icons, one glyph per
+  fact (checks a dot, approval a tick, changes requested a diff, a conflict
+  a warning), its checks and queued merges watched until they settle (so
+  the sidebar is the dashboard and no two badges look alike)
+- Edits with syntax highlighting, `.editorconfig` indentation, page guides
+  at columns 80 and 118 and a change bar beside every uncommitted line
+  (so the editor says what is yours before the diff does)
+- Marks a worktree whose pane has been holding several cores for ten
+  minutes, naming what is running (so one runaway command cannot quietly
+  starve every other agent on the machine)
 - Notifies when an agent finishes or needs input, badges the Dock and plays
   a chime per event (so you never sit polling a terminal)
 - Renders terminals locally from `herdr`'s control stream, reflows copied

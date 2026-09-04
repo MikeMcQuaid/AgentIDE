@@ -1,3 +1,6 @@
+import AgentIDEDomain
+import Foundation
+
 // MARK: - SessionOverview
 
 /// One agent session for the manager: where it lives and what it
@@ -23,10 +26,13 @@ private enum OverviewLayout {
     /// Kilobytes per megabyte, for `ps` rss conversion.
     static let kilobytesPerMegabyte = 1_024
 
-    /// `pid ppid %cpu rss`: the `ps` listing's fields.
-    static let psFields = 4
+    /// `pid ppid %cpu rss comm`: the `ps` listing's fields. The
+    /// command comes last because it is the one that can hold
+    /// spaces, so the split stops before it.
+    static let psFields = 5
     static let psCPUField = 2
     static let psRSSField = 3
+    static let psCommandField = 4
 }
 
 // MARK: - Session overviews
@@ -38,7 +44,7 @@ public extension SessionService {
     func sessionOverviews() async -> [SessionOverview] {
         let panes = await (try? herdr.panes()) ?? []
         let listing = try? await processes.run(
-            ["ps", "-axo", "pid=,ppid=,%cpu=,rss="],
+            ["ps", "-axo", "pid=,ppid=,%cpu=,rss=,comm="],
             workingDirectory: nil,
             environment: [:],
         )
@@ -47,15 +53,71 @@ public extension SessionService {
         var overviews = [SessionOverview]()
         for pane in panes where seen.insert(pane.sessionName).inserted {
             let pid = await herdr.shellPID(paneID: pane.paneID)
-            let usage = pid.map { Self.treeUsage(root: $0, samples: samples) } ?? (0, 0)
+            let usage = pid.map { Self.treeUsage(root: $0, samples: samples) }
             overviews.append(SessionOverview(
                 name: pane.sessionName,
                 workingDirectory: pane.currentPath,
-                cpuPercent: usage.0,
-                memoryMegabytes: usage.1,
+                cpuPercent: usage?.cpuPercent ?? 0,
+                memoryMegabytes: usage?.megabytes ?? 0,
             ))
         }
         return overviews
+    }
+
+    /// What every pane's process tree is costing, keyed by the
+    /// pane's working directory, for the rows that stand for those
+    /// worktrees. One `ps` for the machine and, once per pane ever,
+    /// one herdr call for the shell it runs: a pane's shell never
+    /// changes, so a steady state pays for the `ps` alone.
+    ///
+    /// Only trees that have been busy a while come back, which is
+    /// the point: a runaway in one worktree starves every other, and
+    /// nothing on screen said which one or what it was running.
+    func paneLoads() async -> [String: PaneLoad] {
+        let panes = await panesOrLastAnswer()
+        guard panes.isEmpty == false else {
+            return [:]
+        }
+
+        let listing = try? await processes.run(
+            ["ps", "-axo", "pid=,ppid=,%cpu=,rss=,comm="],
+            workingDirectory: nil,
+            environment: [:],
+        )
+        let samples = Self.processSamples(fromPS: listing?.standardOutput ?? "")
+        var loads = [String: PaneLoad]()
+        for pane in panes {
+            guard let shell = await shellPID(of: pane) else {
+                continue
+            }
+
+            let usage = Self.treeUsage(root: shell, samples: samples)
+            let load = paneLoadCache.reading(
+                percent: usage.cpuPercent,
+                busiest: usage.busiest,
+                of: pane.currentPath,
+            )
+            if let load, load.isHeavy() {
+                loads[pane.currentPath] = load
+            }
+        }
+        paneLoadCache.forgetAll(except: Set(panes.map(\.currentPath)))
+        return loads
+    }
+
+    /// A pane's shell process, asked for once and remembered: it
+    /// lives as long as the pane does.
+    private func shellPID(of pane: HerdrPane) async -> Int? {
+        if let known = paneLoadCache.shell(of: pane.paneID) {
+            return known
+        }
+
+        guard let shell = await herdr.shellPID(paneID: pane.paneID) else {
+            return nil
+        }
+
+        paneLoadCache.remember(shell: shell, of: pane.paneID)
+        return shell
     }
 
     /// The usage of processes the app runs itself rather than herdr,
@@ -88,12 +150,17 @@ public extension SessionService {
         let parent: Int
         let cpuPercent: Double
         let residentKilobytes: Int
+        let command: String
     }
 
-    /// Parses `ps -axo pid=,ppid=,%cpu=,rss=` output.
+    /// Parses `ps -axo pid=,ppid=,%cpu=,rss=,comm=` output.
     static func processSamples(fromPS output: String) -> [ProcessSample] {
         output.split(separator: "\n").compactMap { line in
-            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            let fields = line.split(
+                separator: " ",
+                maxSplits: OverviewLayout.psFields - 1,
+                omittingEmptySubsequences: true,
+            )
             guard fields.count == OverviewLayout.psFields,
                   let pid = Int(fields[0]),
                   let parent = Int(fields[1]),
@@ -103,13 +170,29 @@ public extension SessionService {
                 return nil
             }
 
-            return ProcessSample(pid: pid, parent: parent, cpuPercent: cpu, residentKilobytes: rss)
+            return ProcessSample(
+                pid: pid,
+                parent: parent,
+                cpuPercent: cpu,
+                residentKilobytes: rss,
+                command: String(fields[OverviewLayout.psCommandField]),
+            )
         }
     }
 
-    /// Sums CPU and memory over a process and its descendants; an
-    /// agent's cost lives in the children its pane spawned.
-    static func treeUsage(root: Int, samples: [ProcessSample]) -> (cpuPercent: Double, megabytes: Int) {
+    /// What one pane's process tree costs: an agent's cost lives in
+    /// the children its pane spawned, and so does the answer to what
+    /// it is doing.
+    struct TreeUsage: Hashable, Sendable {
+        let cpuPercent: Double
+        let megabytes: Int
+        /// The heaviest process in the tree, named without its path.
+        let busiest: String
+    }
+
+    /// Sums CPU and memory over a process and its descendants, and
+    /// names the heaviest of them.
+    static func treeUsage(root: Int, samples: [ProcessSample]) -> TreeUsage {
         var children = [Int: [ProcessSample]]()
         for sample in samples {
             children[sample.parent, default: []].append(sample)
@@ -117,6 +200,7 @@ public extension SessionService {
         let rootSample = samples.first { $0.pid == root }
         var cpu = rootSample?.cpuPercent ?? 0
         var kilobytes = rootSample?.residentKilobytes ?? 0
+        var busiest = rootSample
         var frontier = [root]
         var visited = Set<Int>()
         while let pid = frontier.popLast() {
@@ -127,10 +211,17 @@ public extension SessionService {
             for child in children[pid] ?? [] where visited.contains(child.pid) == false {
                 cpu += child.cpuPercent
                 kilobytes += child.residentKilobytes
+                if child.cpuPercent > (busiest?.cpuPercent ?? 0) {
+                    busiest = child
+                }
                 frontier.append(child.pid)
             }
         }
-        return (cpu, kilobytes / OverviewLayout.kilobytesPerMegabyte)
+        return TreeUsage(
+            cpuPercent: cpu,
+            megabytes: kilobytes / OverviewLayout.kilobytesPerMegabyte,
+            busiest: busiest.map { URL(filePath: $0.command).lastPathComponent } ?? "",
+        )
     }
 
     /// Whether a session still exists on the server.

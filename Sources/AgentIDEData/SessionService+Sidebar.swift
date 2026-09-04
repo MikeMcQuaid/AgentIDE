@@ -29,7 +29,7 @@ public extension SessionService {
         kept: [RepositoryGroup] = [],
     ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
         await configureHerdrOnce()
-        let panes = await (try? herdr.panes()) ?? []
+        let panes = await panesOrLastAnswer()
         let activity = spool.activity()
         let metadata = store.load()
         let keptByPath = Dictionary(kept.map { ($0.repository.path, $0) }) { first, _ in first }
@@ -145,6 +145,18 @@ public extension SessionService {
                 path: path,
             )
         }
+    }
+
+    /// herdr's panes, or the listing it last answered with when the
+    /// reading failed. See `LastPanes`: a listing that could not be
+    /// read is not a listing of nothing.
+    func panesOrLastAnswer() async -> [HerdrPane] {
+        guard let panes = try? await herdr.panes() else {
+            return lastPanes.kept()
+        }
+
+        lastPanes.remember(panes)
+        return panes
     }
 
     /// The repository's own checkout as a worktree: its branch is

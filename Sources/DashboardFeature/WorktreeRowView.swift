@@ -15,6 +15,10 @@ struct WorktreeRowView: View {
     /// and what it is built on.
     let standing: StackStanding
 
+    /// What this pane's process tree is costing, when it has cost it
+    /// long enough to be worth showing; nil is the quiet case.
+    let load: PaneLoad?
+
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
             leadingIcon
@@ -114,6 +118,13 @@ struct WorktreeRowView: View {
             Text(title)
                 .lineLimit(1)
             Spacer(minLength: Self.spacing)
+            // A pane holding the machine down is news wherever it
+            // is: the row names what is running and for how long, so
+            // ten panes that all look hung say which one to look at.
+            if let load {
+                Octicon("flame.fill", colour: .orange)
+                    .hoverHelp(load.summary())
+            }
             if item.hasActionableUnread {
                 Circle()
                     .fill(.tint)
@@ -326,7 +337,7 @@ private struct PullRequestBadge: View {
         Button {
             LinkOpener.open(pullRequest.checksClickURL)
         } label: {
-            Octicon("octicon-dot-fill", colour: ChecksStyle.colour(for: pullRequest.checks))
+            Octicon(ChecksStyle.checksOcticonName, colour: ChecksStyle.colour(for: pullRequest.checks))
                 .accessibilityLabel("Checks: \(pullRequest.checks.lowercased())")
         }
         .buttonStyle(.plain)
@@ -346,11 +357,11 @@ private struct PullRequestBadge: View {
            let conflict = ChecksStyle.mergeableOcticonName(for: pullRequest.mergeable)
         {
             Octicon(conflict, colour: ChecksStyle.mergeableColour(for: pullRequest.mergeable))
-                .hoverHelp("Merge conflicts with the base branch; rebase to resolve them")
+                .hoverHelp(ChecksStyle.mergeableHelp(for: pullRequest.mergeable))
         }
         if let review = reviewIcon {
             Octicon(review, colour: ChecksStyle.reviewColour(for: pullRequest.reviewDecision))
-                .hoverHelp("Review: " + pullRequest.reviewDecision.lowercased())
+                .hoverHelp(ChecksStyle.reviewHelp(for: pullRequest.reviewDecision))
         }
         if pullRequest.state == "OPEN", pullRequest.unresolvedComments > 0 {
             Octicon(ChecksStyle.commentOcticonName, colour: .secondary)

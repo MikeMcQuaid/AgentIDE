@@ -174,6 +174,14 @@ build.
   workspace shapes or server behaviour needs the running session stopped
   (`herdr session stop <name>` as the sandbox user) to take effect.
 
+- A pane listing that could not be read is not a listing of nothing
+  (`LastPanes`). Taken as an empty one it emptied every session in the
+  app at once: every row lost its agent, every pane read as exited and
+  only relaunching brought them back, though herdr had lost nothing
+  and the agents were still working. The last answer stands for two
+  minutes of failures, after which an empty answer is believed, so a
+  herdr that really has gone still shows as gone.
+
 ### Terminals
 
 Agent panes attach to herdr as terminal controllers (`herdr terminal
@@ -475,6 +483,18 @@ page resumes any past conversation into a fresh worktree.
   file; the full name comes from the remote URL, never `gh repo view`.
   Every read passes `--no-optional-locks` so nothing waits on an
   agent's index lock. Rows are kept between readings (`GitReadScope`).
+- **A pane that is holding the machine down says so** (`PaneLoad`,
+  `PaneLoads`). One `ps` every thirty seconds sums each pane's
+  process tree and names its heaviest process; a tree over three
+  cores for ten unbroken minutes puts a mark on that row, hovering
+  it saying what is running and for how long. The thresholds are
+  what keeps it honest: a repository's own test suite holds five
+  cores for several minutes and must pass unremarked, while a linter
+  that spun for half an hour starved every other worktree and left
+  ten panes that all looked hung with nothing saying which one was
+  the cause. The pane's shell is asked of herdr once and remembered,
+  since it lives as long as the pane; the steady state is the one
+  `ps`.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.
@@ -595,7 +615,34 @@ selects the worktree holding it, and `agentide new` starts a session.
   An agent's finished turn forgets its own branch's stamps, on the
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.
-  Acting on a pull request clears its stamp; looking never does.
+  Acting on a pull request clears its stamp; looking never does, and
+  so does pressing Refresh: the tab drops the stamps of its listing,
+  of the pull request in view and of that pull request's
+  conversation, asks the sidebar for a git reading forced on this
+  repository, and tells the conversation pane (which holds its
+  threads in its own state, keyed by number) to read them again.
+  Everything a refresh is pressed for -- checks finishing,
+  mergeability, a review or comment arriving, unpushed counts --
+  changes with nothing happening in the app, so the intervals that
+  keep an idle tab quiet must not answer a click.
+- **The editor reads like a code editor**: page guides at columns 80
+  and 118 drawn under the text (`EditingTextView.drawBackground`),
+  and a change bar down the gutter's inner edge for every line with
+  uncommitted work (`LineNumberRuler`). The bar replaced a tinted
+  line number, which said the same thing but could not be read down
+  a scrolling file, which is the whole use of a change bar. Both
+  measure the font's own advance and draw nothing for a face that is
+  not fixed pitch.
+- **One glyph per fact** (`ChecksStyle`). A row can carry failing checks,
+  a reviewer asking for changes and a merge conflict at once, and all
+  three used to be the same red crossed circle, which said "something is
+  wrong" three times and which nothing was. Checks are a dot in both
+  rows, red, green or orange, so a run finishing recolours a row rather
+  than reshaping it; changes requested is GitHub's own diff glyph, since
+  a person has written on the code; a conflict is a warning triangle,
+  since it is nobody's verdict and the one state a pull request cannot
+  leave on its own. Each badge's hover help names what it is, because colour cannot
+  tell three red badges apart.
 - **Row and pane never disagree**: both read the same two caches
   through `PullRequestStore`, the per-branch summary (which pull
   request a branch has) and the enriched summary (what state it is
@@ -617,6 +664,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   and when they conflict it sets the remote's version aside
   (`OverwriteTips`, rebasing onto origin/HEAD) so the next Push carries
   an explicit `--force-with-lease=<branch>:<tip>`. Never add `--force`.
+- **Pushed is a tip, not a flag.** A push records the branch and the
+  commit it sent, and Push stays dimmed with Open PR lit until that
+  branch's tip moves, read with the other branch facts. The mark used
+  to be a boolean any worktree refresh cleared, so counts gathered
+  before the push arrived after it and swapped the two buttons back
+  and forth until the next reading caught up.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing

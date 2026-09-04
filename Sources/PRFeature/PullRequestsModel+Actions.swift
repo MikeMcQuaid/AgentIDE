@@ -278,6 +278,28 @@ extension PullRequestsModel {
 
     /// Pokes the sidebar to refresh now rather than on its next
     /// poll, so a push or rebase shows in the counts immediately.
+    /// The pane's own refresh: its listing and the branch facts
+    /// the buttons read, and a fresh sidebar reading with them. The
+    /// unpushed counts Push and Open PR gate on belong to the
+    /// dashboard, so without this the buttons kept whatever the
+    /// last poll knew however often the button was pressed.
+    func refresh() async {
+        Self.requestSidebarRefresh()
+        // What a refresh is asked for is exactly what changes with
+        // nothing happening in the app: checks finishing, a branch
+        // going unmergeable, a review or a comment arriving. The
+        // intervals that keep an idle tab quiet must not answer a
+        // click, so the listing, the pull request in view and its
+        // conversation are all forgotten before the reading.
+        pullRequests.invalidateListings(repositoryPath: repository.path)
+        if let number = selected?.number {
+            pullRequests.invalidate(repositoryPath: repository.path, number: number)
+        }
+        conversationRefreshes += 1
+        await reload(keepingSelection: true)
+        await loadMergeQueue()
+    }
+
     static func requestSidebarRefresh() {
         let key = "dashboardRefreshRequest"
         UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)

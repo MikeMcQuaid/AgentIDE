@@ -100,10 +100,13 @@ struct AgentSessionForm: View {
     @State private var isStarting = false
     @State private var issues: [IssueSummary] = []
     @State private var pullRequests: [PullRequestSummary] = []
+    /// The one thing typed here, whichever source is chosen: the
+    /// whole prompt when there is no issue or pull request, and what
+    /// to say about one when there is. Two fields meant choosing an
+    /// issue after typing looked exactly like the app throwing the
+    /// typing away.
     @AppStorage("newSessionPrompt")
     private var prompt = ""
-    @AppStorage("newSessionContext")
-    private var context = ""
     @AppStorage("agentModel")
     private var agentModel = ""
     @AppStorage("agentEffort")
@@ -158,11 +161,11 @@ struct AgentSessionForm: View {
         case .issue,
              .pullRequest:
             numberPicker
-            TextEditor(text: $context)
+            TextEditor(text: $prompt)
                 .font(.body)
                 .frame(minHeight: Self.contextHeight)
                 .border(.separator)
-                .hoverHelp("Additional context appended to the fetched title and body")
+                .hoverHelp("Context appended to the fetched title and body; anything typed first is kept")
         }
     }
 
@@ -217,8 +220,8 @@ struct AgentSessionForm: View {
         let submission = Submission(
             source: source,
             number: number,
-            prompt: prompt,
-            context: context,
+            prompt: source == .prompt ? prompt : "",
+            context: source == .prompt ? "" : prompt,
             agent: agent.wrappedValue,
             options: AgentLaunchOptions(
                 model: agentModel.isEmpty ? nil : agentModel,
@@ -228,11 +231,7 @@ struct AgentSessionForm: View {
         Task {
             await onSubmit(submission)
             isStarting = false
-            if source == .prompt {
-                prompt = ""
-            } else {
-                context = ""
-            }
+            prompt = ""
         }
     }
 }

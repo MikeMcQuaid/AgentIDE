@@ -86,6 +86,34 @@ public extension DashboardModel {
         }
     }
 
+    /// What the panes are costing, read on its own slower clock: it
+    /// is one `ps` over the whole machine and answers a question
+    /// nobody asks every few seconds, and a spell worth showing has
+    /// lasted minutes by definition.
+    private func readPaneLoads() async {
+        let now = Date()
+        guard now.timeIntervalSince(paneLoadsReadAt) >= Self.paneLoadInterval else {
+            return
+        }
+
+        paneLoadsReadAt = now
+        let loads = await service.paneLoads()
+        guard loads != paneLoads else {
+            return
+        }
+
+        paneLoads = loads
+    }
+
+    /// A refresh asked for by hand, which forces the repository in
+    /// view: an ordinary reading asks git only about repositories
+    /// the watcher flagged, so pressing Refresh could otherwise
+    /// answer with the counts it already had, and the pull request
+    /// pane's buttons gate on those counts.
+    func refreshSelected() async {
+        await refresh(forcing: selection?.worktree.repositoryPath)
+    }
+
     /// One whole reading of the system; only `refresh` runs it, one
     /// at a time. The selected worktree is on screen, so its
     /// activity counts as seen; a manual unread mark survives.
@@ -114,6 +142,7 @@ public extension DashboardModel {
         // herdr has answered, so nothing is waiting on it any more.
         awaitedSessions = []
         cacheSidebar(listed)
+        await readPaneLoads()
         await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: forces)
     }

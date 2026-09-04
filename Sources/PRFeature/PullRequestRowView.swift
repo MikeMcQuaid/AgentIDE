@@ -83,15 +83,11 @@ struct PullRequestRowView: View {
     @ViewBuilder private var statusBadges: some View {
         if let review = ChecksStyle.reviewOcticonName(for: summary.reviewDecision) {
             Octicon(review, colour: ChecksStyle.reviewColour(for: summary.reviewDecision))
-                .hoverHelp("Review: " + summary.reviewDecision.lowercased())
+                .hoverHelp(ChecksStyle.reviewHelp(for: summary.reviewDecision))
         }
         if summary.state == "OPEN", let mergeable = ChecksStyle.mergeableOcticonName(for: summary.mergeable) {
             Octicon(mergeable, colour: ChecksStyle.mergeableColour(for: summary.mergeable))
-                .hoverHelp(
-                    summary.mergeable == "MERGEABLE"
-                        ? "No conflicts with the base branch"
-                        : "Conflicts with the base branch",
-                )
+                .hoverHelp(ChecksStyle.mergeableHelp(for: summary.mergeable))
         }
         if summary.hasAutomerge {
             Octicon("octicon-git-merge-queue", colour: .blue)
@@ -111,7 +107,7 @@ struct PullRequestRowView: View {
             LinkOpener.open(summary.checksClickURL)
         } label: {
             Octicon(
-                ChecksStyle.octiconName(for: summary.checks),
+                ChecksStyle.checksOcticonName,
                 colour: ChecksStyle.colour(for: summary.checks),
             )
             .accessibilityLabel("Checks: \(summary.checks.lowercased())")

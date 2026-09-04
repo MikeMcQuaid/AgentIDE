@@ -50,12 +50,38 @@ extension PullRequestsModelTests {
         #expect(model.canPush == false)
         #expect(model.status == "Pushed.")
 
-        // Fresh counts can mean fresh commits nobody has verified:
-        // Push waits for the signature read the change kicked off.
+        // New commits move the tip, which is what a push has to
+        // send again; the signature read the change kicks off is
+        // what Push then waits on.
+        model.fetchTipCommit = { _ in "amended" }
         model.items = [item(branch: "feature", ahead: 1)]
         #expect(model.canPush == false)
         await model.reload()
         #expect(model.canPush)
+    }
+
+    @Test
+    func `a count gathered before the push cannot unpush the branch`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+        #expect(await model.push())
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // The sidebar's reading was in flight while the push ran, so
+        // it still says one commit is unpushed. Push and Open PR both
+        // stay as the push left them rather than swapping over until
+        // the next reading lands.
+        model.items = [item(branch: "feature", ahead: 1)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // And the reading that has caught up changes nothing either.
+        model.items = [item(branch: "feature", ahead: 0)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
     }
 
     @Test
@@ -107,6 +133,69 @@ extension PullRequestsModelTests {
         model.checkTipSigned = { _ in false }
         await model.reload()
         #expect(model.pushHelp.contains("already pushed"))
+    }
+
+    @Test
+    func `a tip that could not be read leaves the push mark alone`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+        #expect(await model.push())
+        #expect(model.isPushed)
+
+        // git answered nothing, which says the branch has moved
+        // nowhere: taking that as a moved tip relit Push exactly as
+        // the stale counts this mark exists to survive used to.
+        model.fetchTipCommit = { _ in nil }
+        model.items = [item(branch: "feature", ahead: 1)]
+        await model.reload()
+        #expect(model.canPush == false)
+        #expect(model.isFullyPushed)
+
+        // A tip that reads, and differs, still unpushes it.
+        model.fetchTipCommit = { _ in "moved" }
+        await model.reload()
+        #expect(model.canPush)
+    }
+
+    @Test
+    func `refresh reads the counts the buttons gate on again`() async {
+        let key = "dashboardRefreshRequest"
+        let before = UserDefaults.standard.integer(forKey: key)
+        let model = makeModel(items: [item(branch: "feature", ahead: 2)])
+
+        await model.refresh()
+
+        // The unpushed counts belong to the sidebar's reading, so the
+        // pane's own refresh has to ask for one; the listing and the
+        // branch facts it reads itself. Counted as a rise, not an
+        // exact step: the defaults are shared by every test running
+        // beside this one.
+        #expect(UserDefaults.standard.integer(forKey: key) > before)
+        #expect(model.hasLoaded)
+        #expect(model.canPush)
+    }
+
+    @Test
+    func `refresh asks GitHub again rather than waiting out the interval`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var listings = 0
+        model.fetchList = { _, _ in
+            listings += 1
+            return [summary(7, head: "feature")]
+        }
+        await model.reload()
+        let opened = listings
+        let conversations = model.conversationRefreshes
+
+        await model.refresh()
+
+        // Checks finishing, a branch going unmergeable and a review
+        // arriving are exactly what a refresh is pressed for, and
+        // none of them happen in the app: the stamps that keep an
+        // idle tab quiet are dropped first, and the conversation
+        // pane is told to read its own threads again.
+        #expect(listings > opened)
+        #expect(model.conversationRefreshes == conversations + 1)
     }
 
     @Test

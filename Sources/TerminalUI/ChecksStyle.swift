@@ -51,19 +51,13 @@ public nonisolated enum ChecksStyle {
     /// something to answer rather than a verdict on the branch.
     public static let commentOcticonName = "octicon-comment"
 
-    /// The octicon asset for a checks rollup state. Checks are
-    /// dots, whatever they say; the tick belongs to a review's
-    /// approval, and one row carrying both showed the same green
-    /// tick twice for two unrelated facts.
-    public static func octiconName(for checks: String) -> String {
-        switch checks {
-        case "FAILURE":
-            "octicon-x-circle-fill"
-
-        default:
-            "octicon-dot-fill"
-        }
-    }
+    /// The badge for a checks rollup, in the sidebar and the pull
+    /// request row alike: a dot whatever the checks say, so the
+    /// colour is the whole of the state and one run's progress
+    /// never changes the shape of the row. The tick belongs to a
+    /// review's approval and the diff to a review's changes; a
+    /// glyph shared between two facts says neither.
+    public static let checksOcticonName = "octicon-dot-fill"
 
     /// The colour for a checks rollup state: green, red, and orange
     /// while they run, which reads against a sidebar's background
@@ -84,20 +78,51 @@ public nonisolated enum ChecksStyle {
     /// The octicon for an aggregate review decision, nil when there
     /// is none to show. A review that is required but has not
     /// happened is waiting rather than failing, so it gets a clock
-    /// rather than a verdict.
+    /// rather than a verdict. Changes requested is GitHub's own
+    /// glyph for it, a diff, which says a person has written on the
+    /// code: the crossed circle it used to share said "failed" in
+    /// the same breath as the checks beside it.
     public static func reviewOcticonName(for decision: String) -> String? {
         switch decision {
         case "APPROVED":
             "octicon-check-circle-fill"
 
         case "CHANGES_REQUESTED":
-            "octicon-x-circle-fill"
+            "octicon-file-diff"
 
         case "REVIEW_REQUIRED":
             "clock"
 
         default:
             nil
+        }
+    }
+
+    /// What a review badge means, in words: the glyph says which of
+    /// the three red badges a row can carry this one is, and the
+    /// help says what to do about it.
+    public static func reviewHelp(for decision: String) -> String {
+        switch decision {
+        case "APPROVED":
+            "Approved by a reviewer"
+
+        case "CHANGES_REQUESTED":
+            "A reviewer asked for changes"
+
+        case "REVIEW_REQUIRED":
+            "Waiting on a required review"
+
+        default:
+            "Review: " + decision.lowercased()
+        }
+    }
+
+    /// What a mergeability badge means, in words.
+    public static func mergeableHelp(for mergeable: String) -> String {
+        if mergeable == "MERGEABLE" {
+            "No conflicts with the base branch"
+        } else {
+            "Conflicts with the base branch; rebase to resolve them"
         }
     }
 
@@ -117,14 +142,17 @@ public nonisolated enum ChecksStyle {
     }
 
     /// The octicon for GitHub's mergeability verdict, nil while it
-    /// is still unknown.
+    /// is still unknown. A conflict warns rather than fails: it is
+    /// nobody's verdict on the work, it is the one state a pull
+    /// request cannot leave on its own, and its triangle is legible
+    /// at twelve points beside the circles either side of it.
     public static func mergeableOcticonName(for mergeable: String) -> String? {
         switch mergeable {
         case "MERGEABLE":
             "octicon-git-merge"
 
         case "CONFLICTING":
-            "octicon-x-circle-fill"
+            "exclamationmark.triangle.fill"
 
         default:
             nil

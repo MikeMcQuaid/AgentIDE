@@ -224,7 +224,7 @@ struct RootView: View {
         // Pushes and rebases poke this counter so their counts show
         // in the sidebar immediately rather than on the next poll.
         .onChange(of: dashboardRefreshRequest) {
-            Task { await dependencies.dashboard.refresh() }
+            Task { await dependencies.dashboard.refreshSelected() }
         }
         // The pull request pane cached a changed state: the rows read
         // the same cache and repaint on this bump, no reading needed.

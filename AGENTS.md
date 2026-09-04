@@ -321,8 +321,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   needs nothing. herdr 0.8.2 also takes a short PTY write as a whole
   one, so a reader stalled while a paste larger than the input queue
   (1,022 bytes) is in flight loses about a kibibyte from the middle;
-  `HerdrSlowReaderIntegrationTests` reproduces it under load and stays
-  disabled until herdr waits or retries.
+  `HerdrSlowReaderIntegrationTests` reproduces it under load, and
+  `HerdrLargeInputIntegrationTests` meets it whenever the run is
+  contended; both stay disabled until herdr waits or retries.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with
@@ -332,6 +333,15 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file
   itself rather than resolving it against a worktree.
+- Building and testing inside the sandbox has to leave the user's
+  agents alone: both run capped (`--jobs 6`) and niced. The
+  background band (`taskpolicy -b`) was tried and dropped: it
+  throttles file I/O as well as CPU, which took a full rebuild from
+  about a minute to twelve. `script/test` also sweeps the herdr
+  servers a killed run orphaned, matching them by a socket under
+  this checkout's `.test-scratch` and never by name: a run the
+  system kills never reaches its own teardown, and seven orphaned
+  servers were found holding memory after one such kill.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped

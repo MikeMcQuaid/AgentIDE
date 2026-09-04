@@ -155,6 +155,9 @@ final class PullRequestsModel {
         performRebase = { worktree in
             try await service.rebaseSigned(worktree: worktree)
         }
+        fetchTipCommit = { worktree in
+            await service.tipCommit(worktree: worktree)
+        }
         checkTipSigned = { worktree in
             // Settings can waive signing for repositories whose
             // remote runs no signature hook.
@@ -206,10 +209,7 @@ final class PullRequestsModel {
     /// reload; agents sometimes switch branches inside a worktree.
     var currentBranch: String?
 
-    /// True after an in-app push succeeds, dimming Push until the
-    /// next item refresh proves new commits. Written only by the
-    /// actions extension.
-    var isPushed = false
+    var pushedTip: PushedTip?
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.
@@ -221,6 +221,12 @@ final class PullRequestsModel {
     var commitsAboveBase = 0
 
     var tipSignature: TipSignature = .unread
+
+    /// Bumped by a refresh asked for by hand, so the conversation
+    /// pane reads its threads and comments again: it holds them in
+    /// its own state, keyed by the pull request's number, and
+    /// nothing else would tell it that the answers have moved.
+    var conversationRefreshes = 0
 
     /// Which pull requests the tab lists.
     var scope: PullRequestScope = .worktree
@@ -319,6 +325,7 @@ final class PullRequestsModel {
     var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> Void
     var checkTipSigned: (Worktree) async -> Bool
+    var fetchTipCommit: (Worktree) async -> String?
 
     /// The visible page. Every scope asks GitHub for one small
     /// listing and no more, so paging walks what is already here
@@ -353,11 +360,12 @@ final class PullRequestsModel {
     }
 
     /// The repository's worktree items, refreshed by the view as the
-    /// dashboard polls; fresh counts also clear the local pushed
-    /// mark, so new commits light Push up again.
+    /// dashboard polls. The pushed mark outlives a refresh: it is
+    /// the branch's tip moving that clears it, read with the other
+    /// branch facts, never the arrival of counts that may have been
+    /// gathered before the push.
     var items: [WorktreeItem] {
         didSet {
-            isPushed = false
             // The sidebar's poll may have fetched a fresher summary
             // into the shared cache since these rows were painted.
             repaintFromCache()

@@ -101,7 +101,9 @@ extension PullRequestsModel {
         do {
             let destination = try await performPush(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            isPushed = true
+            if let tip = await fetchTipCommit(worktree) {
+                pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
+            }
             setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
