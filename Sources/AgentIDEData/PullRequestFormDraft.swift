@@ -4,11 +4,18 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a draft.
-    public init(title: String, body: String, template: String, labels: [String] = []) {
+    public init(
+        title: String,
+        body: String,
+        template: String,
+        labels: [String] = [],
+        isDraft: Bool = false,
+    ) {
         self.title = title
         self.body = body
         self.template = template
         self.labels = labels
+        self.isDraft = isDraft
     }
 
     /// Drafts saved before labels existed have no key for them.
@@ -18,6 +25,7 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
         body = try container.decode(String.self, forKey: .body)
         template = try container.decode(String.self, forKey: .template)
         labels = try container.decodeIfPresent([String].self, forKey: .labels) ?? []
+        isDraft = try container.decodeIfPresent(Bool.self, forKey: .isDraft) ?? false
     }
 
     // MARK: Public
@@ -33,4 +41,7 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
 
     /// The labels picked for the pull request.
     public let labels: [String]
+
+    /// Whether it is to open as a draft.
+    public let isDraft: Bool
 }

@@ -625,6 +625,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **A pull request can open as a draft**, chosen by the form's own
+  icon: GitHub's two glyphs for the state it is about to create,
+  rather than a checkbox saying the same thing in words. The choice
+  is kept with the rest of the form's draft, so leaving the tab and
+  coming back finds the same intention, and the row the creation
+  paints carries the draft glyph before any fetch has been near it.
 - **Nothing is stat'd that macOS would ask permission for.** A
   directory of your own can be anywhere: inside Documents, on a
   network volume, on a disk that is not mounted. macOS asks the user

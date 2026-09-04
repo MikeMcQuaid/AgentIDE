@@ -59,7 +59,7 @@ struct PullRequestStackTests {
             BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
         }
         let opened = Mutex([String]())
-        model.performCreate = { worktree, _, _, _ in
+        model.performCreate = { worktree, _, _, _, _ in
             opened.withLock { $0.append(worktree.branch) }
             return "https://example.com/1"
         }

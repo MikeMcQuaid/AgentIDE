@@ -58,6 +58,9 @@ In workflow order; the loop from prompt to review repeats before shipping.
   fact (checks a dot, approval a tick, changes requested a diff, a conflict
   a warning), its checks and queued merges watched until they settle (so
   the sidebar is the dashboard and no two badges look alike)
+- Opens a pull request as a draft or ready for review, chosen by the
+  icon the row will carry (so an agent's first attempt can go up as
+  something to read rather than something to merge)
 - Commits some of the uncommitted files rather than all of them, ticking
   the ones to take and drafting the message beside them (so one agent's
   worktree can land as more than one commit)

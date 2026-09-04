@@ -27,7 +27,7 @@ extension PullRequestsModel {
         isOpening = true
         defer { isOpening = false }
         do {
-            let url = try await performCreate(worktree, title, body, prLabels)
+            let url = try await performCreate(worktree, title, body, prLabels, prIsDraft)
             note("Opened pull request " + url)
             // A stack is built one pull request at a time: each one
             // links what is open into the stack, and failing to link
@@ -54,6 +54,7 @@ extension PullRequestsModel {
                 worktree: worktree,
                 base: defaultBranch,
                 listed: summaries,
+                isDraft: prIsDraft,
             )
             if let created {
                 cacheCreated(created, branch: worktree.branch)
@@ -124,6 +125,7 @@ extension PullRequestsModel {
         worktree: Worktree,
         base: String?,
         listed: [PullRequestSummary],
+        isDraft: Bool = false,
     ) -> PullRequestSummary? {
         guard let number = number(inURL: url) else {
             return nil
@@ -142,6 +144,7 @@ extension PullRequestsModel {
             checks: "",
             baseBranch: base ?? "",
             state: "OPEN",
+            isDraft: isDraft,
         )
     }
 
