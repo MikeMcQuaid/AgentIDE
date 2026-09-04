@@ -625,9 +625,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
-- **A pull request can open as a draft**, chosen by the form's own
-  icon: GitHub's two glyphs for the state it is about to create,
-  rather than a checkbox saying the same thing in words. The choice
+- **A pull request can open as a draft**, chosen by the icon beside
+  Open PR: GitHub's two glyphs for the state a click is about to
+  create, rather than a checkbox saying the same thing in words.
+  It sits in the footer's own row, with the actions, since that is
+  where the button it changes is. The choice
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.
@@ -652,6 +654,17 @@ selects the worktree holding it, and `agentide new` starts a session.
   goes back to `add -A`, since a commit of everything must sweep up
   what the diff never listed. The drafted message is used when there
   is one, and the menu command's own wording when there is not.
+- **A hunk lays out in the engine that measured it.** The review's
+  hunks are measured off screen (`HunkMeasurer`) because laying out
+  a view's own container resizes it, and a measurement that resizes
+  what it measures loops until AppKit kills the window. Both sides
+  must therefore be TextKit 1: `NSTextView(frame:)` builds a
+  TextKit 2 view that downgrades itself the first time anything asks
+  for its `layoutManager`, and the two engines do not always break
+  the same text into the same lines, so the height measured was not
+  the height drawn and hunks painted over one another. Each hunk
+  also clips to its own frame, so a wrong height can never take the
+  file below it with it.
 - **The editor reads like a code editor**: page guides at columns 80
   and 118 drawn under the text (`EditingTextView.drawBackground`),
   and a change bar down the gutter's inner edge for every line with

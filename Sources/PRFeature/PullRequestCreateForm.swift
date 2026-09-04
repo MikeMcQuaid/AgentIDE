@@ -16,7 +16,6 @@ struct PullRequestCreateForm: View {
                 Text("No open pull request for this branch")
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                draftToggle
                 generateButton
                 resetButton
             }
@@ -71,29 +70,6 @@ struct PullRequestCreateForm: View {
     /// replace what is being typed.
     private var isBlocked: Bool {
         model.unpushedBelow != nil || model.isOpening || model.isBranchActionRunning
-    }
-
-    /// Opens as a draft or ready for review, in GitHub's own two
-    /// glyphs: an icon rather than a checkbox, since the pull
-    /// request's own state is drawn with these everywhere else in
-    /// the app.
-    private var draftToggle: some View {
-        Button {
-            model.prIsDraft.toggle()
-        } label: {
-            Octicon(
-                ChecksStyle.stateOcticonName(state: "OPEN", isDraft: model.prIsDraft),
-                colour: ChecksStyle.stateColour(state: "OPEN", isDraft: model.prIsDraft),
-            )
-            .accessibilityLabel(model.prIsDraft ? "Opens as a draft" : "Opens ready for review")
-        }
-        .buttonStyle(.plain)
-        .disabled(isGenerating || isBlocked)
-        .hoverHelp(
-            model.prIsDraft
-                ? "Opens as a draft: work to read rather than work to merge. Click to open it ready for review"
-                : "Opens ready for review. Click to open it as a draft instead",
-        )
     }
 
     /// Back to what the commits say. Typed text asks first; blank
