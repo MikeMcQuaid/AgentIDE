@@ -26,6 +26,15 @@ extension ReviewModel {
         files.count { isCommitting($0.path) }
     }
 
+    /// Whether anything is ticked at all. An empty `pathsToCommit`
+    /// says "the whole worktree" to the service, and unticking every
+    /// file empties it too: the menu bar's own Commit does not ask
+    /// the button whether it is dimmed, so the answer has to be
+    /// here rather than in the button's state.
+    var hasSomethingToCommit: Bool {
+        files.isEmpty == false && committingCount > 0
+    }
+
     /// Whether a file is ticked for the next commit.
     func isCommitting(_ path: String) -> Bool {
         excludedFromCommit.contains(path) == false

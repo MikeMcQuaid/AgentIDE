@@ -1,5 +1,3 @@
-import Foundation
-
 /// Making commits: everything, some named paths, or folded into
 /// the commit before. Split from the client for length.
 public extension GitClient {

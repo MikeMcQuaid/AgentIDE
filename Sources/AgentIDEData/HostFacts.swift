@@ -1,9 +1,13 @@
-import Foundation
 import Synchronization
 
 // MARK: - HostFacts
 
 /// What one directory of your own last said about itself.
+///
+/// `Sendable` by inference rather than by annotation: everything it
+/// holds is, and an internal type gets the conformance for free,
+/// which is why writing it out here is removed again by the
+/// formatter as redundant.
 struct HostFacts: Hashable {
     /// Whether it was there at all when it was last read.
     let exists: Bool

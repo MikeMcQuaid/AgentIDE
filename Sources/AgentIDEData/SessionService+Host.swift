@@ -142,12 +142,10 @@ public extension SessionService {
             return gone
         }
 
-        let facts = await HostFacts(
-            exists: true,
-            branch: git.currentBranch(worktreePath: path) ?? "",
-            isDirty: git.isDirty(worktreePath: path),
-            aheadOfUpstream: git.aheadOfUpstream(worktreePath: path),
-        )
+        let branch = await git.currentBranch(worktreePath: path) ?? ""
+        let isDirty = await git.isDirty(worktreePath: path)
+        let ahead = await git.aheadOfUpstream(worktreePath: path)
+        let facts = HostFacts(exists: true, branch: branch, isDirty: isDirty, aheadOfUpstream: ahead)
         hostFacts.remember(facts, of: path)
         return facts
     }
