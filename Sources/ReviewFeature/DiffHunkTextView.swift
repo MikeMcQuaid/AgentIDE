@@ -73,17 +73,65 @@ struct DiffHunkTextView: NSViewRepresentable {
         }
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: HunkTextView, context _: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0,
-              let container = nsView.textContainer, let layout = nsView.layoutManager
-        else {
+    func makeCoordinator() -> HunkMeasurer {
+        HunkMeasurer()
+    }
+
+    /// Measured off the view: laying out its own container resizes
+    /// it, and a measurement that resizes what it measures loops
+    /// until AppKit kills the window (see AGENTS.md).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView _: HunkTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else {
             return nil
         }
 
-        container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
-        layout.ensureLayout(for: container)
-        return CGSize(width: width, height: layout.usedRect(for: container).height)
+        return CGSize(width: width, height: context.coordinator.height(of: text, width: width))
     }
+}
+
+// MARK: - HunkMeasurer
+
+/// A layout stack with no view attached, so laying it out resizes
+/// nothing. One per hunk, held as its coordinator, so hunks do not
+/// evict each other's layout.
+final class HunkMeasurer {
+    // MARK: Lifecycle
+
+    deinit {
+        // The layout stack owns nothing outside itself.
+    }
+
+    init() {
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+    }
+
+    // MARK: Internal
+
+    func height(of text: NSAttributedString, width: CGFloat) -> CGFloat {
+        if measured !== text {
+            storage.setAttributedString(text)
+            measured = text
+        }
+
+        if container.size.width != width {
+            container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
+        }
+
+        layout.ensureLayout(for: container)
+        return layout.usedRect(for: container).height
+    }
+
+    // MARK: Private
+
+    private let storage: NSTextStorage = .init()
+    private let layout: NSLayoutManager = .init()
+    private let container: NSTextContainer = .init(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+
+    /// Compared by identity, since hunks are memoised by content
+    /// upstream and an equal instance costs only a relayout.
+    private var measured: NSAttributedString?
 }
 
 // MARK: - HunkTextView
