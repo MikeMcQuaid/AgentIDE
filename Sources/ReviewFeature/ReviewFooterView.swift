@@ -72,6 +72,28 @@ struct ReviewFooterView: View {
     private var messageHeight = 150.0
     @State private var messageDragBase: Double?
 
+    /// The button's own words: everything, or the count that is
+    /// ticked, so what a click is about to commit is on the button.
+    private var commitTitle: String {
+        let committing = model.committingCount
+        guard committing < model.files.count else {
+            return "Commit"
+        }
+
+        return "Commit " + String(committing) + " of " + String(model.files.count)
+    }
+
+    private var commitHelp: String {
+        guard model.committingCount > 0 else {
+            return "Tick the files to commit; every file is ticked to begin with"
+        }
+        guard model.pathsToCommit.isEmpty else {
+            return "Commit the ticked files, leaving the rest uncommitted"
+        }
+
+        return "Commit everything uncommitted; enabled on the uncommitted scope with changes"
+    }
+
     private var subjectBinding: Binding<String> {
         Binding(
             get: { Self.subject(of: model.commitMessage) },
@@ -123,13 +145,13 @@ struct ReviewFooterView: View {
                 + "only fills an empty message",
         )
         BusyButton(
-            "Commit",
+            commitTitle,
             busy: "Committing",
-            disabled: canCommit == false,
+            disabled: canCommit == false || model.committingCount == 0,
             keepsTitle: true,
             action: onCommit,
         )
-        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
+        .hoverHelp(commitHelp)
         BusyButton(
             "Amend",
             busy: "Amending",

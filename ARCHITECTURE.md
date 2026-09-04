@@ -625,6 +625,16 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **A commit can take some of the files, not all of them.** Every
+  uncommitted file's row carries a tick, all ticked to begin with, and
+  the button says what a click will carry ("Commit 3 of 7"). The model
+  holds what is *unticked*, so a file the agent writes while the pane
+  is open joins the commit rather than being silently dropped. A
+  selective commit stages the named paths and names them again on the
+  commit, so whatever else was staged stays staged; ticking everything
+  goes back to `add -A`, since a commit of everything must sweep up
+  what the diff never listed. The drafted message is used when there
+  is one, and the menu command's own wording when there is not.
 - **The editor reads like a code editor**: page guides at columns 80
   and 118 drawn under the text (`EditingTextView.drawBackground`),
   and a change bar down the gutter's inner edge for every line with

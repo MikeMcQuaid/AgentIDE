@@ -58,6 +58,9 @@ In workflow order; the loop from prompt to review repeats before shipping.
   fact (checks a dot, approval a tick, changes requested a diff, a conflict
   a warning), its checks and queued merges watched until they settle (so
   the sidebar is the dashboard and no two badges look alike)
+- Commits some of the uncommitted files rather than all of them, ticking
+  the ones to take and drafting the message beside them (so one agent's
+  worktree can land as more than one commit)
 - Edits with syntax highlighting, `.editorconfig` indentation, page guides
   at columns 80 and 118 and a change bar beside every uncommitted line
   (so the editor says what is yours before the diff does)

@@ -191,6 +191,7 @@ struct DiffFileView: View {
     /// copy and edit actions.
     private var headerRow: some View {
         HStack {
+            commitTick
             FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
             Text(file.path).font(.headline.monospaced())
             if file.isNew {

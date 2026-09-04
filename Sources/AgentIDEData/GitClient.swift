@@ -283,6 +283,21 @@ public struct GitClient: Sendable {
         try await git(["commit", "-m", message], in: worktreePath)
     }
 
+    /// Commits named paths and leaves the rest of the worktree
+    /// alone. The paths are staged first, since a commit given a
+    /// pathspec refuses a path git has never seen, and named again
+    /// on the commit, so whatever else was staged stays staged: a
+    /// selective commit must not sweep up what the agent left in
+    /// the index.
+    public func commit(worktreePath: String, paths: [String], message: String) async throws {
+        guard paths.isEmpty == false else {
+            return
+        }
+
+        try await git(["add", "--"] + paths, in: worktreePath)
+        try await git(["commit", "-m", message, "--"] + paths, in: worktreePath)
+    }
+
     /// Pushes the branch, creating its upstream.
     /// Removes a worktree and deletes its branch; the archive bundle
     /// keeps the commits recoverable. Pruning drops any stale

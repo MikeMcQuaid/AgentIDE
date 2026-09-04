@@ -160,13 +160,27 @@ public extension SessionService {
         }
     }
 
-    /// Commits anything the agent left uncommitted.
-    func commitOutstanding(worktreePath: String) async throws {
+    /// Commits what the agent left uncommitted: the named paths
+    /// alone, or the whole worktree when none are named. An empty
+    /// message takes the wording the menu command has always used,
+    /// so committing without drafting one still says something.
+    func commitOutstanding(
+        worktreePath: String,
+        paths: [String] = [],
+        message: String = "",
+    ) async throws {
         guard await git.isDirty(worktreePath: worktreePath) else {
             return
         }
 
-        try await git.commitAll(worktreePath: worktreePath, message: "Commit outstanding agent work")
+        let wording = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let written = wording.isEmpty ? "Commit outstanding agent work" : wording
+        guard paths.isEmpty == false else {
+            try await git.commitAll(worktreePath: worktreePath, message: written)
+            return
+        }
+
+        try await git.commit(worktreePath: worktreePath, paths: paths, message: written)
     }
 
     /// Ends the session's workspace and everything in it, asking
