@@ -40,4 +40,32 @@ extension GitClientIntegrationTests {
         try await git.commit(worktreePath: repoPath, paths: [], message: "Nothing to see")
         #expect(try await git.lastCommitMessage(worktreePath: repoPath) == before)
     }
+
+    @Test
+    func `an amend folds named files into the last commit and leaves the rest`() async throws {
+        let root = try TestSupport.temporaryDirectory("git-amend")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let git = GitClient(runner: FoundationProcessRunner())
+        let repoPath = root + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+
+        try "first\n".write(toFile: repoPath + "/first.txt", atomically: true, encoding: .utf8)
+        try await git.commitAll(worktreePath: repoPath, message: "The commit being added to")
+        let before = try await git.commitCount(worktreePath: repoPath, range: "HEAD")
+
+        // One file to fold in, one to leave behind.
+        try "edited\n".write(toFile: repoPath + "/README.md", atomically: true, encoding: .utf8)
+        try "later\n".write(toFile: repoPath + "/later.txt", atomically: true, encoding: .utf8)
+        try await git.amend(worktreePath: repoPath, paths: ["README.md"], message: nil)
+
+        // One commit, not two, and its message is the one it had.
+        #expect(try await git.commitCount(worktreePath: repoPath, range: "HEAD") == before)
+        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "The commit being added to")
+        let amended = try await git.lastCommitDiff(worktreePath: repoPath)
+        #expect(amended.contains("+edited"))
+        #expect(amended.contains("+first"))
+        #expect(amended.contains("+later") == false)
+        // What was not ticked is still waiting to be committed.
+        #expect(await git.isDirty(worktreePath: repoPath))
+    }
 }

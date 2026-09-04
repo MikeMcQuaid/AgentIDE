@@ -644,6 +644,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   no entitlement that declines these prompts in advance: the
   `NS*UsageDescription` strings in `project.yml` decide only what a
   prompt says, so the app's answer is to not look.
+- **Amend adds to the commit before rather than making a new one.**
+  On the uncommitted scope it folds the ticked files into the last
+  commit and keeps its message, since the editor above the button is
+  drafting the *next* commit's message, not rewriting this one's; on
+  the scopes that show a commit it goes on doing what it always did
+  and rewrites that message. The fold names its paths on the amend
+  itself, so the last commit's tree plus those paths is what lands
+  and anything else staged or uncommitted stays where it was. A
+  commit already pushed needs pushing again, which the lease covers.
 - **A commit can take some of the files, not all of them.** Every
   uncommitted file's row carries a tick, all ticked to begin with, and
   the button says what a click will carry ("Commit 3 of 7"). The model

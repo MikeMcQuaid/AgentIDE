@@ -183,6 +183,22 @@ public extension SessionService {
         try await git.commit(worktreePath: worktreePath, paths: paths, message: written)
     }
 
+    /// Folds what the agent left uncommitted into the last commit:
+    /// the named paths alone, or everything when none are named. The
+    /// message is kept as it is, since the editor above the button
+    /// is drafting the next commit's message rather than rewriting
+    /// this one's.
+    func amendOutstanding(worktreePath: String, paths: [String] = []) async throws {
+        guard await git.commitHash(of: "HEAD", worktreePath: worktreePath) != nil else {
+            throw SessionServiceError("There is no commit here yet to add these changes to.")
+        }
+        guard await git.isDirty(worktreePath: worktreePath) else {
+            return
+        }
+
+        try await git.amend(worktreePath: worktreePath, paths: paths, message: nil)
+    }
+
     /// Ends the session's workspace and everything in it, asking
     /// again when the polite close does not take; worktree,
     /// transcript and metadata survive so it stays resumable. The

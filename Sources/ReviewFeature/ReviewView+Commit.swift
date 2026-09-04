@@ -1,9 +1,9 @@
 import AgentIDEData
 import SwiftUI
 
-/// Committing from the review pane: the ticked files, or the
-/// whole worktree when every file is ticked. Split from the view
-/// for length.
+/// Committing from the review pane: the ticked files, or the whole
+/// worktree when every file is ticked. Split from the view for
+/// length.
 extension ReviewView {
     func commitOutstanding(model: ReviewModel) async {
         do {
@@ -12,6 +12,18 @@ extension ReviewView {
                 paths: model.pathsToCommit,
                 message: model.commitMessage,
             )
+            model.excludedFromCommit = []
+            await model.reload()
+        } catch {
+            model.report(error.localizedDescription)
+        }
+    }
+
+    /// Adds what is ticked to the last commit rather than making a
+    /// new one.
+    func amendOutstanding(model: ReviewModel) async {
+        do {
+            try await service.amendOutstanding(worktreePath: worktreePath, paths: model.pathsToCommit)
             model.excludedFromCommit = []
             await model.reload()
         } catch {

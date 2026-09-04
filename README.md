@@ -61,6 +61,9 @@ In workflow order; the loop from prompt to review repeats before shipping.
 - Opens a pull request as a draft or ready for review, chosen by the
   icon the row will carry (so an agent's first attempt can go up as
   something to read rather than something to merge)
+- Adds the ticked files to the previous commit instead of making a new
+  one, keeping its message (so a fix to what an agent just committed
+  lands in the commit it belongs to)
 - Commits some of the uncommitted files rather than all of them, ticking
   the ones to take and drafting the message beside them (so one agent's
   worktree can land as more than one commit)
