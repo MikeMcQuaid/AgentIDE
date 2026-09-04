@@ -110,9 +110,11 @@ final class HunkMeasurer {
     // MARK: Internal
 
     func height(of text: NSAttributedString, width: CGFloat) -> CGFloat {
-        if measured !== text {
+        // Compared by content, as `updateNSView` compares: the hunk's
+        // text is built afresh per render, so an identity check never
+        // matched and every measurement relaid the hunk out.
+        if storage.isEqual(to: text) == false {
             storage.setAttributedString(text)
-            measured = text
         }
 
         if container.size.width != width {
@@ -128,10 +130,6 @@ final class HunkMeasurer {
     private let storage: NSTextStorage = .init()
     private let layout: NSLayoutManager = .init()
     private let container: NSTextContainer = .init(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-
-    /// Compared by identity, since hunks are memoised by content
-    /// upstream and an equal instance costs only a relayout.
-    private var measured: NSAttributedString?
 }
 
 // MARK: - HunkTextView
