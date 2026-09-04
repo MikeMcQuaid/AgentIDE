@@ -11,13 +11,6 @@ struct AppCommands: Commands {
     let dashboard: DashboardModel
 
     var body: some Commands {
-        CommandGroup(replacing: .appInfo) {
-            // The version already ends in the build number, so the
-            // panel's own build field would say it twice.
-            Button("About AgentIDE") {
-                NSApplication.shared.orderFrontStandardAboutPanel(options: [.version: ""])
-            }
-        }
         CommandGroup(replacing: .newItem) {
             Button("New Agent Session") {
                 // No preset: the menu is repository-agnostic, and a

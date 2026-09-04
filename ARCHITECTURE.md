@@ -855,13 +855,14 @@ organisation.
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
-No updater: releases ship as a Homebrew cask.
+No updater: releases will ship as a Homebrew cask once it exists.
 
 Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
 every rule enabled (per-line disables with a reason). Scripts:
-`bootstrap`, `build`, `install`, `test`, `analyze`, `style [--fix]`,
-`performance-log` and `attach [workspace]`; see AGENTS.md. Sandboxed
-builds gate on `SV_SESSION_ID` and disable SwiftPM's sandbox.
+`bootstrap`, `build`, `install`, `zip`, `package`, `test`, `analyze`,
+`style [--fix]`, `performance-log` and `attach [workspace]`; see
+AGENTS.md. Sandboxed builds gate on `SV_SESSION_ID` and disable
+SwiftPM's sandbox.
 
 Tests are two tiers. Unit tests cover Domain's pure functions, Data
 decoders over fixtures and the feature models, whose fetch and
@@ -874,6 +875,66 @@ from the environment so a teardown can never reach the production
 server. CI (`.github/workflows/tests.yml`) runs style on
 every push and pull request, and build-and-test and analyze in parallel
 on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
+
+### Releases
+
+Three scripts turn a checkout into the artefact a release ships, split
+so that only the last needs credentials:
+
+- `script/build` validates an exact tag on the current commit as three
+  period-separated integers with no leading zeroes and passes it as
+  `MARKETING_VERSION`; an untagged development or CI build uses
+  `0.0.0`. `CURRENT_PROJECT_VERSION` remains the build number and
+  counts the default branch's commits. The release workflow selects the
+  Release configuration; local builds stay Debug.
+- `script/zip` verifies the built app's signature, then zips it with
+  `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the
+  built `Info.plist`, with `AgentIDE.app` as the only top-level entry.
+- `script/package` needs every credential in its environment and fails
+  without them. `DEVELOPER_ID_APPLICATION_CERTIFICATE`, a base64
+  encoded `.p12` export of the Developer ID Application certificate and
+  its private key, with
+  `DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD`, is imported into a
+  temporary keychain. The script selects its one valid Developer ID
+  Application identity, signs the app from
+  `App/AgentIDE.entitlements` with a hardened runtime and secure
+  timestamp, and restores the user's keychain list on exit.
+  `NOTARIZATION_KEY`, the contents of an App Store Connect API key's
+  `.p8` file, `NOTARIZATION_KEY_ID` and `NOTARIZATION_ISSUER_ID` send
+  the zip to `notarytool`. The script waits for Apple's verdict, prints
+  its log on failure, staples the accepted ticket, asks Gatekeeper to
+  assess the app and remakes the zip around the stapled app.
+
+The Release workflow (`.github/workflows/release.yml`) requires a bare
+`MAJOR.MINOR.PATCH` version such as `0.1.0` on `workflow_dispatch` and
+must be run on `main`. It rejects leading zeroes, `v`, prerelease
+suffixes and build metadata, the development and dry-run versions, an
+existing requested tag and a commit already carrying any tag. It
+creates the local tag before building so `script/build` stamps it into
+the app, then zips, signs and notarises. Nothing reaches GitHub until
+packaging succeeds; only then does the workflow upload the zip as an
+artefact, push the tag and create a release with generated notes and
+the zip attached.
+
+A push that touches the workflow, packaging scripts or metadata uses
+`9999.0.0` as a reserved local-only version and repeats the build,
+signing and notarisation as a dry run, but uploads no artefact and
+pushes no tag or release. Dependabot cannot read Actions secrets, so
+its dry runs skip signing and notarisation. The disabled `bump-cask`
+job is ready to run `Homebrew/actions/bump-packages` after a release
+once the `agentide` cask exists and `HOMEBREW_GITHUB_API_TOKEN`, a
+personal access token with the `public_repo` and `workflow` scopes, is
+a repository secret.
+
+The release contract is also the cask contract: the tag is the bare
+version, the zip is `AgentIDE-<version>.zip` and the app's
+`CFBundleShortVersionString` is the same value, so the cask can use the
+stable URL
+`https://github.com/MikeMcQuaid/AgentIDE/releases/download/#{version}/AgentIDE-#{version}.zip`.
+Every release is Developer ID signed with the hardened runtime,
+notarised and stapled so Homebrew's signing audit and Gatekeeper accept
+it. Releases are full releases, never drafts or prereleases, which lets
+`brew livecheck` discover the next version without a custom strategy.
 
 ## Potential future plans
 
