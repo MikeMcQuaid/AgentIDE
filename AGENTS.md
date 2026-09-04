@@ -176,6 +176,33 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   by default and paint over sibling rows in the titlebar band;
   pass `ignoresSafeAreaEdges: []` inside panes that ignore the
   top safe area.
+- An `NSViewRepresentable` whose `sizeThatFits` lays out the live
+  view hangs the window and then kills it. `DiffHunkTextView` set
+  its own text view's container size and called `ensureLayout` on
+  its layout manager; a text view that is vertically resizable and
+  tracks its container gets resized by that, so the measurement
+  invalidated layout, SwiftUI asked again, and the display cycle
+  never finished. AppKit gives up with `NSGenericException`,
+  "marked as needing another Display Window pass, but it has
+  already had more Display Window passes than there are views in
+  the window" (Update Constraints overflows the same way). Measure
+  on a container with no view attached, held as the coordinator.
+  Nothing in the crash report names the app, and the reason is lost
+  to `objc_exception_rethrow`; the log around the crash has it:
+
+  ```bash
+  log show --predicate 'process == "AgentIDE"' --info
+  ```
+
+  The symptoms lie about the cause: the scroll view's document
+  flipped between 480 x 222 and 463 x 6567, a scroller's width
+  apart, so both `.scrollIndicators(.never)` and macOS's overlay
+  scrollers ("Show scroll bars: When scrolling") stopped the crash
+  without touching it. What found it: swapping
+  `-[NSView setNeedsUpdateConstraints:]` for a counting version,
+  resetting the count each run-loop turn, and dumping every scroll
+  view's frames and the live stack once a turn passed forty. The
+  offending frame was ten deep in the fourth dump.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.
