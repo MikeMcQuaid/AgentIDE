@@ -483,6 +483,18 @@ page resumes any past conversation into a fresh worktree.
   file; the full name comes from the remote URL, never `gh repo view`.
   Every read passes `--no-optional-locks` so nothing waits on an
   agent's index lock. Rows are kept between readings (`GitReadScope`).
+- **A pane that is holding the machine down says so** (`PaneLoad`,
+  `PaneLoads`). One `ps` every thirty seconds sums each pane's
+  process tree and names its heaviest process; a tree over three
+  cores for ten unbroken minutes puts a mark on that row, hovering
+  it saying what is running and for how long. The thresholds are
+  what keeps it honest: a repository's own test suite holds five
+  cores for several minutes and must pass unremarked, while a linter
+  that spun for half an hour starved every other worktree and left
+  ten panes that all looked hung with nothing saying which one was
+  the cause. The pane's shell is asked of herdr once and remembered,
+  since it lives as long as the pane; the steady state is the one
+  `ps`.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.

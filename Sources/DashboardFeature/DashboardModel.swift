@@ -80,6 +80,12 @@ public final class DashboardModel {
     /// Worktrees mid-deletion, so their rows grey out instantly.
     public internal(set) var deletingPaths: Set<String> = []
 
+    /// The panes whose process tree has been heavy long enough to
+    /// say so, keyed by worktree path. One runaway starves every
+    /// other worktree, and the window used to show ten panes that
+    /// all looked hung and nothing saying which one was the cause.
+    public internal(set) var paneLoads: [String: PaneLoad] = [:]
+
     /// Bumped when the pull request pane caches a fresher summary,
     /// which every row's summary read observes.
     public var pullRequestCacheGeneration = 0
@@ -274,6 +280,9 @@ public final class DashboardModel {
 
     static let selectedWorktreeKey = "selectedWorktreePath"
 
+    /// How often that reading is worth taking.
+    static let paneLoadInterval: TimeInterval = 30
+
     /// Internal rather than private so the repository extension file
     /// can reach the service too.
     let service: SessionService
@@ -329,6 +338,9 @@ public final class DashboardModel {
     var refreshTask: Task<Void, Never>?
     var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
+
+    /// When the panes' cost was last read; see `readPaneLoads`.
+    var paneLoadsReadAt: Date = .distantPast
 
     /// One herdr waiter per running agent, keyed by pane; the
     /// agent-watch extension file is the only thing that touches it.

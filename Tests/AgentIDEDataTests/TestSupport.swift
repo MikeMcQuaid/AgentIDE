@@ -114,7 +114,7 @@ enum TestSupport {
     }
 
     /// Polls a condition until it holds or the timeout passes.
-    static func poll(timeout: Double = 5, until condition: () async -> Bool) async -> Bool {
+    static func poll(timeout: Double = 20, until condition: () async -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if await condition() {

@@ -58,6 +58,9 @@ In workflow order; the loop from prompt to review repeats before shipping.
   fact (checks a dot, approval a tick, changes requested a diff, a conflict
   a warning), its checks and queued merges watched until they settle (so
   the sidebar is the dashboard and no two badges look alike)
+- Marks a worktree whose pane has been holding several cores for ten
+  minutes, naming what is running (so one runaway command cannot quietly
+  starve every other agent on the machine)
 - Notifies when an agent finishes or needs input, badges the Dock and plays
   a chime per event (so you never sit polling a terminal)
 - Renders terminals locally from `herdr`'s control stream, reflows copied

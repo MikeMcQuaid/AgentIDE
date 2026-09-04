@@ -15,6 +15,10 @@ struct WorktreeRowView: View {
     /// and what it is built on.
     let standing: StackStanding
 
+    /// What this pane's process tree is costing, when it has cost it
+    /// long enough to be worth showing; nil is the quiet case.
+    let load: PaneLoad?
+
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
             leadingIcon
@@ -114,6 +118,13 @@ struct WorktreeRowView: View {
             Text(title)
                 .lineLimit(1)
             Spacer(minLength: Self.spacing)
+            // A pane holding the machine down is news wherever it
+            // is: the row names what is running and for how long, so
+            // ten panes that all look hung say which one to look at.
+            if let load {
+                Octicon("flame.fill", colour: .orange)
+                    .hoverHelp(load.summary())
+            }
             if item.hasActionableUnread {
                 Circle()
                     .fill(.tint)

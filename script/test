@@ -40,14 +40,14 @@ find .test-scratch -mindepth 1 -maxdepth 1 -mtime +0 -exec rm -rf {} + 2>/dev/nu
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
-  # Capped parallelism in the background band: full-width builds
-  # inside the sandbox have triggered resource kills that tore down
-  # the whole sandbox user, taking the production herdr server and
-  # its agents with it. `taskpolicy -b` puts the compiler where the
-  # system looks first when it needs memory back, so what gets culled
-  # is this run rather than the user's agents. Not exec'd: the sweep
-  # above runs on the way out.
-  taskpolicy -b nice swift test --disable-sandbox --jobs 6
+  # Capped and niced: full-width builds inside the sandbox have
+  # triggered resource kills that tore down the whole sandbox user,
+  # taking the production herdr server and its agents with it. The
+  # background band (`taskpolicy -b`) throttles file I/O as well as
+  # CPU and made a run take minutes rather than seconds, so the cap
+  # and the niceness do the work instead. Not exec'd: the sweep above
+  # runs on the way out.
+  nice -n 10 swift test --disable-sandbox --jobs 6
   exit
 fi
 
