@@ -1,0 +1,79 @@
+#!/bin/bash
+# Sign the Release build with the Developer ID Application certificate,
+# notarise it, staple the ticket and zip it through script/zip. Every
+# step needs credentials, taken from the environment:
+# - DEVELOPER_ID_APPLICATION_CERTIFICATE, a base64 encoded .p12 export
+#   of the certificate and its private key, with
+#   DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD
+# - NOTARIZATION_KEY, the contents of an App Store Connect API .p8 key,
+#   with NOTARIZATION_KEY_ID and NOTARIZATION_ISSUER_ID
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+: "${DEVELOPER_ID_APPLICATION_CERTIFICATE:?}"
+: "${DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD:?}"
+: "${NOTARIZATION_KEY:?}"
+: "${NOTARIZATION_KEY_ID:?}"
+: "${NOTARIZATION_ISSUER_ID:?}"
+
+app=.DerivedData/Build/Products/Release/AgentIDE.app
+keychains=()
+while read -r existing_keychain; do
+  existing_keychain="${existing_keychain#\"}"
+  keychains+=("${existing_keychain%\"}")
+done < <(security list-keychains -d user)
+scratch="$(mktemp -d -t agentide-package)"
+keychain="${scratch}/signing.keychain-db"
+cleanup() {
+  security list-keychains -d user -s "${keychains[@]}" &>/dev/null || true
+  security delete-keychain "${keychain}" &>/dev/null || true
+  rm -rf "${scratch}"
+}
+trap cleanup EXIT
+
+keychain_password="$(uuidgen)"
+security create-keychain -p "${keychain_password}" "${keychain}"
+security unlock-keychain -p "${keychain_password}" "${keychain}"
+base64 --decode <<<"${DEVELOPER_ID_APPLICATION_CERTIFICATE}" >"${scratch}/certificate.p12"
+security import "${scratch}/certificate.p12" -k "${keychain}" \
+  -P "${DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD}" -T /usr/bin/codesign
+# Let codesign use the key without a prompt.
+security set-key-partition-list -S apple-tool:,apple: -s \
+  -k "${keychain_password}" "${keychain}" &>/dev/null
+security list-keychains -d user -s "${keychain}" "${keychains[@]}"
+
+identity="$(
+  security find-identity -v -p codesigning "${keychain}" |
+    sed -nE 's/^[[:space:]]*[0-9]+\) ([[:xdigit:]]{40}) "Developer ID Application:.*"$/\1/p'
+)"
+if [[ ! "${identity}" =~ ^[[:xdigit:]]{40}$ ]]; then
+  echo "Expected exactly one valid Developer ID Application identity; found:" >&2
+  security find-identity -p codesigning "${keychain}" >&2
+  exit 1
+fi
+
+# The ad hoc build carries the get-task-allow entitlement, which
+# notarisation rejects, so sign again from the source entitlements with
+# the hardened runtime and secure timestamp notarisation requires.
+codesign --force --sign "${identity}" --keychain "${keychain}" \
+  --options runtime --timestamp --entitlements App/AgentIDE.entitlements "${app}"
+
+zip="$(script/zip)"
+key="${scratch}/notarization.p8"
+(umask 077 && printf '%s\n' "${NOTARIZATION_KEY}" >"${key}")
+credentials=(--key "${key}" --key-id "${NOTARIZATION_KEY_ID}" --issuer "${NOTARIZATION_ISSUER_ID}")
+result="${scratch}/notarization.plist"
+xcrun notarytool submit "${zip}" "${credentials[@]}" --wait --timeout 30m \
+  --output-format plist >"${result}"
+status="$(/usr/libexec/PlistBuddy -c 'Print status' "${result}")"
+if [[ "${status}" != "Accepted" ]]; then
+  echo "Notarisation ${status}:" >&2
+  xcrun notarytool log "$(/usr/libexec/PlistBuddy -c 'Print id' "${result}")" "${credentials[@]}" >&2
+  exit 1
+fi
+xcrun stapler staple "${app}"
+spctl --assess --type execute --verbose=2 "${app}"
+
+# The ticket is stapled to the app, so remake the zip around it.
+script/zip

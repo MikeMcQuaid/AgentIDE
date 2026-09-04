@@ -19,6 +19,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   changed, then build the app with xcodebuild
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds
+- `script/zip`: zip the Release build as
+  `.build/AgentIDE-<version>.zip`
+- `script/package`: sign the Release build with a Developer ID
+  certificate, notarise and staple it, then remake its zip
 - `script/test`: run the unit and integration tests, then on the
   host the App Intents tests through `xcodebuild` (a UI testing
   bundle, since `AppIntentsTesting` drives the system's own runtime;

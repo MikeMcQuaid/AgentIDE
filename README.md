@@ -182,6 +182,18 @@ In workflow order; the loop from prompt to review repeats before shipping.
 
 ## 🖥️ Usage
 
+Every release on the
+[releases page](https://github.com/MikeMcQuaid/AgentIDE/releases) is an
+`AgentIDE-<version>.zip` holding `AgentIDE.app`, signed with a Developer
+ID certificate and notarised by Apple so it opens without a Gatekeeper
+warning: unzip it and move the app to `/Applications`.
+
+Releases will also ship as a Homebrew cask
+(`brew install --cask agentide`) once the cask exists; `brew upgrade`
+will then update the app, which has no updater of its own.
+
+To run the current source instead:
+
 ```bash
 git clone https://github.com/MikeMcQuaid/AgentIDE
 cd AgentIDE
@@ -207,6 +219,20 @@ fi
 
 `agentide .` from any terminal switches the window to the worktree or
 checkout you are in.
+
+### 🚀 Releasing
+
+Run the **Release** workflow from the Actions tab on `main` with a bare
+`MAJOR.MINOR.PATCH` version such as `0.1.0`: three integers, with no
+`v`, prerelease suffix or build metadata. The workflow validates and
+locally tags the commit before building, so the tag becomes the app's
+version as well as the GitHub release and zip name. It pushes the tag
+only after signing and notarisation succeed. No new commit or push is
+needed: dispatching it builds the current `main` commit. A push that
+touches the release workflow, packaging scripts or metadata creates the
+reserved local test tag `9999.0.0`, signs and notarises as a dry run but
+publishes nothing; Dependabot skips that step because GitHub withholds
+its secrets.
 
 ### 📱 From a phone
 

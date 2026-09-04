@@ -66,7 +66,7 @@ let package = Package(
                 "TerminalUI",
             ],
             path: "App",
-            exclude: ["Assets.xcassets"],
+            exclude: ["AgentIDE.entitlements", "Assets.xcassets"],
             swiftSettings: mainActorByDefault,
         ),
         .target(

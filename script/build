@@ -1,8 +1,16 @@
 #!/bin/bash
-# Build AgentIDE.app; the repo-root AgentIDE.app symlink points at the output.
+# Build AgentIDE.app; the repo-root symlink points at the Debug output.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+# A release workflow creates its local version tag before building.
+version="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+version="${version:-0.0.0}"
+if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "Version tag must be bare MAJOR.MINOR.PATCH: ${version}" >&2
+  exit 1
+fi
 
 [[ -d AgentIDE.xcodeproj ]] || script/bootstrap
 
@@ -19,23 +27,25 @@ fi
 # taking the production herdr server and its agents with it.
 JOBS="$(sysctl -n hw.ncpu)"
 [[ -n "${SV_SESSION_ID:-}" ]] && JOBS=6
+configuration="${XCODE_CONFIGURATION:-Debug}"
 
 ARGS=(
   -project AgentIDE.xcodeproj
   -scheme AgentIDEApp
+  -configuration "${configuration}"
   -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
   -derivedDataPath .DerivedData
   -jobs "${JOBS}"
 )
 
-# The version counts the default branch's commits, so numbers are
-# comparable across feature branches: the app is 0.1.<count>.
+# The build number counts the default branch's commits, so numbers are
+# comparable across feature branches.
 BUILD_NUMBER="$(
   git rev-list --count origin/main 2>/dev/null ||
     git rev-list --count main 2>/dev/null ||
     git rev-list --count HEAD
 )"
-ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}")
+ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}" "MARKETING_VERSION=${version}")
 ACTIONS=(build)
 
 # Inside the sandbox this is the whole build: Xcode runs SwiftTerm's
@@ -71,4 +81,4 @@ xcodebuild "${ARGS[@]}" "${ACTIONS[@]}"
 
 # Icon caches key on the bundle's modification time; bump it so the
 # Dock and Finder notice icon changes.
-touch AgentIDE.app
+touch ".DerivedData/Build/Products/${configuration}/AgentIDE.app"
