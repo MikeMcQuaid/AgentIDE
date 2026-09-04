@@ -236,9 +236,14 @@ public extension SessionService {
         await github.openIssues(repositoryPath: repository.path)
     }
 
-    /// The repository's open pull requests, for the PR source picker.
+    /// The repository's open pull requests, for the PR source
+    /// picker, which offers more of them than a row's listing does.
     func openPullRequests(repository: Repository) async throws -> [PullRequestSummary] {
-        try await pullRequests.listing(repositoryPath: repository.path, scope: .open)
+        try await pullRequests.listing(
+            repositoryPath: repository.path,
+            scope: .open,
+            limit: GitHubClient.pickerLimit,
+        )
     }
 
     /// The user's login and organisations, for the repository

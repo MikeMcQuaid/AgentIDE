@@ -15,10 +15,12 @@ struct PullRequestDetail {
 /// Issue and pull request detail: prompt sources, checkouts and
 /// review feedback.
 public extension GitHubClient {
-    /// The repository's open issues, newest first.
-    func openIssues(repositoryPath: String) async -> [IssueSummary] {
+    /// The repository's open issues, newest first. The limit is
+    /// named: `gh` defaults to thirty, which quietly cut the picker
+    /// short on any repository with a real backlog.
+    func openIssues(repositoryPath: String, limit: Int = GitHubClient.pickerLimit) async -> [IssueSummary] {
         let result = try? await gh(
-            ["issue", "list", "--state", "open", "--json", "number,title"],
+            ["issue", "list", "--state", "open", "--json", "number,title", "--limit", String(limit)],
             in: repositoryPath,
         )
         guard let output = result?.standardOutput,
