@@ -625,6 +625,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **The editor reads like a code editor**: page guides at columns 80
+  and 118 drawn under the text (`EditingTextView.drawBackground`),
+  and a change bar down the gutter's inner edge for every line with
+  uncommitted work (`LineNumberRuler`). The bar replaced a tinted
+  line number, which said the same thing but could not be read down
+  a scrolling file, which is the whole use of a change bar. Both
+  measure the font's own advance and draw nothing for a face that is
+  not fixed pitch.
 - **One glyph per fact** (`ChecksStyle`). A row can carry failing checks,
   a reviewer asking for changes and a merge conflict at once, and all
   three used to be the same red crossed circle, which said "something is
