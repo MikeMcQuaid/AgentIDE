@@ -7,6 +7,20 @@ import Foundation
 /// sandbox user may well be able to read `/opt/homebrew`, but
 /// AgentIDE must never give it a reason to write to one.
 public extension SessionService {
+    /// The home-directory folders macOS guards, which this app has
+    /// no business reading: a stat inside one asks the user for
+    /// permission, and the answer is asked for again next time.
+    static var guardedFolders: Set<String> {
+        ["Documents", "Desktop", "Downloads", "Movies", "Music", "Pictures"]
+    }
+
+    /// The storage-bus key naming the selected row, which the
+    /// sidebar writes; the only directory of your own worth reading
+    /// from disk is the one in front of you.
+    static var selectedWorktreeKey: String {
+        "selectedWorktreePath"
+    }
+
     /// Lists a directory of your own under a repository.
     func addHostDirectory(_ path: String, to repository: Repository) {
         var listed = store.load().hostDirectories[repository.path] ?? []
@@ -82,40 +96,60 @@ public extension SessionService {
         )
     }
 
-    /// The repository's listed directories, as rows: their branch is
-    /// shown for orientation, and a missing one is dropped rather
-    /// than shown as a row that opens nothing.
+    /// The repository's listed directories, as rows.
+    ///
+    /// Only the selected one is read from disk; the rest are drawn
+    /// from what it last said. A directory of your own can be
+    /// anywhere on the Mac, and macOS guards Documents, Desktop,
+    /// Downloads and every network volume: a poll that stats one of
+    /// those asks the user for permission, and asks again on the
+    /// next poll, for a row nobody was looking at. Nothing here can
+    /// know which paths are guarded, so nothing here touches a path
+    /// the user is not looking at.
     internal func hostItems(of repository: Repository, metadata: AppMetadata) async -> [WorktreeItem] {
+        let listed = metadata.hostDirectories[repository.path] ?? []
+        let selected = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
         var items = [WorktreeItem]()
-        let listed = (metadata.hostDirectories[repository.path] ?? [])
-            .filter { FileManager.default.fileExists(atPath: $0) }
-        let branches = await withTaskGroup(of: (String, String).self) { tasks in
-            for path in listed {
-                tasks.addTask { await (path, self.git.currentBranch(worktreePath: path) ?? "") }
-            }
-            var collected = [String: String]()
-            for await (path, branch) in tasks {
-                collected[path] = branch
-            }
-            return collected
-        }
         for path in listed {
-            let branch = branches[path] ?? ""
-            await items.append(WorktreeItem(
+            let facts = path == selected ? await readHostFacts(of: path) : hostFacts.facts(of: path)
+            guard facts?.exists != false else {
+                continue
+            }
+
+            items.append(WorktreeItem(
                 worktree: Worktree(
                     repositoryName: repository.name,
                     repositoryPath: repository.path,
-                    branch: branch,
+                    branch: facts?.branch ?? "",
                     path: path,
                     isHostDirectory: true,
                 ),
                 session: nil,
-                isDirty: git.isDirty(worktreePath: path),
-                aheadOfUpstream: git.aheadOfUpstream(worktreePath: path),
+                isDirty: facts?.isDirty ?? false,
+                aheadOfUpstream: facts?.aheadOfUpstream,
                 hasUnread: false,
             ))
         }
         return items
+    }
+
+    /// Reads one directory of your own and remembers what it said,
+    /// so its row keeps painting while nothing touches it again.
+    private func readHostFacts(of path: String) async -> HostFacts {
+        guard FileManager.default.fileExists(atPath: path) else {
+            let gone = HostFacts(exists: false, branch: "", isDirty: false, aheadOfUpstream: nil)
+            hostFacts.remember(gone, of: path)
+            return gone
+        }
+
+        let facts = await HostFacts(
+            exists: true,
+            branch: git.currentBranch(worktreePath: path) ?? "",
+            isDirty: git.isDirty(worktreePath: path),
+            aheadOfUpstream: git.aheadOfUpstream(worktreePath: path),
+        )
+        hostFacts.remember(facts, of: path)
+        return facts
     }
 
     /// The local branches a worktree could switch to: everything

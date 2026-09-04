@@ -42,6 +42,32 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        # macOS has no way to decline these prompts in advance: a
+        # non-sandboxed app is asked the first time it touches one of
+        # these places, and these strings are only what the prompt
+        # says. AgentIDE reaches them for one reason, so the prompt
+        # says which directory of your own asked and offers the
+        # honest way out.
+        INFOPLIST_KEY_NSDocumentsFolderUsageDescription: >-
+          AgentIDE reads a directory you listed yourself. Deny this and remove
+          the directory from its repository's menu if you would rather it never
+          looked.
+        INFOPLIST_KEY_NSDesktopFolderUsageDescription: >-
+          AgentIDE reads a directory you listed yourself. Deny this and remove
+          the directory from its repository's menu if you would rather it never
+          looked.
+        INFOPLIST_KEY_NSDownloadsFolderUsageDescription: >-
+          AgentIDE reads a directory you listed yourself. Deny this and remove
+          the directory from its repository's menu if you would rather it never
+          looked.
+        INFOPLIST_KEY_NSNetworkVolumesUsageDescription: >-
+          AgentIDE reads a directory you listed yourself, or a repository on a
+          share. Deny this and keep your work on a local disk if you would
+          rather it never looked.
+        INFOPLIST_KEY_NSRemovableVolumesUsageDescription: >-
+          AgentIDE reads a directory you listed yourself, or a repository on a
+          removable disk. Deny this and keep your work on the internal disk if
+          you would rather it never looked.
         MACOSX_DEPLOYMENT_TARGET: "27.0"
         SWIFT_VERSION: "6.0"
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor

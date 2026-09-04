@@ -625,6 +625,17 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **Nothing is stat'd that macOS would ask permission for.** A
+  directory of your own can be anywhere: inside Documents, on a
+  network volume, on a disk that is not mounted. macOS asks the user
+  before a non-sandboxed app reads any of those and asks again the
+  next time, so only the selected one is read from disk; every other
+  row paints from what it last said (`HostFactsCache`). The
+  home-directory sweep a repository deletion runs skips the guarded
+  folders by name rather than reading and discarding them. There is
+  no entitlement that declines these prompts in advance: the
+  `NS*UsageDescription` strings in `project.yml` decide only what a
+  prompt says, so the app's answer is to not look.
 - **A commit can take some of the files, not all of them.** Every
   uncommitted file's row carries a tick, all ticked to begin with, and
   the button says what a click will carry ("Commit 3 of 7"). The model
