@@ -89,6 +89,16 @@ public struct BrowserView: View {
 
     private static let padding: CGFloat = 8
 
+    /// How long a remembered address is still where a worktree
+    /// was. A dev server's port is reused by the next thing to run
+    /// on it, and a page nobody has opened in a day is more likely
+    /// to be someone else's than yours.
+    private static let addressLifetime: TimeInterval = 86_400
+
+    /// A stored line is a path, an address and when it was last
+    /// seen.
+    private static let addressFields = 3
+
     /// The address bus other panes write to, and every worktree's
     /// own address, stored as path-address lines.
     @AppStorage(UtilityTabTarget.addressKey)
@@ -106,16 +116,41 @@ public struct BrowserView: View {
     private let worktreePath: String
     private let isActive: Bool
 
-    /// Parses the stored path-address lines.
-    private static func addresses(in lines: String) -> [String: String] {
+    /// Parses the stored lines: a path, its address, and when it was
+    /// last seen. Lines written before the time was kept have none,
+    /// and are read as seen now rather than thrown away.
+    private static func addresses(in lines: String, now: Date = Date()) -> [String: String] {
         var addresses = [String: String]()
         for line in lines.split(separator: "\n") {
-            let parts = line.split(separator: "\t", maxSplits: 1)
-            if let path = parts.first, parts.count > 1, let page = parts.last {
-                addresses[String(path)] = String(page)
+            let parts = line.split(separator: "\t", maxSplits: addressFields - 1)
+            guard let path = parts.first, parts.count > 1 else {
+                continue
             }
+
+            let page = String(parts[1])
+            let stamp = parts.count == addressFields ? Double(parts[parts.count - 1]) : nil
+            // A line written before the time was kept is read as
+            // seen now rather than thrown away.
+            let seen = parts.count == addressFields ? stamp.map(Date.init(timeIntervalSince1970:)) : now
+            guard let seen, now.timeIntervalSince(seen) < addressLifetime else {
+                continue
+            }
+
+            addresses[String(path)] = page
         }
         return addresses
+    }
+
+    /// When each stored address was last opened.
+    private static func seenTimes(in lines: String) -> [String: Date] {
+        var times = [String: Date]()
+        for line in lines.split(separator: "\n") {
+            let parts = line.split(separator: "\t", maxSplits: addressFields - 1)
+            if let path = parts.first, parts.count == addressFields, let stamp = Double(parts[parts.count - 1]) {
+                times[String(path)] = Date(timeIntervalSince1970: stamp)
+            }
+        }
+        return times
     }
 
     /// Tells the register what this page is and what is rendering
@@ -131,11 +166,18 @@ public struct BrowserView: View {
     /// Keeps this worktree's address for the next time its browser
     /// opens, including after a restart.
     private func remember() {
-        var addresses = Self.addresses(in: storedAddresses)
+        let now = Date()
+        var addresses = Self.addresses(in: storedAddresses, now: now)
         addresses[worktreePath] = address
+        // Only this worktree's line is stamped now: every other keeps
+        // the time it was last opened, which is what ages it out.
+        let seen = Self.seenTimes(in: storedAddresses).merging([worktreePath: now]) { _, mine in mine }
         storedAddresses = addresses
             .filter { $0.value.isEmpty == false }
-            .map { $0.key + "\t" + $0.value }
+            .map { entry in
+                let stamp = (seen[entry.key] ?? now).timeIntervalSince1970
+                return entry.key + "\t" + entry.value + "\t" + String(Int(stamp))
+            }
             .sorted()
             .joined(separator: "\n")
     }

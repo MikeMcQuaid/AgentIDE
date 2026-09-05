@@ -12,22 +12,26 @@ struct PullRequestCreateForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack {
-                Text("No open pull request for this branch")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                generateButton
-                resetButton
-            }
+            Text("No open pull request for this branch")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
             if let below = model.unpushedBelow {
                 Text("Waiting on `" + below + "` below it to be pushed and opened first")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
-                .textFieldStyle(.roundedBorder)
-                .readOnly(isGenerating || isBlocked)
-                .hoverHelp("The pull request title; git convention keeps it short and imperative")
+            HStack(spacing: Self.spacing) {
+                TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
+                    .textFieldStyle(.plain)
+                    .readOnly(isGenerating || isBlocked)
+                    .hoverHelp("The pull request title; git convention keeps it short and imperative")
+                generateButton
+                resetButton
+            }
+            .padding(.horizontal, Self.fieldPadding)
+            .padding(.vertical, Self.fieldVerticalPadding)
+            .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+            .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
             labelsSection
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
@@ -48,6 +52,11 @@ struct PullRequestCreateForm: View {
     private static let spacing: CGFloat = 8
 
     private static let fieldCorner: CGFloat = 6
+    private static let fieldPadding: CGFloat = 6
+
+    /// The field is tighter above and below than beside, the way a
+    /// rounded text field is.
+    private static let fieldVerticalPadding: CGFloat = 3
     private static let bodyMinimumHeight: CGFloat = 120
     private static let templateMinimumHeight: CGFloat = 160
 
@@ -86,6 +95,7 @@ struct PullRequestCreateForm: View {
                 .accessibilityLabel("Reset to the commit message")
         }
         .buttonStyle(.borderless)
+        .controlSize(.small)
         .disabled(isGenerating || isBlocked)
         .hoverHelp("Replace the title and body with what the branch's commits say")
         .confirmationDialog(
@@ -167,6 +177,7 @@ struct PullRequestCreateForm: View {
             }
         }
         .buttonStyle(.borderless)
+        .controlSize(.small)
         .disabled(isGenerating || isBlocked)
         .hoverHelp(
             "Draft the title and body from the branch name and its commits: one commit's "

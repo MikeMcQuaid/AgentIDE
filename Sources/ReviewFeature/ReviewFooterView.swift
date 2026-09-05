@@ -152,20 +152,21 @@ struct ReviewFooterView: View {
     /// Committing and amending, in click order.
     @ViewBuilder private var messageButtons: some View {
         BusyButton(
-            commitTitle,
-            busy: "Committing",
-            disabled: canCommit == false || model.committingCount == 0,
-            keepsTitle: true,
-            action: onCommit,
-        )
-        .hoverHelp(commitHelp)
-        BusyButton(
             "Amend",
             busy: "Amending",
             disabled: canAmend == false,
             action: amend,
         )
         .hoverHelp(amendHelp)
+        BusyButton(
+            commitTitle,
+            busy: "Committing",
+            prominent: true,
+            disabled: canCommit == false || model.committingCount == 0,
+            keepsTitle: true,
+            action: onCommit,
+        )
+        .hoverHelp(commitHelp)
     }
 
     /// A slim grab area over the divider: dragging resizes the
@@ -290,7 +291,7 @@ struct ReviewFooterView: View {
             Text("body \(widestBody)/\(Self.bodyLimit)")
                 .foregroundStyle(widestBody > Self.bodyLimit ? .red : .secondary)
         }
-        .font(.footnote.monospaced())
+        .font(.callout.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
     }
 

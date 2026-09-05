@@ -15,9 +15,13 @@ private let parseCacheCap = 512
 public struct MarkdownText: View {
     // MARK: Lifecycle
 
-    /// Creates the view for one markdown string.
-    public init(_ text: String) {
+    /// Creates the view for one markdown string. `relativeTo` is the
+    /// directory its own file sits in, where it has one: a README's
+    /// `![shot](docs/screenshot.png)` means a file beside it, and
+    /// without somewhere to be relative to it can only be alt text.
+    public init(_ text: String, relativeTo directory: String? = nil) {
         self.text = text
+        self.directory = directory
     }
 
     // MARK: Public
@@ -96,12 +100,15 @@ public struct MarkdownText: View {
     /// a path on this Mac as a file. A relative path has nothing to
     /// be relative to here, so it stays alt text rather than
     /// guessing at a directory.
-    static func imageURL(_ source: String) -> URL? {
+    static func imageURL(_ source: String, relativeTo directory: String? = nil) -> URL? {
         if source.hasPrefix("http://") || source.hasPrefix("https://") {
             return URL(string: source)
         }
+        if source.hasPrefix("/") {
+            return URL(filePath: source)
+        }
 
-        return source.hasPrefix("/") ? URL(filePath: source) : nil
+        return directory.map { URL(filePath: $0 + "/" + source) }
     }
 
     // MARK: Private
@@ -113,6 +120,10 @@ public struct MarkdownText: View {
     private static let codeBackgroundOpacity = 0.5
 
     private let text: String
+
+    /// See `init(_:relativeTo:)`: where a relative image source
+    /// points from.
+    private let directory: String?
 
     /// The text split on `<details>` blocks, which render collapsed;
     /// bots fold their long reports into them for a reason.
@@ -153,7 +164,7 @@ public struct MarkdownText: View {
     /// text said before images were drawn at all.
     @ViewBuilder
     private func image(source: String, alt: String) -> some View {
-        if let url = Self.imageURL(source) {
+        if let url = Self.imageURL(source, relativeTo: directory) {
             AsyncImage(url: url) { image in
                 image.resizable().scaledToFit()
             } placeholder: {

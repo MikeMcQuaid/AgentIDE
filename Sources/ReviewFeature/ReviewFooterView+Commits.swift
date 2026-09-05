@@ -7,18 +7,20 @@ extension ReviewFooterView {
     /// Fills the subject and body from the diff, beside the field it
     /// fills rather than among the actions that use what it wrote.
     var draftButton: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "sparkles",
-            accessibilityLabel: "Draft commit message",
-            disabled: model.showsUncommitted == false
-                || model.commitMessage.trimmingCharacters(in: .whitespaces).isEmpty == false,
-        ) {
+        Button {
             // The model reports its own refusal to the messages
             // pane, which is where every other failure here lands.
-            _ = await model.generateCommitMessage()
+            Task { _ = await model.generateCommitMessage() }
+        } label: {
+            Image(systemName: "sparkles")
+                .accessibilityLabel("Draft commit message")
         }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .disabled(
+            model.showsUncommitted == false
+                || model.commitMessage.trimmingCharacters(in: .whitespaces).isEmpty == false,
+        )
         .hoverHelp(
             "Draft the commit message from the uncommitted diff with the on-device model; "
                 + "only fills an empty message",
