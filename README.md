@@ -126,12 +126,14 @@ fi
 `agentide .` from any terminal switches the window to the worktree you
 are in.
 
-## 📱 From a phone
+## 📱 iPhone SSH access
 
-Agents run as the sandbox user, so anything that can SSH to that user can
-start and steer them. [Moshi](https://getmoshi.app) is the iOS client
-this is built around: it speaks [`mosh`](https://mosh.org), so a phone
-that changes network keeps its session rather than dropping it.
+Agents run as the sandbox user, so anything that can SSH to that user
+can start and steer them. [Moshi](https://getmoshi.app) is the iOS
+client this is currently built around, because it speaks both
+[`mosh`](https://mosh.org), so a phone changing network keeps its
+session rather than dropping it, and `herdr`, so it attaches to the same
+sessions the app does.
 
 1. Put the phone's public key in sandvault's guest template, which is
    what the sandbox home is built from, then rebuild it. A sandvault
@@ -145,11 +147,12 @@ that changes network keeps its session rather than dropping it.
 
 2. Name the shared workspace for logins from outside the sandbox, which
    do not inherit it, in `/etc/ssh/sshd_config.d/000-agentide.conf` with
-   your own user and path, then turn on Remote Login for that account:
+   your own user name and path in place of `<you>`, then turn on macOS's
+   Remote Login for that account:
 
    ```text
-   Match User sandvault-mike
-       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-mike
+   Match User sandvault-<you>
+       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-<you>
    ```
 
 3. In the sandbox user's shell configuration, name the session and give
@@ -157,11 +160,11 @@ that changes network keeps its session rather than dropping it.
 
    ```bash
    export HERDR_SESSION=agentide
-   alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
+   alias ain='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
    ```
 
 Connect as `sandvault-<you>` and run `herdr`: one attach presents every
-agent's workspace, and `an` starts a new session, asking for repository,
+agent's workspace, and `ain` starts a new session, asking for repository,
 agent, model, effort and prompt. A session steered from the phone is the
 same session the Mac shows.
 
@@ -182,10 +185,6 @@ same session the Mac shows.
 
 Releases run the **Release** workflow from the Actions tab on `main` with
 a bare `MAJOR.MINOR.PATCH` version.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how AgentIDE is designed and
-[AGENTS.md](AGENTS.md) if you are working on this repository, human or
-agent.
 
 ## 🚧 Status
 
