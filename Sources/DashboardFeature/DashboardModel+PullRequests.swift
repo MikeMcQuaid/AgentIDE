@@ -301,12 +301,16 @@ extension DashboardModel {
         switch await cleanUp(item: item) {
         case .dirty:
             ErrorLog.shared.note(
-                "\(item.worktree.branch) merged but has uncommitted changes; left in place for you to review",
+                "merged but has uncommitted changes; left in place for you to review",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
             )
 
         case .unmerged:
             ErrorLog.shared.note(
-                "\(item.worktree.branch) merged but has commits not on the base branch; left in place",
+                "merged but has commits not on the base branch; left in place",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
             )
 
         case nil:

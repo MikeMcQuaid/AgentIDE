@@ -27,7 +27,7 @@ extension GitHubClientTests {
         let jobs = #"{"jobs": [{"databaseId": 11, "conclusion": "failure"}, {"databaseId": 12, "conclusion": null}]}"#
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .success("job\tstep\tline\n"),
         ])
         let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
@@ -41,7 +41,7 @@ extension GitHubClientTests {
         let jobs = #"{"jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}"#
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
             "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("2026-09-01T10:00:00Z it broke\n"),
         ])
@@ -57,7 +57,7 @@ extension GitHubClientTests {
         """#
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .success("early\tstep\tbroke here\n"),
             "gh run view --job 12 --log-failed": .failure("run 9 is still in progress"),
             "gh api repos/{owner}/{repo}/actions/jobs/12/logs": .failure("still uploading"),
@@ -79,7 +79,7 @@ extension GitHubClientTests {
         let jobs = #"{"jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}"#
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
             "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("PK\u{3}\u{4}archive"),
         ])
@@ -107,10 +107,13 @@ extension GitHubClientTests {
 
     @Test
     func `nothing readable yet says so in the app's own words`() async throws {
-        let jobs = #"{"jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}"#
+        let jobs = #"""
+        {"url": "https://github.com/o/r/actions/runs/9",
+         "jobs": [{"databaseId": 11, "name": "style", "conclusion": "failure"}]}
+        """#
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(jobs),
+            "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
             "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .failure("still uploading"),
         ])
@@ -118,17 +121,21 @@ extension GitHubClientTests {
             try await GitHubClient(runner: runner) { true }
                 .failedRunLog(repositoryPath: "/repo", runID: 9)
         }
-        // gh's own wording never reaches the messages pane.
+        // gh's own wording never reaches the messages pane, and
+        // neither does a claim that GitHub has no logs: it has
+        // them, and shows them live where the message points.
         let message = try #require(failure?.localizedDescription)
         #expect(message.contains("still in progress") == false)
-        #expect(message.contains("1 failed job"))
+        #expect(message.contains("no logs") == false)
+        #expect(message.contains("only once the job has finished"))
+        #expect(message.contains("https://github.com/o/r/actions/runs/9/job/11"))
     }
 
     @Test
     func `a run in progress with no failed job keeps its own error`() async {
         let runner = ScriptedGitHubRunner(answers: [
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
-            "gh run view 9 --json jobs": .success(#"{"jobs": [{"databaseId": 12, "conclusion": null}]}"#),
+            "gh run view 9 --json url,jobs": .success(#"{"jobs": [{"databaseId": 12, "conclusion": null}]}"#),
         ])
         await #expect(throws: Error.self) {
             try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)

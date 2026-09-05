@@ -60,15 +60,15 @@ extension PullRequestsModel {
         }
     }
 
-    /// A note about this repository's work, named as the sidebar
-    /// names it.
+    /// A note about this branch's work, named as the sidebar names
+    /// it: the repository, then the branch, then what happened.
     func note(_ message: String) {
-        ErrorLog.shared.note(message, about: repository.name)
+        ErrorLog.shared.note(message, about: repository.name, branch: actedBranch)
     }
 
     /// The same for a failure.
     func report(_ message: String) {
-        ErrorLog.shared.report(message, about: repository.name)
+        ErrorLog.shared.report(message, about: repository.name, branch: actedBranch)
     }
 
     /// Copies every unresolved review conversation to the
@@ -78,7 +78,7 @@ extension PullRequestsModel {
         let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        note("Copied \(threads.count) unresolved conversations from `#\(summary.number)`.")
+        note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }
 
     /// Jumps to the one failing check, or to the checks page when
@@ -216,18 +216,16 @@ extension PullRequestsModel {
         branches.lazy.map { "`" + $0 + "`" }.joined(separator: ", ")
     }
 
-    static func describe(push destination: PushDestination, branch: String) -> String {
+    static func describe(push destination: PushDestination) -> String {
         switch destination {
         case .origin:
-            "Pushed `" + branch + "`."
+            "pushed"
 
         case let .fork(owner):
-            "Pushed `" + branch + "` to `" + owner
-                + "`'s fork, since this repository is not yours to push to."
+            "pushed to `" + owner + "`'s fork, since this repository is not yours to push to"
 
         case let .contributorFork(owner, _):
-            "Pushed `" + branch + "` to `" + owner
-                + "`'s fork, which this pull request comes from."
+            "pushed to `" + owner + "`'s fork, which this pull request comes from"
         }
     }
 

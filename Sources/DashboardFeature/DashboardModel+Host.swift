@@ -42,7 +42,11 @@ public extension DashboardModel {
                     path: item.worktree.path,
                 ),
             )
-            ErrorLog.shared.note("Checked out and pulled the default branch in `\(item.worktree.path)`.")
+            ErrorLog.shared.note(
+                "checked out and pulled the default branch",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
+            )
             // The row says the new branch at once: a refresh reads
             // every repository and worktree first, which is seconds
             // of the row still claiming the branch just left.
@@ -61,7 +65,11 @@ public extension DashboardModel {
                 name: item.worktree.repositoryName,
                 path: item.worktree.path,
             ))
-            ErrorLog.shared.note("Fetched `\(item.worktree.path)`.")
+            ErrorLog.shared.note(
+                "fetched",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
+            )
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -91,7 +99,11 @@ public extension DashboardModel {
     func stackBranch(named name: String, on item: WorktreeItem) async {
         do {
             try await service.stackBranch(named: name, on: item.worktree)
-            ErrorLog.shared.note("Stacked `\(name)` on `\(item.worktree.branch)`.")
+            ErrorLog.shared.note(
+                "stacked `" + name + "` on it",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
+            )
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -125,7 +137,11 @@ public extension DashboardModel {
     func switchBranch(_ branch: String, for item: WorktreeItem) async {
         do {
             try await service.switchBranch(branch, worktree: item.worktree)
-            ErrorLog.shared.note("Checked out `" + branch + "` in `" + item.worktree.path + "`.")
+            ErrorLog.shared.note(
+                "checked out `" + branch + "`",
+                about: item.worktree.repositoryName,
+                branch: item.worktree.branch,
+            )
             rename(item, to: branch)
             await refresh()
         } catch {

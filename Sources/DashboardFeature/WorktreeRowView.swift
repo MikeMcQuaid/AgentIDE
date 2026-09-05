@@ -115,7 +115,11 @@ struct WorktreeRowView: View {
     /// tight against branch names of every length.
     private var titleLine: some View {
         HStack(spacing: Self.spacing) {
+            // A branch name, or the path of a directory of your
+            // own: an identifier either way, drawn as the messages
+            // pane draws one.
             Text(title)
+                .monospaced()
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: Self.spacing)
@@ -142,6 +146,7 @@ struct WorktreeRowView: View {
         if item.worktree.isHostDirectory {
             HStack(spacing: Self.spacing) {
                 Text(item.worktree.branch)
+                    .monospaced()
                     .lineLimit(1)
                 Text(counts)
                     .lineLimit(1)

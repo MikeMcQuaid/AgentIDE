@@ -135,7 +135,7 @@ extension PullRequestsModel {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
             recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
-            note(Self.describe(push: destination, branch: worktree.branch))
+            note(Self.describe(push: destination))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

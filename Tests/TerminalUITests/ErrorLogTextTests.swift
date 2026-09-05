@@ -83,4 +83,21 @@ struct ErrorLogTextTests {
         ) as? NSFont
         #expect(bold?.fontDescriptor.symbolicTraits.contains(.bold) == true)
     }
+
+    @Test
+    func `a line names its repository and its branch in front`() {
+        ErrorLog.shared.clear()
+        ErrorLog.shared.note("pushed", about: "brew", branch: "more_deprecations")
+        ErrorLog.shared.report("rebasing failed", about: "brew")
+        let entries = ErrorLog.shared.entries
+
+        #expect(entries.first?.message == "brew: `more_deprecations`: pushed")
+        #expect(entries.first?.repository == "brew")
+        // A message about no branch in particular names only the
+        // repository, and a repeated name is said once.
+        #expect(entries.last?.message == "brew: rebasing failed")
+        ErrorLog.shared.note("brew: already named", about: "brew", branch: "main")
+        #expect(ErrorLog.shared.entries.last?.message == "brew: already named")
+        ErrorLog.shared.clear()
+    }
 }

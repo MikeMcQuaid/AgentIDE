@@ -552,9 +552,14 @@ page resumes any past conversation into a fresh worktree.
    since their lines become fields on a click, and there Copy hunk
    is what takes several lines. The messages pane is one selectable
    document the same way (`SelectableTextView` over the whole log),
-   and every line in it reads the same: prose, with identifiers named
-   in backticks drawn monospaced (`MessageMarkup`) and the repository
-   a line belongs to in bold in front of it.
+   and every line in it reads the same: `repository: branch: what
+   happened`, the repository bold and the branch monospaced, with
+   any other identifier the line names in backticks drawn the same
+   way (`MessageMarkup`). Both names come from the caller
+   (`note(_:about:branch:)`), never from the message's own words, so
+   no line has to name what the sidebar already names, and the
+   sidebar draws its own branch and directory names monospaced to
+   match.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
@@ -834,10 +839,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   failed step, since a check goes red the moment a step does while
   the job runs on. A run that hands over nothing is skipped too, so
   what the other runs have is still copied, and only every run
-  coming back empty is reported — in the app's own words, naming how
-  many jobs have failed and that their logs appear as each finishes,
-  never gh's "still in progress", which is neither what happened nor
-  anything to act on.
+  coming back empty is reported — in the app's own words, never gh's
+  "still in progress", and never a claim that GitHub has no logs: it
+  has them and streams them live on the web, so the message says
+  that the API gives a job's log up only once the job has finished
+  and links each failed job's page (the run's own address and the
+  job's id, from `--json url,jobs`).
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses
