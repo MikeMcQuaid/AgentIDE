@@ -341,7 +341,7 @@ extension PullRequestsModel {
             // Done means Push agrees; reporting success with the
             // stack still unsigned took a second press to notice.
             if let unsigned = stacking.unsignedBranches.first {
-                report("Restacked, but " + unsigned + "'s tip still reads unsigned; "
+                report("Restacked, but `" + unsigned + "`'s tip still reads unsigned; "
                     + "check the signing key and hit Rebase again")
                 return false
             }
@@ -355,7 +355,7 @@ extension PullRequestsModel {
             }
 
             recordFinished(.rebased, branch: actedBranch ?? worktree.branch)
-            note(verb + " " + moved.joined(separator: ", ") + ".")
+            note(verb + " " + Self.named(moved) + ".")
             Self.requestSidebarRefresh()
             return true
         } catch {
@@ -377,7 +377,7 @@ extension PullRequestsModel {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
             recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
-            note("Pushed " + pushed.joined(separator: ", ") + ".")
+            note("Pushed " + Self.named(pushed) + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

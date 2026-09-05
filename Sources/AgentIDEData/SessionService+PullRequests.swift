@@ -275,7 +275,9 @@ public extension SessionService {
             return report
         }
         guard await git.isDirty(worktreePath: worktree.path) == false else {
-            report.failures.append("\(worktree.repositoryName) has uncommitted changes, so it was left alone.")
+            report.failures.append(
+                "\(worktree.repositoryName) has uncommitted changes, so it was left alone.",
+            )
             return report
         }
 
@@ -295,9 +297,9 @@ public extension SessionService {
         if await git.currentBranch(worktreePath: worktree.path) != branch {
             do {
                 try await git.checkout(worktreePath: worktree.path, branch: branch)
-                report.notes.append("Checked out \(branch) in \(worktree.repositoryName).")
+                report.notes.append("Checked out `\(branch)` in \(worktree.repositoryName).")
             } catch {
-                report.failures.append("Checking out \(branch) failed: " + error.localizedDescription)
+                report.failures.append("Checking out `\(branch)` failed: " + error.localizedDescription)
                 return report
             }
         }
@@ -321,13 +323,13 @@ public extension SessionService {
         do {
             if counts.ahead == 0 {
                 try await git.resetHard(worktreePath: worktreePath, ref: upstream)
-                report.notes.append("Pulled \(branch) up to \(upstream).")
+                report.notes.append("Pulled `\(branch)` up to `\(upstream)`.")
             } else {
                 try await git.rebaseSigned(worktreePath: worktreePath, branch: branch, onto: upstream)
-                report.notes.append("Rebased \(counts.ahead) local commits onto \(upstream).")
+                report.notes.append("Rebased \(counts.ahead) local commits onto `\(upstream)`.")
             }
         } catch {
-            report.failures.append("Updating \(branch) failed: " + error.localizedDescription)
+            report.failures.append("Updating `\(branch)` failed: " + error.localizedDescription)
         }
     }
 
@@ -343,10 +345,10 @@ public extension SessionService {
         let deleted = merged.filter { remaining.contains($0) == false }
         if deleted.isEmpty == false {
             report.notes.append("Deleted merged \(deleted.count == 1 ? "branch" : "branches"): "
-                + deleted.joined(separator: ", ") + ".")
+                + deleted.lazy.map { "`" + $0 + "`" }.joined(separator: ", ") + ".")
         }
         for name in remaining {
-            report.failures.append("Deleting merged branch \(name) failed; it is still there.")
+            report.failures.append("Deleting merged branch `\(name)` failed; it is still there.")
         }
     }
 }

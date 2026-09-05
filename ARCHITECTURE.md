@@ -551,7 +551,10 @@ page resumes any past conversation into a fresh worktree.
    through to the review bar. Uncommitted hunks stay line by line,
    since their lines become fields on a click, and there Copy hunk
    is what takes several lines. The messages pane is one selectable
-   document the same way (`SelectableTextView` over the whole log).
+   document the same way (`SelectableTextView` over the whole log),
+   and every line in it reads the same: prose, with identifiers named
+   in backticks drawn monospaced (`MessageMarkup`) and the repository
+   a line belongs to in bold in front of it.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 

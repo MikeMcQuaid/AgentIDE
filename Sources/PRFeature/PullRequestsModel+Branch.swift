@@ -130,7 +130,7 @@ extension PullRequestsModel {
                     // is for.
                     _ = try await stacking.pushPublished(worktree)
                 } catch {
-                    report("Rebasing the branches above " + worktree.branch + " failed: "
+                    report("Rebasing the branches above `" + worktree.branch + "` failed: "
                         + error.localizedDescription)
                 }
             }
@@ -143,7 +143,7 @@ extension PullRequestsModel {
                 return false
             }
             recordFinished(onlySigns ? .signed : .rebased, branch: listedBranch ?? worktree.branch)
-            note("Rebased " + worktree.branch + " on " + target + " and signed it.")
+            note("Rebased `" + worktree.branch + "` on `" + target + "` and signed it.")
             Self.requestSidebarRefresh()
             return true
         } catch {

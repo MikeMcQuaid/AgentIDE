@@ -34,6 +34,11 @@ public final class ErrorLog {
         /// Whether the message is a failure; only failures count in
         /// the tab's badge and summon the tab.
         public let isError: Bool
+
+        /// The repository the work belonged to, when it belonged to
+        /// one: the pane draws its name in front in bold, the way
+        /// this app's own scripts label a line.
+        public let repository: String?
     }
 
     /// The one log the whole app reports into.
@@ -64,12 +69,12 @@ public final class ErrorLog {
     /// sidebar shows goes in front, since "Pushed" and "Rebased"
     /// read identically whichever repository they happened in.
     public func note(_ message: String, about repository: String) {
-        note(Self.prefixed(message, with: repository))
+        append(Self.prefixed(message, with: repository), isError: false, repository: repository)
     }
 
     /// A failure in one repository's work, named the same way.
     public func report(_ message: String, about repository: String) {
-        report(Self.prefixed(message, with: repository))
+        append(Self.prefixed(message, with: repository), isError: true, repository: repository)
     }
 
     /// Empties the log; the messages tab stays either way.
@@ -95,9 +100,15 @@ public final class ErrorLog {
         return repository + ": " + message
     }
 
-    private func append(_ message: String, isError: Bool) {
+    private func append(_ message: String, isError: Bool, repository: String? = nil) {
         nextID += 1
-        entries.append(Entry(id: nextID, date: Date(), message: message, isError: isError))
+        entries.append(Entry(
+            id: nextID,
+            date: Date(),
+            message: message,
+            isError: isError,
+            repository: message.hasPrefix((repository ?? "") + ": ") ? repository : nil,
+        ))
         if entries.count > Self.entryCap {
             entries.removeFirst(entries.count - Self.entryCap)
         }

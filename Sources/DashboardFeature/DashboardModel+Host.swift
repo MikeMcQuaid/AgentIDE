@@ -42,7 +42,7 @@ public extension DashboardModel {
                     path: item.worktree.path,
                 ),
             )
-            ErrorLog.shared.note("Checked out and pulled the default branch in \(item.worktree.path).")
+            ErrorLog.shared.note("Checked out and pulled the default branch in `\(item.worktree.path)`.")
             // The row says the new branch at once: a refresh reads
             // every repository and worktree first, which is seconds
             // of the row still claiming the branch just left.
@@ -61,7 +61,7 @@ public extension DashboardModel {
                 name: item.worktree.repositoryName,
                 path: item.worktree.path,
             ))
-            ErrorLog.shared.note("Fetched \(item.worktree.path).")
+            ErrorLog.shared.note("Fetched `\(item.worktree.path)`.")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -91,7 +91,7 @@ public extension DashboardModel {
     func stackBranch(named name: String, on item: WorktreeItem) async {
         do {
             try await service.stackBranch(named: name, on: item.worktree)
-            ErrorLog.shared.note("Stacked \(name) on \(item.worktree.branch).")
+            ErrorLog.shared.note("Stacked `\(name)` on `\(item.worktree.branch)`.")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -125,7 +125,7 @@ public extension DashboardModel {
     func switchBranch(_ branch: String, for item: WorktreeItem) async {
         do {
             try await service.switchBranch(branch, worktree: item.worktree)
-            ErrorLog.shared.note("Checked out " + branch + " in " + item.worktree.path + ".")
+            ErrorLog.shared.note("Checked out `" + branch + "` in `" + item.worktree.path + "`.")
             rename(item, to: branch)
             await refresh()
         } catch {

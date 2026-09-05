@@ -7,8 +7,20 @@ struct ErrorLogTextTests {
     @Test
     func `the log reads newest first with times in front`() throws {
         let entries = [
-            ErrorLog.Entry(id: 1, date: Date(timeIntervalSince1970: 0), message: "First note", isError: false),
-            ErrorLog.Entry(id: 2, date: Date(timeIntervalSince1970: 60), message: "Then a failure", isError: true),
+            ErrorLog.Entry(
+                id: 1,
+                date: Date(timeIntervalSince1970: 0),
+                message: "First note",
+                isError: false,
+                repository: nil,
+            ),
+            ErrorLog.Entry(
+                id: 2,
+                date: Date(timeIntervalSince1970: 60),
+                message: "Then a failure",
+                isError: true,
+                repository: nil,
+            ),
         ]
         let text = ErrorLogText.attributed(entries).string
         let first = text.range(of: "Then a failure")
@@ -20,7 +32,13 @@ struct ErrorLogTextTests {
     @Test
     func `web links in messages are live`() {
         let entries = [
-            ErrorLog.Entry(id: 1, date: .now, message: "See https://example.com/run for the log", isError: false),
+            ErrorLog.Entry(
+                id: 1,
+                date: .now,
+                message: "See https://example.com/run for the log",
+                isError: false,
+                repository: nil,
+            ),
         ]
         let text = ErrorLogText.attributed(entries)
         var found = false
@@ -30,5 +48,39 @@ struct ErrorLogTextTests {
             }
         }
         #expect(found)
+    }
+
+    @Test
+    func `an identifier is monospaced and its repository bold`() throws {
+        let entries = [
+            ErrorLog.Entry(
+                id: 1,
+                date: .now,
+                message: "brew: Pushed `non-capturing-regexp-groups`.",
+                isError: false,
+                repository: "brew",
+            ),
+        ]
+        let text = ErrorLogText.attributed(entries)
+
+        // The backticks are markup, not text.
+        #expect(text.string.contains("`") == false)
+        #expect(text.string.contains("brew: Pushed non-capturing-regexp-groups."))
+
+        let branch = try #require(text.string.range(of: "non-capturing-regexp-groups"))
+        let monospaced = text.attribute(
+            .font,
+            at: NSRange(branch, in: text.string).location,
+            effectiveRange: nil,
+        ) as? NSFont
+        #expect(monospaced?.fontName.contains("Mono") == true)
+
+        let name = try #require(text.string.range(of: "brew"))
+        let bold = text.attribute(
+            .font,
+            at: NSRange(name, in: text.string).location,
+            effectiveRange: nil,
+        ) as? NSFont
+        #expect(bold?.fontDescriptor.symbolicTraits.contains(.bold) == true)
     }
 }

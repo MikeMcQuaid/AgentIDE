@@ -55,7 +55,7 @@ struct CommandError: Error, LocalizedError {
     /// A readable failure description.
     var errorDescription: String? {
         let detail = result.standardError.isEmpty ? result.standardOutput : result.standardError
-        return "\(command) failed (\(result.status)): \(detail)"
+        return "`\(command)` failed (\(result.status)): \(detail)"
     }
 }
 

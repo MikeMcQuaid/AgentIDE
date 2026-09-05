@@ -78,7 +78,7 @@ extension PullRequestsModel {
         let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
+        note("Copied \(threads.count) unresolved conversations from `#\(summary.number)`.")
     }
 
     /// Jumps to the one failing check, or to the checks page when
@@ -210,12 +210,25 @@ extension PullRequestsModel {
     /// What a push is reported as, which depends on where it went:
     /// a branch that went to a fork is worth saying so about, since
     /// it is not in the repository being looked at.
-    static func describe(push destination: PushDestination, branch: String) -> String {
-        guard case let .fork(owner) = destination else {
-            return "Pushed " + branch + "."
-        }
+    /// A list of branches as the pane says them: each in the
+    /// backticks that draw it monospaced.
+    static func named(_ branches: [String]) -> String {
+        branches.lazy.map { "`" + $0 + "`" }.joined(separator: ", ")
+    }
 
-        return "Pushed " + branch + " to " + owner + "'s fork, since this repository is not yours to push to."
+    static func describe(push destination: PushDestination, branch: String) -> String {
+        switch destination {
+        case .origin:
+            "Pushed `" + branch + "`."
+
+        case let .fork(owner):
+            "Pushed `" + branch + "` to `" + owner
+                + "`'s fork, since this repository is not yours to push to."
+
+        case let .contributorFork(owner, _):
+            "Pushed `" + branch + "` to `" + owner
+                + "`'s fork, which this pull request comes from."
+        }
     }
 
     /// Rebases onto origin with signed commits; false means the

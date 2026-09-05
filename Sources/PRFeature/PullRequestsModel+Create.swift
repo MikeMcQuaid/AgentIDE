@@ -18,7 +18,7 @@ extension PullRequestsModel {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
             recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
-            note("Pushed " + pushed.joined(separator: ", ") + ".")
+            note("Pushed " + Self.named(pushed) + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()
@@ -115,8 +115,8 @@ extension PullRequestsModel {
             rebaseNeed = await fetchRebaseNeed(worktree)
             setStatus(
                 "Not pushed: the tip commit is unsigned.",
-                detail: "The tip commit of " + worktree.branch
-                    + " is not GPG signed; Rebase on origin signs the branch, then Push.",
+                detail: "The tip commit of `" + worktree.branch
+                    + "` is not GPG signed; Rebase on origin signs the branch, then Push.",
             )
             return true
         }

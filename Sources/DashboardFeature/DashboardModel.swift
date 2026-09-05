@@ -262,7 +262,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetch(repository: repository)
-            ErrorLog.shared.note("Fetched \(repository.name).")
+            ErrorLog.shared.note("Fetched `\(repository.name)`.")
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -278,7 +278,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             let ref = try await service.fetchAndReset(repository: repository)
-            ErrorLog.shared.note("Reset the checkout to " + ref + ".", about: repository.name)
+            ErrorLog.shared.note("Reset the checkout to `" + ref + "`.", about: repository.name)
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
