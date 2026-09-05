@@ -51,7 +51,19 @@ struct DiffHunkTextView: NSViewRepresentable {
     let onToggleLine: (Int) -> Void
 
     func makeNSView(context _: Context) -> HunkTextView {
-        let view = HunkTextView(frame: .zero)
+        // A hand-built TextKit 1 stack, the same one the measurer
+        // lays out in. `NSTextView(frame:)` builds a TextKit 2 view
+        // whose `layoutManager` (which the gutter's clicks ask for)
+        // silently downgrades it to TextKit 1 later, and the two
+        // engines do not always break the same text into the same
+        // lines: the height measured here was then not the height
+        // drawn, and hunks painted over one another.
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        layout.addTextContainer(container)
+        let view = HunkTextView(frame: .zero, textContainer: container)
         view.isEditable = false
         view.isSelectable = true
         view.drawsBackground = false
@@ -61,6 +73,11 @@ struct DiffHunkTextView: NSViewRepresentable {
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
         view.autoresizingMask = []
+        // Whatever the measurement says, a hunk may never draw
+        // outside its own frame: unclipped, one wrong height took
+        // the file below it with it.
+        view.wantsLayer = true
+        view.layer?.masksToBounds = true
         return view
     }
 

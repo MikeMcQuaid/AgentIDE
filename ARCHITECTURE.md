@@ -625,6 +625,61 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **A draft's one action is to stop being one.** GitHub refuses to
+  merge a draft and refuses automerge on one too, so the merge
+  button reads "Mark ready" while a pull request is a draft and runs
+  `gh pr ready`; the next click is the Merge, Queue or Automerge it
+  would always have been. Nothing is cleaned up behind it, since
+  nothing merged.
+- **A pull request can open as a draft**, chosen by the icon beside
+  Open PR: GitHub's two glyphs for the state a click is about to
+  create, rather than a checkbox saying the same thing in words.
+  It sits in the footer's own row, with the actions, since that is
+  where the button it changes is. The choice
+  is kept with the rest of the form's draft, so leaving the tab and
+  coming back finds the same intention, and the row the creation
+  paints carries the draft glyph before any fetch has been near it.
+- **Nothing is stat'd that macOS would ask permission for.** A
+  directory of your own can be anywhere: inside Documents, on a
+  network volume, on a disk that is not mounted. macOS asks the user
+  before a non-sandboxed app reads any of those and asks again the
+  next time, so only the selected one is read from disk; every other
+  row paints from what it last said (`HostFactsCache`). The
+  home-directory sweep a repository deletion runs skips the guarded
+  folders by name rather than reading and discarding them. There is
+  no entitlement that declines these prompts in advance: the
+  `NS*UsageDescription` strings in `project.yml` decide only what a
+  prompt says, so the app's answer is to not look.
+- **Amend adds to the commit before rather than making a new one.**
+  On the uncommitted scope it folds the ticked files into the last
+  commit and keeps its message, since the editor above the button is
+  drafting the *next* commit's message, not rewriting this one's; on
+  the scopes that show a commit it goes on doing what it always did
+  and rewrites that message. The fold names its paths on the amend
+  itself, so the last commit's tree plus those paths is what lands
+  and anything else staged or uncommitted stays where it was. A
+  commit already pushed needs pushing again, which the lease covers.
+- **A commit can take some of the files, not all of them.** Every
+  uncommitted file's row carries a tick, all ticked to begin with, and
+  the button says what a click will carry ("Commit 3 of 7"). The model
+  holds what is *unticked*, so a file the agent writes while the pane
+  is open joins the commit rather than being silently dropped. A
+  selective commit stages the named paths and names them again on the
+  commit, so whatever else was staged stays staged; ticking everything
+  goes back to `add -A`, since a commit of everything must sweep up
+  what the diff never listed. The drafted message is used when there
+  is one, and the menu command's own wording when there is not.
+- **A hunk lays out in the engine that measured it.** The review's
+  hunks are measured off screen (`HunkMeasurer`) because laying out
+  a view's own container resizes it, and a measurement that resizes
+  what it measures loops until AppKit kills the window. Both sides
+  must therefore be TextKit 1: `NSTextView(frame:)` builds a
+  TextKit 2 view that downgrades itself the first time anything asks
+  for its `layoutManager`, and the two engines do not always break
+  the same text into the same lines, so the height measured was not
+  the height drawn and hunks painted over one another. Each hunk
+  also clips to its own frame, so a wrong height can never take the
+  file below it with it.
 - **The editor reads like a code editor**: page guides at columns 80
   and 118 drawn under the text (`EditingTextView.drawBackground`),
   and a change bar down the gutter's inner edge for every line with

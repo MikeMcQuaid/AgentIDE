@@ -69,6 +69,9 @@ final class ReviewModel {
     /// Whether the diff shows uncommitted changes; rejection amends committed ones only.
     private(set) var showsUncommitted = false
 
+    /// See `ReviewModel+Committing`.
+    var excludedFromCommit: Set<String> = []
+
     /// Set only by the find extension, which recounts them.
     var findTargets: [FindTarget] = []
     var currentFind = 0
@@ -124,24 +127,21 @@ final class ReviewModel {
         didSet { remember(scope) }
     }
 
-    /// Whether what is shown can only be read: a branch this
-    /// worktree does not hold, or a commit further back than the
-    /// last one. Either way rejecting lines or amending would have
-    /// to rewrite history that is not the tip in front of you.
-    var isReadOnly: Bool {
-        stackTarget != nil || commitTarget != nil
+    // Whether what is shown can only be read: a branch this
+    // worktree does not hold, or a commit further back than the
+    // last one. Either way rejecting lines or amending would have
+    // to rewrite history that is not the tip in front of you.
+
+    /// Whether the commit message differs from the commit's actual
+    /// message, so Amend only lights up with something to amend.
+    var messageEdited: Bool {
+        commitMessage != originalMessage
     }
 
     /// The find bar's query; the hunks holding a match and which of
     /// them is showing are derived from it.
     var findQuery = "" {
         didSet { updateFindTargets() }
-    }
-
-    /// Whether the commit message differs from the commit's actual
-    /// message, so Amend only lights up with something to amend.
-    var messageEdited: Bool {
-        commitMessage != originalMessage
     }
 
     /// Flips one conversation's resolved state on GitHub, then

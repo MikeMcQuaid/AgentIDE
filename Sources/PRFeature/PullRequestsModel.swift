@@ -66,8 +66,14 @@ final class PullRequestsModel {
             }
             return answer?.threads ?? []
         }
-        performCreate = { worktree, title, body, labels in
-            try await service.createPullRequest(worktree: worktree, title: title, body: body, labels: labels)
+        performCreate = { worktree, title, body, labels, isDraft in
+            try await service.createPullRequest(
+                worktree: worktree,
+                title: title,
+                body: body,
+                labels: labels,
+                isDraft: isDraft,
+            )
         }
         fetchLabels = {
             await github.labels(repositoryPath: repository.path)
@@ -121,7 +127,9 @@ final class PullRequestsModel {
         }
         performMergeChange = { summary in
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
-            if summary.hasAutomerge {
+            if summary.isDraft {
+                try await github.markReady(repositoryPath: repository.path, number: summary.number)
+            } else if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
             } else if Self.isReadyToMerge(summary) {
                 try await github.merge(repositoryPath: repository.path, number: summary.number)
@@ -273,7 +281,7 @@ final class PullRequestsModel {
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
     var fetchThreads: (Int) async -> [ReviewThread]
-    var performCreate: (Worktree, String, String, [String]) async throws -> String
+    var performCreate: (Worktree, String, String, [String], Bool) async throws -> String
 
     /// The repository's labels, read once per model when the form
     /// first needs them.
@@ -359,6 +367,11 @@ final class PullRequestsModel {
         didSet { saveDraft() }
     }
 
+    /// See `PullRequestsModel+Create`: whether it opens as a draft.
+    var prIsDraft = false {
+        didSet { saveDraft() }
+    }
+
     /// The repository's worktree items, refreshed by the view as the
     /// dashboard polls. The pushed mark outlives a refresh: it is
     /// the branch's tip moving that clears it, read with the other
@@ -370,21 +383,6 @@ final class PullRequestsModel {
             // into the shared cache since these rows were painted.
             repaintFromCache()
             reverifyBranchFacts(from: oldValue)
-        }
-    }
-
-    /// Takes the cache's summary for the selected pull request and
-    /// every listed row, so what the sidebar just learnt shows here
-    /// too; the cache is written by whichever side fetched last.
-    func repaintFromCache() {
-        if let selected,
-           let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
-           cached != selected
-        {
-            self.selected = cached
-        }
-        summaries = summaries.map { row in
-            pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row
         }
     }
 }

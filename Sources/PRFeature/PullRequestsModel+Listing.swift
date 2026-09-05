@@ -3,6 +3,21 @@ import AgentIDEDomain
 /// What the tab is listing and how it asks for it. Split from the
 /// model for length.
 extension PullRequestsModel {
+    /// Takes the cache's summary for the selected pull request and
+    /// every listed row, so what the sidebar just learnt shows here
+    /// too; the cache is written by whichever side fetched last.
+    func repaintFromCache() {
+        if let selected,
+           let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
+           cached != selected
+        {
+            self.selected = cached
+        }
+        summaries = summaries.map { row in
+            pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row
+        }
+    }
+
     /// The branch the tab lists and compares against: the checked
     /// out one when known, the worktree's recorded one otherwise.
     var listedBranch: String? {

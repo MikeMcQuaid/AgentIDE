@@ -144,6 +144,11 @@ public struct SessionService: Sendable {
     /// untouched.
     let overwriteTips: OverwriteTips = .init()
 
+    /// See `HostFactsCache`; a default so the public init is
+    /// untouched, and a class so every copy of the service shares
+    /// what each directory of your own last said.
+    let hostFacts: HostFactsCache = .init()
+
     /// See `PaneLoads`; a default so the public init is untouched,
     /// and a class so every copy of the service shares one set of
     /// pane shells and busy spells.

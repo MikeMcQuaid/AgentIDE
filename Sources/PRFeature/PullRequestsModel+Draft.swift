@@ -99,6 +99,7 @@ extension PullRequestsModel {
                 body: prBody,
                 template: prTemplate,
                 labels: prLabels,
+                isDraft: prIsDraft,
             )
         }
     }
@@ -127,6 +128,7 @@ extension PullRequestsModel {
         if prLabels.isEmpty {
             prLabels = draft.labels
         }
+        prIsDraft = draft.isDraft
         loadingDraft = false
         // What was already typed may be newer than the draft, so the
         // draft is brought back up to date rather than left behind.

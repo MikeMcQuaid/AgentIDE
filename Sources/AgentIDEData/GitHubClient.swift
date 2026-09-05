@@ -150,6 +150,7 @@ public struct GitHubClient: Sendable {
         let arguments = ["pr", "create", "--title", request.title, "--body-file", bodyFile]
             + ["--head", head, "--base", base]
             + request.labels.flatMap { ["--label", $0] }
+            + (request.isDraft ? ["--draft"] : [])
         return try await gh(arguments, in: worktreePath)
             .standardOutput
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -165,6 +166,13 @@ public struct GitHubClient: Sendable {
     /// leaves the queue.
     public func disableAutomerge(repositoryPath: String, number: Int) async throws {
         try await gh(["pr", "merge", String(number), "--disable-auto"], in: repositoryPath)
+    }
+
+    /// Takes a pull request out of draft. GitHub refuses to merge
+    /// or automerge a draft at all, so this is the step that has to
+    /// come first rather than an error to report.
+    public func markReady(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "ready", String(number)], in: repositoryPath)
     }
 
     /// Merges a pull request immediately.
@@ -370,31 +378,4 @@ public struct GitHubClient: Sendable {
         }
         return "PENDING"
     }
-}
-
-// MARK: - NewPullRequest
-
-/// What a pull request opens with, apart from where: the form's
-/// title, its body with the template appended, and the labels
-/// picked from the repository's own.
-public struct NewPullRequest: Sendable {
-    // MARK: Lifecycle
-
-    /// Creates the request.
-    public init(title: String, body: String, labels: [String]) {
-        self.title = title
-        self.body = body
-        self.labels = labels
-    }
-
-    // MARK: Public
-
-    /// The title.
-    public let title: String
-
-    /// The body.
-    public let body: String
-
-    /// The labels to attach.
-    public let labels: [String]
 }

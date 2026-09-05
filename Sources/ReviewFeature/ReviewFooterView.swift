@@ -15,6 +15,9 @@ struct ReviewFooterView: View {
     /// Commits everything the agent left uncommitted.
     let onCommit: @MainActor () async -> Void
 
+    /// Adds it to the last commit instead.
+    let onAmend: @MainActor () async -> Void
+
     /// Whether Commit applies: the uncommitted scope with changes.
     let canCommit: Bool
 
@@ -72,6 +75,52 @@ struct ReviewFooterView: View {
     private var messageHeight = 150.0
     @State private var messageDragBase: Double?
 
+    /// Amend folds the ticked files into the last commit on the
+    /// uncommitted scope, and rewrites a commit's message on the
+    /// scopes that show one.
+    private var canAmend: Bool {
+        guard model.showsUncommitted else {
+            return model.messageEdited
+        }
+
+        return canCommit && model.committingCount > 0
+    }
+
+    private var amendHelp: String {
+        guard model.showsUncommitted else {
+            return "Rewrite the last commit's message; dimmed until the text differs from it"
+        }
+        guard model.committingCount > 0 else {
+            return "Tick the files to add to the last commit"
+        }
+
+        let count = model.pathsToCommit.isEmpty ? "everything uncommitted" : String(model.committingCount) + " files"
+        return "Add " + count + " to the last commit, keeping its message. "
+            + "A commit already pushed needs Push again, which leases the overwrite"
+    }
+
+    /// The button's own words: everything, or the count that is
+    /// ticked, so what a click is about to commit is on the button.
+    private var commitTitle: String {
+        let committing = model.committingCount
+        guard committing < model.files.count else {
+            return "Commit"
+        }
+
+        return "Commit " + String(committing) + " of " + String(model.files.count)
+    }
+
+    private var commitHelp: String {
+        guard model.committingCount > 0 else {
+            return "Tick the files to commit; every file is ticked to begin with"
+        }
+        guard model.pathsToCommit.isEmpty else {
+            return "Commit the ticked files, leaving the rest uncommitted"
+        }
+
+        return "Commit everything uncommitted; enabled on the uncommitted scope with changes"
+    }
+
     private var subjectBinding: Binding<String> {
         Binding(
             get: { Self.subject(of: model.commitMessage) },
@@ -123,19 +172,20 @@ struct ReviewFooterView: View {
                 + "only fills an empty message",
         )
         BusyButton(
-            "Commit",
+            commitTitle,
             busy: "Committing",
-            disabled: canCommit == false,
+            disabled: canCommit == false || model.committingCount == 0,
             keepsTitle: true,
             action: onCommit,
         )
-        .hoverHelp("Commit everything uncommitted; enabled on the uncommitted scope with changes")
+        .hoverHelp(commitHelp)
         BusyButton(
             "Amend",
             busy: "Amending",
-            disabled: model.showsUncommitted || model.messageEdited == false,
-        ) { await model.saveCommitMessage() }
-            .hoverHelp("Rewrite the last commit's message; dimmed until the text differs from it")
+            disabled: canAmend == false,
+            action: amend,
+        )
+        .hoverHelp(amendHelp)
     }
 
     /// A slim grab area over the divider: dragging resizes the
@@ -273,5 +323,15 @@ struct ReviewFooterView: View {
             .frame(width: 1)
             .offset(x: inset + width * CGFloat(limit))
             .allowsHitTesting(false)
+    }
+
+    /// The uncommitted scope folds files in; the scopes that show a
+    /// commit rewrite its message.
+    private func amend() async {
+        if model.showsUncommitted {
+            await onAmend()
+        } else {
+            await model.saveCommitMessage()
+        }
     }
 }

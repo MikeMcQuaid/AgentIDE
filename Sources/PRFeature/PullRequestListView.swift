@@ -160,6 +160,7 @@ struct PullRequestFooterView: View {
             }
             Spacer()
             if model.needsCreateForm {
+                draftToggle
                 openButton
             }
             if model.isStackedEntry {
@@ -176,6 +177,28 @@ struct PullRequestFooterView: View {
         }
         .padding(Self.padding)
         .background(.bar)
+    }
+
+    /// Whether the pull request opens as a draft, beside the button
+    /// that opens it: GitHub's own two glyphs for the state a click
+    /// is about to create, in the colour the row will carry, rather
+    /// than a checkbox saying the same thing in words.
+    var draftToggle: some View {
+        Button {
+            model.prIsDraft.toggle()
+        } label: {
+            Octicon(
+                ChecksStyle.stateOcticonName(state: "OPEN", isDraft: model.prIsDraft),
+                colour: ChecksStyle.stateColour(state: "OPEN", isDraft: model.prIsDraft),
+            )
+            .accessibilityLabel(model.prIsDraft ? "Opens as a draft" : "Opens ready for review")
+        }
+        .buttonStyle(.glass)
+        .hoverHelp(
+            model.prIsDraft
+                ? "Opens as a draft: work to read rather than work to merge. Click to open it ready for review"
+                : "Opens ready for review. Click to open it as a draft instead",
+        )
     }
 
     var rebaseButton: some View {

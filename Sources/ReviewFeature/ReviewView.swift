@@ -81,7 +81,8 @@ public struct ReviewView: View {
             diffList
             ReviewFooterView(
                 model: model,
-                onCommit: { await commitOutstanding() },
+                onCommit: { await commitOutstanding(model: model) },
+                onAmend: { await amendOutstanding(model: model) },
                 canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
             )
         }
@@ -107,8 +108,16 @@ public struct ReviewView: View {
         .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
         // The menu bar's Commit Outstanding lands here through the
         // storage bus.
-        .onChange(of: commitRequest) { Task { await commitOutstanding() } }
+        .onChange(of: commitRequest) { Task { await commitOutstanding(model: model) } }
     }
+
+    // MARK: Internal
+
+    /// Internal, since the commit extension file reads them.
+    let worktreePath: String
+
+    /// Internal for the same reason as `worktreePath`.
+    let service: SessionService
 
     // MARK: Private
 
@@ -145,9 +154,8 @@ public struct ReviewView: View {
     @AppStorage("reviewFindPreviousRequest")
     private var findPreviousRequest = 0
 
-    private let worktreePath: String
     private let worktree: Worktree
-    private let service: SessionService
+
     private let makeModel: () -> ReviewModel
 
     /// Icon-only controls in two grouped capsules, every one
@@ -308,14 +316,5 @@ public struct ReviewView: View {
     private func closeFind() {
         showsFind = false
         model.findQuery = ""
-    }
-
-    private func commitOutstanding() async {
-        do {
-            try await service.commitOutstanding(worktreePath: worktreePath)
-            await model.reload()
-        } catch {
-            model.report(error.localizedDescription)
-        }
     }
 }

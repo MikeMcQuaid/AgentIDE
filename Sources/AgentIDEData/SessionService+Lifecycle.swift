@@ -78,8 +78,13 @@ public extension SessionService {
             try await removeAsSandboxUser(path: repository.path)
         }
         try? FileManager.default.removeItem(atPath: worktreeContainer(repository: repository))
+        // The symlink this app made sits at the top of the home
+        // directory and nowhere else. Guarded folders are skipped by
+        // name rather than read and discarded: reading one is what
+        // asks the user for permission to see their Documents.
         let home = FileManager.default.homeDirectoryForCurrentUser
-        for entry in (try? FileManager.default.contentsOfDirectory(atPath: home.path)) ?? [] {
+        let entries = (try? FileManager.default.contentsOfDirectory(atPath: home.path)) ?? []
+        for entry in entries where Self.guardedFolders.contains(entry) == false {
             let link = home.appending(path: entry).path
             if (try? FileManager.default.destinationOfSymbolicLink(atPath: link)) == repository.path {
                 try? FileManager.default.removeItem(atPath: link)

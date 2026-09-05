@@ -30,6 +30,40 @@ struct ReviewModelTests {
     // MARK: Internal
 
     @Test
+    func `unticking every file is not the same as ticking them all`() async throws {
+        let path = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-ticks-" + UUID().uuidString, isDirectory: true)
+            .path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+        try "a\n".write(toFile: path + "/file.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+        try await runGit(["commit", "-q", "-m", "Add file"], in: path)
+        try "b\n".write(toFile: path + "/file.txt", atomically: true, encoding: .utf8)
+        let model = ReviewModel(
+            worktreePath: path,
+            repositoryName: "repo",
+            git: GitClient(runner: FoundationProcessRunner()),
+        )
+        model.scope = .uncommitted
+        await model.reload()
+        let file = try #require(model.files.first)
+
+        // Everything ticked: no paths, which says the whole worktree.
+        #expect(model.hasSomethingToCommit)
+        #expect(model.pathsToCommit.isEmpty)
+
+        // Nothing ticked empties the paths too, and that must never
+        // read as the whole worktree: the menu bar's own Commit does
+        // not ask the button whether it is dimmed.
+        model.setCommitting(false, path: file.path)
+        #expect(model.pathsToCommit.isEmpty)
+        #expect(model.hasSomethingToCommit == false)
+        #expect(model.committingCount == 0)
+    }
+
+    @Test
     func `a working line is replaced by the typed lines and the diff follows`() async throws {
         let path = FileManager.default
             .temporaryDirectory

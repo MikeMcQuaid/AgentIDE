@@ -131,9 +131,11 @@ struct PullRequestsModelTests {
         }
         var created: (title: String, body: String)?
         var createdLabels = [String]()
-        model.performCreate = { _, title, body, labels in
+        var createdAsDraft = true
+        model.performCreate = { _, title, body, labels, isDraft in
             created = (title, body)
             createdLabels = labels
+            createdAsDraft = isDraft
             return "https://example.invalid/pull/1"
         }
         model.prTitle = "A change"
@@ -146,6 +148,9 @@ struct PullRequestsModelTests {
         #expect(created?.title == "A change")
         #expect(created?.body == "Why it changed.\n\n- [ ] Checked")
         #expect(createdLabels == ["bug", "ci"])
+        // Ready for review unless the form's own toggle says
+        // otherwise; seeded true so the call is what clears it.
+        #expect(createdAsDraft == false)
         #expect(model.prTitle.isEmpty && model.prLabels.isEmpty)
 
         // Unpushed commits dim Open PR instead of pushing for it.

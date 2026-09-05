@@ -27,4 +27,35 @@ extension PullRequestsModelTests {
         await model.performMergeAction()
         #expect(cleaned == false)
     }
+
+    @Test
+    func `a draft is taken out of draft rather than merged`() async {
+        let draft = PullRequestSummary(
+            number: 45,
+            title: "Still a draft",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+            isDraft: true,
+        )
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var cleaned = false
+        model.performPostMergeCleanup = { _, _ in cleaned = true }
+        model.selected = draft
+
+        // Everything else about it says merge, and GitHub would
+        // refuse both that and automerge: "Pull Request is still a
+        // draft". The button says the step that has to come first.
+        #expect(model.mergeActionTitle == "Mark ready")
+        #expect(model.mergeActionBusyTitle == "Marking ready")
+        #expect(PullRequestsModel.isReadyToMerge(draft) == false)
+
+        await model.performMergeAction()
+        // Nothing merged, so nothing is cleaned up behind it.
+        #expect(cleaned == false)
+    }
 }
