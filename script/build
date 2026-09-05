@@ -4,17 +4,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# A release workflow creates its local version tag before building, so
-# a release names itself. Every other build takes the most recent tag
-# behind it and says which release it continues, told apart by the
-# build number below; `0.0.0` is what a repository with no tags at all
-# gets, which is what the release workflow reserves it for.
-version="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-version="${version:-0.0.0}"
-if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-  echo "Version tag must be bare MAJOR.MINOR.PATCH: ${version}" >&2
-  exit 1
-fi
+# See `script/version`, which decides both of these and writes the
+# xcconfig the generated project includes, so a build started in Xcode
+# is versioned the same way this one is.
+{
+  read -r version
+  read -r BUILD_NUMBER
+} < <(script/version)
+script/version --xcconfig .build/version.xcconfig
 
 [[ -d AgentIDE.xcodeproj ]] || script/bootstrap
 
@@ -42,13 +39,6 @@ ARGS=(
   -jobs "${JOBS}"
 )
 
-# The build number counts the default branch's commits, so numbers are
-# comparable across feature branches.
-BUILD_NUMBER="$(
-  git rev-list --count origin/main 2>/dev/null ||
-    git rev-list --count main 2>/dev/null ||
-    git rev-list --count HEAD
-)"
 ARGS+=("CURRENT_PROJECT_VERSION=${BUILD_NUMBER}" "MARKETING_VERSION=${version}")
 ACTIONS=(build)
 

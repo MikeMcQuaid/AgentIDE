@@ -32,14 +32,19 @@ targets:
         product: TerminalUI
       - package: AgentIDEPackage
         product: AgentIDEData
+    # The version and build number come from git through
+    # `script/version`, which writes this before the project is
+    # generated and before every scripted build; a build started in
+    # Xcode reads the same file, so it is versioned the same way.
+    configFiles:
+      Debug: .build/version.xcconfig
+      Release: .build/version.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
         PRODUCT_NAME: AgentIDE
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: "0.0.0"
-        CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         # macOS has no way to decline these prompts in advance: a

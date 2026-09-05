@@ -1001,6 +1001,13 @@ on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
 Three scripts turn a checkout into the artefact a release ships, split
 so that only the last needs credentials:
 
+- `script/version` decides the version and the build number, and is the
+  only thing that does. It prints them for `script/build` and writes
+  them as `.build/version.xcconfig`, which the generated project takes
+  as its base configuration, so a build started in Xcode is versioned
+  exactly as a scripted one; `script/bootstrap` writes it before
+  generating the project, and the file is rewritten only when its
+  contents change, so Xcode does not rebuild the world for it.
 - `script/build` takes the most recent tag behind the current commit
   (`git describe --tags --abbrev=0`), validates it as three
   period-separated integers with no leading zeroes and passes it as
