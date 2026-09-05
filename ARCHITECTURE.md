@@ -807,7 +807,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   short of it says Automerge and runs `gh pr merge --auto`, which is
   what GitHub's own refusal asks for. Judging from checks and
   mergeability alone offered Merge on a branch whose policy still
-  wanted a review, and `gh` refused it.
+  wanted a review, and `gh` refused it. A repository with a merge
+  queue has no automerge to ask for: `enablePullRequestAutoMerge`
+  answers that the queue sets the strategy, and that automerge is
+  unsupported for a stacked pull request. Its button says Queue
+  throughout and dims until the pull request is ready.
 - **Last mile buttons**: copy unresolved review threads grouped per
   file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query

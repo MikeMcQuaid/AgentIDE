@@ -170,13 +170,15 @@ struct PullRequestFooterView: View {
             if model.isStackedEntry {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
-                BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
+                BusyButton(
+                    mergeTitle,
+                    busy: model.mergeActionBusyTitle,
+                    prominent: true,
+                    disabled: model.canMergeAction == false,
+                ) {
                     await model.performMergeAction()
                 }
-                .hoverHelp(
-                    "The one merge action for the open conversation: its label names exactly "
-                        + "what a click does now, and a second click cancels automerge or queueing",
-                )
+                .hoverHelp(model.mergeActionHelp)
             }
         }
         .padding(Self.padding)

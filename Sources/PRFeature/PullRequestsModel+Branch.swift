@@ -171,7 +171,36 @@ extension PullRequestsModel {
         if Self.isReadyToMerge(selected) {
             return hasMergeQueue ? "Queue" : "Merge"
         }
-        return "Automerge"
+        // GitHub refuses automerge where a merge queue sets the
+        // branch's strategy, and refuses it on a stacked pull
+        // request: offering it there only ever ended in that
+        // refusal, so the queue's own button waits instead.
+        return hasMergeQueue ? "Queue" : "Automerge"
+    }
+
+    /// Whether the merge action can run as things stand. Only a
+    /// queue's button waits: everywhere else the label already
+    /// names something a click can do now, automerge included.
+    var canMergeAction: Bool {
+        guard let selected, hasMergeQueue, selected.isDraft == false,
+              selected.hasAutomerge == false
+        else {
+            return true
+        }
+
+        return Self.isReadyToMerge(selected)
+    }
+
+    /// Why the merge action is in the state it is in.
+    var mergeActionHelp: String {
+        guard canMergeAction else {
+            return "This repository's merge queue sets the merge strategy, so there is no "
+                + "automerge to ask for: the queue takes it once its checks have passed and "
+                + "the reviews it needs are in"
+        }
+
+        return "The one merge action for the open conversation: its label names exactly "
+            + "what a click does now, and a second click cancels automerge or queueing"
     }
 
     /// The present-tense form while the merge action runs.
