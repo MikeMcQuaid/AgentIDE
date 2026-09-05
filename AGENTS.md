@@ -131,6 +131,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   a bar sliding in, a page fading over a pane. Nothing decorative,
   nothing slower, and never on a surface that is mid-drag or holds
   a live terminal.
+- One typography per kind of text: code and terminals use
+  `CodeStyle` (the face and size Settings owns), a name git owns (a
+  branch, a ref, a worktree path) uses `NameStyle` wherever it is
+  shown, and everything else is the system font.
 - Semantic AppKit colours only in UI chrome: selection uses the
   system selection colours and greys out when the window is not
   key, text surfaces use `textColor` over `textBackgroundColor`.

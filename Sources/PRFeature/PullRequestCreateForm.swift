@@ -15,11 +15,7 @@ struct PullRequestCreateForm: View {
             Text("No open pull request for this branch")
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let below = model.unpushedBelow {
-                Text("Waiting on `" + below + "` below it to be pushed and opened first")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            waitingLine
             HStack(spacing: Self.spacing) {
                 TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
                     .textFieldStyle(.plain)
@@ -197,6 +193,19 @@ struct PullRequestCreateForm: View {
 
     /// Whether a field holds anything worth keeping; whitespace
     /// alone is as good as empty, and generating replaces it.
+    /// What this branch waits on, when it waits on one below it.
+    /// The name is drawn monospaced rather than fenced: backticks
+    /// are markup where a message is parsed, and two stray
+    /// characters where it is not.
+    @ViewBuilder private var waitingLine: some View {
+        if let below = model.unpushedBelow {
+            (Text("Waiting on ") + Text(below).font(NameStyle.small)
+                + Text(" below it to be pushed and opened first"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private static func hasText(_ text: String) -> Bool {
         PullRequestsModel.isBlank(text) == false
     }

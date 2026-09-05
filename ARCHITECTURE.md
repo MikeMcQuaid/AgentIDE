@@ -557,9 +557,13 @@ page resumes any past conversation into a fresh worktree.
    any other identifier the line names in backticks drawn the same
    way (`MessageMarkup`). Both names come from the caller
    (`note(_:about:branch:)`), never from the message's own words, so
-   no line has to name what the sidebar already names, and the
-   sidebar draws its own branch and directory names monospaced to
-   match.
+   no line has to name what the sidebar already names. Every surface
+   draws such a name the same way (`NameStyle`, the system
+   monospaced design a size down from the prose beside it, since a
+   monospaced face reads larger at the same size): the sidebar's
+   rows, a pull request's header, the stack and branch popovers.
+   That is chrome naming a thing; code's own typography is
+   `CodeStyle`, whose face and size Settings owns.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 

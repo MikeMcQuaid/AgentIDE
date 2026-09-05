@@ -17,8 +17,11 @@ struct BranchSwitchPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("Switch " + item.worktree.branch + " to")
-                .font(.subheadline.weight(.semibold))
+            HStack(spacing: Self.spacing) {
+                Text("Switch").font(.subheadline.weight(.semibold))
+                Text(item.worktree.branch).font(NameStyle.font)
+                Text("to").font(.subheadline.weight(.semibold))
+            }
             if let branches {
                 if branches.isEmpty {
                     Text("Every other local branch is checked out elsewhere.")
@@ -63,6 +66,7 @@ struct BranchSwitchPopover: View {
                         }
                     } label: {
                         Label(branch, image: "octicon-git-branch")
+                            .font(NameStyle.font)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }
