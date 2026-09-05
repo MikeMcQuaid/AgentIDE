@@ -49,6 +49,31 @@ public extension SessionService {
         }
     }
 
+    /// What identifies the answer a listing would give: the CLI's
+    /// own version, and where the list comes from a cache the server
+    /// rewrites, that file's modification time as well. Keyed on the
+    /// version alone, a model added server-side stayed missing from
+    /// the picker until the CLI itself was upgraded.
+    func modelListingStamp(for agent: AgentKind) async -> String? {
+        let version = await probeVersion(of: agent)
+        guard let file = runner(for: agent).modelCacheFile else {
+            return version
+        }
+
+        let attributes = try? FileManager.default.attributesOfItem(atPath: paths.sandboxHome + "/" + file)
+        let modified = attributes?[.modificationDate] as? Date
+        return (version ?? "") + "#" + (modified?.timeIntervalSince1970.description ?? "")
+    }
+
+    /// What a picker starts on for an agent: the first model it
+    /// offers and the effort the CLI itself would use. A form that
+    /// opens on nothing makes the first thing anyone does a choice
+    /// between names they have to look up.
+    func launchDefaults(for agent: AgentKind, models: [String]) -> (model: String, effort: String) {
+        let runner = runner(for: agent)
+        return (models.first ?? runner.models.first ?? "", runner.defaultEffort ?? runner.efforts.first ?? "")
+    }
+
     /// Whether an agent has a listing of its own at all; one that
     /// does not is offered its curated models and nothing else.
     func reportsModels(_ agent: AgentKind) -> Bool {

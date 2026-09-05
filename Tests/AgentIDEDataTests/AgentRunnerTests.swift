@@ -41,4 +41,32 @@ struct AgentRunnerTests {
         #expect(CodexRunner().launchCommand(extraArguments: "  ", promptFile: nil) == "codex")
         #expect(ClaudeCodeRunner().resumeCommand(resumeID: "abc", extraArguments: "") == "claude --resume 'abc'")
     }
+
+    @Test
+    func `every agent offers something to start on`() {
+        // A form opens on these: the first model the agent lists and
+        // the effort the CLI itself runs at, which is not the first
+        // of its tiers.
+        let claude = ClaudeCodeRunner()
+        #expect(claude.models.first == "fable")
+        #expect(claude.defaultEffort == "high")
+        #expect(claude.efforts.first == "max")
+
+        let codex = CodexRunner()
+        #expect(codex.models.first == "gpt-5.6-sol")
+        #expect(codex.defaultEffort == "medium")
+    }
+
+    @Test
+    func `a listing's placeholders are not models to pick`() {
+        // Codex's cache names a reservation and the reviewer it runs
+        // itself; neither is something to start a session on.
+        let listed = """
+        gpt-reserve
+        gpt-5.6-sol
+        codex-auto-review
+        gpt-5.4-mini
+        """
+        #expect(CodexRunner().parseModelList(listed) == ["gpt-5.6-sol", "gpt-5.4-mini"])
+    }
 }

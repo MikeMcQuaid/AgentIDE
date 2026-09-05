@@ -21,10 +21,10 @@ struct PullRequestDisclosureTests {
         // Said once however often the button is pressed.
         let again = PullRequestsModel.disclosing(
             in: template ?? "",
-            sentence: "Codex CLI with GPT 5.6-sol at Minimal effort, with local review and testing.",
+            sentence: "Codex CLI with GPT 5.6 Sol at Minimal effort, with local review and testing.",
         )
         #expect(again?.contains("Claude Code") == false)
-        #expect(again?.contains("Codex CLI with GPT 5.6-sol at Minimal effort") == true)
+        #expect(again?.contains("Codex CLI with GPT 5.6 Sol at Minimal effort") == true)
 
         // A template with no AI section is left alone, so the
         // sentence goes in the body instead.
@@ -59,7 +59,7 @@ struct PullRequestDisclosureTests {
         metadata.arguments["agentide--repo--feature--claude"] = ""
         model.store.update { $0 = metadata }
 
-        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
+        #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
     }
 
     @Test
@@ -80,7 +80,7 @@ struct PullRequestDisclosureTests {
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1, session: running)])
         model.launchChoices = { _ in (["fable", "opus"], "high") }
 
-        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
+        #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
     }
 
     @Test
@@ -96,9 +96,14 @@ struct PullRequestDisclosureTests {
         #expect(PullRequestsModel.model(inArguments: "") == nil)
         #expect(PullRequestsModel.effort(inArguments: "") == nil)
         #expect(AgentOptionName.display("xhigh") == "Extra High")
-        #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6-sol")
-        // Exactly what the picker shows, which for a name carrying
-        // digits or dashes is the name itself.
+        // An id is read as its words, never shown raw.
+        #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6 Sol")
+        #expect(AgentOptionName.display("gpt-5.3-codex-spark") == "GPT 5.3 Codex Spark")
+        // A Claude alias carries the version it stands for, while
+        // what is sent stays the alias.
+        #expect(AgentOptionName.display("fable") == "Fable 5.1")
+        #expect(AgentOptionName.display("haiku") == "Haiku 4.5")
+        // A name already carrying digits or dashes is its own.
         #expect(AgentOptionName.display("opus-5") == "opus-5")
         #expect(AgentOptionName.display("minimal") == "Minimal")
     }

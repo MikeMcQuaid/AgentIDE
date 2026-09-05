@@ -386,8 +386,11 @@ task on an actor: keep one running and one queued follow-up.
 ### Start work
 
 1. Input: a prompt, or an issue or pull request number, plus repository,
-   agent, model and effort. No default model or effort exists: the form
-   refuses to start until one was picked, then remembers it per agent in
+   agent, model and effort. Every picker opens on something: the last
+   pick where the chosen agent still offers it, and otherwise the first
+   model that agent lists and the effort its own CLI would run at, so
+   changing agent leaves a working choice rather than two empty pickers.
+   What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
    surface starts a session. Submitting inserts a placeholder row
@@ -495,6 +498,17 @@ page resumes any past conversation into a fresh worktree.
   the cause. The pane's shell is asked of herdr once and remembered,
   since it lives as long as the pane; the steady state is the one
   `ps`.
+- **A model list is only as fresh as its key.** Each agent's models are
+  discovered once per stamp rather than per launch, since asking costs a
+  sandbox launch of about twenty seconds. The stamp is the CLI's version
+  and, where the list lives in a cache the server rewrites
+  (`modelCacheFile`, Codex's `~/.codex/models_cache.json`), that file's
+  modification time: keyed on the version alone, a model added
+  server-side stayed out of the picker until the CLI itself was
+  upgraded. Names shown are the ids read as words (`gpt-5.6-sol` is GPT
+  5.6 Sol), with Claude's aliases carrying the version they stand for,
+  written down because Claude Code has no listing to ask. What is sent
+  is always the id.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.
