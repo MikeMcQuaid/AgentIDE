@@ -175,6 +175,12 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "ready", String(number)], in: repositoryPath)
     }
 
+    /// Takes an open pull request back to a draft: it stays open,
+    /// and nobody is asked to review it while it is one.
+    public func markDraft(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "ready", "--undo", String(number)], in: repositoryPath)
+    }
+
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)

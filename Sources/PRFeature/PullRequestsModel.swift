@@ -141,6 +141,10 @@ final class PullRequestsModel {
                 try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
             }
         }
+        performDraftChange = { summary in
+            defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
+            try await github.markDraft(repositoryPath: repository.path, number: summary.number)
+        }
         performPostMergeCleanup = { worktree, mergedBranch in
             let report = await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)
             for note in report.notes {
@@ -304,9 +308,7 @@ final class PullRequestsModel {
     var performLinkStack: (Worktree) async throws -> Void
 
     /// Merges a stacked pull request and every one below it.
-    var performMergeStack: (Worktree, Int) async throws -> Void = { _, _ in
-        // Replaced by the initialiser.
-    }
+    var performMergeStack: (Worktree, Int) async throws -> Void
 
     /// The picker's models and the effort a launch without a flag
     /// runs at, for a disclosure of a session started on defaults.
@@ -328,6 +330,9 @@ final class PullRequestsModel {
     var generateDescription: ([String], String) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
+
+    /// Takes an open pull request back to a draft.
+    var performDraftChange: (PullRequestSummary) async throws -> Void
     var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed

@@ -250,4 +250,67 @@ extension PullRequestsModelTests {
         model.stacking.selected = "elsewhere"
         #expect(model.rebaseDoneTitle == nil)
     }
+
+    @Test
+    func `open waits for the entry's own commits to be pushed`() async {
+        // A stack's entries each have their own reading: the
+        // worktree's count is the checked-out branch's, and reading
+        // it for an entry above offered Open on a branch nothing
+        // had pushed.
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        await model.reload()
+        #expect(model.isFullyPushed)
+
+        model.stacking.stack = BranchStack(
+            base: "main",
+            branches: ["feature", "on_top"],
+            checkedOut: "feature",
+        )
+        model.stacking.selected = "on_top"
+        model.stacking.unpushedBranches = ["on_top"]
+        #expect(model.isFullyPushed == false)
+
+        // Pushed, and it opens.
+        model.stacking.unpushedBranches = []
+        #expect(model.isFullyPushed)
+    }
+
+    @Test
+    func `an open pull request can go back to being a draft`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var drafted = [Int]()
+        model.performDraftChange = { summary in drafted.append(summary.number) }
+        model.selected = PullRequestSummary(
+            number: 51,
+            title: "Ready, and then not",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+        #expect(model.canConvertToDraft)
+        #expect(await model.convertToDraft())
+        #expect(drafted == [51])
+
+        // A draft has nowhere to go back to, and neither has a
+        // pull request that is no longer open.
+        model.selected = PullRequestSummary(
+            number: 52,
+            title: "Already a draft",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+            isDraft: true,
+        )
+        #expect(model.canConvertToDraft == false)
+        model.selected = nil
+        #expect(model.canConvertToDraft == false)
+    }
 }

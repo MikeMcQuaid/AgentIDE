@@ -661,7 +661,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   button reads "Mark ready" while a pull request is a draft and runs
   `gh pr ready`; the next click is the Merge, Queue or Automerge it
   would always have been. Nothing is cleaned up behind it, since
-  nothing merged.
+  nothing merged. Draft stays in its place afterwards, taking an
+  open pull request back to a draft (`gh pr ready --undo`) for work
+  that turned out to need more.
 - **A pull request can open as a draft** through a button of its
   own: Open Draft beside Open PR, since the two make different pull
   requests and a toggle beside them said which without saying what a
@@ -669,6 +671,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.
+  Both wait for the listed entry's own commits to be on the remote:
+  a stack's entries each have their own count, and reading the
+  worktree's (the checked-out branch's) offered to open a pull
+  request for a branch nothing had pushed.
 - **Nothing is stat'd that macOS would ask permission for.** A
   directory of your own can be anywhere: inside Documents, on a
   network volume, on a disk that is not mounted. macOS asks the user

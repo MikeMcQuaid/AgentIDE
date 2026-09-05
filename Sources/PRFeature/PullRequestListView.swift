@@ -163,10 +163,7 @@ struct PullRequestFooterView: View {
                     .textSelection(.enabled)
             }
             Spacer(minLength: Self.padding)
-            if model.needsCreateForm {
-                openDraftButton
-                openButton
-            }
+            draftAndOpenButtons
             if model.isStackedEntry {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
@@ -200,6 +197,33 @@ struct PullRequestFooterView: View {
             }
         }
         .hoverHelp("Open it as a draft: work to read rather than work to merge")
+    }
+
+    /// Opening a pull request, and Draft either way: before one
+    /// exists it opens a draft, and after it takes the open one
+    /// back to being a draft, which work that turned out to need
+    /// more is.
+    @ViewBuilder var draftAndOpenButtons: some View {
+        if model.needsCreateForm {
+            openDraftButton
+            openButton
+        } else if model.canConvertToDraft {
+            draftButton
+        }
+    }
+
+    /// Takes the open pull request back to a draft.
+    var draftButton: some View {
+        BusyButton(
+            "Draft",
+            busy: "Drafting",
+            disabled: model.isBranchActionRunning,
+        ) {
+            if await model.convertToDraft() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp("Take it back to a draft: it stays open, and nobody is asked to review a draft")
     }
 
     var rebaseButton: some View {
