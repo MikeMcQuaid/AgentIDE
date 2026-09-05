@@ -13,6 +13,7 @@ extension MarkdownText {
         case rule
         case code(String, SyntaxLanguage?)
         case table(header: [String], rows: [[String]])
+        case image(source: String, alt: String)
         case text(String)
     }
 
@@ -43,11 +44,78 @@ extension MarkdownText {
                     rows: table.body.rows.map { row in row.cells.map { cellSource($0) } },
                 ))
 
+            case let paragraph as Paragraph where image(in: paragraph) != nil:
+                // A paragraph holding nothing but an image is the
+                // shape a screenshot takes in a README; anything
+                // around it stays prose.
+                if let found = image(in: paragraph) {
+                    blocks.append(.image(source: found.source, alt: found.alt))
+                }
+
             default:
-                appendProse(child.format(), to: &blocks)
+                appendProse(reflowed(child.format()), to: &blocks)
             }
         }
         return blocks
+    }
+
+    /// The image a paragraph is, when that is all it is: the source
+    /// and whatever alt text it carries.
+    static func image(in paragraph: Paragraph) -> (source: String, alt: String)? {
+        let children = Array(paragraph.inlineChildren).filter { inline in
+            (inline as? Markdown.Text)?.string.trimmingCharacters(in: .whitespaces).isEmpty != true
+        }
+        guard children.count == 1, let image = children.first as? Markdown.Image,
+              let source = image.source, source.isEmpty == false
+        else {
+            return nil
+        }
+
+        return (source, image.plainText)
+    }
+
+    /// Prose as GitHub renders it: a single newline inside a
+    /// paragraph or a list item is a soft break, which joins rather
+    /// than wrapping where the author's editor happened to. A blank
+    /// line still ends a paragraph, a line git or markdown gives
+    /// structure to (a heading, a quote, a list marker, a table row,
+    /// a fence) starts afresh, and a line ending in two spaces or a
+    /// backslash keeps the break it asked for.
+    static func reflowed(_ text: String) -> String {
+        var lines = [String]()
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            guard let previous = lines.last, continues(line, after: previous) else {
+                lines.append(line)
+                continue
+            }
+
+            lines[lines.count - 1] = previous + " " + line.trimmingCharacters(in: .whitespaces)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Whether a line carries on the one before it rather than
+    /// starting something of its own.
+    private static func continues(_ line: String, after previous: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty == false
+            && previous.trimmingCharacters(in: .whitespaces).isEmpty == false
+            && previous.hasSuffix("  ") == false
+            && previous.hasSuffix("\\") == false
+            && starts(trimmed) == false
+    }
+
+    /// Whether a line begins something markdown gives its own shape.
+    private static func starts(_ trimmed: String) -> Bool {
+        let markers = ["- ", "* ", "+ ", "> ", "#", "|", "```", "~~~"]
+        if markers.contains(where: trimmed.hasPrefix) {
+            return true
+        }
+
+        // `1.` and friends: a number, a dot or bracket, a space.
+        let digits = trimmed.prefix(while: \.isNumber)
+        let rest = trimmed.dropFirst(digits.count)
+        return digits.isEmpty == false && (rest.hasPrefix(". ") || rest.hasPrefix(") "))
     }
 
     /// The fence tag's language, tolerating common aliases.

@@ -92,6 +92,18 @@ public struct MarkdownText: View {
     static let blockCache: ParseCache<[ProseBlock]> = .init()
     static let inlineCache: ParseCache<AttributedString> = .init()
 
+    /// Where an image's source points: a web address as written, and
+    /// a path on this Mac as a file. A relative path has nothing to
+    /// be relative to here, so it stays alt text rather than
+    /// guessing at a directory.
+    static func imageURL(_ source: String) -> URL? {
+        if source.hasPrefix("http://") || source.hasPrefix("https://") {
+            return URL(string: source)
+        }
+
+        return source.hasPrefix("/") ? URL(filePath: source) : nil
+    }
+
     // MARK: Private
 
     private static let spacing: CGFloat = 4
@@ -126,9 +138,31 @@ public struct MarkdownText: View {
             case let .table(header, rows):
                 table(header: header, rows: rows)
 
+            case let .image(source, alt):
+                image(source: source, alt: alt)
+
             case let .text(line):
                 Text(Self.inline(line)).textSelection(.enabled)
             }
+        }
+    }
+
+    /// An image the markdown embeds, drawn at its own size up to
+    /// the width it is given and never blown up past it. Anything
+    /// that will not load stays as its alt text, which is what the
+    /// text said before images were drawn at all.
+    @ViewBuilder
+    private func image(source: String, alt: String) -> some View {
+        if let url = Self.imageURL(source) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                Text(Self.inline(alt)).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(alt)
+        } else {
+            Text(Self.inline(alt)).foregroundStyle(.secondary)
         }
     }
 

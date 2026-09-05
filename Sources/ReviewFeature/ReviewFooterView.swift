@@ -65,10 +65,6 @@ struct ReviewFooterView: View {
     private static let fieldCorner: CGFloat = 6
     private static let resizeHandleHeight: CGFloat = 7
 
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage(UtilityTabTarget.key)
-    private var utilityTab = ""
-
     /// The footer's height, dragged by the handle above it and
     /// persisted like the pane widths.
     @AppStorage("reviewMessageHeight")
@@ -153,24 +149,8 @@ struct ReviewFooterView: View {
         }
     }
 
-    /// Drafting, committing and amending, in click order.
+    /// Committing and amending, in click order.
     @ViewBuilder private var messageButtons: some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "sparkles",
-            accessibilityLabel: "Draft commit message",
-            disabled: model.showsUncommitted == false
-                || model.commitMessage.trimmingCharacters(in: .whitespaces).isEmpty == false,
-        ) {
-            if await model.generateCommitMessage() == false {
-                utilityTab = UtilityTabTarget.errors
-            }
-        }
-        .hoverHelp(
-            "Draft the commit message from the uncommitted diff with the on-device model; "
-                + "only fills an empty message",
-        )
         BusyButton(
             commitTitle,
             busy: "Committing",
@@ -276,13 +256,17 @@ struct ReviewFooterView: View {
     /// on save.
     private var messageEditor: some View {
         VStack(spacing: 0) {
-            TextField("Subject", text: subjectBinding.readOnly(model.isReadOnly))
-                .readOnly(model.isReadOnly)
-                .textFieldStyle(.plain)
-                .font(.body.monospaced())
-                .padding(Self.fieldInset)
-                .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
-                .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
+            HStack(spacing: 0) {
+                TextField("Subject", text: subjectBinding.readOnly(model.isReadOnly))
+                    .readOnly(model.isReadOnly)
+                    .textFieldStyle(.plain)
+                    .font(.body.monospaced())
+                    .padding(Self.fieldInset)
+                    .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
+                    .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
+                draftButton
+                    .padding(.trailing, Self.fieldInset)
+            }
             Divider()
             TextEditor(text: bodyBinding.readOnly(model.isReadOnly))
                 .readOnly(model.isReadOnly)
@@ -306,7 +290,7 @@ struct ReviewFooterView: View {
             Text("body \(widestBody)/\(Self.bodyLimit)")
                 .foregroundStyle(widestBody > Self.bodyLimit ? .red : .secondary)
         }
-        .font(.caption.monospaced())
+        .font(.footnote.monospaced())
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
     }
 

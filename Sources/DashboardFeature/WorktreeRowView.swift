@@ -117,6 +117,7 @@ struct WorktreeRowView: View {
         HStack(spacing: Self.spacing) {
             Text(title)
                 .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: Self.spacing)
             // A pane holding the machine down is news wherever it
             // is: the row names what is running and for how long, so
@@ -169,6 +170,7 @@ struct WorktreeRowView: View {
                     .hoverHelp("A " + agent.displayName + " session runs here")
             }
             pullRequestBadge
+                .layoutPriority(1)
             Text(counts)
                 .lineLimit(1)
                 .fixedSize()

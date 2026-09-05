@@ -42,7 +42,7 @@ struct DiffStatText: View {
             Text("+" + String(additions)).foregroundStyle(.green)
             Text("\u{2212}" + String(deletions)).foregroundStyle(.red)
         }
-        .font(.caption.monospaced())
+        .font(.footnote.monospaced())
     }
 }
 
@@ -187,8 +187,6 @@ struct DiffFileView: View {
     /// the first click into it and stays armed.
     @State private var isLive = false
 
-    /// The file's name, its new-file marker, diffstat and the
-    /// copy and edit actions.
     private var headerRow: some View {
         HStack {
             commitTick

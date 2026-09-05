@@ -66,7 +66,7 @@ final class ReviewModel {
     /// Whether any scope has loaded yet; before, progress shows.
     private(set) var hasLoaded = false
 
-    /// Whether the diff shows uncommitted changes; rejection amends committed ones only.
+    /// Whether the diff shows uncommitted changes.
     private(set) var showsUncommitted = false
 
     /// See `ReviewModel+Committing`.
@@ -174,11 +174,14 @@ final class ReviewModel {
         do {
             switch scope {
             case .uncommitted:
-                showsUncommitted = true
-                files = try await DiffParser.parse(git.uncommittedDiff(
+                // Both at once: the flag alone ticked rows the
+                // last scope had left on screen.
+                let uncommitted = try await DiffParser.parse(git.uncommittedDiff(
                     worktreePath: worktreePath,
                     ignoringWhitespace: hidesWhitespace,
                 ))
+                showsUncommitted = true
+                files = uncommitted
 
             case .lastCommit:
                 showsUncommitted = false
@@ -225,9 +228,8 @@ final class ReviewModel {
         hasLoaded = true
     }
 
-    /// Fills the commit message from the uncommitted diff using the
-    /// on-device model; false when it could not help, so the caller
-    /// can show the errors surface. Only ever fills a blank field.
+    /// Fills a blank commit message from the uncommitted diff using
+    /// the on-device model; false when it could not help.
     func generateCommitMessage() async -> Bool {
         guard commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return true

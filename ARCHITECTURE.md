@@ -650,11 +650,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   `gh pr ready`; the next click is the Merge, Queue or Automerge it
   would always have been. Nothing is cleaned up behind it, since
   nothing merged.
-- **A pull request can open as a draft**, chosen by the icon beside
-  Open PR: GitHub's two glyphs for the state a click is about to
-  create, rather than a checkbox saying the same thing in words.
-  It sits in the footer's own row, with the actions, since that is
-  where the button it changes is. The choice
+- **A pull request can open as a draft** through a button of its
+  own: Open Draft beside Open PR, since the two make different pull
+  requests and a toggle beside them said which without saying what a
+  click would do. Both refuse for the same reasons, named once. The choice
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.

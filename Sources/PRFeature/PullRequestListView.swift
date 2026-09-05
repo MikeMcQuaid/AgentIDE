@@ -151,16 +151,18 @@ struct PullRequestFooterView: View {
             if let selected = model.selected {
                 copyButtons(for: selected)
             }
+            Spacer(minLength: Self.padding)
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                     .textSelection(.enabled)
             }
-            Spacer()
+            Spacer(minLength: Self.padding)
             if model.needsCreateForm {
-                draftToggle
+                openDraftButton
                 openButton
             }
             if model.isStackedEntry {
@@ -179,35 +181,29 @@ struct PullRequestFooterView: View {
         .background(.bar)
     }
 
-    /// Whether the pull request opens as a draft, beside the button
-    /// that opens it: GitHub's own two glyphs for the state a click
-    /// is about to create, in the colour the row will carry, rather
-    /// than a checkbox saying the same thing in words.
-    var draftToggle: some View {
-        Button {
-            model.prIsDraft.toggle()
-        } label: {
-            Octicon(
-                ChecksStyle.stateOcticonName(state: "OPEN", isDraft: model.prIsDraft),
-                colour: ChecksStyle.stateColour(state: "OPEN", isDraft: model.prIsDraft),
-            )
-            .accessibilityLabel(model.prIsDraft ? "Opens as a draft" : "Opens ready for review")
+    /// Opening as a draft is its own button beside Open PR: the two
+    /// make different pull requests, and a toggle beside them said
+    /// which without saying what a click would do.
+    var openDraftButton: some View {
+        BusyButton(
+            "Open Draft",
+            busy: "Opening",
+            disabled: openDisabled,
+        ) {
+            model.prIsDraft = true
+            if await model.createPullRequest() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
         }
-        .buttonStyle(.glass)
-        .hoverHelp(
-            model.prIsDraft
-                ? "Opens as a draft: work to read rather than work to merge. Click to open it ready for review"
-                : "Opens ready for review. Click to open it as a draft instead",
-        )
+        .hoverHelp("Open it as a draft: work to read rather than work to merge")
     }
 
     var rebaseButton: some View {
         BusyButton(
-            rebaseCount,
+            rebaseCount.isEmpty ? "Rebase" : "Rebase " + rebaseCount,
             busy: "Rebasing",
-            systemImage: "arrow.triangle.2.circlepath",
-            accessibilityLabel: model.rebaseTitle,
             disabled: model.canRebase == false,
+            keepsTitle: true,
         ) {
             if await model.rebaseSigned() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -218,10 +214,8 @@ struct PullRequestFooterView: View {
 
     var pushButton: some View {
         BusyButton(
-            pushCount,
+            pushCount.isEmpty ? "Push" : "Push " + pushCount,
             busy: "Pushing",
-            systemImage: "arrow.up",
-            accessibilityLabel: "Push",
             disabled: model.canPush == false,
             keepsTitle: true,
         ) {
@@ -242,6 +236,17 @@ struct PullRequestFooterView: View {
         return ahead > 0 ? String(ahead) : ""
     }
 
+    /// What stops either button opening anything: a title of spaces
+    /// dims rather than failing on click, the push comes first, and
+    /// a template still reading exactly as the repository wrote it
+    /// helps nobody as a pull request body.
+    private var openDisabled: Bool {
+        model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
+            || model.isFullyPushed == false
+            || model.templateUnedited
+            || model.unpushedBelow != nil
+    }
+
     private var openButton: some View {
         BusyButton(
             "Open PR",
@@ -253,11 +258,9 @@ struct PullRequestFooterView: View {
             // is enough on its own, but a template still reading
             // exactly as the repository wrote it is not: opening
             // with its placeholders intact helps nobody.
-            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                || model.isFullyPushed == false
-                || model.templateUnedited
-                || model.unpushedBelow != nil,
+            disabled: openDisabled,
         ) {
+            model.prIsDraft = false
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
             }
