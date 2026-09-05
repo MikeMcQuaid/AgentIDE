@@ -313,4 +313,24 @@ extension PullRequestsModelTests {
         model.selected = nil
         #expect(model.canConvertToDraft == false)
     }
+
+    @Test
+    func `a rebase detaching HEAD leaves the creation form alone`() async {
+        let model = makeModel(
+            items: [item(branch: "feature", ahead: 0)],
+            worktreePath: "/worktrees/feature",
+        )
+        await model.reload()
+        #expect(model.needsCreateForm)
+        #expect(model.listedBranch == "feature")
+
+        // git detaches HEAD for the whole of a rebase, and a
+        // detached worktree reports its directory's name as its
+        // branch. The tab follows the worktree, so the form it was
+        // showing stays exactly where it was.
+        model.items = [item(branch: "pr-77", ahead: nil, path: "/worktrees/feature")]
+        #expect(model.branchItem != nil)
+        #expect(model.listedBranch == "feature")
+        #expect(model.needsCreateForm)
+    }
 }

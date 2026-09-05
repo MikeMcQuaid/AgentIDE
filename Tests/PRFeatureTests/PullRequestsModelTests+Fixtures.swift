@@ -12,6 +12,7 @@ extension PullRequestsModelTests {
     func makeModel(
         items: [WorktreeItem] = [],
         metadataFile: String? = nil,
+        worktreePath: String? = nil,
     ) -> PullRequestsModel {
         // The entry a worktree was last looking at lives in the
         // defaults, which every test in the process shares: without
@@ -20,7 +21,7 @@ extension PullRequestsModelTests {
         for item in items {
             StackSelection.remember(nil, for: item.worktree.path)
         }
-        let model = makeBareModel(items: items, metadataFile: metadataFile)
+        let model = makeBareModel(items: items, metadataFile: metadataFile, worktreePath: worktreePath)
         model.fetchList = { _, _ in [] }
         model.fetchSummary = { _ in nil }
         model.fetchHasMergeQueue = { false }
@@ -53,7 +54,11 @@ extension PullRequestsModelTests {
 
     /// The model against a throwaway store, before any seams are
     /// replaced; split from `makeModel` for function length.
-    private func makeBareModel(items: [WorktreeItem], metadataFile: String?) -> PullRequestsModel {
+    private func makeBareModel(
+        items: [WorktreeItem],
+        metadataFile: String?,
+        worktreePath: String? = nil,
+    ) -> PullRequestsModel {
         let runner = FoundationProcessRunner()
         let base = FileManager.default
             .temporaryDirectory
@@ -83,7 +88,7 @@ extension PullRequestsModelTests {
         return PullRequestsModel(
             repository: Repository(name: "repo", path: "/repo"),
             branch: "feature",
-            worktreePath: nil,
+            worktreePath: worktreePath,
             defaultBranch: "main",
             items: items,
             github: GitHubClient(runner: runner),
@@ -115,13 +120,18 @@ extension PullRequestsModelTests {
         )
     }
 
-    func item(branch: String, ahead: Int?, session: AgentSession? = nil) -> WorktreeItem {
+    func item(
+        branch: String,
+        ahead: Int?,
+        session: AgentSession? = nil,
+        path: String? = nil,
+    ) -> WorktreeItem {
         WorktreeItem(
             worktree: Worktree(
                 repositoryName: "repo",
                 repositoryPath: "/repo",
                 branch: branch,
-                path: "/worktrees/" + branch,
+                path: path ?? "/worktrees/" + branch,
             ),
             session: session,
             isDirty: false,

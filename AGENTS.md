@@ -215,7 +215,12 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.
 - `@State` objects outlive view re-initialisation: rebuild models
-  when their identity input changes (see `ReviewView`).
+  when their identity input changes (see `ReviewView`). That
+  identity is the worktree's path, never its branch: git detaches
+  HEAD for the whole of a rebase and a detached worktree reports its
+  directory's name as its branch, so a branch-keyed pane rebuilt its
+  model twice per rebase and painted an empty list in place of what
+  it was showing. A branch that really changes is a reload.
 - `Text("\(someInt)")` applies digit grouping; use `String(_:)`.
 - Trailing closures after multiline calls fight SwiftFormat; keep
   them single-line or make the closure a non-final argument.

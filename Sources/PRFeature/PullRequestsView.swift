@@ -25,7 +25,14 @@ public struct PullRequestsView: View {
     ) {
         self.items = items
         self.isMainCheckout = isMainCheckout
-        identity = repository.id + "#" + (branch ?? "")
+        branchName = branch
+        // The worktree, never the branch it is on: git detaches HEAD
+        // for the whole of a rebase, and a detached worktree reports
+        // its directory's name as its branch. Keying on the branch
+        // rebuilt the model twice per rebase, and a rebuilt model
+        // has no listing for the name it was handed, so the creation
+        // form vanished into an empty list and came back.
+        identity = repository.id + "#" + (worktreePath ?? branch ?? "")
         makeModel = {
             PullRequestsModel(
                 repository: repository,
@@ -93,6 +100,11 @@ public struct PullRequestsView: View {
             }
         }
         .onChange(of: model.scope) { Task { await model.reload() } }
+        // A branch really changing under the pane (an agent checking
+        // one out, a restack moving through them) is a reload rather
+        // than a rebuild: the listing it has stays on screen while
+        // the new one is read.
+        .onChange(of: branchName) { Task { await model.reload(keepingSelection: true) } }
         .onChange(of: items) { model.items = items }
         // The menu bar's Push and Rebase land here through the
         // storage bus, acting on whichever worktree the pane shows.
@@ -123,6 +135,10 @@ public struct PullRequestsView: View {
     @State private var loadedIdentity = ""
 
     private let isMainCheckout: Bool
+
+    /// The branch the sidebar last named, watched rather than built
+    /// into the identity.
+    private let branchName: String?
 
     /// The repository and branch as a task identity: it comes from
     /// the view's own inputs, never the persisted model, so a
