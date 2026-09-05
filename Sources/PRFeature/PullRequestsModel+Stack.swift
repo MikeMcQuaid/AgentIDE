@@ -346,12 +346,16 @@ extension PullRequestsModel {
                 return false
             }
             let verb = AppSettings.requiresSignedCommits ? "Rebased and signed" : "Rebased"
-            setStatus(
-                moved.isEmpty ? "Already in order." : verb + ".",
-                detail: moved.isEmpty
-                    ? "The stack was already in order."
-                    : verb + " " + moved.joined(separator: ", ") + ".",
-            )
+            guard moved.isEmpty == false else {
+                // Nothing moved, so nothing was done: the button
+                // must not claim otherwise.
+                setStatus("Already in order.", detail: "The stack was already in order.")
+                Self.requestSidebarRefresh()
+                return true
+            }
+
+            recordFinished(.rebased, branch: actedBranch ?? worktree.branch)
+            note(verb + " " + moved.joined(separator: ", ") + ".")
             Self.requestSidebarRefresh()
             return true
         } catch {
@@ -372,7 +376,8 @@ extension PullRequestsModel {
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            setStatus("Pushed.", detail: "Pushed " + pushed.joined(separator: ", ") + ".")
+            recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
+            note("Pushed " + pushed.joined(separator: ", ") + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

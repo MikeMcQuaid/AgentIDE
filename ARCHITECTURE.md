@@ -748,6 +748,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   to be a boolean any worktree refresh cleared, so counts gathered
   before the push arrived after it and swapped the two buttons back
   and forth until the next reading caught up.
+- **A button says what it just did.** A finished rebase, sign or push
+  turns its own dimmed button's label to the past tense (Rebased,
+  Signed, Pushed) rather than narrating it in the middle of the bar,
+  which is left for what went wrong and is cleared by the next
+  success. Each label belongs to the entry it acted on, so reading up
+  and down a stack never shows one branch's work on another's.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing

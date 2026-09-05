@@ -17,7 +17,8 @@ extension PullRequestsModel {
             if let tip = await fetchTipCommit(worktree) {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
-            setStatus("Pushed.", detail: "Pushed " + pushed.joined(separator: ", ") + ".")
+            recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
+            note("Pushed " + pushed.joined(separator: ", ") + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()
@@ -133,7 +134,8 @@ extension PullRequestsModel {
             if let tip = await fetchTipCommit(worktree) {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
-            setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
+            recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
+            note(Self.describe(push: destination, branch: worktree.branch))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

@@ -108,6 +108,9 @@ extension PullRequestsModel {
 
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
+        // What it is about to do, before doing it moves the branch
+        // and leaves nothing to read it from.
+        let onlySigns = rebaseNeed == SessionService.RebaseNeed.sign
         do {
             let target = try await performRebase(worktree)
             // A stack member that moves takes the branches above it
@@ -139,10 +142,8 @@ extension PullRequestsModel {
                     + "and hit Rebase again")
                 return false
             }
-            setStatus(
-                "Rebased and signed.",
-                detail: "Rebased " + worktree.branch + " on " + target + " and signed it.",
-            )
+            recordFinished(onlySigns ? .signed : .rebased, branch: listedBranch ?? worktree.branch)
+            note("Rebased " + worktree.branch + " on " + target + " and signed it.")
             Self.requestSidebarRefresh()
             return true
         } catch {

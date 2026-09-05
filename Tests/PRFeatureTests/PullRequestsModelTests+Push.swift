@@ -48,7 +48,9 @@ extension PullRequestsModelTests {
         #expect(await model.push())
         #expect(model.isPushed)
         #expect(model.canPush == false)
-        #expect(model.status == "Pushed.")
+        // The dimmed button is what says so, where the click was.
+        #expect(model.pushDoneTitle == "Pushed")
+        #expect(model.rebaseDoneTitle == nil)
 
         // New commits move the tip, which is what a push has to
         // send again; the signature read the change kicks off is
@@ -223,5 +225,29 @@ extension PullRequestsModelTests {
         #expect(model.rebaseTitle == "Rebase and sign")
         model.rebaseNeed = .rebase
         #expect(model.rebaseTitle == "Rebase on origin")
+    }
+
+    @Test
+    func `a finished rebase says so on its own button`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+
+        // A rebase that only signs says it signed, since that is
+        // what it did and what its button offered to do.
+        model.rebaseNeed = .sign
+        #expect(await model.rebaseSigned())
+        #expect(model.rebaseDoneTitle == "Signed")
+        #expect(model.pushDoneTitle == nil)
+        // The middle of the bar says nothing: the button did.
+        #expect(model.status == nil)
+
+        // One that moves the branch says it rebased.
+        model.rebaseNeed = .rebaseAndSign
+        #expect(await model.rebaseSigned())
+        #expect(model.rebaseDoneTitle == "Rebased")
+
+        // Another entry's button says nothing about this one.
+        model.stacking.selected = "elsewhere"
+        #expect(model.rebaseDoneTitle == nil)
     }
 }

@@ -195,17 +195,6 @@ final class PullRequestsModel {
 
     // MARK: Internal
 
-    /// What the last read said of the tip commit's signature:
-    /// unread until the current tip has been checked. Pushing
-    /// unsigned commits is never allowed, so Push waits for proof
-    /// rather than trusting a stale answer, and dims until Rebase
-    /// on origin signs the branch.
-    enum TipSignature {
-        case unread
-        case unsigned
-        case signed
-    }
-
     let repository: Repository
     let branch: String?
 
@@ -225,6 +214,11 @@ final class PullRequestsModel {
     var currentBranch: String?
 
     var pushedTip: PushedTip?
+
+    /// What the last branch action finished here, and on which
+    /// branch: its button reads it in the past tense while it stays
+    /// dim, so the work says so where the click was.
+    var finished: (outcome: BranchOutcome, branch: String)?
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.

@@ -127,10 +127,12 @@ struct PullRequestFooterView: View {
     @AppStorage(UtilityTabTarget.key)
     var utilityTab = ""
 
-    /// Sidebar-style: how far the branch sits behind its base.
+    /// How far the branch sits behind its base, bare: an arrow
+    /// belongs to whichever button draws one, and the stack's own
+    /// pair already carry theirs as icons.
     var rebaseCount: String {
         let behind = model.branchItem?.behindDefault ?? 0
-        return behind > 0 ? "\u{2193}" + String(behind) : ""
+        return behind > 0 ? String(behind) : ""
     }
 
     var rebaseHelp: String {
@@ -203,7 +205,6 @@ struct PullRequestFooterView: View {
             rebaseLabel,
             busy: signsOnly ? "Signing" : "Rebasing",
             disabled: model.canRebase == false,
-            keepsTitle: true,
         ) {
             if await model.rebaseSigned() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -214,10 +215,9 @@ struct PullRequestFooterView: View {
 
     var pushButton: some View {
         BusyButton(
-            pushCount.isEmpty ? "Push" : "Push " + Self.upArrow + pushCount,
+            pushLabel,
             busy: "Pushing",
             disabled: model.canPush == false,
-            keepsTitle: true,
         ) {
             if await model.push() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -230,9 +230,12 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    /// The arrow the sidebar's own counts use for what has yet to
-    /// go to the remote; the rebase count brings its own.
+    /// The arrows the sidebar's own counts use, so a number means
+    /// the same thing in both places: up is what has yet to go to
+    /// the remote, down what has yet to come from it. A button draws
+    /// one of them at most, beside one count.
     private static let upArrow = "\u{2191}"
+    private static let downArrow = "\u{2193}"
 
     /// Whether the button would only sign: the base has not moved,
     /// so nothing is being rebased onto anything.
@@ -244,15 +247,29 @@ struct PullRequestFooterView: View {
         return false
     }
 
-    /// What a click is about to do: signing alone when there is no
+    /// What a click is about to do, or what the last one did while
+    /// the button stays dim: signing alone when there is no
     /// rebasing in it, otherwise the rebase and how far behind the
     /// branch is.
     private var rebaseLabel: String {
+        if model.canRebase == false, let done = model.rebaseDoneTitle {
+            return done
+        }
         guard signsOnly == false else {
             return "Sign"
         }
 
-        return rebaseCount.isEmpty ? "Rebase" : "Rebase " + rebaseCount
+        return rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.downArrow + rebaseCount
+    }
+
+    /// The same for the push: what it would send, or that it sent
+    /// it, while it stays dim.
+    private var pushLabel: String {
+        if model.canPush == false, let done = model.pushDoneTitle {
+            return done
+        }
+
+        return pushCount.isEmpty ? "Push" : "Push " + Self.upArrow + pushCount
     }
 
     /// The commits this branch has above the base it was rebased
