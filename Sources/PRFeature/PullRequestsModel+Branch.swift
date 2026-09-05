@@ -144,6 +144,12 @@ extension PullRequestsModel {
             return nil
         }
 
+        // A draft cannot be merged or queued, and GitHub refuses
+        // automerge on one too: what a click can do here is take it
+        // out of draft, and the label says so.
+        if selected.isDraft {
+            return "Mark ready"
+        }
         if selected.hasAutomerge {
             return hasMergeQueue ? "Dequeue" : "Cancel automerge"
         }
@@ -156,6 +162,9 @@ extension PullRequestsModel {
     /// The present-tense form while the merge action runs.
     var mergeActionBusyTitle: String {
         switch mergeActionTitle {
+        case "Mark ready":
+            "Marking ready"
+
         case "Dequeue":
             "Dequeuing"
 

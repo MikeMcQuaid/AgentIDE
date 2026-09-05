@@ -168,6 +168,13 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "merge", String(number), "--disable-auto"], in: repositoryPath)
     }
 
+    /// Takes a pull request out of draft. GitHub refuses to merge
+    /// or automerge a draft at all, so this is the step that has to
+    /// come first rather than an error to report.
+    public func markReady(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "ready", String(number)], in: repositoryPath)
+    }
+
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)

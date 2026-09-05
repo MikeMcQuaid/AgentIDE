@@ -625,6 +625,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
   keep an idle tab quiet must not answer a click.
+- **A draft's one action is to stop being one.** GitHub refuses to
+  merge a draft and refuses automerge on one too, so the merge
+  button reads "Mark ready" while a pull request is a draft and runs
+  `gh pr ready`; the next click is the Merge, Queue or Automerge it
+  would always have been. Nothing is cleaned up behind it, since
+  nothing merged.
 - **A pull request can open as a draft**, chosen by the icon beside
   Open PR: GitHub's two glyphs for the state a click is about to
   create, rather than a checkbox saying the same thing in words.

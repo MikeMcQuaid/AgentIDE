@@ -127,7 +127,9 @@ final class PullRequestsModel {
         }
         performMergeChange = { summary in
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
-            if summary.hasAutomerge {
+            if summary.isDraft {
+                try await github.markReady(repositoryPath: repository.path, number: summary.number)
+            } else if summary.hasAutomerge {
                 try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
             } else if Self.isReadyToMerge(summary) {
                 try await github.merge(repositoryPath: repository.path, number: summary.number)
