@@ -81,6 +81,13 @@ extension PullRequestsModel {
         note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }
 
+    /// Jumps to the review conversations on the web: the files
+    /// page, which is where a review comment is anchored and where
+    /// it is answered or resolved.
+    func openReviews(_ summary: PullRequestSummary) {
+        LinkOpener.open(summary.url + "/files")
+    }
+
     /// Jumps to the one failing check, or to the checks page when
     /// several fail or the row has not been enriched with their
     /// links yet; the logs themselves copy from the button beside.

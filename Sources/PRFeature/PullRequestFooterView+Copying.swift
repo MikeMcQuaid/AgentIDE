@@ -20,9 +20,17 @@ extension PullRequestFooterView {
             systemImage: Self.copyIcon,
             disabled: selected.unresolvedComments == 0,
         ) {
-            await model.copyUnresolvedComments(selected)
+            // Both buttons read the modifier at the click, as
+            // `LinkOpener` does: Cmd goes to the browser, Shift to
+            // the Browser tab, a plain click to the clipboard.
+            if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
+                model.openReviews(selected)
+            } else {
+                await model.copyUnresolvedComments(selected)
+            }
         }
-        .hoverHelp("Copy every unresolved review conversation to the clipboard; dimmed while none is unresolved")
+        .hoverHelp("Copy every unresolved review conversation to the clipboard; Cmd-click opens them "
+            + "in your browser, Shift-click in the Browser tab; dimmed while none is unresolved")
         // One button for the failing checks: a click copies their
         // logs, and a modifier opens them instead, since the
         // modifier is read at the click and `LinkOpener` already

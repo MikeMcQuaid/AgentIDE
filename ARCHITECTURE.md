@@ -843,7 +843,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   greys it out. Reviews copies unresolved review threads grouped per
   file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query
-  carries it); Failures is one button for the failing checks, dimmed
+  carries it), with Cmd-click opening the pull request's files page,
+  where a review comment is anchored and answered, and Shift-click
+  opening it in the Browser tab; Failures is one button for the
+  failing checks, dimmed
   until the rollup is red, that copies the tail of every failing run's `gh run view
   --log-failed` condensed (job and step named once in a heading,
   timestamps and colour stripped), Cmd opening the check in the
