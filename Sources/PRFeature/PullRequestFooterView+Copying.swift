@@ -12,9 +12,10 @@ extension PullRequestFooterView {
     @ViewBuilder
     func copyButtons(for selected: PullRequestSummary) -> some View {
         // The glyph says a click copies, the word says what, and
-        // the count how much of it there is.
+        // the count how much of it there is; none of it dims the
+        // button, which is the same fact the count reports.
         BusyButton(
-            Self.copyLabel("Comments", count: selected.unresolvedComments),
+            Self.copyLabel("Reviews", count: selected.unresolvedComments),
             busy: "Copying",
             systemImage: Self.copyIcon,
             disabled: selected.unresolvedComments == 0,
@@ -30,7 +31,7 @@ extension PullRequestFooterView {
         // and green have no failed log, and a red rollup whose
         // failures are not Actions runs has none either.
         BusyButton(
-            Self.copyLabel("Logs", count: selected.failingCheckLinks.count),
+            Self.copyLabel("Failures", count: selected.failingCheckLinks.count),
             busy: "Copying",
             systemImage: Self.copyIcon,
             disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
@@ -50,13 +51,11 @@ extension PullRequestFooterView {
     /// The glyph a copy carries everywhere in the app.
     static let copyIcon = "doc.on.doc"
 
-    /// A copy button's label: what it copies, and how much of
-    /// it there is when there is any.
+    /// A copy button's label: what it copies and how much of it
+    /// there is, a nothing to copy included. The count is always
+    /// there, so the button says what it has rather than changing
+    /// width as it arrives, and none of it greys the button out.
     static func copyLabel(_ name: String, count: Int) -> String {
-        if count > 0 {
-            name + " " + String(count)
-        } else {
-            name
-        }
+        name + " " + String(count)
     }
 }
