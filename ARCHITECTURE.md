@@ -836,12 +836,13 @@ selects the worktree holding it, and `agentide new` starts a session.
   answers that the queue sets the strategy, and that automerge is
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
-- **Last mile buttons**: copy unresolved review threads grouped per
-  file, dimmed until one is unresolved (the count comes from the
+- **Last mile buttons** say what they copy: Comments and Logs, each
+  behind the glyph every copy in the app carries and each carrying
+  its own count. Comments copies unresolved review threads grouped
+  per file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query
-  carries it); one failing-checks button, dimmed until the rollup is
-  red,
-  that copies the tail of every failing run's `gh run view
+  carries it); Logs is one button for the failing checks, dimmed
+  until the rollup is red, that copies the tail of every failing run's `gh run view
   --log-failed` condensed (job and step named once in a heading,
   timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. A run still in progress has
