@@ -333,4 +333,31 @@ extension PullRequestsModelTests {
         #expect(model.listedBranch == "feature")
         #expect(model.needsCreateForm)
     }
+
+    @Test
+    func `the default branch is not pushed from here`() async {
+        // The fixture's model calls `main` the default branch, and
+        // the sidebar's own checkout sits on it: commits made there
+        // belong on a branch of their own, and pushing them from
+        // here goes round the pull request this tab is for.
+        let model = makeModel(items: [item(branch: "main", ahead: 2)])
+        model.currentBranch = "main"
+        await model.reload()
+
+        #expect(model.isDefaultBranch)
+        #expect(model.canPush == false)
+        #expect(model.pushHelp.contains("branch of its own"))
+
+        // The menu bar's Push reaches the model without a button to
+        // dim, and declines in the footer rather than pushing.
+        #expect(await model.push())
+        #expect(model.status?.contains("default branch") == true)
+
+        // A branch of its own pushes as it always did.
+        model.currentBranch = "feature"
+        model.items = [item(branch: "feature", ahead: 2)]
+        await model.reload()
+        #expect(model.isDefaultBranch == false)
+        #expect(model.canPush)
+    }
 }

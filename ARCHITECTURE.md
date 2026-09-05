@@ -743,6 +743,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
   which the next fetch replaces.
+- **The default branch is not pushed from here.** Work belongs on a
+  branch of its own, and a push straight to `main` goes round the
+  pull request the rest of the tab is for (a protected branch would
+  refuse it anyway), so Push dims there and says why, and the menu
+  bar's Push, which has no button to dim, declines in the footer.
+  The tab already asks GitHub nothing about the default branch.
 - **Pushing** asks the branch first and GitHub second. A branch checked
   out from someone else's pull request carries that fork's URL in its
   config (all `gh pr checkout` leaves behind), so it is given a remote

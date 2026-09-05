@@ -103,6 +103,18 @@ extension PullRequestsModel {
             return true
         }
 
+        // The menu bar's Push reaches this without a button to dim,
+        // and a push to the default branch goes round the pull
+        // request the rest of this tab is for.
+        guard isDefaultBranch == false else {
+            setStatus(
+                "Not pushed: this is the default branch.",
+                detail: "work belongs on a branch of its own; the default branch is what a pull "
+                    + "request merges into",
+            )
+            return true
+        }
+
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
         // The button dims on what the last read knew, and a tip
