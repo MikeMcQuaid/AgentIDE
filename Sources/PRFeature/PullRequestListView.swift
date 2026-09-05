@@ -200,8 +200,8 @@ struct PullRequestFooterView: View {
 
     var rebaseButton: some View {
         BusyButton(
-            rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.downArrow + rebaseCount,
-            busy: "Rebasing",
+            rebaseLabel,
+            busy: signsOnly ? "Signing" : "Rebasing",
             disabled: model.canRebase == false,
             keepsTitle: true,
         ) {
@@ -230,11 +230,30 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    /// The arrows the sidebar's own counts use, so a number means
-    /// the same thing in both: up is what goes to the remote, down
-    /// is what comes from it.
+    /// The arrow the sidebar's own counts use for what has yet to
+    /// go to the remote; the rebase count brings its own.
     private static let upArrow = "\u{2191}"
-    private static let downArrow = "\u{2193}"
+
+    /// Whether the button would only sign: the base has not moved,
+    /// so nothing is being rebased onto anything.
+    private var signsOnly: Bool {
+        if case .sign = model.rebaseNeed {
+            return true
+        }
+
+        return false
+    }
+
+    /// What a click is about to do: signing alone when there is no
+    /// rebasing in it, otherwise the rebase and how far behind the
+    /// branch is.
+    private var rebaseLabel: String {
+        guard signsOnly == false else {
+            return "Sign"
+        }
+
+        return rebaseCount.isEmpty ? "Rebase" : "Rebase " + rebaseCount
+    }
 
     /// The commits this branch has above the base it was rebased
     /// on, which is the number the branch is: what one push happens
@@ -329,71 +348,3 @@ struct PullRequestFooterView: View {
 }
 
 // MARK: - PullRequestScope
-
-/// Which pull requests the tab lists.
-enum PullRequestScope: CaseIterable {
-    case worktree
-    case mine
-    case open
-
-    // MARK: Internal
-
-    var title: String {
-        switch self {
-        case .worktree:
-            "Worktree"
-
-        case .mine:
-            "Mine"
-
-        case .open:
-            "Open"
-        }
-    }
-
-    /// The client's scope, branch-bound for the worktree case.
-    func listScope(branch: String?) -> GitHubClient.ListScope {
-        switch self {
-        case .worktree:
-            .branch(branch ?? "")
-
-        case .mine:
-            .mine
-
-        case .open:
-            .open
-        }
-    }
-}
-
-// MARK: - PullRequestScopePicker
-
-/// The segmented scope control at the tab's top.
-struct PullRequestScopePicker: View {
-    // MARK: Internal
-
-    @Binding var scope: PullRequestScope
-
-    /// What the worktree scope calls itself: Branch on the main
-    /// checkout, where there is no worktree to speak of.
-    let worktreeTitle: String
-
-    var body: some View {
-        Picker("Scope", selection: $scope) {
-            ForEach(PullRequestScope.allCases, id: \.self) { scope in
-                Text(scope == .worktree ? worktreeTitle : scope.title).tag(scope)
-            }
-        }
-        .pickerStyle(.segmented)
-        .controlSize(.small)
-        .labelsHidden()
-        .padding(Self.padding)
-        .hoverHelp(
-            "Worktree: this branch's pull requests, open and closed. Mine: open ones you created. Open: every open one",
-        )
-    }
-
-    // MARK: Private
-
-    private static let padding: CGFloat = 8
-}

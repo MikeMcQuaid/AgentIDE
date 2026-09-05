@@ -206,4 +206,22 @@ extension PullRequestsModelTests {
         #expect(await model.push() == false)
         #expect(model.canPush)
     }
+
+    @Test
+    func `the rebase button says what it would actually do`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        await model.reload()
+
+        // Nothing to move it onto: what is left is the signing, and
+        // a count of commits behind would be a count of none.
+        model.rebaseNeed = .sign
+        #expect(model.rebaseTitle == "Sign commits")
+
+        // A base that has moved is a rebase, whether or not it also
+        // signs on the way.
+        model.rebaseNeed = .rebaseAndSign
+        #expect(model.rebaseTitle == "Rebase and sign")
+        model.rebaseNeed = .rebase
+        #expect(model.rebaseTitle == "Rebase on origin")
+    }
 }
