@@ -177,13 +177,10 @@ struct ReviewFooterView: View {
             .frame(maxWidth: .infinity)
             .frame(height: Self.resizeHandleHeight)
             .contentShape(Rectangle())
-            .onHover { inside in
-                if inside {
-                    NSCursor.resizeUpDown.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
+            // The system's own pointer for a row edge, which holds
+            // over the AppKit views either side of it; a pushed
+            // `NSCursor` did not.
+            .pointerStyle(.rowResize)
             .gesture(
                 DragGesture()
                     .onChanged { value in

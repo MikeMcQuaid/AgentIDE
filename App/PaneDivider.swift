@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// A draggable pane divider driving a bound pane width, so split
@@ -21,13 +20,11 @@ struct PaneDivider: View {
             .frame(width: 1)
             .contentShape(Rectangle().inset(by: -Self.grabSlop))
             .gesture(drag)
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
+            // The system's own pointer for a column edge: pushing an
+            // `NSCursor` on hover fought every neighbouring AppKit
+            // view, which sets its own as the pointer crosses it, so
+            // the arrow stayed an arrow until a drag began.
+            .pointerStyle(.columnResize)
     }
 
     // MARK: Private
