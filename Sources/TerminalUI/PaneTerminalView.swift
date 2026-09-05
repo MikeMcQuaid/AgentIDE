@@ -153,6 +153,27 @@ final class PaneTerminalView: LocalProcessTerminalView {
         return CGSize(width: gridWidth / CGFloat(columns), height: optimal.height / CGFloat(rows))
     }
 
+    /// Sends Option and an arrow as terminals always have, for a
+    /// program that never asked for the kitty keyboard protocol:
+    /// SwiftTerm now encodes them the way that protocol does whether
+    /// or not anything turned it on, and a shell typed the tail of
+    /// the sequence into the line rather than moving a word. Fed by
+    /// the coordinator's event monitor, since `keyDown` is not
+    /// overridable either; nil means the pane consumed it.
+    func routeKey(_ event: NSEvent) -> NSEvent? {
+        guard window?.firstResponder === self,
+              getTerminal().keyboardEnhancementFlags.isEmpty,
+              event.modifierFlags.isDisjoint(with: [.command, .control]),
+              event.modifierFlags.contains(.option),
+              let arrow = Self.arrow(of: event)
+        else {
+            return event
+        }
+
+        send(TerminalKeys.optionArrow(arrow, applicationCursor: getTerminal().applicationCursor))
+        return nil
+    }
+
     /// The whole recent output from herdr, reflowed like a selection
     /// copy when this pane reflows, onto the clipboard.
     @objc
@@ -243,6 +264,31 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
     /// The wheel's fractional line carry between events.
     private var wheelRemainder: CGFloat = 0
+
+    /// Which arrow an event is, if it is one.
+    private static func arrow(of event: NSEvent) -> TerminalKeys.Arrow? {
+        guard let key = event.charactersIgnoringModifiers?.unicodeScalars.first.map({ Int($0.value) })
+        else {
+            return nil
+        }
+
+        switch key {
+        case NSLeftArrowFunctionKey:
+            return .left
+
+        case NSRightArrowFunctionKey:
+            return .right
+
+        case NSUpArrowFunctionKey:
+            return .upward
+
+        case NSDownArrowFunctionKey:
+            return .downward
+
+        default:
+            return nil
+        }
+    }
 
     /// Whether this pane is the first to take the event.
     private static func claim(_ event: NSEvent) -> Bool {

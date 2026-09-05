@@ -328,6 +328,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `HerdrSlowReaderIntegrationTests` reproduces it under load, and
   `HerdrLargeInputIntegrationTests` meets it whenever the run is
   contended; both stay disabled until herdr waits or retries.
+- SwiftTerm encodes Option and an arrow the way the kitty keyboard
+  protocol does (`ESC [ 1 ; 3 D`) whether or not anything turned that
+  protocol on, so a shell read as far as `ESC [ 1`, found nothing
+  bound and typed `;3D` into the line instead of moving a word. Its
+  `keyDown` is not overridable, so `PaneTerminalView.routeKey` takes
+  those four keys off the coordinator's event monitor and sends what
+  terminals have always sent (`TerminalKeys.optionArrow`), leaving a
+  pane whose program did turn the protocol on alone.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with
