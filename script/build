@@ -4,8 +4,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# A release workflow creates its local version tag before building.
-version="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+# A release workflow creates its local version tag before building, so
+# a release names itself. Every other build takes the most recent tag
+# behind it and says which release it continues, told apart by the
+# build number below; `0.0.0` is what a repository with no tags at all
+# gets, which is what the release workflow reserves it for.
+version="$(git describe --tags --abbrev=0 2>/dev/null || true)"
 version="${version:-0.0.0}"
 if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
   echo "Version tag must be bare MAJOR.MINOR.PATCH: ${version}" >&2

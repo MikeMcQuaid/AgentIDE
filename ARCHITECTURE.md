@@ -936,11 +936,15 @@ on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
 Three scripts turn a checkout into the artefact a release ships, split
 so that only the last needs credentials:
 
-- `script/build` validates an exact tag on the current commit as three
+- `script/build` takes the most recent tag behind the current commit
+  (`git describe --tags --abbrev=0`), validates it as three
   period-separated integers with no leading zeroes and passes it as
-  `MARKETING_VERSION`; an untagged development or CI build uses
-  `0.0.0`. `CURRENT_PROJECT_VERSION` remains the build number and
-  counts the default branch's commits. The release workflow selects the
+  `MARKETING_VERSION`. A release tags its commit before building, so
+  it names itself; every build after that names the release it
+  continues rather than claiming `0.0.0`, which is left for a
+  repository with no tags at all. `CURRENT_PROJECT_VERSION` remains
+  the build number and counts the default branch's commits, which is
+  what tells two builds of one version apart. The release workflow selects the
   Release configuration; local builds stay Debug.
 - `script/zip` verifies the built app's signature, then zips it with
   `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the
