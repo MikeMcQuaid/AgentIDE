@@ -11,13 +11,22 @@ public extension SessionService {
     /// first time and tracking the branch there. Nil when the branch
     /// belongs to origin, which is every branch of your own.
     func forkRemote(worktreePath: String, branch: String) async -> (owner: String, remote: String)? {
-        if let known = forkRemotes.answer(worktreePath: worktreePath, branch: branch) {
-            return known
-        }
+        switch forkRemotes.answer(worktreePath: worktreePath, branch: branch) {
+        case .origin:
+            return nil
 
-        let found = await readForkRemote(worktreePath: worktreePath, branch: branch)
-        forkRemotes.remember(found, worktreePath: worktreePath, branch: branch)
-        return found
+        case let .fork(owner, remote):
+            return (owner, remote)
+
+        case .unasked:
+            let found = await readForkRemote(worktreePath: worktreePath, branch: branch)
+            forkRemotes.remember(
+                found.map { ForkAnswer.fork(owner: $0.owner, remote: $0.remote) } ?? .origin,
+                worktreePath: worktreePath,
+                branch: branch,
+            )
+            return found
+        }
     }
 
     // MARK: Internal

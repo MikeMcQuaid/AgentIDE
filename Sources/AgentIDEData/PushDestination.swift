@@ -1,5 +1,3 @@
-import AgentIDEDomain
-
 // MARK: - PushDestination
 
 /// Where a branch can be pushed: the repository it came from, or the

@@ -1,5 +1,3 @@
-import AgentIDEDomain
-
 /// The remotes a branch belongs to. A pull request opened from a fork
 /// is checked out with the fork's URL written straight into the
 /// branch's config and no remote named for it, which leaves the

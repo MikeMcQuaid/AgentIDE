@@ -10,7 +10,7 @@ public enum GitHubRemote {
     /// The `owner/name` a URL points at, nil when it points anywhere
     /// but GitHub or names no repository.
     public static func fullName(ofURL url: String) -> String? {
-        guard let range = url.range(of: host) else {
+        guard let range = url.range(of: host), isHost(range, in: url) else {
             return nil
         }
 
@@ -42,4 +42,17 @@ public enum GitHubRemote {
     private static let host = "github.com"
 
     private static let separators: CharacterSet = .init(charactersIn: ":/")
+
+    /// Whether a match is the URL's host rather than part of a
+    /// longer name: `evilgithub.com` and `github.com.example.org`
+    /// are somebody else's, however much they look like this one.
+    private static func isHost(_ match: Range<String.Index>, in url: String) -> Bool {
+        let before = match.lowerBound == url.startIndex ? nil : url[url.index(before: match.lowerBound)]
+        guard before == nil || before == "/" || before == "@" else {
+            return false
+        }
+
+        let after = match.upperBound == url.endIndex ? nil : url[match.upperBound]
+        return after == "/" || after == ":"
+    }
 }

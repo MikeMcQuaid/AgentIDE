@@ -16,6 +16,15 @@ struct GitHubRemoteTests {
         #expect(GitHubRemote.fullName(ofURL: "https://gitlab.com/owner/name") == nil)
         #expect(GitHubRemote.fullName(ofURL: "https://github.com/Homebrew") == nil)
         #expect(GitHubRemote.owner(ofURL: "") == nil)
+
+        // A host that merely reads like GitHub's is somebody
+        // else's, and a push aimed there would be a push aimed at
+        // a stranger.
+        #expect(GitHubRemote.fullName(ofURL: "https://evilgithub.com/Homebrew/brew") == nil)
+        #expect(GitHubRemote.fullName(ofURL: "https://github.com.example.org/Homebrew/brew") == nil)
+        #expect(GitHubRemote.fullName(ofURL: "git@notgithub.com:Homebrew/brew.git") == nil)
+        // Its own forms, however they are written, still count.
+        #expect(GitHubRemote.fullName(ofURL: "ssh://git@github.com/Homebrew/brew.git") == "Homebrew/brew")
     }
 
     @Test
