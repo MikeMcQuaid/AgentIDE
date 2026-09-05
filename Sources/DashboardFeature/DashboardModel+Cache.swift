@@ -52,6 +52,17 @@ extension DashboardModel {
         }
     }
 
+    /// Reads what each agent calls its own models, which costs a
+    /// file read apiece and no sandbox launch at all.
+    func readModelNames() {
+        for agent in AgentKind.allCases {
+            let names = service.modelNames(for: agent)
+            if names.isEmpty == false {
+                modelNames[agent] = names
+            }
+        }
+    }
+
     func restoreDiscoveredModels() {
         for (raw, models) in store.load().discoveredModels {
             // Only what the agent itself can report: anything

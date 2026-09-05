@@ -30,6 +30,7 @@ public final class DashboardModel {
         watcher.start()
         restoreCachedSidebar()
         restoreDiscoveredModels()
+        readModelNames()
     }
 
     deinit {
@@ -193,6 +194,7 @@ public final class DashboardModel {
             efforts: fallback.efforts,
             defaultModel: defaults.model,
             defaultEffort: defaults.effort,
+            names: modelNames[agent] ?? [:],
         )
     }
 
@@ -335,6 +337,10 @@ public final class DashboardModel {
     /// Models each CLI reported, seeded from the last launch's answer
     /// by the cache extension; absent agents fall back.
     var discoveredModels: [AgentKind: [String]] = [:]
+
+    /// See `SessionService.modelNames`: read beside the models, so a
+    /// picker draws from memory rather than a file.
+    var modelNames: [AgentKind: [String: String]] = [:]
 
     /// The newest reading (running or queued), the queued follow-up
     /// while one is joinable, and the repositories queued to be

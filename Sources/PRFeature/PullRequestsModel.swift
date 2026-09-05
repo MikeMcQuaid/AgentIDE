@@ -117,7 +117,11 @@ final class PullRequestsModel {
         }
         launchChoices = { agent in
             let choices = service.launchChoices(for: agent)
-            return (choices.models, service.defaultEffort(for: agent))
+            return LaunchChoices(
+                models: choices.models,
+                defaultEffort: service.defaultEffort(for: agent),
+                names: service.modelNames(for: agent),
+            )
         }
         generateDescription = { commits, branch in
             await service.draftPullRequestDescription(fromCommits: commits, branch: branch)
@@ -309,7 +313,7 @@ final class PullRequestsModel {
 
     /// The picker's models and the effort a launch without a flag
     /// runs at, for a disclosure of a session started on defaults.
-    var launchChoices: (AgentKind) -> (models: [String], defaultEffort: String?) = { _ in ([], nil) }
+    var launchChoices: (AgentKind) -> LaunchChoices = { _ in LaunchChoices() }
     /// The repository's default branch, which has no pull request
     /// of its own to look for.
     let defaultBranch: String?

@@ -8,11 +8,18 @@ public struct AgentChoices: Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates the choices.
-    public init(models: [String], efforts: [String], defaultModel: String, defaultEffort: String) {
+    public init(
+        models: [String],
+        efforts: [String],
+        defaultModel: String,
+        defaultEffort: String,
+        names: [String: String] = [:],
+    ) {
         self.models = models
         self.efforts = efforts
         self.defaultModel = defaultModel
         self.defaultEffort = defaultEffort
+        self.names = names
     }
 
     // MARK: Public
@@ -29,4 +36,9 @@ public struct AgentChoices: Hashable, Sendable {
     /// The effort it opens on, which is what the CLI itself would
     /// run at rather than the first of its tiers.
     public let defaultEffort: String
+
+    /// Fuller names the agent itself reported, by model name: an
+    /// alias like `fable` reads as the version it stands for where
+    /// the agent has said which, and as itself where it has not.
+    public let names: [String: String]
 }

@@ -44,13 +44,13 @@ public struct AgentOptionPickers: View {
             .hoverHelp("The agent CLI to run")
             Picker("Model", selection: $model) {
                 ForEach(choices(agent).models, id: \.self) { name in
-                    Text(AgentOptionName.display(name)).tag(name)
+                    Text(AgentOptionName.display(name, named: choices(agent).names)).tag(name)
                 }
             }
             .hoverHelp("The model the agent uses")
             Picker("Effort", selection: $effort) {
                 ForEach(choices(agent).efforts, id: \.self) { name in
-                    Text(AgentOptionName.display(name)).tag(name)
+                    Text(AgentOptionName.display(name, named: choices(agent).names)).tag(name)
                 }
             }
             .hoverHelp("How much reasoning the agent spends")

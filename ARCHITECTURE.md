@@ -506,9 +506,14 @@ page resumes any past conversation into a fresh worktree.
   modification time: keyed on the version alone, a model added
   server-side stayed out of the picker until the CLI itself was
   upgraded. Names shown are the ids read as words (`gpt-5.6-sol` is GPT
-  5.6 Sol), with Claude's aliases carrying the version they stand for,
-  written down because Claude Code has no listing to ask. What is sent
-  is always the id.
+  5.6 Sol). Claude takes an alias saying nothing about its version and
+  has no listing to ask, so the version is read from the identifiers
+  Claude Code recorded using in its own state (`modelNamesFile`,
+  `~/.claude.json`): `claude-fable-5-1` is what makes `fable` read as
+  Fable 5.1, the newest of each family winning, and an alias no
+  identifier names is shown as it is rather than guessed at. No model's
+  version is written down in this app, and what is sent is always the
+  name the agent takes.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.

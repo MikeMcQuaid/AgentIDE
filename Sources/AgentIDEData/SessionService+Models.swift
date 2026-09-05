@@ -65,6 +65,35 @@ public extension SessionService {
         return (version ?? "") + "#" + (modified?.timeIntervalSince1970.description ?? "")
     }
 
+    /// The fuller names an agent reports for its own models, by the
+    /// name `--model` takes. Read from the file the agent keeps
+    /// rather than written here, so a new version names itself the
+    /// first time it is used.
+    func modelNames(for agent: AgentKind) -> [String: String] {
+        guard let file = runner(for: agent).modelNamesFile,
+              let data = FileManager.default.contents(atPath: paths.sandboxHome + "/" + file),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return [:]
+        }
+
+        return ClaudeModelNames.names(fromIdentifiers: Self.modelIdentifiers(inClaudeState: json))
+    }
+
+    /// Every model identifier Claude Code's state names: the options
+    /// it was offered, and the usage it recorded per project.
+    static func modelIdentifiers(inClaudeState json: [String: Any]) -> [String] {
+        var identifiers = [String]()
+        let offered = json["additionalModelOptionsCache"] as? [[String: Any]] ?? []
+        identifiers += offered.compactMap { $0["value"] as? String }
+        let projects = json["projects"] as? [String: Any] ?? [:]
+        for project in projects.values {
+            let usage = (project as? [String: Any])?["lastModelUsage"] as? [String: Any] ?? [:]
+            identifiers += usage.keys
+        }
+        return identifiers
+    }
+
     /// What a picker starts on for an agent: the first model it
     /// offers and the effort the CLI itself would use. A form that
     /// opens on nothing makes the first thing anyone does a choice

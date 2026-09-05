@@ -69,4 +69,20 @@ struct AgentRunnerTests {
         """
         #expect(CodexRunner().parseModelList(listed) == ["gpt-5.6-sol", "gpt-5.4-mini"])
     }
+
+    @Test
+    func `claude's own state names the models it has used`() {
+        // The shape `~/.claude.json` has: the options it was offered,
+        // and what each project last ran.
+        let state: [String: Any] = [
+            "additionalModelOptionsCache": [["value": "claude-fable-5-1[1m]", "label": "Fable"]],
+            "projects": [
+                "/repo": ["lastModelUsage": ["claude-opus-5": ["inputTokens": 1]]],
+                "/other": ["lastModelUsage": ["claude-haiku-4-5-20251001": ["inputTokens": 2]]],
+            ],
+        ]
+
+        let found = SessionService.modelIdentifiers(inClaudeState: state).sorted()
+        #expect(found == ["claude-fable-5-1[1m]", "claude-haiku-4-5-20251001", "claude-opus-5"])
+    }
 }

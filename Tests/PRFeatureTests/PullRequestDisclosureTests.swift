@@ -52,7 +52,11 @@ struct PullRequestDisclosureTests {
         defer { try? FileManager.default.removeItem(atPath: file) }
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)], metadataFile: file)
-        model.launchChoices = { _ in (["fable", "opus"], "high") }
+        model.launchChoices = { _ in
+            // The names Claude Code itself reported, which is
+            // where a version comes from.
+            LaunchChoices(models: ["fable", "opus"], defaultEffort: "high", names: ["fable": "Fable 5.1"])
+        }
         // A default launch writes no flags: the arguments are empty.
         var metadata = model.store.load()
         metadata.sessionsByWorktree["/worktrees/feature"] = "agentide--repo--feature--claude"
@@ -78,7 +82,11 @@ struct PullRequestDisclosureTests {
             version: nil,
         )
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1, session: running)])
-        model.launchChoices = { _ in (["fable", "opus"], "high") }
+        model.launchChoices = { _ in
+            // The names Claude Code itself reported, which is
+            // where a version comes from.
+            LaunchChoices(models: ["fable", "opus"], defaultEffort: "high", names: ["fable": "Fable 5.1"])
+        }
 
         #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
     }
@@ -99,10 +107,11 @@ struct PullRequestDisclosureTests {
         // An id is read as its words, never shown raw.
         #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6 Sol")
         #expect(AgentOptionName.display("gpt-5.3-codex-spark") == "GPT 5.3 Codex Spark")
-        // A Claude alias carries the version it stands for, while
-        // what is sent stays the alias.
-        #expect(AgentOptionName.display("fable") == "Fable 5.1")
-        #expect(AgentOptionName.display("haiku") == "Haiku 4.5")
+        // A name the agent itself reported wins; nothing about a
+        // version is written down here, so an alias it said nothing
+        // about is shown as it is.
+        #expect(AgentOptionName.display("fable", named: ["fable": "Fable 5.1"]) == "Fable 5.1")
+        #expect(AgentOptionName.display("fable") == "Fable")
         // A name already carrying digits or dashes is its own.
         #expect(AgentOptionName.display("opus-5") == "opus-5")
         #expect(AgentOptionName.display("minimal") == "Minimal")

@@ -47,6 +47,12 @@ public protocol AgentRunner: Sendable {
     /// list.
     var modelListingCommand: [String] { get }
 
+    /// The file naming the models the agent has actually used,
+    /// relative to its home, where it keeps one. Their identifiers
+    /// carry versions the aliases do not, which is the only honest
+    /// way to write `fable` as Fable 5.1.
+    var modelNamesFile: String? { get }
+
     /// The file that listing reads, relative to the agent's home,
     /// when the list comes from a cache rather than the binary. Its
     /// modification time says when the answer last changed, so a
@@ -92,6 +98,11 @@ extension AgentRunner {
     /// colour codes and prose: the first plausible token per line.
     /// Most agents answer from the binary, not from a file.
     public var modelCacheFile: String? {
+        nil
+    }
+
+    /// Most agents' names need no looking up.
+    public var modelNamesFile: String? {
         nil
     }
 
@@ -178,6 +189,13 @@ public struct ClaudeCodeRunner: AgentRunner {
     /// read as model names. The curated list above stands instead.
     public var modelListingCommand: [String] {
         []
+    }
+
+    /// Claude Code records every model identifier it has used here,
+    /// so `fable` can be read as the Fable it stands for without a
+    /// version being written down anywhere in this app.
+    public var modelNamesFile: String? {
+        ".claude.json"
     }
 
     /// Claude Code's effort tiers.
