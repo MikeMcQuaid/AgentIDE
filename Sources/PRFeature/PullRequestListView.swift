@@ -200,7 +200,7 @@ struct PullRequestFooterView: View {
 
     var rebaseButton: some View {
         BusyButton(
-            rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.arrow + " " + rebaseCount,
+            rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.downArrow + rebaseCount,
             busy: "Rebasing",
             disabled: model.canRebase == false,
             keepsTitle: true,
@@ -214,7 +214,7 @@ struct PullRequestFooterView: View {
 
     var pushButton: some View {
         BusyButton(
-            pushCount.isEmpty ? "Push" : "Push " + Self.arrow + " " + pushCount,
+            pushCount.isEmpty ? "Push" : "Push " + Self.upArrow + pushCount,
             busy: "Pushing",
             disabled: model.canPush == false,
             keepsTitle: true,
@@ -230,9 +230,11 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    /// Between a button's name and its count: what it is about to
-    /// send, rather than a number sitting against a word.
-    private static let arrow = "\u{2192}"
+    /// The arrows the sidebar's own counts use, so a number means
+    /// the same thing in both: up is what goes to the remote, down
+    /// is what comes from it.
+    private static let upArrow = "\u{2191}"
+    private static let downArrow = "\u{2193}"
 
     /// The commits this branch has above the base it was rebased
     /// on, which is the number the branch is: what one push happens
