@@ -191,7 +191,10 @@ struct PullRequestStackTests {
             BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
         }
         let done = Mutex([String]())
-        model.performRebase = { _ in done.withLock { $0.append("rebase") } }
+        model.performRebase = { _ in
+            done.withLock { $0.append("rebase") }
+            return "origin/main"
+        }
         model.stacking.restack = { _ in
             done.withLock { $0.append("restack") }
             return ["upper"]

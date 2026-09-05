@@ -331,7 +331,7 @@ final class PullRequestsModel {
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
     var performPush: (Worktree) async throws -> PushDestination
-    var performRebase: (Worktree) async throws -> Void
+    var performRebase: (Worktree) async throws -> String
     var checkTipSigned: (Worktree) async -> Bool
     var fetchTipCommit: (Worktree) async -> String?
 

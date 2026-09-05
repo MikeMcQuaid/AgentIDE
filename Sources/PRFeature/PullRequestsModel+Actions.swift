@@ -267,7 +267,9 @@ extension PullRequestsModel {
     func act(_ work: () async throws -> Void) async -> Bool {
         do {
             try await work()
-            setStatus("Done.")
+            // No "Done.": the row, the button and the listing all say
+            // what happened, and a message that says only that it did
+            // is one more line to scroll past in the messages pane.
             await reload(keepingSelection: true)
             return true
         } catch {

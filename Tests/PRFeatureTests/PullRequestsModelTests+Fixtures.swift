@@ -45,9 +45,7 @@ extension PullRequestsModelTests {
         model.fetchCurrentBranch = { _ in nil }
         model.fetchRebaseNeed = { _ in .nothing }
         model.performPush = { _ in .origin }
-        model.performRebase = { _ in
-            // Succeeds without side effects.
-        }
+        model.performRebase = { _ in "origin/main" }
         model.checkTipSigned = { _ in true }
         model.fetchTipCommit = { _ in "tip" }
         return model

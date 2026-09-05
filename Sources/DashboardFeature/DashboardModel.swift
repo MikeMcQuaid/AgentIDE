@@ -181,12 +181,19 @@ public final class DashboardModel {
         selection = item
     }
 
-    /// The models and efforts an agent offers: models the CLI
-    /// reported at startup when it answered, the curated fallback
-    /// otherwise.
-    public func launchChoices(for agent: AgentKind) -> (models: [String], efforts: [String]) {
+    /// The models and efforts an agent offers, and what to start on:
+    /// models the CLI reported at startup when it answered, the
+    /// curated fallback otherwise.
+    public func launchChoices(for agent: AgentKind) -> AgentChoices {
         let fallback = service.launchChoices(for: agent)
-        return (discoveredModels[agent] ?? fallback.models, fallback.efforts)
+        let models = discoveredModels[agent] ?? fallback.models
+        let defaults = service.launchDefaults(for: agent, models: models)
+        return AgentChoices(
+            models: models,
+            efforts: fallback.efforts,
+            defaultModel: defaults.model,
+            defaultEffort: defaults.effort,
+        )
     }
 
     /// Deletes a worktree; its conversations stay readable in the
@@ -268,8 +275,8 @@ public final class DashboardModel {
                 name: item.worktree.repositoryName,
                 path: item.worktree.repositoryPath,
             )
-            try await service.fetchAndReset(repository: repository)
-            ErrorLog.shared.note("Reset \(repository.name) to origin.")
+            let ref = try await service.fetchAndReset(repository: repository)
+            ErrorLog.shared.note("Reset the checkout to " + ref + ".", about: repository.name)
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)

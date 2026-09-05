@@ -105,7 +105,7 @@ extension PullRequestsModel {
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
         do {
-            try await performRebase(worktree)
+            let target = try await performRebase(worktree)
             // A stack member that moves takes the branches above it
             // with it. Left where they were, they fork from the
             // default branch instead of from it, which is not a
@@ -128,7 +128,10 @@ extension PullRequestsModel {
                     + "and hit Rebase again")
                 return false
             }
-            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
+            setStatus(
+                "Rebased and signed.",
+                detail: "Rebased " + worktree.branch + " on " + target + " and signed it.",
+            )
             Self.requestSidebarRefresh()
             return true
         } catch {
