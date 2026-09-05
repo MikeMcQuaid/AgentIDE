@@ -17,6 +17,9 @@ extension PullRequestsModel {
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
         }
+        stacking.pushPublished = { worktree in
+            try await service.pushStack(worktree: worktree, publishedOnly: true)
+        }
         stacking.pending = { worktree in
             await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
         }

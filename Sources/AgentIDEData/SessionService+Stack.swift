@@ -271,10 +271,20 @@ public extension SessionService {
     /// request's base is on the remote before the branch that points
     /// at it. Each push carries the lease and the includes check the
     /// single-branch push does.
-    func pushStack(worktree: Worktree) async throws -> [String] {
+    func pushStack(worktree: Worktree, publishedOnly: Bool = false) async throws -> [String] {
         let stack = await stack(for: worktree)
         var pushed = [String]()
         for branch in stack.branches {
+            // A rebase moves what is already on the remote out from
+            // under GitHub, which then reads the stack as broken;
+            // putting it back is not the moment to publish a branch
+            // nobody has pushed yet.
+            if publishedOnly,
+               await git.refExists(worktreePath: worktree.path, ref: "origin/" + branch) == false
+            {
+                continue
+            }
+
             // What the single-branch push refuses, this refuses:
             // unsigned commits are turned away by the hook, and the
             // stack must not be left half pushed to learn that;

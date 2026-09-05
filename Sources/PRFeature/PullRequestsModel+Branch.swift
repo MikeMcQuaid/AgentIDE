@@ -115,6 +115,13 @@ extension PullRequestsModel {
             if stacking.stack.isStacked {
                 do {
                     _ = try await stacking.restack(worktree)
+                    // Every branch the restack moved is now behind
+                    // what the remote has, and GitHub reads a stack
+                    // whose parents moved as no stack at all: the
+                    // published ones go back up at once. A branch
+                    // nobody has pushed stays unpushed, which Push
+                    // is for.
+                    _ = try await stacking.pushPublished(worktree)
                 } catch {
                     report("Rebasing the branches above " + worktree.branch + " failed: "
                         + error.localizedDescription)

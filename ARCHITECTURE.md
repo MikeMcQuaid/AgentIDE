@@ -766,6 +766,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   ticks every box and writes the AI disclosure from the session's model
   and effort, and only into a template. The template is read from the
   working copy or, for sparse checkouts, from git.
+- **A stack moves as one.** Rebasing any entry restacks the branches
+  above it and pushes the ones the remote already has, since GitHub
+  reads a pull request whose parent moved as no stack at all; pushing
+  any entry pushes every branch of the stack, bottom first, whether or
+  not each has a pull request open yet. A branch nobody has pushed is
+  published by Push and never by a rebase.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.

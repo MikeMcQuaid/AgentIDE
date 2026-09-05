@@ -262,6 +262,63 @@ struct PullRequestStackTests {
         #expect(model.listedBranch == "upper")
     }
 
+    @Test
+    func `a rebase anywhere in a stack puts the published branches back`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        let done = Mutex([String]())
+        model.performRebase = { _ in
+            done.withLock { $0.append("rebase") }
+            return "origin/main"
+        }
+        model.stacking.restack = { _ in
+            done.withLock { $0.append("restack") }
+            return ["upper"]
+        }
+        model.stacking.pushPublished = { _ in
+            done.withLock { $0.append("push published") }
+            return ["upper"]
+        }
+        await model.reload()
+
+        #expect(await model.rebaseSigned())
+
+        // A branch the restack moved is behind what the remote has,
+        // and GitHub reads a stack whose parents moved as no stack
+        // at all until the remote copies catch up.
+        #expect(done.withLock { $0 } == ["rebase", "restack", "push published"])
+    }
+
+    @Test
+    func `a push from inside a stack pushes the stack`() async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.fetchCurrentBranch = { _ in "upper" }
+        model.stacking.fetch = { _ in
+            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        }
+        let pushed = Mutex([String]())
+        model.stacking.push = { _ in
+            pushed.withLock { $0.append("stack") }
+            return ["lower", "upper"]
+        }
+        model.performPush = { _ in
+            pushed.withLock { $0.append("one branch") }
+            return .origin
+        }
+        await model.reload()
+
+        #expect(await model.push())
+
+        // One branch of a stack never goes up alone: the ones above
+        // it are built on this tip.
+        #expect(pushed.withLock { $0 } == ["stack"])
+    }
+
     // MARK: Private
 
     /// Puts one branch's listing in the store the model reads, the
