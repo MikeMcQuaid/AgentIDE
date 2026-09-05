@@ -725,9 +725,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
   which the next fetch replaces.
-- **Pushing** asks `viewerPermission` first: write access pushes to the
-  repository, anything less to the viewer's fork (`gh repo fork` on
-  first use) and the pull request names `owner:branch`. Rewritten
+- **Pushing** asks the branch first and GitHub second. A branch checked
+  out from someone else's pull request carries that fork's URL in its
+  config (all `gh pr checkout` leaves behind), so it is given a remote
+  named after the fork's owner and tracked there, and every push,
+  count and stack push follows it back to the fork. Otherwise
+  `viewerPermission` decides: write access pushes to the repository,
+  anything less to the viewer's fork (`gh repo fork` on first use).
+  Either fork names the pull request's head `owner:branch`. Rewritten
   history pushes with `--force-with-lease --force-if-includes`. The bare
   lease protects nothing under constant background fetches;
   `--force-if-includes` is the real gate, refusing a remote tip never

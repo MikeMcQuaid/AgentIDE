@@ -17,6 +17,10 @@ extension PullRequestsModel {
         // second press ran a fresh read.
         stacking.factsGeneration += 1
         let generation = stacking.factsGeneration
+        // Before the counts are read: a pull request from a fork has
+        // no tracking ref until its remote is named, and everything
+        // below counts against one.
+        _ = await nameFork(listedWorktree ?? worktree)
         let signed = await checkTipSigned(listedWorktree ?? worktree)
         let tip = await fetchTipCommit(listedWorktree ?? worktree)
         let need = await fetchRebaseNeed(listedWorktree ?? worktree)

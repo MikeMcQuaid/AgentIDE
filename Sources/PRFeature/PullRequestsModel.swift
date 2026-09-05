@@ -161,6 +161,9 @@ final class PullRequestsModel {
         fetchRebaseNeed = { worktree in
             await service.rebaseNeed(worktree: worktree)
         }
+        nameFork = { worktree in
+            await service.forkRemote(worktreePath: worktree.path, branch: worktree.branch)?.remote
+        }
         performPush = { worktree in
             try await service.push(worktree: worktree)
         }
@@ -334,6 +337,11 @@ final class PullRequestsModel {
     var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
+
+    /// Names a remote for the fork a checked-out pull request came
+    /// from, so the branch has a tracking ref to count against and
+    /// a push goes back to the fork.
+    var nameFork: (Worktree) async -> String?
     var performPush: (Worktree) async throws -> PushDestination
     var performRebase: (Worktree) async throws -> String
     var checkTipSigned: (Worktree) async -> Bool

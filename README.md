@@ -48,7 +48,8 @@ updates.
   model.
 - Pushes, rebases and opens pull requests as drafts or ready for review,
   templates filled in, labels attached, forks used where the repository
-  is not yours, and branches stacked in one worktree.
+  is not yours, pushes following a contributor's fork back to it, and
+  branches stacked in one worktree.
 - Copies unresolved review comments and failing CI logs into a prompt,
   resolves conversations and merges or queues, each with a click.
 - Notifies when an agent finishes or needs input, badges the Dock, and

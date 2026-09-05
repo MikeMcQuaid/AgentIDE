@@ -138,6 +138,11 @@ public extension SessionService {
         let worktreePath = try await createDetachedWorktreePath(repository: repository, name: "pr-\(number)")
         try await github.checkoutPullRequest(worktreePath: worktreePath, number: number)
         let branch = detail.headBranch.isEmpty ? "pr-\(number)" : detail.headBranch
+        // A pull request from a fork is checked out with the fork's
+        // URL and no remote named for it: naming one here is what
+        // gives the branch a tracking ref to count against and a
+        // remote to push back to.
+        _ = await forkRemote(worktreePath: worktreePath, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: prompt,
