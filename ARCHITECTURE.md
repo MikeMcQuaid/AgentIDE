@@ -864,6 +864,71 @@ conversations to deleted worktrees. Rules:
   herdr owns arrives late, and a row the cache says had an agent waits
   for herdr rather than claiming its session ended.
 
+### Environment and the shared workspace
+
+Two directories in the shared workspace are the app's own: `user/`, the
+template sandvault syncs into the sandbox home, where the agent hooks
+live and where your keys and shell configuration go, and `agentide/`,
+holding prompts, hook events and `session-defaults`, which remembers
+what the new session form and `agentide new` last chose. The app also
+keeps `[worktrees] directory` in herdr's own configuration pointed at
+its layout, so `herdr worktree create` lands where the sidebar looks.
+
+The variables shell files and scripts can read or set:
+
+| Variable | Set by | Meaning |
+|---|---|---|
+| `AGENTIDE` | the app, in shell panes | `1`, so shell files know they are inside the app |
+| `SHARED_WORKSPACE` | you, for remote logins | the shared workspace `agentide` reads, when a login did not inherit it |
+| `HERDR_SESSION` | your shell configuration | the herdr session name, `agentide` for the installed app |
+| `AGENTIDE_SESSION` | the app, per pane | the session's label, which the agent hooks attribute events by |
+| `AGENTIDE_EDITS` | the app, in shell panes | where `agentide --wait` spools the edit it is waiting on |
+| `AGENTIDE_COLOR` | you | forces colour in `agentide`'s output where no terminal is detected |
+| `AGENTIDE_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
+| `AGENTIDE_DEVELOPMENT_TEAM` | you, running `script/test` | the Apple team id signing the app and the App Intents runner alike, which the framework requires; unset, the bundle is skipped |
+| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out even with a team set |
+| `AGENTIDE_DRY_RUN` | you, running `agentide new` | prints what it would make instead of making it |
+
+### From a phone
+
+Sessions are reachable over SSH as the sandbox user;
+[Moshi](https://getmoshi.app) speaks `mosh`, so a phone changing network
+keeps its session. Two things are particular to sandvault and herdr, and
+`sshd` is otherwise hardened however you would harden it:
+
+1. The sandbox user's home is built from a template sandvault owns, so
+   the client's key goes into that template and the home is rebuilt. A
+   sandvault upgrade replaces the template, so keep this in your
+   dotfiles if it must stay automatic:
+
+   ```bash
+   guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
+   cat "${HOME}/Downloads/moshi.pub" >>"${guest_keys}"
+   sv --rebuild build
+   ```
+
+2. `agentide new` needs the shared workspace named, which a login from
+   outside the sandbox does not inherit, in
+   `/etc/ssh/sshd_config.d/000-agentide.conf` with your own user name
+   and path, then Remote Login on for that account:
+
+   ```text
+   Match User sandvault-mike
+       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-mike
+   ```
+
+Aliasing the command in the sandbox user's shell configuration also
+names the session:
+
+```bash
+alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
+export HERDR_SESSION=agentide
+```
+
+Connecting as `sandvault-<you>` and running `herdr` presents every agent
+workspace in one attach, so a session steered from the phone is the same
+session.
+
 Owner avatars cache per owner under `Application Support/AgentIDE/Avatars`;
 a failed fetch is silent. The performance log
 (`<workspace>/tmp/agentide/performance.log`, off by default, on with
