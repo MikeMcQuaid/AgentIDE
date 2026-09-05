@@ -43,9 +43,10 @@ extension TerminalRepresentable {
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
 
-        /// Installs the Option-drag rectangular selection and the
-        /// wheel routing: both arrive through a monitor because
-        /// SwiftTerm's mouse handling is not overridable.
+        /// Installs the Option-drag rectangular selection, the wheel
+        /// routing and the Option-arrow keys: all three arrive
+        /// through a monitor because SwiftTerm's mouse and key
+        /// handling are not overridable.
         func installBlockSelection(on view: PaneTerminalView) {
             guard blockMonitor == nil else {
                 return
@@ -58,10 +59,13 @@ extension TerminalRepresentable {
             let selector = BlockSelector(view: view)
             blockSelector = selector
             blockMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel],
+                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel, .keyDown],
             ) { [weak view] event in
                 guard let view, event.window === view.window else {
                     return event
+                }
+                guard event.type != .keyDown else {
+                    return view.routeKey(event)
                 }
                 guard event.type != .scrollWheel else {
                     return view.routeWheel(event)

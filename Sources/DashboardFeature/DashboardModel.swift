@@ -30,6 +30,7 @@ public final class DashboardModel {
         watcher.start()
         restoreCachedSidebar()
         restoreDiscoveredModels()
+        readModelNames()
     }
 
     deinit {
@@ -181,12 +182,20 @@ public final class DashboardModel {
         selection = item
     }
 
-    /// The models and efforts an agent offers: models the CLI
-    /// reported at startup when it answered, the curated fallback
-    /// otherwise.
-    public func launchChoices(for agent: AgentKind) -> (models: [String], efforts: [String]) {
+    /// The models and efforts an agent offers, and what to start on:
+    /// models the CLI reported at startup when it answered, the
+    /// curated fallback otherwise.
+    public func launchChoices(for agent: AgentKind) -> AgentChoices {
         let fallback = service.launchChoices(for: agent)
-        return (discoveredModels[agent] ?? fallback.models, fallback.efforts)
+        let models = discoveredModels[agent] ?? fallback.models
+        let defaults = service.launchDefaults(for: agent, models: models)
+        return AgentChoices(
+            models: models,
+            efforts: fallback.efforts,
+            defaultModel: defaults.model,
+            defaultEffort: defaults.effort,
+            names: modelNames[agent] ?? [:],
+        )
     }
 
     /// Deletes a worktree; its conversations stay readable in the
@@ -253,7 +262,7 @@ public final class DashboardModel {
                 path: item.worktree.repositoryPath,
             )
             try await service.fetch(repository: repository)
-            ErrorLog.shared.note("Fetched \(repository.name).")
+            ErrorLog.shared.note("fetched", about: repository.name)
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -268,8 +277,8 @@ public final class DashboardModel {
                 name: item.worktree.repositoryName,
                 path: item.worktree.repositoryPath,
             )
-            try await service.fetchAndReset(repository: repository)
-            ErrorLog.shared.note("Reset \(repository.name) to origin.")
+            let ref = try await service.fetchAndReset(repository: repository)
+            ErrorLog.shared.note("reset the checkout to `" + ref + "`", about: repository.name)
             await refresh()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
@@ -328,6 +337,10 @@ public final class DashboardModel {
     /// Models each CLI reported, seeded from the last launch's answer
     /// by the cache extension; absent agents fall back.
     var discoveredModels: [AgentKind: [String]] = [:]
+
+    /// See `SessionService.modelNames`: read beside the models, so a
+    /// picker draws from memory rather than a file.
+    var modelNames: [AgentKind: [String: String]] = [:]
 
     /// The newest reading (running or queued), the queued follow-up
     /// while one is joinable, and the repositories queued to be

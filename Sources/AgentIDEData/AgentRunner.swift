@@ -47,6 +47,19 @@ public protocol AgentRunner: Sendable {
     /// list.
     var modelListingCommand: [String] { get }
 
+    /// The file naming the models the agent has actually used,
+    /// relative to its home, where it keeps one. Their identifiers
+    /// carry versions the aliases do not, which is the only honest
+    /// way to write `fable` as Fable 5.1.
+    var modelNamesFile: String? { get }
+
+    /// The file that listing reads, relative to the agent's home,
+    /// when the list comes from a cache rather than the binary. Its
+    /// modification time says when the answer last changed, so a
+    /// list the server rewrote is noticed without the CLI having
+    /// been upgraded. Nil where the binary itself is the source.
+    var modelCacheFile: String? { get }
+
     /// The command line arguments selecting a model and effort; nil
     /// values fall back to the agent's defaults.
     func optionArguments(model: String?, effort: String?) -> String
@@ -83,8 +96,19 @@ extension AgentRunner {
 
     /// Extracts model names from a listing's output, tolerating ANSI
     /// colour codes and prose: the first plausible token per line.
+    /// Most agents answer from the binary, not from a file.
+    public var modelCacheFile: String? {
+        nil
+    }
+
+    /// Most agents' names need no looking up.
+    public var modelNamesFile: String? {
+        nil
+    }
+
     func parseModelList(_ output: String) -> [String] {
         var names = [String]()
+        let hidden: Set = ["gpt-reserve", "codex-auto-review"]
         for line in output.split(separator: "\n") {
             let plain = Self.strippingANSI(String(line))
             let token = plain
@@ -98,6 +122,10 @@ extension AgentRunner {
                   token.contains(where: \.isLetter),
                   // Model identifiers are lowercase; prose is not.
                   token == token.lowercased(),
+                  // Named in a listing but not a model to pick: a
+                  // placeholder and the reviewer the agent runs
+                  // itself.
+                  hidden.contains(token) == false,
                   names.contains(token) == false
             else {
                 continue
@@ -161,6 +189,13 @@ public struct ClaudeCodeRunner: AgentRunner {
     /// read as model names. The curated list above stands instead.
     public var modelListingCommand: [String] {
         []
+    }
+
+    /// Claude Code records every model identifier it has used here,
+    /// so `fable` can be read as the Fable it stands for without a
+    /// version being written down anywhere in this app.
+    public var modelNamesFile: String? {
+        ".claude.json"
     }
 
     /// Claude Code's effort tiers.
@@ -252,8 +287,15 @@ public struct CodexRunner: AgentRunner {
     public var modelListingCommand: [String] {
         [
             "grep -o '\"slug\": *\"[^\"]*\"' ~/.codex/models_cache.json"
-                + " | cut -d '\"' -f4 | grep -v codex-auto-review",
+                + " | cut -d '\"' -f4 | grep -vE 'codex-auto-review|gpt-reserve'",
         ]
+    }
+
+    /// Codex rewrites this cache when the server's list changes,
+    /// which is not when the CLI changes: its models moved under a
+    /// version that had not.
+    public var modelCacheFile: String? {
+        ".codex/models_cache.json"
     }
 
     /// Codex's reasoning effort levels.

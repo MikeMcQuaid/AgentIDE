@@ -13,15 +13,17 @@ extension DashboardModel {
     /// Asks each CLI its models, beside the others, only when its
     /// version has moved since the last answer.
     func discoverModels() async {
-        // Keyed by the CLI's version, read from the host in a few
-        // milliseconds: a list can only change when the CLI does,
-        // and asking it otherwise was twenty seconds of sandbox
-        // launch on every start.
+        // Keyed by the CLI's version and, where its list lives in a
+        // cache, that file's modification time: both read from the
+        // host in a few milliseconds, where asking the agent itself
+        // is twenty seconds of sandbox launch. The cache's time is
+        // what catches a model the server added under a version that
+        // had not moved.
         let known = store.load().discoveredModelsVersion
         await withTaskGroup(of: (AgentKind, String?, [String]?).self) { tasks in
             for agent in AgentKind.allCases {
                 tasks.addTask {
-                    let version = await self.service.probeVersion(of: agent)
+                    let version = await self.service.modelListingStamp(for: agent)
                     guard version == nil || version != known[agent.rawValue] else {
                         return (agent, version, nil)
                     }
@@ -46,6 +48,17 @@ extension DashboardModel {
                     metadata.discoveredModels[entry.agent.rawValue] = entry.models
                     metadata.discoveredModelsVersion[entry.agent.rawValue] = entry.version
                 }
+            }
+        }
+    }
+
+    /// Reads what each agent calls its own models, which costs a
+    /// file read apiece and no sandbox launch at all.
+    func readModelNames() {
+        for agent in AgentKind.allCases {
+            let names = service.modelNames(for: agent)
+            if names.isEmpty == false {
+                modelNames[agent] = names
             }
         }
     }

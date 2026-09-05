@@ -34,6 +34,11 @@ public final class ErrorLog {
         /// Whether the message is a failure; only failures count in
         /// the tab's badge and summon the tab.
         public let isError: Bool
+
+        /// The repository the work belonged to, when it belonged to
+        /// one: the pane draws its name in front in bold, the way
+        /// this app's own scripts label a line.
+        public let repository: String?
     }
 
     /// The one log the whole app reports into.
@@ -60,16 +65,26 @@ public final class ErrorLog {
         append(message, isError: false)
     }
 
-    /// The same, for work belonging to one repository: the name the
-    /// sidebar shows goes in front, since "Pushed" and "Rebased"
-    /// read identically whichever repository they happened in.
-    public func note(_ message: String, about repository: String) {
-        note(Self.prefixed(message, with: repository))
+    /// The same, for work belonging to one repository and, when it
+    /// is about one of them, one branch: the names the sidebar
+    /// shows go in front, since "pushed" and "rebased" read
+    /// identically whichever branch of whichever repository they
+    /// happened in.
+    public func note(_ message: String, about repository: String, branch: String? = nil) {
+        append(
+            Self.prefixed(message, with: repository, branch: branch),
+            isError: false,
+            repository: repository,
+        )
     }
 
     /// A failure in one repository's work, named the same way.
-    public func report(_ message: String, about repository: String) {
-        report(Self.prefixed(message, with: repository))
+    public func report(_ message: String, about repository: String, branch: String? = nil) {
+        append(
+            Self.prefixed(message, with: repository, branch: branch),
+            isError: true,
+            repository: repository,
+        )
     }
 
     /// Empties the log; the messages tab stays either way.
@@ -85,19 +100,29 @@ public final class ErrorLog {
     /// Monotonic, so identities survive the cap dropping entries.
     private var nextID = 0
 
-    /// The message with its repository in front, unless it is
-    /// already there: a name is worth saying once.
-    private static func prefixed(_ message: String, with repository: String) -> String {
+    /// The message with the repository, and the branch it is about,
+    /// in front of it: `brew: `main`: pushed`. Neither is repeated
+    /// where it is already there, since a name is worth saying once.
+    private static func prefixed(_ message: String, with repository: String, branch: String?) -> String {
         guard repository.isEmpty == false, message.hasPrefix(repository + ": ") == false else {
             return message
         }
+        guard let branch, branch.isEmpty == false, message.hasPrefix("`" + branch + "`: ") == false else {
+            return repository + ": " + message
+        }
 
-        return repository + ": " + message
+        return repository + ": `" + branch + "`: " + message
     }
 
-    private func append(_ message: String, isError: Bool) {
+    private func append(_ message: String, isError: Bool, repository: String? = nil) {
         nextID += 1
-        entries.append(Entry(id: nextID, date: Date(), message: message, isError: isError))
+        entries.append(Entry(
+            id: nextID,
+            date: Date(),
+            message: message,
+            isError: isError,
+            repository: message.hasPrefix((repository ?? "") + ": ") ? repository : nil,
+        ))
         if entries.count > Self.entryCap {
             entries.removeFirst(entries.count - Self.entryCap)
         }

@@ -15,9 +15,13 @@ private let parseCacheCap = 512
 public struct MarkdownText: View {
     // MARK: Lifecycle
 
-    /// Creates the view for one markdown string.
-    public init(_ text: String) {
+    /// Creates the view for one markdown string. `relativeTo` is the
+    /// directory its own file sits in, where it has one: a README's
+    /// `![shot](docs/screenshot.png)` means a file beside it, and
+    /// without somewhere to be relative to it can only be alt text.
+    public init(_ text: String, relativeTo directory: String? = nil) {
         self.text = text
+        self.directory = directory
     }
 
     // MARK: Public
@@ -92,6 +96,21 @@ public struct MarkdownText: View {
     static let blockCache: ParseCache<[ProseBlock]> = .init()
     static let inlineCache: ParseCache<AttributedString> = .init()
 
+    /// Where an image's source points: a web address as written, and
+    /// a path on this Mac as a file. A relative path has nothing to
+    /// be relative to here, so it stays alt text rather than
+    /// guessing at a directory.
+    static func imageURL(_ source: String, relativeTo directory: String? = nil) -> URL? {
+        if source.hasPrefix("http://") || source.hasPrefix("https://") {
+            return URL(string: source)
+        }
+        if source.hasPrefix("/") {
+            return URL(filePath: source)
+        }
+
+        return directory.map { URL(filePath: $0 + "/" + source) }
+    }
+
     // MARK: Private
 
     private static let spacing: CGFloat = 4
@@ -101,6 +120,10 @@ public struct MarkdownText: View {
     private static let codeBackgroundOpacity = 0.5
 
     private let text: String
+
+    /// See `init(_:relativeTo:)`: where a relative image source
+    /// points from.
+    private let directory: String?
 
     /// The text split on `<details>` blocks, which render collapsed;
     /// bots fold their long reports into them for a reason.
@@ -126,9 +149,31 @@ public struct MarkdownText: View {
             case let .table(header, rows):
                 table(header: header, rows: rows)
 
+            case let .image(source, alt):
+                image(source: source, alt: alt)
+
             case let .text(line):
                 Text(Self.inline(line)).textSelection(.enabled)
             }
+        }
+    }
+
+    /// An image the markdown embeds, drawn at its own size up to
+    /// the width it is given and never blown up past it. Anything
+    /// that will not load stays as its alt text, which is what the
+    /// text said before images were drawn at all.
+    @ViewBuilder
+    private func image(source: String, alt: String) -> some View {
+        if let url = Self.imageURL(source, relativeTo: directory) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                Text(Self.inline(alt)).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(alt)
+        } else {
+            Text(Self.inline(alt)).foregroundStyle(.secondary)
         }
     }
 

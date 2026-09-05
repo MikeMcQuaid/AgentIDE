@@ -3,9 +3,10 @@ import SwiftUI
 import TerminalUI
 
 /// The agent, model and effort dropdowns shared by every session
-/// creation surface. Neither model nor effort has a default: until
-/// one has been picked the picker stands empty and the form refuses
-/// to start, and afterwards the last pick is what comes back.
+/// creation surface. Each opens on something: the last pick where it
+/// still exists, and what the agent itself would run otherwise, so
+/// changing agent leaves a model and an effort chosen rather than two
+/// empty pickers and a form that will not start.
 public struct AgentOptionPickers: View {
     // MARK: Lifecycle
 
@@ -15,7 +16,7 @@ public struct AgentOptionPickers: View {
         agent: Binding<AgentKind>,
         model: Binding<String>,
         effort: Binding<String>,
-        choices: @escaping (AgentKind) -> (models: [String], efforts: [String]),
+        choices: @escaping (AgentKind) -> AgentChoices,
     ) {
         _agent = agent
         _model = model
@@ -42,23 +43,17 @@ public struct AgentOptionPickers: View {
             }
             .hoverHelp("The agent CLI to run")
             Picker("Model", selection: $model) {
-                // The unpicked state is a row of its own: a
-                // selection matching no row leaves the picker blank,
-                // which reads as a bug rather than as a choice
-                // waiting to be made.
-                Text("Choose…").tag("")
                 ForEach(choices(agent).models, id: \.self) { name in
-                    Text(AgentOptionName.display(name)).tag(name)
+                    Text(AgentOptionName.display(name, named: choices(agent).names)).tag(name)
                 }
             }
-            .hoverHelp("The model the agent uses; pick one to start")
+            .hoverHelp("The model the agent uses")
             Picker("Effort", selection: $effort) {
-                Text("Choose…").tag("")
                 ForEach(choices(agent).efforts, id: \.self) { name in
-                    Text(AgentOptionName.display(name)).tag(name)
+                    Text(AgentOptionName.display(name, named: choices(agent).names)).tag(name)
                 }
             }
-            .hoverHelp("How much reasoning the agent spends; pick one to start")
+            .hoverHelp("How much reasoning the agent spends")
         }
         .labelsHidden()
         // On appearance as well as on change: the agent, model and
@@ -75,7 +70,7 @@ public struct AgentOptionPickers: View {
     @Binding var model: String
     @Binding var effort: String
 
-    let choices: (AgentKind) -> (models: [String], efforts: [String])
+    let choices: (AgentKind) -> AgentChoices
 
     // MARK: Private
 
@@ -83,15 +78,17 @@ public struct AgentOptionPickers: View {
     private static let agentIconSize: CGFloat = 8
 
     /// A model or effort picked for one agent may not exist on
-    /// another; it is unpicked rather than sent, so the agent that
-    /// is chosen now gets a choice of its own.
+    /// another, and neither does the empty string a form opens on the
+    /// first time: either way the picker falls back to what this
+    /// agent itself would run, so there is always something chosen to
+    /// start with.
     private func resetUnavailableChoices() {
         let available = choices(agent)
         if available.models.contains(model) == false {
-            model = ""
+            model = available.defaultModel
         }
         if available.efforts.contains(effort) == false {
-            effort = ""
+            effort = available.defaultEffort
         }
     }
 }

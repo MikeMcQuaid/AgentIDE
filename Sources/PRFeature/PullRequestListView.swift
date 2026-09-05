@@ -127,10 +127,12 @@ struct PullRequestFooterView: View {
     @AppStorage(UtilityTabTarget.key)
     var utilityTab = ""
 
-    /// Sidebar-style: how far the branch sits behind its base.
+    /// How far the branch sits behind its base, bare: an arrow
+    /// belongs to whichever button draws one, and the stack's own
+    /// pair already carry theirs as icons.
     var rebaseCount: String {
         let behind = model.branchItem?.behindDefault ?? 0
-        return behind > 0 ? "\u{2193}" + String(behind) : ""
+        return behind > 0 ? String(behind) : ""
     }
 
     var rebaseHelp: String {
@@ -151,62 +153,59 @@ struct PullRequestFooterView: View {
             if let selected = model.selected {
                 copyButtons(for: selected)
             }
+            Spacer(minLength: Self.padding)
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                     .textSelection(.enabled)
             }
-            Spacer()
+            Spacer(minLength: Self.padding)
             if model.needsCreateForm {
-                draftToggle
+                openDraftButton
                 openButton
             }
             if model.isStackedEntry {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
-                BusyButton(mergeTitle, busy: model.mergeActionBusyTitle, prominent: true) {
+                BusyButton(
+                    mergeTitle,
+                    busy: model.mergeActionBusyTitle,
+                    prominent: true,
+                    disabled: model.canMergeAction == false,
+                ) {
                     await model.performMergeAction()
                 }
-                .hoverHelp(
-                    "The one merge action for the open conversation: its label names exactly "
-                        + "what a click does now, and a second click cancels automerge or queueing",
-                )
+                .hoverHelp(model.mergeActionHelp)
             }
         }
         .padding(Self.padding)
         .background(.bar)
     }
 
-    /// Whether the pull request opens as a draft, beside the button
-    /// that opens it: GitHub's own two glyphs for the state a click
-    /// is about to create, in the colour the row will carry, rather
-    /// than a checkbox saying the same thing in words.
-    var draftToggle: some View {
-        Button {
-            model.prIsDraft.toggle()
-        } label: {
-            Octicon(
-                ChecksStyle.stateOcticonName(state: "OPEN", isDraft: model.prIsDraft),
-                colour: ChecksStyle.stateColour(state: "OPEN", isDraft: model.prIsDraft),
-            )
-            .accessibilityLabel(model.prIsDraft ? "Opens as a draft" : "Opens ready for review")
+    /// Opening as a draft is its own button beside Open PR: the two
+    /// make different pull requests, and a toggle beside them said
+    /// which without saying what a click would do.
+    var openDraftButton: some View {
+        BusyButton(
+            "Draft",
+            busy: "Opening",
+            disabled: openDisabled,
+        ) {
+            model.prIsDraft = true
+            if await model.createPullRequest() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
         }
-        .buttonStyle(.glass)
-        .hoverHelp(
-            model.prIsDraft
-                ? "Opens as a draft: work to read rather than work to merge. Click to open it ready for review"
-                : "Opens ready for review. Click to open it as a draft instead",
-        )
+        .hoverHelp("Open it as a draft: work to read rather than work to merge")
     }
 
     var rebaseButton: some View {
         BusyButton(
-            rebaseCount,
-            busy: "Rebasing",
-            systemImage: "arrow.triangle.2.circlepath",
-            accessibilityLabel: model.rebaseTitle,
+            rebaseLabel,
+            busy: signsOnly ? "Signing" : "Rebasing",
             disabled: model.canRebase == false,
         ) {
             if await model.rebaseSigned() == false {
@@ -218,12 +217,9 @@ struct PullRequestFooterView: View {
 
     var pushButton: some View {
         BusyButton(
-            pushCount,
+            pushLabel,
             busy: "Pushing",
-            systemImage: "arrow.up",
-            accessibilityLabel: "Push",
             disabled: model.canPush == false,
-            keepsTitle: true,
         ) {
             if await model.push() == false {
                 utilityTab = UtilityTabTarget.errors
@@ -236,15 +232,74 @@ struct PullRequestFooterView: View {
 
     private static let padding: CGFloat = 8
 
-    /// Sidebar-style: how many commits a push would send.
+    /// The arrows the sidebar's own counts use, so a number means
+    /// the same thing in both places: up is what has yet to go to
+    /// the remote, down what has yet to come from it. A button draws
+    /// one of them at most, beside one count.
+    private static let upArrow = "\u{2191}"
+    private static let downArrow = "\u{2193}"
+
+    /// Whether the button would only sign: the base has not moved,
+    /// so nothing is being rebased onto anything.
+    private var signsOnly: Bool {
+        if case .sign = model.rebaseNeed {
+            return true
+        }
+
+        return false
+    }
+
+    /// What a click is about to do, or what the last one did while
+    /// the button stays dim: signing alone when there is no
+    /// rebasing in it, otherwise the rebase and how far behind the
+    /// branch is.
+    private var rebaseLabel: String {
+        if model.canRebase == false, let done = model.rebaseDoneTitle {
+            return done
+        }
+        guard signsOnly == false else {
+            return "Sign"
+        }
+
+        return rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.downArrow + rebaseCount
+    }
+
+    /// The same for the push: what it would send, or that it sent
+    /// it, while it stays dim.
+    private var pushLabel: String {
+        if model.canPush == false, let done = model.pushDoneTitle {
+            return done
+        }
+
+        return pushCount.isEmpty ? "Push" : "Push " + Self.upArrow + pushCount
+    }
+
+    /// The commits this branch has above the base it was rebased
+    /// on, which is the number the branch is: what one push happens
+    /// to carry changes with every push, and read as a size it was
+    /// never the size of anything.
     private var pushCount: String {
-        let ahead = model.branchItem?.aheadOfUpstream ?? 0
-        return ahead > 0 ? String(ahead) : ""
+        if model.commitsAboveBase > 0 {
+            String(model.commitsAboveBase)
+        } else {
+            ""
+        }
+    }
+
+    /// What stops either button opening anything: a title of spaces
+    /// dims rather than failing on click, the push comes first, and
+    /// a template still reading exactly as the repository wrote it
+    /// helps nobody as a pull request body.
+    private var openDisabled: Bool {
+        model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
+            || model.isFullyPushed == false
+            || model.templateUnedited
+            || model.unpushedBelow != nil
     }
 
     private var openButton: some View {
         BusyButton(
-            "Open PR",
+            "Open",
             busy: "Opening",
             prominent: true,
             // Trimmed like the validation, so a title of spaces
@@ -253,11 +308,9 @@ struct PullRequestFooterView: View {
             // is enough on its own, but a template still reading
             // exactly as the repository wrote it is not: opening
             // with its placeholders intact helps nobody.
-            disabled: model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
-                || model.isFullyPushed == false
-                || model.templateUnedited
-                || model.unpushedBelow != nil,
+            disabled: openDisabled,
         ) {
+            model.prIsDraft = false
             if await model.createPullRequest() == false {
                 utilityTab = UtilityTabTarget.errors
             }
@@ -314,71 +367,3 @@ struct PullRequestFooterView: View {
 }
 
 // MARK: - PullRequestScope
-
-/// Which pull requests the tab lists.
-enum PullRequestScope: CaseIterable {
-    case worktree
-    case mine
-    case open
-
-    // MARK: Internal
-
-    var title: String {
-        switch self {
-        case .worktree:
-            "Worktree"
-
-        case .mine:
-            "Mine"
-
-        case .open:
-            "Open"
-        }
-    }
-
-    /// The client's scope, branch-bound for the worktree case.
-    func listScope(branch: String?) -> GitHubClient.ListScope {
-        switch self {
-        case .worktree:
-            .branch(branch ?? "")
-
-        case .mine:
-            .mine
-
-        case .open:
-            .open
-        }
-    }
-}
-
-// MARK: - PullRequestScopePicker
-
-/// The segmented scope control at the tab's top.
-struct PullRequestScopePicker: View {
-    // MARK: Internal
-
-    @Binding var scope: PullRequestScope
-
-    /// What the worktree scope calls itself: Branch on the main
-    /// checkout, where there is no worktree to speak of.
-    let worktreeTitle: String
-
-    var body: some View {
-        Picker("Scope", selection: $scope) {
-            ForEach(PullRequestScope.allCases, id: \.self) { scope in
-                Text(scope == .worktree ? worktreeTitle : scope.title).tag(scope)
-            }
-        }
-        .pickerStyle(.segmented)
-        .controlSize(.small)
-        .labelsHidden()
-        .padding(Self.padding)
-        .hoverHelp(
-            "Worktree: this branch's pull requests, open and closed. Mine: open ones you created. Open: every open one",
-        )
-    }
-
-    // MARK: Private
-
-    private static let padding: CGFloat = 8
-}

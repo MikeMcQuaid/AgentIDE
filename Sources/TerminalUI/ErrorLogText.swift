@@ -30,20 +30,35 @@ public enum ErrorLogText {
 
     // MARK: Private
 
-    /// Failures keep the monospaced command-output look; status
-    /// notes read as prose.
+    /// What an identifier is drawn in: the pane's own size, so a
+    /// monospaced run sits on the same line as the prose beside it.
+    private static let code: NSFont = .monospacedSystemFont(
+        ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize,
+        weight: .regular,
+    )
+
+    /// Every message reads as prose, whether it failed or not, with
+    /// the identifiers it names monospaced and the repository it
+    /// belonged to in bold: one treatment across the pane, so a
+    /// branch looks like a branch wherever it is said.
     private static func message(of entry: ErrorLog.Entry) -> NSAttributedString {
-        let body = NSMutableAttributedString(string: entry.message, attributes: [
-            .font: entry.isError
-                ? NSFont.monospacedSystemFont(
-                    ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize,
-                    weight: .regular,
-                )
-                : NSFont.preferredFont(forTextStyle: .callout),
+        let rendered = MessageMarkup.rendered(entry.message)
+        let body = NSMutableAttributedString(string: rendered.text, attributes: [
+            .font: NSFont.preferredFont(forTextStyle: .callout),
             .foregroundColor: NSColor.textColor,
         ])
-        for link in MessageLinks.links(in: entry.message) {
-            body.addAttribute(.link, value: link.url, range: NSRange(link.range, in: entry.message))
+        for span in rendered.code {
+            body.addAttribute(.font, value: Self.code, range: NSRange(span, in: rendered.text))
+        }
+        if let repository = entry.repository, rendered.text.hasPrefix(repository + ": ") {
+            body.addAttribute(
+                .font,
+                value: NSFont.boldSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize),
+                range: NSRange(location: 0, length: repository.count),
+            )
+        }
+        for link in MessageLinks.links(in: rendered.text) {
+            body.addAttribute(.link, value: link.url, range: NSRange(link.range, in: rendered.text))
         }
         return body
     }

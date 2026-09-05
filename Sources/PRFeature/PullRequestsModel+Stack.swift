@@ -17,6 +17,9 @@ extension PullRequestsModel {
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
         }
+        stacking.pushPublished = { worktree in
+            try await service.pushStack(worktree: worktree, publishedOnly: true)
+        }
         stacking.pending = { worktree in
             await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
         }
@@ -338,17 +341,21 @@ extension PullRequestsModel {
             // Done means Push agrees; reporting success with the
             // stack still unsigned took a second press to notice.
             if let unsigned = stacking.unsignedBranches.first {
-                report("Restacked, but " + unsigned + "'s tip still reads unsigned; "
+                report("Restacked, but `" + unsigned + "`'s tip still reads unsigned; "
                     + "check the signing key and hit Rebase again")
                 return false
             }
             let verb = AppSettings.requiresSignedCommits ? "Rebased and signed" : "Rebased"
-            setStatus(
-                moved.isEmpty ? "Already in order." : verb + ".",
-                detail: moved.isEmpty
-                    ? "The stack was already in order."
-                    : verb + " " + moved.joined(separator: ", ") + ".",
-            )
+            guard moved.isEmpty == false else {
+                // Nothing moved, so nothing was done: the button
+                // must not claim otherwise.
+                setStatus("Already in order.", detail: "The stack was already in order.")
+                Self.requestSidebarRefresh()
+                return true
+            }
+
+            recordFinished(.rebased, branch: actedBranch ?? worktree.branch)
+            note(verb + " " + Self.named(moved) + ".")
             Self.requestSidebarRefresh()
             return true
         } catch {
@@ -369,7 +376,8 @@ extension PullRequestsModel {
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            setStatus("Pushed.", detail: "Pushed " + pushed.joined(separator: ", ") + ".")
+            recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
+            note("Pushed " + Self.named(pushed) + ".")
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

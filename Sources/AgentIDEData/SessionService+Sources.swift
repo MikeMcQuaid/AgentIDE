@@ -138,6 +138,11 @@ public extension SessionService {
         let worktreePath = try await createDetachedWorktreePath(repository: repository, name: "pr-\(number)")
         try await github.checkoutPullRequest(worktreePath: worktreePath, number: number)
         let branch = detail.headBranch.isEmpty ? "pr-\(number)" : detail.headBranch
+        // A pull request from a fork is checked out with the fork's
+        // URL and no remote named for it: naming one here is what
+        // gives the branch a tracking ref to count against and a
+        // remote to push back to.
+        _ = await forkRemote(worktreePath: worktreePath, branch: branch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: prompt,
@@ -173,13 +178,15 @@ public extension SessionService {
 
     /// Fetches origin and hard-resets the main checkout to its
     /// default branch.
-    func fetchAndReset(repository: Repository) async throws {
+    @discardableResult
+    func fetchAndReset(repository: Repository) async throws -> String {
         guard let ref = await git.defaultBaseRef(of: repository) else {
             throw SessionServiceError("\(repository.name) has no default branch to reset to.")
         }
 
         try await git.fetchAndReset(repositoryPath: repository.path, onto: ref)
         rememberFetch(repositoryPath: repository.path)
+        return ref
     }
 
     /// Fetches, then rebases the worktree onto the signed-rebase
@@ -192,7 +199,8 @@ public extension SessionService {
     /// conflict. This is how unsigned agent commits become pushable:
     /// the sandbox cannot sign and a hook blocks unsigned pushes, so
     /// signing always happens here on the host.
-    func rebaseSigned(worktree: Worktree) async throws {
+    @discardableResult
+    func rebaseSigned(worktree: Worktree) async throws -> String {
         let branch = worktree.branch
         let held = await git.currentBranch(worktreePath: worktree.path)
         if let held, held != branch {
@@ -207,6 +215,7 @@ public extension SessionService {
         if let held, held != branch {
             try await git.checkout(branch: held, worktreePath: worktree.path)
         }
+        return target
     }
 
     /// Whether anything in a repository is actively working, which

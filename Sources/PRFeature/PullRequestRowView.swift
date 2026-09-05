@@ -21,7 +21,7 @@ struct PullRequestRowView: View {
         HStack {
             VStack(alignment: .leading) {
                 titleRow
-                Text(caption).font(.callout).foregroundStyle(.secondary)
+                caption
             }
             Spacer()
             if showsActions {
@@ -41,11 +41,6 @@ struct PullRequestRowView: View {
 
     // MARK: Private
 
-    private var caption: String {
-        let author = ChecksStyle.authorDisplayName(summary.author ?? "")
-        return author.isEmpty ? summary.headBranch : summary.headBranch + " · " + author
-    }
-
     private var stateHelp: String {
         if summary.state != "OPEN" {
             summary.state.capitalized + " pull request"
@@ -54,6 +49,20 @@ struct PullRequestRowView: View {
         } else {
             "Open pull request"
         }
+    }
+
+    private var caption: some View {
+        HStack(spacing: Self.rowPadding) {
+            Text(summary.headBranch)
+                .font(NameStyle.font)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            let author = ChecksStyle.authorDisplayName(summary.author ?? "")
+            if author.isEmpty == false {
+                Text("· " + author).font(.callout).lineLimit(1)
+            }
+        }
+        .foregroundStyle(.secondary)
     }
 
     private var titleRow: some View {

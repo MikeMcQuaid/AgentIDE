@@ -154,6 +154,11 @@ public struct SessionService: Sendable {
     /// pane shells and busy spells.
     let paneLoadCache: PaneLoads = .init()
 
+    /// See `ForkRemotes`; a default so the public init is
+    /// untouched, and a class so every copy of the service shares
+    /// which fork each checked-out pull request belongs to.
+    let forkRemotes: ForkRemotes = .init()
+
     /// See `LastPanes`; a default so the public init is untouched,
     /// and a class so every copy of the service holds one answer.
     let lastPanes: LastPanes = .init()

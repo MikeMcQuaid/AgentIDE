@@ -160,19 +160,7 @@ public extension GitClient {
             return nil
         }
 
-        let url = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let range = url.range(of: "github.com") else {
-            return nil
-        }
-
-        let path = url[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: ":/"))
-        let components = path.split(separator: "/").map(String.init)
-        guard let owner = components.first, let repo = components.dropFirst().first else {
-            return nil
-        }
-
-        let name = repo.hasSuffix(".git") ? String(repo.dropLast(".git".count)) : repo
-        return owner + "/" + name
+        return GitHubRemote.fullName(ofURL: result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private func readDefaultBaseRef(of repository: Repository) async -> String? {

@@ -94,7 +94,7 @@ struct FileEditorView: View {
             Divider()
             if rendersMarkdown, isMarkdown {
                 ScrollView {
-                    MarkdownText(content)
+                    MarkdownText(content, relativeTo: markdownDirectory)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Self.padding)
                 }
@@ -158,6 +158,7 @@ struct FileEditorView: View {
     /// The file, absolute and already checked; nil when the path
     /// resolved outside the worktree it claimed to be in.
     private let path: String?
+
     private let title: String
     private let language: SyntaxLanguage?
 
@@ -174,6 +175,13 @@ struct FileEditorView: View {
 
     /// Releases the command waiting on this file, saved or not.
     private let onFinish: ((Bool) -> Void)?
+
+    /// Where a relative image in this file points from: the
+    /// directory the file itself sits in, so a README's screenshot
+    /// beside it is drawn rather than left as alt text.
+    private var markdownDirectory: String? {
+        path.map { URL(filePath: $0).deletingLastPathComponent().path }
+    }
 
     private var hasChanges: Bool {
         content != saved

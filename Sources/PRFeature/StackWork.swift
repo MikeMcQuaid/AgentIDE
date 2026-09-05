@@ -41,6 +41,10 @@ struct StackWork {
 
     var restack: (Worktree) async throws -> [String] = { _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
+
+    /// Pushes only the stack's branches the remote already has, for
+    /// putting a rebase back where GitHub can still read it.
+    var pushPublished: (Worktree) async throws -> [String] = { _ in [] }
     var pending: (Worktree) async -> Bool = { _ in false }
     var unpushed: (Worktree) async -> [String] = { _ in [] }
     var unsigned: (Worktree) async -> [String] = { _ in [] }

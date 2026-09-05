@@ -53,7 +53,7 @@ extension PullRequestsModel {
         let choices = launchChoices(agent)
         let model = Self.model(inArguments: arguments) ?? choices.models.first
         let effort = Self.effort(inArguments: arguments) ?? choices.defaultEffort
-        let named = model.map { " with " + AgentOptionName.display($0) } ?? ""
+        let named = model.map { " with " + AgentOptionName.display($0, named: choices.names) } ?? ""
         let level = effort.map { " at " + AgentOptionName.display($0) + " effort" } ?? ""
         return agent.displayName + named + level + ", with local review and testing."
     }
@@ -107,4 +107,15 @@ extension PullRequestsModel {
         lines.insert(contentsOf: ["", sentence], at: after)
         return lines.joined(separator: "\n")
     }
+}
+
+// MARK: - LaunchChoices
+
+/// What a session would have been started with, for reading back what
+/// one was: the models an agent offers, the effort it defaults to and
+/// the fuller names it reports for either.
+struct LaunchChoices {
+    var models: [String] = []
+    var defaultEffort: String?
+    var names: [String: String] = [:]
 }

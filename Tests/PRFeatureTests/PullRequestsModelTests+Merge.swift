@@ -58,4 +58,51 @@ extension PullRequestsModelTests {
         // Nothing merged, so nothing is cleaned up behind it.
         #expect(cleaned == false)
     }
+
+    @Test
+    func `a merge queue waits rather than asking for automerge`() {
+        let waiting = PullRequestSummary(
+            number: 23_703,
+            title: "Awaiting review",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "REVIEW_REQUIRED",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.selected = waiting
+        model.hasMergeQueue = true
+
+        // GitHub refuses automerge where the queue sets the merge
+        // strategy: "Auto-merge is not supported for stacked pull
+        // requests", and the strategy is the queue's. The button
+        // says what the queue will take, and waits for it.
+        #expect(model.mergeActionTitle == "Queue")
+        #expect(model.mergeActionBusyTitle == "Queueing")
+        #expect(model.canMergeAction == false)
+
+        // Ready, and it takes it.
+        model.selected = PullRequestSummary(
+            number: 23_703,
+            title: "Reviewed",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "APPROVED",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+        #expect(model.mergeActionTitle == "Queue")
+        #expect(model.canMergeAction)
+
+        // Without a queue, automerge is still what GitHub asks for.
+        model.hasMergeQueue = false
+        model.selected = waiting
+        #expect(model.mergeActionTitle == "Automerge")
+        #expect(model.canMergeAction)
+    }
 }

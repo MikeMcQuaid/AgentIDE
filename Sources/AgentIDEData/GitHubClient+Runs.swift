@@ -10,6 +10,10 @@ extension GitHubClient {
         let name: String?
         let conclusion: String?
 
+        /// Where the job is on the web, as gh names it; the run's
+        /// own address answers the same question when this does not.
+        let url: String?
+
         // A job's own steps, which conclude before it does. Absent
         // rather than empty when the listing carried none, and a
         // non-optional would fail the whole decode.
@@ -28,9 +32,11 @@ extension GitHubClient {
     public struct RunLogsUnavailable: LocalizedError, Sendable {
         // MARK: Lifecycle
 
-        /// Creates the refusal, naming how many jobs have failed.
-        public init(failedJobs: Int) {
+        /// Creates the refusal, naming the failed jobs and where
+        /// each of them can be read in the meantime.
+        public init(failedJobs: Int, links: [String] = []) {
             self.failedJobs = failedJobs
+            self.links = links
         }
 
         // MARK: Public
@@ -38,14 +44,22 @@ extension GitHubClient {
         /// How many of the run's jobs have failed so far.
         public let failedJobs: Int
 
+        /// Those jobs on the web, in the order they were listed.
+        public let links: [String]
+
         public var errorDescription: String? {
             guard failedJobs > 0 else {
                 return "no job in this run has failed yet, so there is nothing to copy."
             }
 
-            let jobs = failedJobs == 1 ? "1 failed job" : String(failedJobs) + " failed jobs"
-            return "GitHub has no logs for its " + jobs
-                + " yet; each one appears as its job finishes."
+            // Never "GitHub has no logs": it has them, and shows
+            // them live on the web. What it will not do is hand a
+            // running job's log to the API, so say that and say
+            // where to read them instead.
+            let jobs = failedJobs == 1 ? "its failed job" : "any of its " + String(failedJobs) + " failed jobs"
+            let reading = links.isEmpty ? "" : "; read them on the web: " + links.joined(separator: ", ")
+            return "GitHub gives up a job's log only once the job has finished, and it has not "
+                + "finished " + jobs + " yet" + reading + "."
         }
     }
 
@@ -60,7 +74,10 @@ extension GitHubClient {
         do {
             return try await gh(["run", "view", String(runID), "--log-failed"], in: repositoryPath).standardOutput
         } catch {
-            let jobs = try await gh(["run", "view", String(runID), "--json", "jobs"], in: repositoryPath)
+            // The run's own address comes back with its jobs, since
+            // a job's page is that address and the job's id: the
+            // one place a running job's log can be read.
+            let jobs = try await gh(["run", "view", String(runID), "--json", "url,jobs"], in: repositoryPath)
             let failed = Self.failedJobs(fromJSON: jobs.standardOutput)
             var logs = [String]()
             for job in failed {
@@ -71,11 +88,41 @@ extension GitHubClient {
             guard logs.isEmpty == false else {
                 // Never gh's own wording: it names a run still in
                 // progress, when what matters is whether any failed
-                // job has a log to give.
-                throw RunLogsUnavailable(failedJobs: failed.count)
+                // job has a log to give, and where to read the ones
+                // it will not give.
+                throw RunLogsUnavailable(
+                    failedJobs: failed.count,
+                    links: Self.jobLinks(failed, inRunAt: Self.runURL(fromJSON: jobs.standardOutput)),
+                )
             }
 
             return logs.joined(separator: "\n")
+        }
+    }
+
+    /// The run's own address, which every one of its jobs hangs
+    /// off; separated for tests.
+    static func runURL(fromJSON json: String) -> String? {
+        guard let data = json.data(using: .utf8),
+              let run = try? JSONDecoder().decode(RunJobs.self, from: data)
+        else {
+            return nil
+        }
+
+        return run.url
+    }
+
+    /// Where each failed job can be read while it runs: the run's
+    /// page and the job's id, which is the address GitHub itself
+    /// links to, falling back to whatever gh named.
+    static func jobLinks(_ jobs: [RunJob], inRunAt run: String?) -> [String] {
+        jobs.compactMap { job in
+            guard let run, run.isEmpty == false else {
+                return job.url
+            }
+
+            // swiftformat:disable:next acronyms
+            return run + "/job/" + String(job.databaseId)
         }
     }
 
@@ -114,9 +161,11 @@ extension GitHubClient {
             && output.contains("\0") == false
     }
 
-    /// The slice of `gh run view --json jobs` the fallback reads.
+    /// The slice of `gh run view --json url,jobs` the fallback
+    /// reads.
     private struct RunJobs: Decodable {
         let jobs: [RunJob]
+        let url: String?
     }
 
     /// One failed job's log while its run still goes: `gh run view

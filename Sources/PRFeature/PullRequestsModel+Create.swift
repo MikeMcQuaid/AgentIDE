@@ -7,6 +7,28 @@ import TerminalUI
 /// so what the form opens is on the row before any poll. Split from
 /// the actions for length.
 extension PullRequestsModel {
+    /// Pushes every branch of the stack, bottom first, and says so
+    /// as one push rather than as the branch in view: what went up
+    /// is the whole stack.
+    func pushWholeStack(_ worktree: Worktree) async -> Bool {
+        do {
+            let pushed = try await stacking.push(worktree)
+            pullRequests.invalidateListings(repositoryPath: repository.path)
+            if let tip = await fetchTipCommit(worktree) {
+                pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
+            }
+            recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
+            note("Pushed " + Self.named(pushed) + ".")
+            Self.requestSidebarRefresh()
+            await reload(keepingSelection: true)
+            refreshAfterPush()
+            return true
+        } catch {
+            report(error.localizedDescription)
+            return false
+        }
+    }
+
     /// Opens the pull request from the form's title and body, with
     /// the template appended below the body after an empty line;
     /// false opens the errors surface. The button dims until the
@@ -93,19 +115,27 @@ extension PullRequestsModel {
             rebaseNeed = await fetchRebaseNeed(worktree)
             setStatus(
                 "Not pushed: the tip commit is unsigned.",
-                detail: "The tip commit of " + worktree.branch
-                    + " is not GPG signed; Rebase on origin signs the branch, then Push.",
+                detail: "The tip commit of `" + worktree.branch
+                    + "` is not GPG signed; Rebase on origin signs the branch, then Push.",
             )
             return true
         }
 
         do {
+            // A branch of a stack never goes up alone: the ones
+            // above it are built on this tip, and pushing it by
+            // itself leaves GitHub reading their parents as gone.
+            guard stacking.stack.isStacked == false else {
+                return await pushWholeStack(worktree)
+            }
+
             let destination = try await performPush(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
             if let tip = await fetchTipCommit(worktree) {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
-            setStatus("Pushed.", detail: Self.describe(push: destination, branch: worktree.branch))
+            recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
+            note(Self.describe(push: destination))
             Self.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()

@@ -115,8 +115,13 @@ struct WorktreeRowView: View {
     /// tight against branch names of every length.
     private var titleLine: some View {
         HStack(spacing: Self.spacing) {
+            // A branch name, or the path of a directory of your
+            // own: an identifier either way, drawn as every surface
+            // draws one.
             Text(title)
+                .font(NameStyle.font)
                 .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: Self.spacing)
             // A pane holding the machine down is news wherever it
             // is: the row names what is running and for how long, so
@@ -141,6 +146,7 @@ struct WorktreeRowView: View {
         if item.worktree.isHostDirectory {
             HStack(spacing: Self.spacing) {
                 Text(item.worktree.branch)
+                    .font(NameStyle.small)
                     .lineLimit(1)
                 Text(counts)
                     .lineLimit(1)
@@ -169,6 +175,7 @@ struct WorktreeRowView: View {
                     .hoverHelp("A " + agent.displayName + " session runs here")
             }
             pullRequestBadge
+                .layoutPriority(1)
             Text(counts)
                 .lineLimit(1)
                 .fixedSize()

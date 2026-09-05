@@ -12,10 +12,10 @@ extension PullRequestsModelTests {
         let model = makeModel(items: [item(branch: "feature", ahead: 2)])
         model.performPush = { _ in .fork(owner: "MikeMcQuaid") }
         #expect(await model.push())
-        // The footer and the messages pane both say where it went,
-        // since pushing somewhere other than the repository you are
-        // looking at is worth knowing.
-        #expect(model.status == "Pushed.")
+        // The button itself says it pushed, and the messages pane
+        // keeps where it went: pushing somewhere other than the
+        // repository you are looking at is worth knowing later.
+        #expect(model.pushDoneTitle == "Pushed")
 
         // A branch in a fork names its owner too; either way the
         // branch is named, since `gh pr create` left to itself opens

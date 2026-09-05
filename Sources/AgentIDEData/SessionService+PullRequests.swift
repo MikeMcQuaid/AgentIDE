@@ -1,53 +1,5 @@
 import AgentIDEDomain
 
-// MARK: - PushDestination
-
-/// Where a branch can be pushed: the repository it came from, or the
-/// viewer's own fork of it when they may not write there.
-public enum PushDestination: Hashable, Sendable {
-    case origin
-    case fork(owner: String)
-
-    // MARK: Public
-
-    /// How `gh pr create` must name the branch: `owner:branch` when
-    /// it lives in a fork, since the pull request belongs to the
-    /// repository it is opened against rather than the one holding
-    /// the branch, and the plain name otherwise. Never nil: left to
-    /// itself `gh` opens a pull request for whatever is checked out,
-    /// which in a stack of branches in one worktree is rarely the
-    /// branch being looked at.
-    public func head(branch: String) -> String {
-        guard case let .fork(owner) = self else {
-            return branch
-        }
-
-        return owner + ":" + branch
-    }
-}
-
-// MARK: - MergeCleanupReport
-
-/// What a post-merge cleanup did and what it could not do, so the
-/// caller can put both in the messages pane rather than the work
-/// happening silently.
-public struct MergeCleanupReport: Sendable {
-    // MARK: Lifecycle
-
-    /// Creates an empty report.
-    public init() {
-        // Both lists fill as the cleanup runs.
-    }
-
-    // MARK: Public
-
-    /// What the cleanup did, in order.
-    public var notes: [String] = []
-
-    /// What it could not do, each naming the step and the reason.
-    public var failures: [String] = []
-}
-
 // MARK: - Pull requests
 
 /// Pushing branches, drafting and opening pull requests, and
@@ -80,18 +32,22 @@ public extension SessionService {
         }
 
         let destination = await pushDestination(worktree: worktree)
-        guard case let .fork(owner) = destination else {
-            try await git.push(
-                worktreePath: worktree.path,
-                branch: worktree.branch,
-                expectedTip: overwriteTips.tip(worktreePath: worktree.path, branch: worktree.branch),
-            )
-            overwriteTips.forget(worktreePath: worktree.path, branch: worktree.branch)
-            return destination
+        // The fork a pull request came from is somebody else's and
+        // already exists: making one of the viewer's own here would
+        // push the branch where the pull request cannot see it.
+        if case let .fork(owner) = destination {
+            try await github.ensureFork(worktreePath: worktree.path, remoteName: owner)
         }
 
-        try await github.ensureFork(worktreePath: worktree.path, remoteName: owner)
-        try await git.push(worktreePath: worktree.path, branch: worktree.branch, remote: owner)
+        try await git.push(
+            worktreePath: worktree.path,
+            branch: worktree.branch,
+            remote: destination.remote,
+            // An overwrite the user set aside after a lease refusal
+            // is theirs wherever the branch goes.
+            expectedTip: overwriteTips.tip(worktreePath: worktree.path, branch: worktree.branch),
+        )
+        overwriteTips.forget(worktreePath: worktree.path, branch: worktree.branch)
         return destination
     }
 
@@ -187,6 +143,10 @@ public extension SessionService {
     /// says the branch may be pushed there, and the viewer's own fork
     /// of it otherwise.
     func pushDestination(worktree: Worktree) async -> PushDestination {
+        if let fork = await forkRemote(worktreePath: worktree.path, branch: worktree.branch) {
+            return .contributorFork(owner: fork.owner, remote: fork.remote)
+        }
+
         guard await github.canPush(worktreePath: worktree.path) == false,
               let owner = await github.viewer(worktreePath: worktree.path)
         else {
@@ -315,7 +275,9 @@ public extension SessionService {
             return report
         }
         guard await git.isDirty(worktreePath: worktree.path) == false else {
-            report.failures.append("\(worktree.repositoryName) has uncommitted changes, so it was left alone.")
+            report.failures.append(
+                "\(worktree.repositoryName) has uncommitted changes, so it was left alone.",
+            )
             return report
         }
 
@@ -335,9 +297,9 @@ public extension SessionService {
         if await git.currentBranch(worktreePath: worktree.path) != branch {
             do {
                 try await git.checkout(worktreePath: worktree.path, branch: branch)
-                report.notes.append("Checked out \(branch) in \(worktree.repositoryName).")
+                report.notes.append("Checked out `\(branch)` in \(worktree.repositoryName).")
             } catch {
-                report.failures.append("Checking out \(branch) failed: " + error.localizedDescription)
+                report.failures.append("Checking out `\(branch)` failed: " + error.localizedDescription)
                 return report
             }
         }
@@ -361,13 +323,13 @@ public extension SessionService {
         do {
             if counts.ahead == 0 {
                 try await git.resetHard(worktreePath: worktreePath, ref: upstream)
-                report.notes.append("Pulled \(branch) up to \(upstream).")
+                report.notes.append("Pulled `\(branch)` up to `\(upstream)`.")
             } else {
                 try await git.rebaseSigned(worktreePath: worktreePath, branch: branch, onto: upstream)
-                report.notes.append("Rebased \(counts.ahead) local commits onto \(upstream).")
+                report.notes.append("Rebased \(counts.ahead) local commits onto `\(upstream)`.")
             }
         } catch {
-            report.failures.append("Updating \(branch) failed: " + error.localizedDescription)
+            report.failures.append("Updating `\(branch)` failed: " + error.localizedDescription)
         }
     }
 
@@ -383,10 +345,10 @@ public extension SessionService {
         let deleted = merged.filter { remaining.contains($0) == false }
         if deleted.isEmpty == false {
             report.notes.append("Deleted merged \(deleted.count == 1 ? "branch" : "branches"): "
-                + deleted.joined(separator: ", ") + ".")
+                + deleted.lazy.map { "`" + $0 + "`" }.joined(separator: ", ") + ".")
         }
         for name in remaining {
-            report.failures.append("Deleting merged branch \(name) failed; it is still there.")
+            report.failures.append("Deleting merged branch `\(name)` failed; it is still there.")
         }
     }
 }

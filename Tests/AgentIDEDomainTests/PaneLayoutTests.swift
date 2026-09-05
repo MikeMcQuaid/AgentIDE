@@ -31,14 +31,14 @@ struct PaneLayoutTests {
 
     @Test
     func `a window too narrow for three panes shows two`() {
-        // 300 + 260 + 320 is 880, so 870 cannot hold all three.
-        let layout = PaneLayout(width: 870, sidebar: 300, utility: 480, showsUtility: true)
+        // 200 + 260 + 320 is 780, so 770 cannot hold all three.
+        let layout = PaneLayout(width: 770, sidebar: 300, utility: 480, showsUtility: true)
         #expect(layout.showsUtility == false)
         #expect(layout.sidebar == 300)
-        // The sidebar never goes below a full row's width, even when
-        // that leaves the conversation less than its own minimum:
-        // rows that wrap are worse than a pane that scrolls.
-        #expect(PaneLayout(width: 500, sidebar: 400, utility: 480, showsUtility: true).sidebar == 300)
+        // The sidebar stops at its own minimum, where the rows
+        // truncate rather than the window refusing to narrow.
+        let squeezed = PaneLayout(width: 400, sidebar: 400, utility: 480, showsUtility: true)
+        #expect(squeezed.sidebar == PaneLayout.sidebarRange.lowerBound)
     }
 
     @Test

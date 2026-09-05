@@ -4,6 +4,29 @@ import TerminalUI
 /// The commit listing under a multi-commit review, and the single
 /// commit a click on it opens; split from the footer for length.
 extension ReviewFooterView {
+    /// Fills the subject and body from the diff, beside the field it
+    /// fills rather than among the actions that use what it wrote.
+    var draftButton: some View {
+        Button {
+            // The model reports its own refusal to the messages
+            // pane, which is where every other failure here lands.
+            Task { _ = await model.generateCommitMessage() }
+        } label: {
+            Image(systemName: "sparkles")
+                .accessibilityLabel("Draft commit message")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .disabled(
+            model.showsUncommitted == false
+                || model.commitMessage.trimmingCharacters(in: .whitespaces).isEmpty == false,
+        )
+        .hoverHelp(
+            "Draft the commit message from the uncommitted diff with the on-device model; "
+                + "only fills an empty message",
+        )
+    }
+
     /// The URL scheme a commit line links to; nothing opens it but
     /// this file's own handler.
     static var commitScheme: String {

@@ -131,6 +131,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   a bar sliding in, a page fading over a pane. Nothing decorative,
   nothing slower, and never on a surface that is mid-drag or holds
   a live terminal.
+- One typography per kind of text: code and terminals use
+  `CodeStyle` (the face and size Settings owns), a name git owns (a
+  branch, a ref, a worktree path) uses `NameStyle` wherever it is
+  shown, and everything else is the system font.
 - Semantic AppKit colours only in UI chrome: selection uses the
   system selection colours and greys out when the window is not
   key, text surfaces use `textColor` over `textBackgroundColor`.
@@ -222,6 +226,13 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   keep the last good value on failure. The expensive fields are
   checks, mergeability and review decision: wide listings fetch
   light fields only and enrich one pull request on selection.
+- `gh pr checkout` on a pull request from a fork writes the fork's
+  URL straight into `branch.<name>.remote` and `pushremote` and names
+  no remote for it, so the branch has no tracking ref: nothing could
+  count what was unpushed and a push aimed at origin would have
+  opened a branch in the repository the pull request is against.
+  `SessionService.forkRemote` names the remote after the fork's
+  owner, fetches the branch and tracks it there, once per branch.
 - `@AppStorage` keys are the cross-module signal bus (utility tab
   name, finder mode and focus, browser address); tabs travel by
   name, never index, so reordering cannot repoint them. A repeated
@@ -328,6 +339,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `HerdrSlowReaderIntegrationTests` reproduces it under load, and
   `HerdrLargeInputIntegrationTests` meets it whenever the run is
   contended; both stay disabled until herdr waits or retries.
+- SwiftTerm encodes Option and an arrow the way the kitty keyboard
+  protocol does (`ESC [ 1 ; 3 D`) whether or not anything turned that
+  protocol on, so a shell read as far as `ESC [ 1`, found nothing
+  bound and typed `;3D` into the line instead of moving a word. Its
+  `keyDown` is not overridable, so `PaneTerminalView.routeKey` takes
+  those four keys off the coordinator's event monitor and sends what
+  terminals have always sent (`TerminalKeys.optionArrow`), leaving a
+  pane whose program did turn the protocol on alone.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

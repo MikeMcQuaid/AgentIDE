@@ -17,6 +17,10 @@ extension PullRequestsModel {
         // second press ran a fresh read.
         stacking.factsGeneration += 1
         let generation = stacking.factsGeneration
+        // Before the counts are read: a pull request from a fork has
+        // no tracking ref until its remote is named, and everything
+        // below counts against one.
+        _ = await nameFork(listedWorktree ?? worktree)
         let signed = await checkTipSigned(listedWorktree ?? worktree)
         let tip = await fetchTipCommit(listedWorktree ?? worktree)
         let need = await fetchRebaseNeed(listedWorktree ?? worktree)
@@ -104,8 +108,11 @@ extension PullRequestsModel {
 
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
+        // What it is about to do, before doing it moves the branch
+        // and leaves nothing to read it from.
+        let onlySigns = rebaseNeed == SessionService.RebaseNeed.sign
         do {
-            try await performRebase(worktree)
+            let target = try await performRebase(worktree)
             // A stack member that moves takes the branches above it
             // with it. Left where they were, they fork from the
             // default branch instead of from it, which is not a
@@ -115,8 +122,15 @@ extension PullRequestsModel {
             if stacking.stack.isStacked {
                 do {
                     _ = try await stacking.restack(worktree)
+                    // Every branch the restack moved is now behind
+                    // what the remote has, and GitHub reads a stack
+                    // whose parents moved as no stack at all: the
+                    // published ones go back up at once. A branch
+                    // nobody has pushed stays unpushed, which Push
+                    // is for.
+                    _ = try await stacking.pushPublished(worktree)
                 } catch {
-                    report("Rebasing the branches above " + worktree.branch + " failed: "
+                    report("Rebasing the branches above `" + worktree.branch + "` failed: "
                         + error.localizedDescription)
                 }
             }
@@ -128,7 +142,8 @@ extension PullRequestsModel {
                     + "and hit Rebase again")
                 return false
             }
-            setStatus("Rebased and signed.", detail: "Rebased and signed " + worktree.branch + ".")
+            recordFinished(onlySigns ? .signed : .rebased, branch: listedBranch ?? worktree.branch)
+            note("Rebased `" + worktree.branch + "` on `" + target + "` and signed it.")
             Self.requestSidebarRefresh()
             return true
         } catch {
@@ -156,7 +171,36 @@ extension PullRequestsModel {
         if Self.isReadyToMerge(selected) {
             return hasMergeQueue ? "Queue" : "Merge"
         }
-        return "Automerge"
+        // GitHub refuses automerge where a merge queue sets the
+        // branch's strategy, and refuses it on a stacked pull
+        // request: offering it there only ever ended in that
+        // refusal, so the queue's own button waits instead.
+        return hasMergeQueue ? "Queue" : "Automerge"
+    }
+
+    /// Whether the merge action can run as things stand. Only a
+    /// queue's button waits: everywhere else the label already
+    /// names something a click can do now, automerge included.
+    var canMergeAction: Bool {
+        guard let selected, hasMergeQueue, selected.isDraft == false,
+              selected.hasAutomerge == false
+        else {
+            return true
+        }
+
+        return Self.isReadyToMerge(selected)
+    }
+
+    /// Why the merge action is in the state it is in.
+    var mergeActionHelp: String {
+        guard canMergeAction else {
+            return "This repository's merge queue sets the merge strategy, so there is no "
+                + "automerge to ask for: the queue takes it once its checks have passed and "
+                + "the reviews it needs are in"
+        }
+
+        return "The one merge action for the open conversation: its label names exactly "
+            + "what a click does now, and a second click cancels automerge or queueing"
     }
 
     /// The present-tense form while the merge action runs.

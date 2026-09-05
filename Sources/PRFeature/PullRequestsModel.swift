@@ -117,7 +117,11 @@ final class PullRequestsModel {
         }
         launchChoices = { agent in
             let choices = service.launchChoices(for: agent)
-            return (choices.models, service.defaultEffort(for: agent))
+            return LaunchChoices(
+                models: choices.models,
+                defaultEffort: service.defaultEffort(for: agent),
+                names: service.modelNames(for: agent),
+            )
         }
         generateDescription = { commits, branch in
             await service.draftPullRequestDescription(fromCommits: commits, branch: branch)
@@ -157,6 +161,9 @@ final class PullRequestsModel {
         fetchRebaseNeed = { worktree in
             await service.rebaseNeed(worktree: worktree)
         }
+        nameFork = { worktree in
+            await service.forkRemote(worktreePath: worktree.path, branch: worktree.branch)?.remote
+        }
         performPush = { worktree in
             try await service.push(worktree: worktree)
         }
@@ -188,17 +195,6 @@ final class PullRequestsModel {
 
     // MARK: Internal
 
-    /// What the last read said of the tip commit's signature:
-    /// unread until the current tip has been checked. Pushing
-    /// unsigned commits is never allowed, so Push waits for proof
-    /// rather than trusting a stale answer, and dims until Rebase
-    /// on origin signs the branch.
-    enum TipSignature {
-        case unread
-        case unsigned
-        case signed
-    }
-
     let repository: Repository
     let branch: String?
 
@@ -218,6 +214,11 @@ final class PullRequestsModel {
     var currentBranch: String?
 
     var pushedTip: PushedTip?
+
+    /// What the last branch action finished here, and on which
+    /// branch: its button reads it in the past tense while it stays
+    /// dim, so the work says so where the click was.
+    var finished: (outcome: BranchOutcome, branch: String)?
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.
@@ -309,7 +310,7 @@ final class PullRequestsModel {
 
     /// The picker's models and the effort a launch without a flag
     /// runs at, for a disclosure of a session started on defaults.
-    var launchChoices: (AgentKind) -> (models: [String], defaultEffort: String?) = { _ in ([], nil) }
+    var launchChoices: (AgentKind) -> LaunchChoices = { _ in LaunchChoices() }
     /// The repository's default branch, which has no pull request
     /// of its own to look for.
     let defaultBranch: String?
@@ -330,8 +331,13 @@ final class PullRequestsModel {
     var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
+
+    /// Names a remote for the fork a checked-out pull request came
+    /// from, so the branch has a tracking ref to count against and
+    /// a push goes back to the fork.
+    var nameFork: (Worktree) async -> String?
     var performPush: (Worktree) async throws -> PushDestination
-    var performRebase: (Worktree) async throws -> Void
+    var performRebase: (Worktree) async throws -> String
     var checkTipSigned: (Worktree) async -> Bool
     var fetchTipCommit: (Worktree) async -> String?
 

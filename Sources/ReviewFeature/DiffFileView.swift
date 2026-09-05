@@ -42,7 +42,7 @@ struct DiffStatText: View {
             Text("+" + String(additions)).foregroundStyle(.green)
             Text("\u{2212}" + String(deletions)).foregroundStyle(.red)
         }
-        .font(.caption.monospaced())
+        .font(.callout.monospaced())
     }
 }
 
@@ -187,13 +187,30 @@ struct DiffFileView: View {
     /// the first click into it and stays armed.
     @State private var isLive = false
 
-    /// The file's name, its new-file marker, diffstat and the
-    /// copy and edit actions.
+    /// Beside the name rather than at the end of the row: it copies
+    /// that name, and among the actions it read as one of them.
+    private var copyPathButton: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(file.path, forType: .string)
+        } label: {
+            Image(systemName: "doc.on.doc")
+                .accessibilityLabel("Copy file path")
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .hoverHelp("Copy this file's path to the clipboard")
+    }
+
     private var headerRow: some View {
         HStack {
             commitTick
             FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
-            Text(file.path).font(.headline.monospaced())
+            Text(file.path)
+                .font(.headline.monospaced())
+                .lineLimit(1)
+                .truncationMode(.middle)
+            copyPathButton
             if file.isNew {
                 Text("new file")
                     .font(.caption)
@@ -202,15 +219,6 @@ struct DiffFileView: View {
             }
             Spacer()
             DiffStatText(additions: file.additions, deletions: file.deletions)
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(file.path, forType: .string)
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .accessibilityLabel("Copy file path")
-            }
-            .buttonStyle(.borderless)
-            .hoverHelp("Copy this file's path to the clipboard")
             // Uncommitted work edits in place, line by line, and a
             // file never committed can be thrown away; a commit's
             // diff is history, so its pencil opens the editor instead.

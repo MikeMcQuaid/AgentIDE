@@ -386,8 +386,11 @@ task on an actor: keep one running and one queued follow-up.
 ### Start work
 
 1. Input: a prompt, or an issue or pull request number, plus repository,
-   agent, model and effort. No default model or effort exists: the form
-   refuses to start until one was picked, then remembers it per agent in
+   agent, model and effort. Every picker opens on something: the last
+   pick where the chosen agent still offers it, and otherwise the first
+   model that agent lists and the effort its own CLI would run at, so
+   changing agent leaves a working choice rather than two empty pickers.
+   What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
    surface starts a session. Submitting inserts a placeholder row
@@ -495,6 +498,22 @@ page resumes any past conversation into a fresh worktree.
   the cause. The pane's shell is asked of herdr once and remembered,
   since it lives as long as the pane; the steady state is the one
   `ps`.
+- **A model list is only as fresh as its key.** Each agent's models are
+  discovered once per stamp rather than per launch, since asking costs a
+  sandbox launch of about twenty seconds. The stamp is the CLI's version
+  and, where the list lives in a cache the server rewrites
+  (`modelCacheFile`, Codex's `~/.codex/models_cache.json`), that file's
+  modification time: keyed on the version alone, a model added
+  server-side stayed out of the picker until the CLI itself was
+  upgraded. Names shown are the ids read as words (`gpt-5.6-sol` is GPT
+  5.6 Sol). Claude takes an alias saying nothing about its version and
+  has no listing to ask, so the version is read from the identifiers
+  Claude Code recorded using in its own state (`modelNamesFile`,
+  `~/.claude.json`): `claude-fable-5-1` is what makes `fable` read as
+  Fable 5.1, the newest of each family winning, and an alias no
+  identifier names is shown as it is rather than guessed at. No model's
+  version is written down in this app, and what is sent is always the
+  name the agent takes.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.
@@ -532,7 +551,19 @@ page resumes any past conversation into a fresh worktree.
    through to the review bar. Uncommitted hunks stay line by line,
    since their lines become fields on a click, and there Copy hunk
    is what takes several lines. The messages pane is one selectable
-   document the same way (`SelectableTextView` over the whole log).
+   document the same way (`SelectableTextView` over the whole log),
+   and every line in it reads the same: `repository: branch: what
+   happened`, the repository bold and the branch monospaced, with
+   any other identifier the line names in backticks drawn the same
+   way (`MessageMarkup`). Both names come from the caller
+   (`note(_:about:branch:)`), never from the message's own words, so
+   no line has to name what the sidebar already names. Every surface
+   draws such a name the same way (`NameStyle`, the system
+   monospaced design a size down from the prose beside it, since a
+   monospaced face reads larger at the same size): the sidebar's
+   rows, a pull request's header, the stack and branch popovers.
+   That is chrome naming a thing; code's own typography is
+   `CodeStyle`, whose face and size Settings owns.
 7. Read-only text is never `.disabled`, which takes selection with
    editing: the binding drops writes and the view dims.
 
@@ -631,11 +662,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   `gh pr ready`; the next click is the Merge, Queue or Automerge it
   would always have been. Nothing is cleaned up behind it, since
   nothing merged.
-- **A pull request can open as a draft**, chosen by the icon beside
-  Open PR: GitHub's two glyphs for the state a click is about to
-  create, rather than a checkbox saying the same thing in words.
-  It sits in the footer's own row, with the actions, since that is
-  where the button it changes is. The choice
+- **A pull request can open as a draft** through a button of its
+  own: Open Draft beside Open PR, since the two make different pull
+  requests and a toggle beside them said which without saying what a
+  click would do. Both refuse for the same reasons, named once. The choice
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.
@@ -707,9 +737,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
   which the next fetch replaces.
-- **Pushing** asks `viewerPermission` first: write access pushes to the
-  repository, anything less to the viewer's fork (`gh repo fork` on
-  first use) and the pull request names `owner:branch`. Rewritten
+- **Pushing** asks the branch first and GitHub second. A branch checked
+  out from someone else's pull request carries that fork's URL in its
+  config (all `gh pr checkout` leaves behind), so it is given a remote
+  named after the fork's owner and tracked there, and every push,
+  count and stack push follows it back to the fork. Otherwise
+  `viewerPermission` decides: write access pushes to the repository,
+  anything less to the viewer's fork (`gh repo fork` on first use).
+  Either fork names the pull request's head `owner:branch`. Rewritten
   history pushes with `--force-with-lease --force-if-includes`. The bare
   lease protects nothing under constant background fetches;
   `--force-if-includes` is the real gate, refusing a remote tip never
@@ -725,6 +760,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   to be a boolean any worktree refresh cleared, so counts gathered
   before the push arrived after it and swapped the two buttons back
   and forth until the next reading caught up.
+- **A button says what it just did.** A finished rebase, sign or push
+  turns its own dimmed button's label to the past tense (Rebased,
+  Signed, Pushed) rather than narrating it in the middle of the bar,
+  which is left for what went wrong and is cleared by the next
+  success. Each label belongs to the entry it acted on, so reading up
+  and down a stack never shows one branch's work on another's.
 - **Signing.** Settings' Require signed commits (default on) makes Push
   wait for the tip to verify and rebases sign (`--force-rebase
   --gpg-sign` after a fetch); off, nothing signs or checks and nothing
@@ -748,6 +789,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   ticks every box and writes the AI disclosure from the session's model
   and effort, and only into a template. The template is read from the
   working copy or, for sparse checkouts, from git.
+- **A stack moves as one.** Rebasing any entry restacks the branches
+  above it and pushes the ones the remote already has, since GitHub
+  reads a pull request whose parent moved as no stack at all; pushing
+  any entry pushes every branch of the stack, bottom first, whether or
+  not each has a pull request open yet. A branch nobody has pushed is
+  published by Push and never by a rebase.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.
@@ -772,7 +819,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   short of it says Automerge and runs `gh pr merge --auto`, which is
   what GitHub's own refusal asks for. Judging from checks and
   mergeability alone offered Merge on a branch whose policy still
-  wanted a review, and `gh` refused it.
+  wanted a review, and `gh` refused it. A repository with a merge
+  queue has no automerge to ask for: `enablePullRequestAutoMerge`
+  answers that the queue sets the strategy, and that automerge is
+  unsupported for a stacked pull request. Its button says Queue
+  throughout and dims until the pull request is ready.
 - **Last mile buttons**: copy unresolved review threads grouped per
   file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query
@@ -792,10 +843,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   failed step, since a check goes red the moment a step does while
   the job runs on. A run that hands over nothing is skipped too, so
   what the other runs have is still copied, and only every run
-  coming back empty is reported — in the app's own words, naming how
-  many jobs have failed and that their logs appear as each finishes,
-  never gh's "still in progress", which is neither what happened nor
-  anything to act on.
+  coming back empty is reported — in the app's own words, never gh's
+  "still in progress", and never a claim that GitHub has no logs: it
+  has them and streams them live on the web, so the message says
+  that the API gives a job's log up only once the job has finished
+  and links each failed job's page (the run's own address and the
+  job's id, from `--json url,jobs`).
 - **Cleanup after merge** runs from the Merge button, the context menu
   and the poll (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses
@@ -863,6 +916,71 @@ conversations to deleted worktrees. Rules:
   and pull request surfaces stay mounted across tab switches. Only what
   herdr owns arrives late, and a row the cache says had an agent waits
   for herdr rather than claiming its session ended.
+
+### Environment and the shared workspace
+
+Two directories in the shared workspace are the app's own: `user/`, the
+template sandvault syncs into the sandbox home, where the agent hooks
+live and where your keys and shell configuration go, and `agentide/`,
+holding prompts, hook events and `session-defaults`, which remembers
+what the new session form and `agentide new` last chose. The app also
+keeps `[worktrees] directory` in herdr's own configuration pointed at
+its layout, so `herdr worktree create` lands where the sidebar looks.
+
+The variables shell files and scripts can read or set:
+
+| Variable | Set by | Meaning |
+|---|---|---|
+| `AGENTIDE` | the app, in shell panes | `1`, so shell files know they are inside the app |
+| `SHARED_WORKSPACE` | you, for remote logins | the shared workspace `agentide` reads, when a login did not inherit it |
+| `HERDR_SESSION` | your shell configuration | the herdr session name, `agentide` for the installed app |
+| `AGENTIDE_SESSION` | the app, per pane | the session's label, which the agent hooks attribute events by |
+| `AGENTIDE_EDITS` | the app, in shell panes | where `agentide --wait` spools the edit it is waiting on |
+| `AGENTIDE_COLOR` | you | forces colour in `agentide`'s output where no terminal is detected |
+| `AGENTIDE_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
+| `AGENTIDE_DEVELOPMENT_TEAM` | you, running `script/test` | the Apple team id signing the app and the App Intents runner alike, which the framework requires; unset, the bundle is skipped |
+| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out even with a team set |
+| `AGENTIDE_DRY_RUN` | you, running `agentide new` | prints what it would make instead of making it |
+
+### From a phone
+
+Sessions are reachable over SSH as the sandbox user;
+[Moshi](https://getmoshi.app) speaks `mosh`, so a phone changing network
+keeps its session. Two things are particular to sandvault and herdr, and
+`sshd` is otherwise hardened however you would harden it:
+
+1. The sandbox user's home is built from a template sandvault owns, so
+   the client's key goes into that template and the home is rebuilt. A
+   sandvault upgrade replaces the template, so keep this in your
+   dotfiles if it must stay automatic:
+
+   ```bash
+   guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
+   cat "${HOME}/Downloads/moshi.pub" >>"${guest_keys}"
+   sv --rebuild build
+   ```
+
+2. `agentide new` needs the shared workspace named, which a login from
+   outside the sandbox does not inherit, in
+   `/etc/ssh/sshd_config.d/000-agentide.conf` with your own user name
+   and path, then Remote Login on for that account:
+
+   ```text
+   Match User sandvault-mike
+       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-mike
+   ```
+
+Aliasing the command in the sandbox user's shell configuration also
+names the session:
+
+```bash
+alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
+export HERDR_SESSION=agentide
+```
+
+Connecting as `sandvault-<you>` and running `herdr` presents every agent
+workspace in one attach, so a session steered from the phone is the same
+session.
 
 Owner avatars cache per owner under `Application Support/AgentIDE/Avatars`;
 a failed fetch is silent. The performance log
@@ -936,11 +1054,22 @@ on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
 Three scripts turn a checkout into the artefact a release ships, split
 so that only the last needs credentials:
 
-- `script/build` validates an exact tag on the current commit as three
+- `script/version` decides the version and the build number, and is the
+  only thing that does. It prints them for `script/build` and writes
+  them as `.build/version.xcconfig`, which the generated project takes
+  as its base configuration, so a build started in Xcode is versioned
+  exactly as a scripted one; `script/bootstrap` writes it before
+  generating the project, and the file is rewritten only when its
+  contents change, so Xcode does not rebuild the world for it.
+- `script/build` takes the most recent tag behind the current commit
+  (`git describe --tags --abbrev=0`), validates it as three
   period-separated integers with no leading zeroes and passes it as
-  `MARKETING_VERSION`; an untagged development or CI build uses
-  `0.0.0`. `CURRENT_PROJECT_VERSION` remains the build number and
-  counts the default branch's commits. The release workflow selects the
+  `MARKETING_VERSION`. A release tags its commit before building, so
+  it names itself; every build after that names the release it
+  continues rather than claiming `0.0.0`, which is left for a
+  repository with no tags at all. `CURRENT_PROJECT_VERSION` remains
+  the build number and counts the default branch's commits, which is
+  what tells two builds of one version apart. The release workflow selects the
   Release configuration; local builds stay Debug.
 - `script/zip` verifies the built app's signature, then zips it with
   `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the

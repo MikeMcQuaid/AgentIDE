@@ -47,12 +47,12 @@ public struct PaneLayout: Hashable, Sendable {
 
     // MARK: Public
 
-    /// No narrower than one full row with every badge: rows never
-    /// wrap, so a sidebar narrower than that would only hide their
-    /// ends. The lower bound also sets how small the window itself
-    /// can be dragged, since the sidebar holds whatever width it is
-    /// given.
-    public static let sidebarRange = 300.0 ... 440.0
+    /// The lower bound is what the window itself can be dragged to,
+    /// since the sidebar holds whatever width it is given, so it is
+    /// as mean as the rows allow: a long branch name truncates with
+    /// an ellipsis rather than the pane refusing to narrow, and the
+    /// badges that say what needs attention keep their room.
+    public static let sidebarRange = 200.0 ... 440.0
 
     /// What Resize Panes gives the sidebar: enough for a repository
     /// and a branch to read without wrapping or ellipsis, which its

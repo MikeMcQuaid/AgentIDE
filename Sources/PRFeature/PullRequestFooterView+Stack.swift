@@ -23,7 +23,7 @@ extension PullRequestFooterView {
     /// when there is nothing to do.
     private var restackButton: some View {
         BusyButton(
-            rebaseCount,
+            model.canRestack ? rebaseCount : model.rebaseDoneTitle ?? "",
             busy: "Rebasing",
             systemImage: "arrow.triangle.2.circlepath",
             accessibilityLabel: "Rebase the stack",
@@ -44,12 +44,11 @@ extension PullRequestFooterView {
 
     private var pushStackButton: some View {
         BusyButton(
-            stackPushCount,
+            model.canPushStack ? stackPushCount : model.pushDoneTitle ?? "",
             busy: "Pushing",
             systemImage: "arrow.up",
             accessibilityLabel: "Push stack",
             disabled: model.canPushStack == false,
-            keepsTitle: true,
         ) {
             if await model.pushStack() == false {
                 utilityTab = UtilityTabTarget.errors

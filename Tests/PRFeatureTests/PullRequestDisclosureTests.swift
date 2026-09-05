@@ -21,10 +21,10 @@ struct PullRequestDisclosureTests {
         // Said once however often the button is pressed.
         let again = PullRequestsModel.disclosing(
             in: template ?? "",
-            sentence: "Codex CLI with GPT 5.6-sol at Minimal effort, with local review and testing.",
+            sentence: "Codex CLI with GPT 5.6 Sol at Minimal effort, with local review and testing.",
         )
         #expect(again?.contains("Claude Code") == false)
-        #expect(again?.contains("Codex CLI with GPT 5.6-sol at Minimal effort") == true)
+        #expect(again?.contains("Codex CLI with GPT 5.6 Sol at Minimal effort") == true)
 
         // A template with no AI section is left alone, so the
         // sentence goes in the body instead.
@@ -52,14 +52,18 @@ struct PullRequestDisclosureTests {
         defer { try? FileManager.default.removeItem(atPath: file) }
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)], metadataFile: file)
-        model.launchChoices = { _ in (["fable", "opus"], "high") }
+        model.launchChoices = { _ in
+            // The names Claude Code itself reported, which is
+            // where a version comes from.
+            LaunchChoices(models: ["fable", "opus"], defaultEffort: "high", names: ["fable": "Fable 5.1"])
+        }
         // A default launch writes no flags: the arguments are empty.
         var metadata = model.store.load()
         metadata.sessionsByWorktree["/worktrees/feature"] = "agentide--repo--feature--claude"
         metadata.arguments["agentide--repo--feature--claude"] = ""
         model.store.update { $0 = metadata }
 
-        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
+        #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
     }
 
     @Test
@@ -78,9 +82,13 @@ struct PullRequestDisclosureTests {
             version: nil,
         )
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1, session: running)])
-        model.launchChoices = { _ in (["fable", "opus"], "high") }
+        model.launchChoices = { _ in
+            // The names Claude Code itself reported, which is
+            // where a version comes from.
+            LaunchChoices(models: ["fable", "opus"], defaultEffort: "high", names: ["fable": "Fable 5.1"])
+        }
 
-        #expect(model.disclosure == "Claude with Fable at High effort, with local review and testing.")
+        #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
     }
 
     @Test
@@ -96,9 +104,15 @@ struct PullRequestDisclosureTests {
         #expect(PullRequestsModel.model(inArguments: "") == nil)
         #expect(PullRequestsModel.effort(inArguments: "") == nil)
         #expect(AgentOptionName.display("xhigh") == "Extra High")
-        #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6-sol")
-        // Exactly what the picker shows, which for a name carrying
-        // digits or dashes is the name itself.
+        // An id is read as its words, never shown raw.
+        #expect(AgentOptionName.display("gpt-5.6-sol") == "GPT 5.6 Sol")
+        #expect(AgentOptionName.display("gpt-5.3-codex-spark") == "GPT 5.3 Codex Spark")
+        // A name the agent itself reported wins; nothing about a
+        // version is written down here, so an alias it said nothing
+        // about is shown as it is.
+        #expect(AgentOptionName.display("fable", named: ["fable": "Fable 5.1"]) == "Fable 5.1")
+        #expect(AgentOptionName.display("fable") == "Fable")
+        // A name already carrying digits or dashes is its own.
         #expect(AgentOptionName.display("opus-5") == "opus-5")
         #expect(AgentOptionName.display("minimal") == "Minimal")
     }

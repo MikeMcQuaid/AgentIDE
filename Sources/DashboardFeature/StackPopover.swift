@@ -19,7 +19,10 @@ struct StackPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("Stack in " + (stack?.checkedOut ?? item.worktree.branch)).font(.headline)
+            HStack(spacing: Self.rowSpacing) {
+                Text("Stack in").font(.headline)
+                Text(stack?.checkedOut ?? item.worktree.branch).font(NameStyle.font)
+            }
             if let stack {
                 stacked(stack)
             } else {
@@ -115,6 +118,7 @@ struct StackPopover: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(branch)
+                .font(NameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .fontWeight(branch == stack?.checkedOut ? .semibold : .regular)
@@ -137,6 +141,7 @@ struct StackPopover: View {
     private func excludedRow(_ branch: String) -> some View {
         HStack(spacing: Self.rowSpacing) {
             Text(branch)
+                .font(NameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(.secondary)

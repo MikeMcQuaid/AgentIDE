@@ -60,15 +60,15 @@ extension PullRequestsModel {
         }
     }
 
-    /// A note about this repository's work, named as the sidebar
-    /// names it.
+    /// A note about this branch's work, named as the sidebar names
+    /// it: the repository, then the branch, then what happened.
     func note(_ message: String) {
-        ErrorLog.shared.note(message, about: repository.name)
+        ErrorLog.shared.note(message, about: repository.name, branch: actedBranch)
     }
 
     /// The same for a failure.
     func report(_ message: String) {
-        ErrorLog.shared.report(message, about: repository.name)
+        ErrorLog.shared.report(message, about: repository.name, branch: actedBranch)
     }
 
     /// Copies every unresolved review conversation to the
@@ -78,7 +78,7 @@ extension PullRequestsModel {
         let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        note("Copied \(threads.count) unresolved conversations from #\(summary.number).")
+        note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }
 
     /// Jumps to the one failing check, or to the checks page when
@@ -210,12 +210,23 @@ extension PullRequestsModel {
     /// What a push is reported as, which depends on where it went:
     /// a branch that went to a fork is worth saying so about, since
     /// it is not in the repository being looked at.
-    static func describe(push destination: PushDestination, branch: String) -> String {
-        guard case let .fork(owner) = destination else {
-            return "Pushed " + branch + "."
-        }
+    /// A list of branches as the pane says them: each in the
+    /// backticks that draw it monospaced.
+    static func named(_ branches: [String]) -> String {
+        branches.lazy.map { "`" + $0 + "`" }.joined(separator: ", ")
+    }
 
-        return "Pushed " + branch + " to " + owner + "'s fork, since this repository is not yours to push to."
+    static func describe(push destination: PushDestination) -> String {
+        switch destination {
+        case .origin:
+            "pushed"
+
+        case let .fork(owner):
+            "pushed to `" + owner + "`'s fork, since this repository is not yours to push to"
+
+        case let .contributorFork(owner, _):
+            "pushed to `" + owner + "`'s fork, which this pull request comes from"
+        }
     }
 
     /// Rebases onto origin with signed commits; false means the
@@ -267,7 +278,9 @@ extension PullRequestsModel {
     func act(_ work: () async throws -> Void) async -> Bool {
         do {
             try await work()
-            setStatus("Done.")
+            // No "Done.": the row, the button and the listing all say
+            // what happened, and a message that says only that it did
+            // is one more line to scroll past in the messages pane.
             await reload(keepingSelection: true)
             return true
         } catch {

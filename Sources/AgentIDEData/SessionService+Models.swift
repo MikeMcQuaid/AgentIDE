@@ -49,6 +49,60 @@ public extension SessionService {
         }
     }
 
+    /// What identifies the answer a listing would give: the CLI's
+    /// own version, and where the list comes from a cache the server
+    /// rewrites, that file's modification time as well. Keyed on the
+    /// version alone, a model added server-side stayed missing from
+    /// the picker until the CLI itself was upgraded.
+    func modelListingStamp(for agent: AgentKind) async -> String? {
+        let version = await probeVersion(of: agent)
+        guard let file = runner(for: agent).modelCacheFile else {
+            return version
+        }
+
+        let attributes = try? FileManager.default.attributesOfItem(atPath: paths.sandboxHome + "/" + file)
+        let modified = attributes?[.modificationDate] as? Date
+        return (version ?? "") + "#" + (modified?.timeIntervalSince1970.description ?? "")
+    }
+
+    /// The fuller names an agent reports for its own models, by the
+    /// name `--model` takes. Read from the file the agent keeps
+    /// rather than written here, so a new version names itself the
+    /// first time it is used.
+    func modelNames(for agent: AgentKind) -> [String: String] {
+        guard let file = runner(for: agent).modelNamesFile,
+              let data = FileManager.default.contents(atPath: paths.sandboxHome + "/" + file),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return [:]
+        }
+
+        return ClaudeModelNames.names(fromIdentifiers: Self.modelIdentifiers(inClaudeState: json))
+    }
+
+    /// Every model identifier Claude Code's state names: the options
+    /// it was offered, and the usage it recorded per project.
+    static func modelIdentifiers(inClaudeState json: [String: Any]) -> [String] {
+        var identifiers = [String]()
+        let offered = json["additionalModelOptionsCache"] as? [[String: Any]] ?? []
+        identifiers += offered.compactMap { $0["value"] as? String }
+        let projects = json["projects"] as? [String: Any] ?? [:]
+        for project in projects.values {
+            let usage = (project as? [String: Any])?["lastModelUsage"] as? [String: Any] ?? [:]
+            identifiers += usage.keys
+        }
+        return identifiers
+    }
+
+    /// What a picker starts on for an agent: the first model it
+    /// offers and the effort the CLI itself would use. A form that
+    /// opens on nothing makes the first thing anyone does a choice
+    /// between names they have to look up.
+    func launchDefaults(for agent: AgentKind, models: [String]) -> (model: String, effort: String) {
+        let runner = runner(for: agent)
+        return (models.first ?? runner.models.first ?? "", runner.defaultEffort ?? runner.efforts.first ?? "")
+    }
+
     /// Whether an agent has a listing of its own at all; one that
     /// does not is offered its curated models and nothing else.
     func reportsModels(_ agent: AgentKind) -> Bool {
