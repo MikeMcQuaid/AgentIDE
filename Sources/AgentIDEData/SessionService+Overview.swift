@@ -17,6 +17,11 @@ public struct SessionOverview: Hashable, Sendable {
 
     /// The pane's process tree's summed resident memory.
     public let memoryMegabytes: Int
+
+    /// The agent CLI's version as recorded when the session started,
+    /// which is what that session still runs after an upgrade; nil
+    /// for a session recorded before versions were kept.
+    public let version: String?
 }
 
 // MARK: - OverviewLayout
@@ -49,6 +54,7 @@ public extension SessionService {
             environment: [:],
         )
         let samples = Self.processSamples(fromPS: listing?.standardOutput ?? "")
+        let versions = store.load().agentVersions
         var seen = Set<String>()
         var overviews = [SessionOverview]()
         for pane in panes where seen.insert(pane.sessionName).inserted {
@@ -59,6 +65,7 @@ public extension SessionService {
                 workingDirectory: pane.currentPath,
                 cpuPercent: usage?.cpuPercent ?? 0,
                 memoryMegabytes: usage?.megabytes ?? 0,
+                version: versions[pane.sessionName],
             ))
         }
         return overviews

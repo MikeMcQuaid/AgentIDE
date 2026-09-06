@@ -358,9 +358,15 @@ struct WindowConfigurator: NSViewRepresentable {
                 fitToScreen()
             }
             window.alphaValue = 1
+            // Read before the placement is first recorded: recording
+            // writes the window's state now, which is not fullscreen
+            // yet, over the very flag that says it was left so. That
+            // ordering lost the fullscreen on every relaunch; the
+            // record catches up once the window has gone fullscreen.
+            let wasFullScreen = UserDefaults.standard.bool(forKey: Self.fullScreenKey)
             isPlacing = false
             rememberPlacement()
-            if UserDefaults.standard.bool(forKey: Self.fullScreenKey) {
+            if wasFullScreen {
                 enterFullScreen(window)
             }
         }
