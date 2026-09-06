@@ -62,7 +62,7 @@ extension PullRequestsModel {
 
     /// Where a branch's draft is stored, nil without a branch.
     var draftKey: String? {
-        listedBranch.map { repository.path + "#" + $0 }
+        listedBranch.map { repository.path + "#" + $0 + (editingNumber.map { "#" + String($0) } ?? "") }
     }
 
     /// Whether the template still reads as the repository's own: a

@@ -49,7 +49,8 @@ updates.
 - Pushes, rebases and opens pull requests as drafts or ready for review,
   templates filled in, labels attached, forks used where the repository
   is not yours, pushes following a contributor's fork back to it, and
-  branches stacked in one worktree.
+  branches stacked in one worktree; an open pull request's title and
+  body are edited in the same form, to say what was actually pushed.
 - Copies unresolved review comments and failing CI logs into a prompt,
   resolves conversations and merges or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent

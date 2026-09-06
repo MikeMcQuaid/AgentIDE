@@ -832,6 +832,18 @@ selects the worktree holding it, and `agentide new` starts a session.
   the branch verifies, else origin/HEAD. The ancestor test keeps an
   amended branch out of that path (its pushed commit is a stale twin,
   not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
+- **The same form edits an open pull request.** Edit, beside Draft in
+  the footer, puts the selected pull request's title and body into
+  the creation form in the conversation's place, with the generate
+  and reset buttons working as they do before opening and the labels
+  and template sections left out, since those belong to the pull
+  request itself; Save sends `gh pr edit --title --body` and repaints
+  the row and the pane from the caches, Cancel is the one discard.
+  The form's draft is keyed by the pull request while it is edited,
+  so a half-done edit survives a tab switch and never touches the
+  draft of a pull request yet to open. What it is for is bringing a
+  description up to date with what was actually pushed before the
+  pull request merges.
 - **The creation form** shows when the branch has no open pull request:
   title, body and template as fields, drafts saved as typed and only
   ever filling an empty field, so reloads cannot take back typing.

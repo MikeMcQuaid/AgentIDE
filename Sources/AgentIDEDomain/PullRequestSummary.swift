@@ -147,6 +147,33 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         number
     }
 
+    /// The summary with its title and body as an edit left them,
+    /// everything else standing.
+    public func retitled(_ title: String, body: String) -> Self {
+        var edited = Self(
+            number: number,
+            title: title,
+            url: url,
+            headBranch: headBranch,
+            mergeable: mergeable,
+            reviewDecision: reviewDecision,
+            checks: checks,
+            failingCheckLinks: failingCheckLinks,
+            baseBranch: baseBranch,
+            state: state,
+            isDraft: isDraft,
+            hasAutomerge: hasAutomerge,
+            author: author,
+            body: body,
+            unresolvedComments: unresolvedComments,
+            isQueued: isQueued,
+            closedAt: closedAt,
+            headCommit: headCommit,
+        )
+        edited.unresolvedComments = unresolvedComments
+        return edited
+    }
+
     /// The summary as a push leaves it: its checks pending, since the
     /// run the push starts has not reported yet, and no failing check
     /// to go to, since the one that failed ran on commits that are

@@ -87,6 +87,14 @@ final class PullRequestsModel {
         performLabelChange = { number, add, remove in
             try await github.editLabels(repositoryPath: repository.path, number: number, add: add, remove: remove)
         }
+        performEdit = { number, title, body in
+            try await github.editPullRequest(
+                repositoryPath: repository.path,
+                number: number,
+                title: title,
+                body: body,
+            )
+        }
         performLinkStack = { worktree in
             try await service.linkStack(worktree: worktree)
         }
@@ -130,34 +138,14 @@ final class PullRequestsModel {
             await service.fillPullRequestTemplate(fromCommits: commits, template: template)
         }
         performMergeChange = { summary in
-            defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
-            if summary.isDraft {
-                try await github.markReady(repositoryPath: repository.path, number: summary.number)
-            } else if summary.hasAutomerge {
-                try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
-            } else if Self.isReadyToMerge(summary) {
-                try await github.merge(repositoryPath: repository.path, number: summary.number)
-            } else {
-                try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
-            }
+            try await Self.mergeChange(summary, github: github, repository: repository, gate: gate)
         }
         performDraftChange = { summary in
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             try await github.markDraft(repositoryPath: repository.path, number: summary.number)
         }
         performPostMergeCleanup = { worktree, mergedBranch in
-            let report = await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)
-            for note in report.notes {
-                ErrorLog.shared.note(note)
-            }
-            for failure in report.failures {
-                ErrorLog.shared.report(failure)
-            }
-            // The cleanup changed the checked-out branch and deleted
-            // others, so the sidebar's rows are stale the moment it
-            // finishes; waiting for the next poll showed a branch
-            // that no longer exists.
-            Self.requestSidebarRefresh()
+            await Self.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch, service: service)
         }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
@@ -330,6 +318,13 @@ final class PullRequestsModel {
     var generateDescription: ([String], String) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
     var performMergeChange: (PullRequestSummary) async throws -> Void
+
+    /// Rewrites an open pull request's title and body.
+    var performEdit: (Int, String, String) async throws -> Void
+
+    /// The open pull request whose title and body the form is
+    /// editing, nil while it opens new ones. See `+Editing`.
+    var editingNumber: Int?
 
     /// Takes an open pull request back to a draft.
     var performDraftChange: (PullRequestSummary) async throws -> Void

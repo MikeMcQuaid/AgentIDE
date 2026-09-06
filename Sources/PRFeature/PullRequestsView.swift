@@ -73,7 +73,11 @@ public struct PullRequestsView: View {
                 Divider()
             }
             if let selected = model.selected {
-                conversation(for: selected)
+                if model.isEditing {
+                    PullRequestCreateForm(model: model, editing: selected)
+                } else {
+                    conversation(for: selected)
+                }
             } else if model.needsCreateForm {
                 PullRequestCreateForm(model: model)
             } else {

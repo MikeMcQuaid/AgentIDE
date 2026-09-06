@@ -163,7 +163,9 @@ struct PullRequestFooterView: View {
             }
             Spacer(minLength: Self.padding)
             draftAndOpenButtons
-            if model.isStackedEntry {
+            if model.isEditing {
+                // Saving is the one thing to do while editing.
+            } else if model.isStackedEntry {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(
@@ -206,7 +208,11 @@ struct PullRequestFooterView: View {
         if model.needsCreateForm {
             openDraftButton
             openButton
+        } else if model.isEditing {
+            cancelEditButton
+            saveEditButton
         } else if model.canConvertToDraft {
+            editButton
             draftButton
         }
     }
