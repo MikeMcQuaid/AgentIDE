@@ -191,6 +191,9 @@ struct PullRequestFooterView: View {
             "Draft",
             busy: "Opening",
             disabled: openDisabled,
+            // The spinner says it is opening; a wider word would
+            // widen the button for the whole of its life.
+            keepsTitle: true,
         ) {
             model.prIsDraft = true
             if await model.createPullRequest() == false {
@@ -212,7 +215,6 @@ struct PullRequestFooterView: View {
             cancelEditButton
             saveEditButton
         } else if model.canConvertToDraft {
-            editButton
             draftButton
         }
     }
@@ -223,6 +225,7 @@ struct PullRequestFooterView: View {
             "Draft",
             busy: "Drafting",
             disabled: model.isBranchActionRunning,
+            keepsTitle: true,
         ) {
             if await model.convertToDraft() == false {
                 utilityTab = UtilityTabTarget.errors

@@ -189,6 +189,7 @@ public struct PullRequestsView: View {
             onOpenChecks: { model.openFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },
             onThreadsChanged: { model.updateUnresolved($0, number: summary.number) },
+            onEdit: { model.beginEditing() },
             onToggleLabel: { _ = await model.toggleLabel($0) },
             labels: model.selectedLabels,
             availableLabels: model.availableLabels,

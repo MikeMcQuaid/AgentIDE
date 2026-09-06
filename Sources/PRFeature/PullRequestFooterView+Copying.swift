@@ -41,8 +41,8 @@ extension PullRequestFooterView {
         // and green have no failed log, and a red rollup whose
         // failures are not Actions runs has none either.
         BusyButton(
-            label: Self.copyLabel("Failures", count: selected.failingCheckLinks.count),
-            accessibilityLabel: Self.copyTitle("Failures", count: selected.failingCheckLinks.count),
+            label: Self.copyLabel("Checks", count: selected.failingCheckLinks.count),
+            accessibilityLabel: Self.copyTitle("Checks", count: selected.failingCheckLinks.count),
             busy: "Copying",
             disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
         ) {

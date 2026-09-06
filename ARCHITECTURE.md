@@ -832,8 +832,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   the branch verifies, else origin/HEAD. The ancestor test keeps an
   amended branch out of that path (its pushed commit is a stale twin,
   not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
-- **The same form edits an open pull request.** Edit, beside Draft in
-  the footer, puts the selected pull request's title and body into
+- **The same form edits an open pull request.** The pencil beside the
+  browser button in the conversation's header puts the pull request's
+  title and body into
   the creation form in the conversation's place, with the generate
   and reset buttons working as they do before opening and the labels
   and template sections left out, since those belong to the pull
@@ -889,7 +890,7 @@ selects the worktree holding it, and `agentide new` starts a session.
   answers that the queue sets the strategy, and that automerge is
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
-- **Last mile buttons** say what they copy: Reviews and Failures,
+- **Last mile buttons** say what they copy: Reviews and Checks,
   each carrying the app's copy symbol inline and its count in the run
   the sidebar's arrows use (`Reviews ⎘3` as `Push ↑9`, the symbol the
   same `doc.on.doc` every copy button uses), and nothing to copy is
@@ -898,7 +899,7 @@ selects the worktree holding it, and `agentide new` starts a session.
   threads the conversation pane has read, since no listing query
   carries it), with Cmd-click opening the pull request's files page,
   where a review comment is anchored and answered, and Shift-click
-  opening it in the Browser tab; Failures is one button for the
+  opening it in the Browser tab; Checks is one button for the
   failing checks, dimmed
   until the rollup is red, that copies the tail of every failing run's `gh run view
   --log-failed` condensed (job and step named once in a heading,

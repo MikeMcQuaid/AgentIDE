@@ -4,13 +4,6 @@ import TerminalUI
 /// The footer's buttons around editing an open pull request's title
 /// and body. Split from the footer for length.
 extension PullRequestFooterView {
-    /// Opens the selected pull request's title and body in the form.
-    var editButton: some View {
-        Button("Edit") { model.beginEditing() }
-            .buttonStyle(.glass)
-            .hoverHelp("Edit the title and body, to say what was actually pushed before it merges")
-    }
-
     /// Leaves the edit without saving; Escape does the same.
     var cancelEditButton: some View {
         Button("Cancel") { model.cancelEditing() }

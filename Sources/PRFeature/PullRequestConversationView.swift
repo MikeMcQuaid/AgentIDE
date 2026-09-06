@@ -28,6 +28,9 @@ struct PullRequestConversationPane: View {
     /// See `PullRequestConversationView.onThreadsChanged`.
     let onThreadsChanged: @MainActor (Int) -> Void
 
+    /// Opens the title and body for editing.
+    var onEdit: (@MainActor () -> Void)?
+
     /// Toggles one label against GitHub the moment a menu item is
     /// clicked; declared before the lists so the call site's
     /// closure is never its final argument, which SwiftFormat
@@ -40,13 +43,7 @@ struct PullRequestConversationPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PullRequestHeaderRow(
-                summary: summary,
-                stackDepth: stackDepth,
-                onBack: onBack,
-                onCopyComments: onCopyComments,
-                onOpenChecks: onOpenChecks,
-            )
+            header
             if availableLabels.isEmpty == false || labels.isEmpty == false {
                 LabelsRow(
                     picked: labels,
@@ -76,6 +73,19 @@ struct PullRequestConversationPane: View {
     // MARK: Private
 
     private static let labelsPadding: CGFloat = 8
+
+    /// The header, drawn as the list draws a row, with the back
+    /// chevron live and the edit pencil beside the browser button.
+    private var header: some View {
+        PullRequestHeaderRow(
+            summary: summary,
+            stackDepth: stackDepth,
+            onBack: onBack,
+            onCopyComments: onCopyComments,
+            onOpenChecks: onOpenChecks,
+            onEdit: onEdit,
+        )
+    }
 }
 
 // MARK: - PullRequestHeaderRow
@@ -98,6 +108,10 @@ struct PullRequestHeaderRow: View {
     let onCopyComments: @MainActor () async -> Void
     let onOpenChecks: @MainActor () async -> Void
 
+    /// Opens the title and body for editing, on the conversation's
+    /// header alone.
+    var onEdit: (@MainActor () -> Void)?
+
     var body: some View {
         HStack(spacing: Self.spacing) {
             Button("Back to the list", systemImage: "chevron.backward") { onBack?() }
@@ -112,6 +126,7 @@ struct PullRequestHeaderRow: View {
                 showsActions: true,
                 onCopyComments: onCopyComments,
                 onOpenChecks: onOpenChecks,
+                onEdit: onEdit,
             )
         }
         .padding(.horizontal, Self.padding)
