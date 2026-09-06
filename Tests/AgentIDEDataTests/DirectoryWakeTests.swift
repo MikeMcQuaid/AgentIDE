@@ -24,7 +24,7 @@ struct DirectoryWakeTests {
     @Test
     func `a ring wakes the waiter early, or the next waiter once`() async {
         let wake = DirectoryWake()
-        let long = Duration.seconds(5)
+        let long = Duration.seconds(30)
 
         // A ring before anyone waits is kept for the next wait, and
         // spent by it: the one after waits its full timeout.
@@ -32,7 +32,10 @@ struct DirectoryWakeTests {
         wake.ring()
         let kept = ContinuousClock.now
         await wake.wait(timeout: long)
-        #expect(ContinuousClock.now - kept < .seconds(1))
+        // Early means before the timeout, not fast: a loaded runner
+        // can hold a task for seconds, and only the timeout would
+        // have made it five.
+        #expect(ContinuousClock.now - kept < long)
         let spent = ContinuousClock.now
         await wake.wait(timeout: .milliseconds(30))
         #expect(ContinuousClock.now - spent >= .milliseconds(30))
@@ -44,7 +47,7 @@ struct DirectoryWakeTests {
         }
         let early = ContinuousClock.now
         await wake.wait(timeout: long)
-        #expect(ContinuousClock.now - early < .seconds(1))
+        #expect(ContinuousClock.now - early < long)
         await ringing.value
     }
 }
