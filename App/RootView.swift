@@ -165,7 +165,7 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(WindowConfigurator(
             onVisibilityChange: { visible in windowVisibilityChanged(visible) },
-            onFullScreenChange: { isFullScreen = $0 },
+            onPlacementChange: { isFullScreen = $0.isFullScreen },
         ))
         // The title bar hides the string, but Mission Control, the
         // Window menu and window switching all read it.
