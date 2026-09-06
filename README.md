@@ -87,14 +87,17 @@ updates.
 
 ## 📦 Installation
 
-Download `AgentIDE-<version>.zip` from the
-[releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip
-it and move `AgentIDE.app` to /Applications. Releases are signed with a
-Developer ID certificate and notarised by Apple.
+```bash
+brew install --cask agentide
+```
 
-Releases will also ship as a Homebrew cask
-(`brew install --cask agentide`) once the cask exists; `brew upgrade`
-then updates the app.
+The [`agentide` cask](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/a/agentide.rb)
+installs the latest release, and `brew upgrade` updates it. Releases are
+signed with a Developer ID certificate and notarised by Apple.
+
+Without Homebrew, download `AgentIDE-<version>.zip` from the
+[releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip
+it and move `AgentIDE.app` to /Applications.
 
 To run the current source instead:
 

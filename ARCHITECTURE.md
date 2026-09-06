@@ -1108,7 +1108,8 @@ organisation.
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
-No updater: releases will ship as a Homebrew cask once it exists.
+No updater of its own: releases ship as the `agentide` Homebrew cask,
+and `brew upgrade` is the updater.
 
 Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
 every rule enabled (per-line disables with a reason). Scripts:
@@ -1184,11 +1185,11 @@ A push that touches the workflow, packaging scripts or metadata uses
 `9999.0.0` as a reserved local-only version and repeats the build,
 signing and notarisation as a dry run, but uploads no artefact and
 pushes no tag or release. Dependabot cannot read Actions secrets, so
-its dry runs skip signing and notarisation. The disabled `bump-cask`
-job is ready to run `Homebrew/actions/bump-packages` after a release
-once the `agentide` cask exists and `HOMEBREW_GITHUB_API_TOKEN`, a
-personal access token with the `public_repo` and `workflow` scopes, is
-a repository secret.
+its dry runs skip signing and notarisation. The `agentide` cask exists;
+the disabled `bump-cask` job is ready to run
+`Homebrew/actions/bump-packages` against it after a release once
+`HOMEBREW_GITHUB_API_TOKEN`, a personal access token with the
+`public_repo` and `workflow` scopes, is a repository secret.
 
 The release contract is also the cask contract: the tag is the bare
 version, the zip is `AgentIDE-<version>.zip` and the app's
