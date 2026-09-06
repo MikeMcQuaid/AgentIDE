@@ -33,6 +33,13 @@ struct WindowConfigurator: NSViewRepresentable {
         var onVisibilityChange: ((Bool) -> Void)?
         var onPlacementChange: ((Placement) -> Void)?
 
+        /// Set while the saved frame is being put back, so the moves
+        /// that placing causes are neither recorded as the user's own
+        /// nor fitted: a frame AppKit constrained on the way to the
+        /// screen would otherwise be saved over the one being
+        /// restored.
+        private(set) var isPlacing = true
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard window != nil else {
@@ -64,8 +71,6 @@ struct WindowConfigurator: NSViewRepresentable {
 
         // MARK: Private
 
-        private static let autosaveName = "AgentIDEMainWindow"
-
         /// The size below which a saved frame is treated as junk.
         /// Small enough to be a deliberate choice on a small
         /// screen, since a window shrunk on purpose must come back
@@ -80,12 +85,11 @@ struct WindowConfigurator: NSViewRepresentable {
         private static let readyAttempts = 20
         private static let readySeconds = 0.2
 
-        /// The margin left around a window filling its screen, and
-        /// what centring divides by.
-        private static let screenInset: CGFloat = 8
+        /// What centring divides by.
         private static let halves: CGFloat = 2
 
         /// Where the window was left, and how.
+        private static let frameKey = "mainWindowFrame"
         private static let displayKey = "mainWindowDisplay"
         private static let fullScreenKey = "mainWindowFullScreen"
 
@@ -181,13 +185,11 @@ struct WindowConfigurator: NSViewRepresentable {
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.movedByHand() }
             })
-            observers.append(centre.addObserver(
-                forName: NSWindow.didResizeNotification,
-                object: window,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.placedByHand() }
-            })
+            for name in [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification] {
+                observers.append(centre.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.placedByHand() }
+                })
+            }
             reportWindowState()
         }
 
@@ -215,18 +217,18 @@ struct WindowConfigurator: NSViewRepresentable {
         }
 
         /// Records the frame the window was dragged or resized to,
-        /// under this app's own name. Naming the autosave is not
-        /// enough: SwiftUI names the window's autosave itself once
-        /// its content is up, after which AppKit saves every change
-        /// under that name and none under this one, and the next
-        /// launch found nothing and filled the main display. A
-        /// fullscreen frame is never the one to come back to.
+        /// once the drag or resize has ended and never while it is
+        /// still being put back. A fullscreen frame is only its
+        /// screen's and never the one to come back to.
         private func placedByHand() {
-            guard let window, window.styleMask.contains(.fullScreen) == false else {
+            guard isPlacing == false, let window, window.styleMask.contains(.fullScreen) == false else {
+                return
+            }
+            guard window.inLiveResize == false else {
                 return
             }
 
-            window.saveFrame(usingName: Self.autosaveName)
+            UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
             rememberDisplay()
         }
 
@@ -246,7 +248,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Notes where the window is, and says so only when that
         /// changed.
         private func rememberDisplay() {
-            guard let window, let current = window.screen?.displayID else {
+            guard isPlacing == false, let window, let current = window.screen?.displayID else {
                 return
             }
 
@@ -262,17 +264,6 @@ struct WindowConfigurator: NSViewRepresentable {
             defaults.set(NSScreen.uuid(of: current), forKey: Self.displayKey)
             defaults.set(placement.isFullScreen, forKey: Self.fullScreenKey)
             onPlacementChange?(placement)
-        }
-
-        /// Fills whichever screen the window is on, less a margin: a
-        /// fixed default is either too big for a laptop or too small
-        /// for a desk.
-        private func fill(_ window: NSWindow) {
-            guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
-                return
-            }
-
-            window.setFrame(visible.insetBy(dx: Self.screenInset, dy: Self.screenInset), display: true)
         }
 
         /// Puts the window back where it was left: the same display,
@@ -320,35 +311,48 @@ struct WindowConfigurator: NSViewRepresentable {
             window.toggleFullScreen(nil)
         }
 
-        /// Puts the window back as it was left: the autosaved frame
-        /// applied rather than merely named, on the display it was
-        /// closed on, fullscreen again when it was closed that way,
-        /// and filling whichever screen it lands on when there is
-        /// nothing saved or what was saved is too small for three
-        /// panes. macOS reopens a fullscreen space on the display it
-        /// chooses, which is why the display is remembered by its
-        /// own identity and the window placed before any toggle.
+        /// Puts the window back as it was left. AppKit's autosave is
+        /// neither named nor read: SwiftUI holds the name, and since
+        /// Monterey restoring through it brings a window left on a
+        /// second display back to the main one. The frame is set over
+        /// whatever AppKit restored, once now so nothing shows at a
+        /// default size, and again once the window is really on a
+        /// screen, since a frame set before then is constrained to
+        /// the main display. A frame too small for three panes is
+        /// thrown away, and with none the window fills the screen it
+        /// lands on.
         private func restoreFrame(of window: NSWindow) {
-            guard window.frameAutosaveName != Self.autosaveName else {
-                return
-            }
-
-            window.setFrameAutosaveName(Self.autosaveName)
-            // Naming the autosave does not apply it: without this the
-            // window opens at whatever size its content asked for,
-            // which changed the moment the sidebar started painting
-            // from cache. A frame too small for the panes is grown to
-            // the default rather than restored as saved.
-            if window.setFrameUsingName(Self.autosaveName) {
-                let minimum = NSSize(width: Self.minimumWidth, height: Self.minimumHeight)
-                if window.frame.width < minimum.width || window.frame.height < minimum.height {
-                    fill(window)
-                }
+            window.setFrameAutosaveName("")
+            let saved = UserDefaults.standard.string(forKey: Self.frameKey).map(NSRectFromString)
+            guard let saved, saved.width >= Self.minimumWidth, saved.height >= Self.minimumHeight else {
+                isPlacing = false
+                fill(window)
                 restorePlacement(of: window)
                 return
             }
 
-            fill(window)
+            // Set now, so nothing shows at a default size, and again
+            // once the window is really on a screen: a frame set
+            // before then is constrained to the main display.
+            window.setFrame(saved, display: false)
+            place(window, at: saved)
+        }
+
+        /// Sets the frame once the window is on a screen, then lets
+        /// moves be recorded and puts the window on its display and
+        /// into fullscreen, in that order: a window in a fullscreen
+        /// space must never be moved.
+        private func place(_ window: NSWindow, at frame: NSRect, attempts: Int = ConfiguringView.readyAttempts) {
+            if window.isVisible, window.screen != nil {
+                window.setFrame(frame, display: true)
+            } else if attempts > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.readySeconds) { [weak self] in
+                    self?.place(window, at: frame, attempts: attempts - 1)
+                }
+                return
+            }
+
+            isPlacing = false
             restorePlacement(of: window)
         }
     }

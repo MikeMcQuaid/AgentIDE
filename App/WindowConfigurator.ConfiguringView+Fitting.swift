@@ -3,6 +3,20 @@ import AppKit
 /// Fitting the window to the screen it lands on, used by the window
 /// configurator; its own file for that file's length.
 extension WindowConfigurator.ConfiguringView {
+    /// The margin left around a window filling its screen.
+    private static let screenInset: CGFloat = 8
+
+    /// Fills whichever screen the window is on, less a margin: a
+    /// fixed default is either too big for a laptop or too small
+    /// for a desk.
+    func fill(_ window: NSWindow) {
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
+            return
+        }
+
+        window.setFrame(visible.insetBy(dx: Self.screenInset, dy: Self.screenInset), display: true)
+    }
+
     /// Lays the window out for the screen it is on: a fullscreen
     /// window to the display it lost, any other back inside its
     /// screen's edges.
@@ -13,7 +27,9 @@ extension WindowConfigurator.ConfiguringView {
 
         if window.styleMask.contains(.fullScreen) {
             fitFullScreen(of: window, hasLostDisplay: displayGone)
-        } else {
+        } else if isPlacing == false {
+            // Not while the saved frame is still being put back: the
+            // frame that wants fitting is not there yet.
             fitToScreen()
         }
         // The space a fullscreen window lands on paints black
