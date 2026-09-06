@@ -104,6 +104,7 @@ struct FileEditorView: View {
                     language: language,
                     jumpToLine: jumpToLine,
                     changedLines: markedLines,
+                    scrollKey: path,
                     settings: settings,
                 )
             }

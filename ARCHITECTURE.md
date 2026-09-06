@@ -578,7 +578,11 @@ directory of your own is pinned to the centre slot; a worktree or
 repository page opens it from an Editor button on its conversations
 view, and the primary pane's branch order is what guarantees a live
 session always outranks the centre editor, so one can never cover the
-other. Each slot persists its own finder and open file under
+other. Every file remembers where it was scrolled to
+(`EditorScrollPositions`, capped at two hundred files, written when
+its editor goes away), so a worktree switch or a relaunch brings it
+back in place unless a line was asked for by name. Each slot persists
+its own finder and open file under
 role-suffixed defaults keys; open-file and finder-focus requests
 travel the shared keys and the window routes each to the preferred
 slot: the side editor unless the centre editor is on screen, and
