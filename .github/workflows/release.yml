@@ -149,17 +149,47 @@ jobs:
             ".build/AgentIDE-${VERSION}.zip"
 
   bump-cask:
-    # `false` holds the bump back until the `agentide` cask exists in
-    # Homebrew/homebrew-cask and `HOMEBREW_GITHUB_API_TOKEN`, a personal
-    # access token with the `public_repo` and `workflow` scopes, is a
-    # repository secret. `brew bump` then reads the new version through
-    # `brew livecheck` and opens the pull request.
-    if: false && github.event_name == 'workflow_dispatch'
+    # `HOMEBREW_GITHUB_API_TOKEN` is a classic personal access token
+    # with `public_repo` alone: `brew bump` forks Homebrew/homebrew-cask
+    # under the token's account, pushes the bump there and opens the
+    # pull request, none of which touches a workflow file. The one way
+    # that push can need the `workflow` scope is carrying upstream
+    # commits the fork lacks, so the fork's main is synced first, on
+    # every run: a dry run proves the token, the fork and the sync
+    # are all in place while there is nothing to bump. Without the
+    # secret (a fork, Dependabot) every step here skips.
     needs: release
     runs-on: macos-latest
     timeout-minutes: 15
+    env:
+      HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
     steps:
+      - name: Check the token's account, scope and fork
+        if: env.HOMEBREW_GITHUB_API_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ env.HOMEBREW_GITHUB_API_TOKEN }}
+        run: |
+          login="$(gh api user --jq .login)"
+          scopes="$(gh api -i user | tr -d '\r' | grep -i '^x-oauth-scopes:' | cut -d: -f2-)"
+          echo "token belongs to ${login} with scopes:${scopes}"
+          if [[ "${scopes}" != *public_repo* && "${scopes}" != *" repo"* ]]; then
+            echo "::error::HOMEBREW_GITHUB_API_TOKEN lacks the public_repo scope"
+            exit 1
+          fi
+          if [[ "$(gh api "repos/${login}/homebrew-cask" --jq .fork)" != "true" ]]; then
+            echo "::error::${login} has no fork of Homebrew/homebrew-cask for brew bump to push to"
+            exit 1
+          fi
+          echo "fork=${login}/homebrew-cask" >>"${GITHUB_ENV}"
+
+      - name: Sync the fork
+        if: env.HOMEBREW_GITHUB_API_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ env.HOMEBREW_GITHUB_API_TOKEN }}
+        run: gh repo sync "${fork}" --branch main
+
       - name: Set up Homebrew
+        if: env.HOMEBREW_GITHUB_API_TOKEN != '' && github.event_name == 'workflow_dispatch'
         uses: Homebrew/actions/setup-homebrew@3cdb78d0f62ad29dd32de765782654f4eedea607 # 2026.08.31.1
         with:
           core: false
@@ -167,7 +197,8 @@ jobs:
           test-bot: false
 
       - name: Bump the cask
+        if: env.HOMEBREW_GITHUB_API_TOKEN != '' && github.event_name == 'workflow_dispatch'
         uses: Homebrew/actions/bump-packages@3cdb78d0f62ad29dd32de765782654f4eedea607 # 2026.08.31.1
         with:
-          token: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
+          token: ${{ env.HOMEBREW_GITHUB_API_TOKEN }}
           casks: agentide
