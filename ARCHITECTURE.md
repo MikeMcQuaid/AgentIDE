@@ -870,9 +870,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
 - **Last mile buttons** say what they copy: Reviews and Failures,
-  each carrying a copy glyph and its count in the run the sidebar's
-  arrows use (`Reviews ⧉3` as `Push ↑9`), and nothing to copy is the
-  word alone, greyed out. Reviews copies unresolved review threads grouped per
+  each carrying the app's copy symbol inline and its count in the run
+  the sidebar's arrows use (`Reviews ⎘3` as `Push ↑9`, the symbol the
+  same `doc.on.doc` every copy button uses), and nothing to copy is
+  the word alone, greyed out. Reviews copies unresolved review threads grouped per
   file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query
   carries it), with Cmd-click opening the pull request's files page,

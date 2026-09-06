@@ -26,8 +26,32 @@ public struct BusyButton: View {
         action: @escaping @MainActor () async -> Void,
     ) {
         self.title = title
+        richTitle = nil
         busyTitle = keepsTitle ? title : busy
         self.systemImage = systemImage
+        spokenLabel = accessibilityLabel
+        isProminent = prominent
+        isDisabled = disabled
+        self.action = action
+    }
+
+    /// The same button over a label that is not plain text: a run
+    /// with a symbol in it, such as a count behind the app's copy
+    /// glyph. `accessibilityLabel` is what VoiceOver reads for it,
+    /// since a `Text` cannot be read back as a string.
+    @preconcurrency
+    public init(
+        label: Text,
+        accessibilityLabel: String,
+        busy: String,
+        prominent: Bool = false,
+        disabled: Bool = false,
+        action: @escaping @MainActor () async -> Void,
+    ) {
+        title = accessibilityLabel
+        richTitle = label
+        busyTitle = busy
+        systemImage = nil
         spokenLabel = accessibilityLabel
         isProminent = prominent
         isDisabled = disabled
@@ -55,6 +79,9 @@ public struct BusyButton: View {
     @State private var isBusy = false
 
     private let title: String
+
+    /// The label as drawn when it is more than its title.
+    private let richTitle: Text?
     private let busyTitle: String
     private let systemImage: String?
     private let spokenLabel: String?
@@ -87,7 +114,7 @@ public struct BusyButton: View {
             // so a press never resizes the button and the row never
             // shuffles; while busy a spinner takes the icon's slot.
             ZStack {
-                stateLabel(text: title, spinning: false)
+                stateLabel(text: title, spinning: false, rich: richTitle)
                     .opacity(isBusy ? 0 : 1)
                 stateLabel(text: busyTitle, spinning: true)
                     .opacity(isBusy ? 1 : 0)
@@ -100,7 +127,7 @@ public struct BusyButton: View {
 
     /// One state's content: the icon or the progress spinner in the
     /// same fixed slot, then the state's text.
-    private func stateLabel(text: String, spinning: Bool) -> some View {
+    private func stateLabel(text: String, spinning: Bool, rich: Text? = nil) -> some View {
         HStack(spacing: Self.iconSpacing) {
             if spinning {
                 ProgressView()
@@ -112,7 +139,9 @@ public struct BusyButton: View {
                     .frame(width: Self.iconSlot, height: Self.iconSlot)
                     .accessibilityLabel(spokenTitle)
             }
-            if text.isEmpty == false {
+            if let rich {
+                rich
+            } else if text.isEmpty == false {
                 Text(text)
             }
         }

@@ -4,9 +4,9 @@ import SwiftUI
 import TerminalUI
 
 /// The footer's copy buttons: what a click takes to the
-/// clipboard, said in a word and, when there is any of it, a copy
-/// glyph and a count in the run the sidebar's arrows use. Split
-/// from the footer for length.
+/// clipboard, said in a word and, when there is any of it, the
+/// app's own copy symbol and a count, in the run the sidebar's
+/// arrows use. Split from the footer for length.
 extension PullRequestFooterView {
     /// The copy actions for the open conversation, in the footer's
     /// click-order run.
@@ -17,7 +17,8 @@ extension PullRequestFooterView {
         // to the word alone, which is the same fact the count
         // would have reported.
         BusyButton(
-            Self.copyLabel("Reviews", count: selected.unresolvedComments),
+            label: Self.copyLabel("Reviews", count: selected.unresolvedComments),
+            accessibilityLabel: Self.copyTitle("Reviews", count: selected.unresolvedComments),
             busy: "Copying",
             disabled: selected.unresolvedComments == 0,
         ) {
@@ -40,7 +41,8 @@ extension PullRequestFooterView {
         // and green have no failed log, and a red rollup whose
         // failures are not Actions runs has none either.
         BusyButton(
-            Self.copyLabel("Failures", count: selected.failingCheckLinks.count),
+            label: Self.copyLabel("Failures", count: selected.failingCheckLinks.count),
+            accessibilityLabel: Self.copyTitle("Failures", count: selected.failingCheckLinks.count),
             busy: "Copying",
             disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
         ) {
@@ -56,17 +58,27 @@ extension PullRequestFooterView {
             + "in the Browser tab; dimmed until a check fails")
     }
 
-    /// The copy glyph, a character like the sidebar's arrows so it
-    /// sits in the label at the text's own size: `Reviews ⧉3` reads
-    /// as `Push ↑9` does.
-    static let copyGlyph = "\u{29C9}"
+    /// The symbol every copy in the app carries, drawn inline at the
+    /// text's own size between the word and the count, where
+    /// `Push ↑9` puts its arrow: a character that looked like it did
+    /// not look like it.
+    static let copyIcon = "doc.on.doc"
 
     /// A copy button's label: what it copies and, when there is
-    /// any, the glyph and the count. Nothing to copy is the word
+    /// any, the symbol and the count. Nothing to copy is the word
     /// alone, greyed out.
-    static func copyLabel(_ name: String, count: Int) -> String {
+    static func copyLabel(_ name: String, count: Int) -> Text {
+        guard count > 0 else {
+            return Text(name)
+        }
+
+        return Text(name + " ") + Text(Image(systemName: copyIcon)) + Text(String(count))
+    }
+
+    /// The same as VoiceOver reads it.
+    static func copyTitle(_ name: String, count: Int) -> String {
         if count > 0 {
-            name + " " + copyGlyph + String(count)
+            name + " " + String(count)
         } else {
             name
         }

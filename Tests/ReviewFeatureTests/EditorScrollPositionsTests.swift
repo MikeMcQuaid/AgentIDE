@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 @testable import ReviewFeature
 import Testing
@@ -6,8 +7,12 @@ import Testing
 struct EditorScrollPositionsTests {
     @Test
     func `a file comes back where it was, and the oldest fall off`() throws {
-        let defaults = try #require(UserDefaults(suiteName: "EditorScrollPositionsTests-" + UUID().uuidString))
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        // Named once and removed by that name: the domain a suite is
+        // removed by is its name, not its description, and the wrong
+        // one left a plist behind on every run.
+        let suite = "EditorScrollPositionsTests-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
 
         #expect(EditorScrollPositions.position(for: "/w/a.swift", in: defaults) == nil)
         EditorScrollPositions.remember(CGPoint(x: 0, y: 240), for: "/w/a.swift", in: defaults)
