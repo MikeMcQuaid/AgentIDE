@@ -1206,19 +1206,11 @@ A push that touches the workflow, packaging scripts or metadata uses
 `9999.0.0` as a reserved local-only version and repeats the build,
 signing and notarisation as a dry run, but uploads no artefact and
 pushes no tag or release. Dependabot cannot read Actions secrets, so
-its dry runs skip signing and notarisation. After a release the
-`bump-cask` job runs `Homebrew/actions/bump-packages` against the
-`agentide` cask with `HOMEBREW_GITHUB_API_TOKEN`, a classic personal
-access token with `public_repo` alone and never `workflow`: `brew bump`
-pushes the bump to a fork under the token's account and opens the pull
-request from there. That push carries every upstream commit the fork
-lacks, and GitHub refuses one that touched a workflow file without the
-`workflow` scope, so the job first moves the fork's main to upstream's
-server-side (the Git Refs API, then merge-upstream). GitHub applies the
-same rule to both, so when they refuse the bump pushes its one commit
-straight to Homebrew/homebrew-cask (`fork: false`), which carries
-nothing but the bump. A dry run walks the same steps with nothing to
-bump; without the secret every step skips.
+its dry runs skip signing and notarisation. Nothing here bumps the
+cask: the `agentide` cask in Homebrew/homebrew-cask is open source and
+Homebrew's own autobump reads each release through `brew livecheck`
+and opens the pull request itself, so the release needs no GitHub
+token of its own.
 
 The release contract is also the cask contract: the tag is the bare
 version, the zip is `AgentIDE-<version>.zip` and the app's
