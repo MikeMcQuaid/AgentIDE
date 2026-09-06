@@ -299,6 +299,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   move and told nobody anything. Setting the
   frame of a window in a fullscreen space to chase this blacks out
   both displays until the app is killed; do not try it.
+- SwiftUI names the main window's frame autosave when it makes the
+  window, and `setFrameAutosaveName` refuses a second name while it
+  holds one, so a name of the app's own never saved anything. Beneath
+  that, since Monterey AppKit's restoration moves a window that was
+  on a second display to the main one, keeping its place within the
+  screen. `WindowConfigurator` clears the name and sets the saved
+  frame itself once the window is really on a screen; a frame set
+  before then is constrained to the main display.
 - A window changing screens can leave an `NSViewRepresentable`'s
   AppKit view on the old screen's geometry while the SwiftUI chrome
   around it lays out correctly (seen: the editor's text bleeding
