@@ -150,14 +150,18 @@ jobs:
 
   bump-cask:
     # `HOMEBREW_GITHUB_API_TOKEN` is a classic personal access token
-    # with `public_repo` alone: `brew bump` forks Homebrew/homebrew-cask
-    # under the token's account, pushes the bump there and opens the
-    # pull request, none of which touches a workflow file. The one way
-    # that push can need the `workflow` scope is carrying upstream
-    # commits the fork lacks, so the fork's main is synced first, on
-    # every run: a dry run proves the token, the fork and the sync
-    # are all in place while there is nothing to bump. Without the
-    # secret (a fork, Dependabot) every step here skips.
+    # with `public_repo` alone, never `workflow`. `brew bump` pushes
+    # the bump to a fork under the token's account and opens the pull
+    # request from there; that push carries every upstream commit the
+    # fork lacks, and GitHub refuses one that touched a workflow file
+    # without the `workflow` scope, so the fork is brought up to date
+    # first by moving its main to upstream's, server-side. When GitHub
+    # refuses that too (it applies the same rule to merge-upstream),
+    # the bump pushes its one commit straight to Homebrew/homebrew-cask
+    # instead, which carries nothing but the bump. A dry run walks the
+    # same steps with nothing to bump, so the token, the fork and the
+    # sync are proven on every change here. Without the secret (a
+    # fork of this repository, Dependabot) every step skips.
     needs: release
     runs-on: macos-latest
     timeout-minutes: 15
@@ -176,17 +180,46 @@ jobs:
             echo "::error::HOMEBREW_GITHUB_API_TOKEN lacks the public_repo scope"
             exit 1
           fi
-          if [[ "$(gh api "repos/${login}/homebrew-cask" --jq .fork)" != "true" ]]; then
-            echo "::error::${login} has no fork of Homebrew/homebrew-cask for brew bump to push to"
+          if [[ "${scopes}" == *workflow* ]]; then
+            echo "::error::HOMEBREW_GITHUB_API_TOKEN carries the workflow scope, which nothing here needs"
             exit 1
+          fi
+          if [[ "$(gh api "repos/${login}/homebrew-cask" --jq .fork 2>/dev/null)" != "true" ]]; then
+            echo "::notice::${login} has no fork of Homebrew/homebrew-cask; the bump will push to it directly"
+            echo "bump_fork=false" >>"${GITHUB_ENV}"
+            exit 0
           fi
           echo "fork=${login}/homebrew-cask" >>"${GITHUB_ENV}"
 
-      - name: Sync the fork
-        if: env.HOMEBREW_GITHUB_API_TOKEN != ''
+      - name: Bring the fork up to date
+        if: env.HOMEBREW_GITHUB_API_TOKEN != '' && env.fork != ''
         env:
           GH_TOKEN: ${{ env.HOMEBREW_GITHUB_API_TOKEN }}
-        run: gh repo sync "${fork}" --branch main
+        run: |
+          upstream="$(gh api repos/Homebrew/homebrew-cask/git/ref/heads/main --jq .object.sha)"
+          current="$(gh api "repos/${fork}/git/ref/heads/main" --jq .object.sha)"
+          if [[ "${current}" == "${upstream}" ]]; then
+            echo "${fork} is at upstream's main already"
+            echo "bump_fork=true" >>"${GITHUB_ENV}"
+            exit 0
+          fi
+          # A fast-forward of the fork's main to a commit upstream
+          # already holds, then the merge-upstream route; either is
+          # refused with `workflow` in its message when upstream
+          # touched a workflow file since the fork last caught up.
+          if gh api -X PATCH "repos/${fork}/git/refs/heads/main" -f "sha=${upstream}" -F force=false \
+              --jq .object.sha 2>"${RUNNER_TEMP}/sync.err" \
+            || gh repo sync "${fork}" --branch main 2>>"${RUNNER_TEMP}/sync.err"; then
+            echo "${fork} brought up to ${upstream}"
+            echo "bump_fork=true" >>"${GITHUB_ENV}"
+          elif grep -qi workflow "${RUNNER_TEMP}/sync.err"; then
+            cat "${RUNNER_TEMP}/sync.err"
+            echo "::notice::${fork} cannot be brought up to date without the workflow scope; the bump will push to Homebrew/homebrew-cask directly"
+            echo "bump_fork=false" >>"${GITHUB_ENV}"
+          else
+            cat "${RUNNER_TEMP}/sync.err"
+            exit 1
+          fi
 
       - name: Set up Homebrew
         if: env.HOMEBREW_GITHUB_API_TOKEN != '' && github.event_name == 'workflow_dispatch'
@@ -202,3 +235,4 @@ jobs:
         with:
           token: ${{ env.HOMEBREW_GITHUB_API_TOKEN }}
           casks: agentide
+          fork: ${{ env.bump_fork != 'false' }}
