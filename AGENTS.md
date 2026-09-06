@@ -214,6 +214,17 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.
+- Cancelling a task that is awaiting `AsyncStream.next()` finishes
+  the stream: its termination handler runs and every later `next()`
+  returns nil at once. Racing an iterator against a sleep in a task
+  group and cancelling the loser therefore works exactly once; from
+  the first timeout on the "wait" returns immediately, and the loop
+  around it spins. The edit spool did this and held the app at a
+  core and a half from eight seconds after launch (`DirectoryWake`
+  is the shape that survives: a ring resumes a stored continuation,
+  a timeout resumes only the waiter it was set for, nothing is
+  cancelled). Anything that has to race a stream against time must
+  keep one consumer alive across the race.
 - `@State` objects outlive view re-initialisation: rebuild models
   when their identity input changes (see `ReviewView`). That
   identity is the worktree's path, never its branch: git detaches

@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 /// The files commands outside the app are waiting to have edited.
 public extension SessionService {
@@ -74,7 +75,7 @@ public extension SessionService {
                         }
                     let timeout = Duration.seconds(timeoutSeconds)
                     if let wake {
-                        await Self.wakeOrTimeout(wake, timeout: timeout)
+                        await wake.wait(timeout: timeout)
                     } else {
                         try? await Task.sleep(for: timeout)
                     }
@@ -125,43 +126,33 @@ public extension SessionService {
         spool.pending()
     }
 
-    /// A stream that fires whenever the spool directory's listing
-    /// changes, coalescing bursts; nil when the directory cannot be
-    /// opened for watching.
-    private static func directoryChanges(in directory: String) -> AsyncStream<Void>? {
+    /// A wake rung whenever the spool directory's listing changes;
+    /// nil when the directory cannot be opened for watching. The
+    /// source lives as long as the wake does.
+    private static func directoryChanges(in directory: String) -> DirectoryWake? {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let descriptor = open(directory, O_EVTONLY)
         guard descriptor >= 0 else {
             return nil
         }
 
+        let wake = DirectoryWake()
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
             eventMask: .write,
             queue: .global(qos: .utility),
         )
-        return AsyncStream(Void.self, bufferingPolicy: .bufferingNewest(1)) { continuation in
-            source.setEventHandler { continuation.yield(()) }
-            source.setCancelHandler { close(descriptor) }
-            source.resume()
-            continuation.onTermination = { _ in source.cancel() }
-        }
+        source.setEventHandler { wake.ring() }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        // The source is kept by its own handler chain until the
+        // process ends: the loop it wakes lives as long as the
+        // window, and a watch that outlives it costs one descriptor.
+        Self.sources.withLock { $0.append(source) }
+        return wake
     }
 
-    /// Waits for the next directory event or the timeout, whichever
-    /// comes first. Events that land mid-scan stay buffered, so the
-    /// next wait returns at once rather than losing them.
-    private static func wakeOrTimeout(_ wake: AsyncStream<Void>, timeout: Duration) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
-                var events = wake.makeAsyncIterator()
-                _ = await events.next()
-            }
-            group.addTask {
-                try? await Task.sleep(for: timeout)
-            }
-            _ = await group.next()
-            group.cancelAll()
-        }
-    }
+    /// The directory watches in flight, held so their sources are
+    /// never released while the loops they wake still run.
+    private static let sources: Mutex<[DispatchSourceFileSystemObject]> = .init([])
 }

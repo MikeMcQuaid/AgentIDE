@@ -620,7 +620,9 @@ The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
 request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
-a dispatch source, opens the file in the preferred editor slot and
+a dispatch source ringing a `DirectoryWake` that a loop waits on with a
+backstop timeout, nothing cancelled on either side (the platform notes
+say why), opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A symlinked file
 resolves to its target before it is asked for: the editor saves
