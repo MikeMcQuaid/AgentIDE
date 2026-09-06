@@ -43,20 +43,26 @@ final class DirectoryWake: Sendable {
     /// Returns on the next ring or after the timeout, whichever
     /// comes first; at once when a ring is already waiting.
     func wait(timeout: Duration) async {
-        let rung = held.withLock { held in
-            let was = held.pending
-            held.pending = false
-            return was
-        }
-        guard rung == false else {
-            return
-        }
-
         await withCheckedContinuation { continuation in
-            let generation = held.withLock { held in
+            // One lock take decides: a ring already waiting resumes
+            // at once, otherwise the waiter is installed under the
+            // same lock a ring would take. Checked and installed in
+            // two takes, a ring between them was kept for the next
+            // wait while this one slept its whole safety tick.
+            let generation: Int? = held.withLock { held in
+                if held.pending {
+                    held.pending = false
+                    return nil
+                }
+
                 held.waiter = continuation
                 return held.generation
             }
+            guard let generation else {
+                continuation.resume()
+                return
+            }
+
             Task {
                 try? await Task.sleep(for: timeout)
                 self.expire(generation)

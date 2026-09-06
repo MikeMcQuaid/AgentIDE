@@ -50,4 +50,23 @@ struct DirectoryWakeTests {
         #expect(ContinuousClock.now - early < long)
         await ringing.value
     }
+
+    @Test
+    func `a ring landing as the waiter installs is never lost`() async {
+        // The check for a pending ring and the installing of the
+        // waiter were once two lock takes, and a ring between them
+        // waited out the whole timeout. Raced two hundred times with
+        // a two-second timeout, that version overran on some; every
+        // wait here has to return well inside it.
+        let wake = DirectoryWake()
+        let timeout = Duration.seconds(2)
+        let rounds = 200
+        let started = ContinuousClock.now
+        for _ in 0 ..< rounds {
+            let ringing = Task { wake.ring() }
+            await wake.wait(timeout: timeout)
+            await ringing.value
+        }
+        #expect(ContinuousClock.now - started < timeout)
+    }
 }
