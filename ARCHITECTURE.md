@@ -522,9 +522,14 @@ page resumes any past conversation into a fresh worktree.
 
 1. `GitClient` produces diffs with rename detection; `DiffParser` turns
    them into files, hunks and lines. Scope is the last commit (or
-   uncommitted changes when there are any) or the whole branch against
-   its merge base, remembered per worktree (`ReviewModel+Scope`). Only
-   the tip can be amended; other commits review read-only.
+   uncommitted changes when there are any), the unpushed commits, or
+   the whole branch against its merge base, remembered per worktree
+   (`ReviewModel+Scope`). Unpushed means by patch, not by hash:
+   `git cherry` against the branch's own origin ref, bounded by the
+   base the branch is built on, so a rebase onto a moved base shows
+   nothing rather than every change the base gained, and a commit a
+   conflict rewrote shows on its own. Only the tip can be amended;
+   other commits review read-only.
 2. Generated files (lockfiles and the like, by path fragment) hide by
    default.
 3. Highlighting uses tree-sitter grammars (Swift, Ruby, Bash, Python,
