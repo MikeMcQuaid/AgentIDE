@@ -107,24 +107,83 @@ public extension GitClient {
         }
     }
 
-    /// Exactly what pushing would add that the upstream lacks: the
-    /// unpushed commits' own changes and nothing else. A run of them
-    /// ending at the tip, which is nearly every case, is one range
-    /// diff; a commit a conflicted rebase rewrote in the middle of
-    /// the branch shows on its own, since no single range holds it
-    /// without the equivalent commits around it.
+    /// Exactly what pushing would change on the remote, with the
+    /// base's own movement factored out: the upstream's work
+    /// replayed onto the base the branch now sits on (`git
+    /// merge-tree`, a rebase done as a merge with no worktree), then
+    /// diffed against `HEAD`. An amended commit shows as the lines
+    /// that changed rather than the whole commit again, a plain
+    /// rebase shows nothing, and the base's changes never show. A
+    /// replay that conflicts, or a base that is not known, falls
+    /// back to the unpushed commits' own patches.
     func upstreamDiff(
         worktreePath: String,
         upstreamRef: String,
         baseRef: String?,
         ignoringWhitespace: Bool = false,
     ) async throws -> String {
+        let options = diffOptions(ignoringWhitespace: ignoringWhitespace)
+        let replayed = await upstreamReplayed(
+            worktreePath: worktreePath,
+            upstreamRef: upstreamRef,
+            baseRef: baseRef,
+        )
+        if let replayed {
+            return try await git(["diff"] + options + [replayed, "HEAD"], in: worktreePath).standardOutput
+        }
+
+        return try await unpushedPatches(
+            worktreePath: worktreePath,
+            upstreamRef: upstreamRef,
+            baseRef: baseRef,
+            options: options,
+        )
+    }
+
+    /// The upstream's tree as it would be on the branch's current
+    /// base: the upstream itself when the base has not moved, else
+    /// the three-way merge of the upstream and the new base over
+    /// the old one, which is what a rebase does. Nil without a base
+    /// to measure by, or when the replay conflicts.
+    private func upstreamReplayed(worktreePath: String, upstreamRef: String, baseRef: String?) async -> String? {
+        guard let baseRef, await refExists(worktreePath: worktreePath, ref: baseRef),
+              let oldBase = await mergeBase(baseRef, upstreamRef, worktreePath: worktreePath),
+              let newBase = await mergeBase(baseRef, "HEAD", worktreePath: worktreePath)
+        else {
+            return nil
+        }
+        guard oldBase != newBase else {
+            return upstreamRef
+        }
+
+        let merged = try? await git(
+            ["merge-tree", "--write-tree", "--merge-base=" + oldBase, upstreamRef, newBase],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        guard let merged, merged.succeeded,
+              let tree = merged.standardOutput.split(separator: "\n").first
+        else {
+            return nil
+        }
+
+        return String(tree)
+    }
+
+    /// The unpushed commits' own patches: a run of them ending at
+    /// the tip is one range diff, and a commit a conflicted rebase
+    /// rewrote in the middle of the branch shows on its own.
+    private func unpushedPatches(
+        worktreePath: String,
+        upstreamRef: String,
+        baseRef: String?,
+        options: [String],
+    ) async throws -> String {
         let commits = await unpushedCommits(worktreePath: worktreePath, upstreamRef: upstreamRef, baseRef: baseRef)
         guard let first = commits.first else {
             return ""
         }
 
-        let options = diffOptions(ignoringWhitespace: ignoringWhitespace)
         let range = first + "^..HEAD"
         let spanned = try? await git(["rev-list", "--count", range], in: worktreePath, allowFailure: true)
         if Int(spanned?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") == commits.count {

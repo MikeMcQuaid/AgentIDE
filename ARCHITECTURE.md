@@ -524,12 +524,16 @@ page resumes any past conversation into a fresh worktree.
    them into files, hunks and lines. Scope is the last commit (or
    uncommitted changes when there are any), the unpushed commits, or
    the whole branch against its merge base, remembered per worktree
-   (`ReviewModel+Scope`). Unpushed means by patch, not by hash:
-   `git cherry` against the branch's own origin ref, bounded by the
-   base the branch is built on, so a rebase onto a moved base shows
-   nothing rather than every change the base gained, and a commit a
-   conflict rewrote shows on its own. Only the tip can be amended;
-   other commits review read-only.
+   (`ReviewModel+Scope`). Unpushed is what pushing would change on
+   the remote with the base's movement factored out: the upstream
+   replayed onto the base the branch now sits on (`git merge-tree`,
+   a rebase as a merge with no worktree) and diffed against `HEAD`,
+   so an amended commit shows the lines the amend changed, a rebase
+   onto a moved base shows nothing, and the base's changes never
+   show; the commits listed under it are those whose patch the
+   upstream lacks (`git cherry`, bounded the same way). A replay that
+   conflicts falls back to those commits' own patches. Only the tip
+   can be amended; other commits review read-only.
 2. Generated files (lockfiles and the like, by path fragment) hide by
    default.
 3. Highlighting uses tree-sitter grammars (Swift, Ruby, Bash, Python,

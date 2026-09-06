@@ -84,6 +84,34 @@ struct GitClientUnpushedIntegrationTests {
     }
 
     @Test
+    func `an amended commit shows only what the amend changed`() async throws {
+        let root = try TestSupport.temporaryDirectory("amended")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let path = root + "/repo"
+        try await TestSupport.makeRepository(at: path)
+        let bare = root + "/origin.git"
+        try await TestSupport.runGit(["init", "-q", "--bare", bare], in: path)
+        try await TestSupport.runGit(["remote", "add", "origin", bare], in: path)
+        try await TestSupport.runGit(["checkout", "-q", "-b", "notes"], in: path)
+        try await commit(file: "notes.md", message: "Draft the notes", in: path, content: "one\ntwo\n")
+        try await TestSupport.runGit(["push", "-q", "-u", "origin", "notes"], in: path)
+
+        // The pushed commit adds the whole file; so does its amended
+        // twin. What pushing would change is one line, and that is
+        // what there is to review, not the file over again.
+        try "one\nthree\n".write(toFile: path + "/notes.md", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(["commit", "-q", "-a", "--amend", "--no-edit"], in: path)
+
+        let diff = try await git.upstreamDiff(worktreePath: path, upstreamRef: "origin/notes", baseRef: "main")
+        #expect(diff.contains("-two"))
+        #expect(diff.contains("+three"))
+        #expect(diff.contains("+one") == false)
+        // The commit itself still lists as unpushed: its patch is not
+        // the one the upstream holds.
+        #expect(await git.unpushedCommits(worktreePath: path, upstreamRef: "origin/notes", baseRef: "main").count == 1)
+    }
+
+    @Test
     func `a commit a rebase rewrote shows on its own`() async throws {
         let root = try TestSupport.temporaryDirectory("rewritten")
         defer { try? FileManager.default.removeItem(atPath: root) }
