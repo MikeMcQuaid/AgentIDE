@@ -36,6 +36,11 @@ extension DashboardModel {
             // stale by the time they answer.
             var discovered = [(agent: AgentKind, version: String?, models: [String])]()
             for await (agent, version, models) in tasks {
+                // The stamp leads with the CLI's version; a cache's
+                // time follows a hash where there is one.
+                if let probed = version?.split(separator: "#").first, probed.isEmpty == false {
+                    installedVersions[agent] = String(probed)
+                }
                 guard let models else {
                     continue
                 }

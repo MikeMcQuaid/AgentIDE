@@ -514,8 +514,10 @@ page resumes any past conversation into a fresh worktree.
   is left unread and the last accepted list stands: the server gives
   each client the models it can use, and a session started before an
   upgrade kept rewriting the cache with its own list, so a model the
-  new client knew vanished from the picker each time. Names shown are
-  the ids read as words (`gpt-5.6-sol` is GPT
+  new client knew vanished from the picker each time. The version the
+  stamp was read from is kept for the launch and shown beside the
+  agent's name in the pickers, never probed again for a render. Names
+  shown are the ids read as words (`gpt-5.6-sol` is GPT
   5.6 Sol). Claude takes an alias saying nothing about its version and
   has no listing to ask, so the version is read from the identifiers
   Claude Code recorded using in its own state (`modelNamesFile`,

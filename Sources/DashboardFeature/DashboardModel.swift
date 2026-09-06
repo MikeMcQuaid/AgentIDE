@@ -201,6 +201,7 @@ public final class DashboardModel {
             defaultModel: defaults.model,
             defaultEffort: defaults.effort,
             names: modelNames[agent] ?? [:],
+            version: installedVersions[agent],
         )
     }
 
@@ -344,6 +345,11 @@ public final class DashboardModel {
     /// See `SessionService.modelNames`: read beside the models, so a
     /// picker draws from memory rather than a file.
     var modelNames: [AgentKind: [String: String]] = [:]
+
+    /// Each CLI's version as probed once at launch with the models,
+    /// shown beside the agent's name in the pickers; never probed
+    /// again for a render.
+    var installedVersions: [AgentKind: String] = [:]
 
     /// The newest reading (running or queued), the queued follow-up
     /// while one is joinable, and the repositories queued to be
