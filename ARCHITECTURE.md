@@ -912,9 +912,13 @@ stored. The configurator clears the name, so AppKit writes nothing more
 under it, and sets the frame over whatever was restored: once as the
 window is configured, so nothing shows at a default size, and again once
 the window is really on a screen, since a frame set before then is
-constrained to the main display. Only then is the window moved onto its
-display and into fullscreen, and only then are its moves recorded, once
-each drag or resize pauses rather than per step.
+constrained to the main display. The window is invisible until that
+second set, so it is never seen on the main display first, and a window
+that never reports itself on a screen is shown where it is after a
+couple of seconds rather than left invisible. Only then is the window
+moved onto its display, brought onto a screen that exists if the one it
+was left on has gone, and put into fullscreen, and only then are its
+moves recorded, once each drag or resize pauses rather than per step.
 
 The metadata store is `~/Library/Application Support/AgentIDE/state.json`,
 outside the shared workspace so agents can neither read nor corrupt it.

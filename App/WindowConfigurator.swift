@@ -49,6 +49,12 @@ struct WindowConfigurator: NSViewRepresentable {
                 let centre = NotificationCenter.default
                 observers.forEach(centre.removeObserver)
                 observers = []
+                // A window hidden for a placement this view no
+                // longer lives to finish must not stay hidden.
+                if pendingPlacement != nil {
+                    pendingPlacement = nil
+                    configuredWindow?.alphaValue = 1
+                }
                 return
             }
 
@@ -99,6 +105,11 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Which recording is the latest, so an earlier one still
         /// waiting on its pause writes nothing.
         private var recordGeneration = 0
+
+        /// The placement waiting for the window to be on a screen,
+        /// run by the first notification that finds it there, or by
+        /// the poll when none comes.
+        private var pendingPlacement: (() -> Void)?
 
         /// The window already configured, so re-renders reconfigure
         /// nothing.
@@ -171,9 +182,14 @@ struct WindowConfigurator: NSViewRepresentable {
                     MainActor.assumeIsolated { self?.moved(displayGone: self?.displayGone ?? false) }
                 })
             }
+            // These are also the first word that the window is on a
+            // screen, which is what a pending placement waits for.
             for name in [NSWindow.didBecomeMainNotification, NSWindow.didChangeOcclusionStateNotification] {
                 observers.append(centre.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.reportWindowState() }
+                    MainActor.assumeIsolated {
+                        self?.reportWindowState()
+                        self?.runPendingPlacementIfVisible()
+                    }
                 })
             }
             // A fullscreen space sent to another display posts no
@@ -275,9 +291,10 @@ struct WindowConfigurator: NSViewRepresentable {
         /// notes). The frame is set over whatever AppKit restored,
         /// once now so nothing shows at a default size, and again once
         /// the window is really on a screen, since a frame set before
-        /// then is constrained to the main display. A frame too small
-        /// for three panes is thrown away, and with none the window
-        /// fills the display it was left on.
+        /// then is constrained to the main display; the window stays
+        /// invisible until then rather than flash on the main display.
+        /// A frame too small for three panes is thrown away, and with
+        /// none the window fills the display it was left on.
         private func restoreFrame(of window: NSWindow) {
             window.setFrameAutosaveName("")
             let saved = UserDefaults.standard.string(forKey: Self.frameKey).map(NSRectFromString)
@@ -287,17 +304,48 @@ struct WindowConfigurator: NSViewRepresentable {
             } else {
                 fill(window)
             }
-            whenOnScreen(window) { [weak self] _ in
-                self?.place(window, at: usable)
+            window.alphaValue = 0
+            pendingPlacement = { [weak self] in self?.place(window, at: usable) }
+            // The notifications place it the moment it is drawn; the
+            // poll is for a window that never says so, which is shown
+            // where it is rather than left invisible, and still placed
+            // if it appears later.
+            whenOnScreen(window) { [weak self] onScreen in
+                if onScreen {
+                    self?.runPendingPlacement()
+                } else {
+                    window.alphaValue = 1
+                }
             }
+        }
+
+        /// A visible window with no screen is placed too: its frame
+        /// is off every screen, and placing is what brings it back.
+        private func runPendingPlacementIfVisible() {
+            guard window?.isVisible == true else {
+                return
+            }
+
+            runPendingPlacement()
+        }
+
+        private func runPendingPlacement() {
+            guard let pending = pendingPlacement else {
+                return
+            }
+
+            pendingPlacement = nil
+            pending()
         }
 
         /// Puts the window where it was left, now that it is really
         /// on a screen: the saved frame, or filling the display it
-        /// was left on when there is none, then fullscreen when it
-        /// was closed that way, in that order, since a window in a
-        /// fullscreen space must never be moved. Only from here on
-        /// are its moves recorded and its placement reported.
+        /// was left on when there is none, then shows it, then
+        /// fullscreen when it was closed that way, in that order,
+        /// since a window in a fullscreen space must never be moved.
+        /// A frame left on a display that has gone is brought onto
+        /// one that exists. Only from here on are its moves recorded
+        /// and its placement reported.
         private func place(_ window: NSWindow, at frame: NSRect?) {
             if let frame {
                 window.setFrame(frame, display: true)
@@ -306,6 +354,10 @@ struct WindowConfigurator: NSViewRepresentable {
             if frame == nil {
                 fill(window)
             }
+            if window.screen == nil {
+                fitToScreen()
+            }
+            window.alphaValue = 1
             isPlacing = false
             rememberPlacement()
             if UserDefaults.standard.bool(forKey: Self.fullScreenKey) {

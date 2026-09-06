@@ -77,7 +77,7 @@ extension WindowConfigurator.ConfiguringView {
 
     /// Brings the frame back inside the screen it is on, keeping
     /// its size where it fits and its corner where it can.
-    private func fitToScreen() {
+    func fitToScreen() {
         guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
             return
         }
