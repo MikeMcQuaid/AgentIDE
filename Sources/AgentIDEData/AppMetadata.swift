@@ -134,12 +134,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         // The newer ledgers decode as one value from the same
         // decoder, which keeps this initialiser within its length.
         let ledgers = try Ledgers(from: decoder)
-        discoveredModels = ledgers.discoveredModels
-        discoveredModelsVersion = ledgers.discoveredModelsVersion
-        etags = ledgers.etags
-        gitFetchedAt = ledgers.gitFetchedAt
-        pendingSince = ledgers.pendingSince
-        terminalSchemes = ledgers.terminalSchemes
+        adopt(ledgers)
     }
 
     // MARK: Public
@@ -179,6 +174,13 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// that finds nothing changed is one round trip and no rate
     /// limit, which is most polls.
     public var etags: [String: String] = [:]
+
+    /// The head commit GitHub last reported for each pushed branch,
+    /// keyed like `pullRequestCache`, held from a push until GitHub
+    /// reports another: until then a fetched summary is painted as
+    /// awaiting its checks, since what GitHub says is about commits
+    /// that are gone. Empty when the cache held no commit to compare.
+    public var pendingChecks: [String: String] = [:]
 
     /// When each pull request's checks were first seen still running,
     /// by summary key: one that has been pending an hour is more
@@ -342,8 +344,6 @@ public struct AppMetadata: Codable, Equatable, Sendable {
 
     // MARK: Private
 
-    /// The newer ledgers of the metadata, each absent from an older
-    /// file and decoded tolerantly.
     private struct Ledgers: Decodable {
         // MARK: Lifecycle
 
@@ -353,6 +353,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
             discoveredModelsVersion = try container
                 .decodeIfPresent([String: String].self, forKey: .discoveredModelsVersion) ?? [:]
             etags = try container.decodeIfPresent([String: String].self, forKey: .etags) ?? [:]
+            pendingChecks = try container.decodeIfPresent([String: String].self, forKey: .pendingChecks) ?? [:]
             pendingSince = try container.decodeIfPresent([String: Date].self, forKey: .pendingSince) ?? [:]
             terminalSchemes = try container.decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
             gitFetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .gitFetchedAt) ?? [:]
@@ -363,6 +364,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         var discoveredModels: [String: [String]] = [:]
         var discoveredModelsVersion: [String: String] = [:]
         var etags: [String: String] = [:]
+        var pendingChecks: [String: String] = [:]
         var pendingSince: [String: Date] = [:]
         var terminalSchemes: [String: String] = [:]
         var gitFetchedAt: [String: Date] = [:]
@@ -380,4 +382,17 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// without the file growing forever.
     private static let conversationCap = 80
     private static let listingCap = 40
+
+    /// The newer ledgers of the metadata, each absent from an older
+    /// file and decoded tolerantly.
+    /// Takes the second batch of fields as the decoder read them.
+    private mutating func adopt(_ ledgers: Ledgers) {
+        discoveredModels = ledgers.discoveredModels
+        discoveredModelsVersion = ledgers.discoveredModelsVersion
+        etags = ledgers.etags
+        pendingChecks = ledgers.pendingChecks
+        gitFetchedAt = ledgers.gitFetchedAt
+        pendingSince = ledgers.pendingSince
+        terminalSchemes = ledgers.terminalSchemes
+    }
 }

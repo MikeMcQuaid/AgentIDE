@@ -675,7 +675,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   repositories, collapsed ones rarely. A pull request with checks
   running or queued is asked every half minute, back to its tier after
   an hour (a stalled run or an outage must not be polled at that rate).
-  A push looks again a minute later, where the run it started shows.
+  A push paints its pull request's checks pending at once, in every
+  cache a row or a pane reads (`markChecksPending`), since the last
+  run's verdict is about commits that are gone; the mark outlives the
+  paint, since GitHub takes a minute to see the commits and a listing
+  fetched inside it still says what the old run did, so every fetched
+  summary of that branch is painted pending until GitHub reports a
+  head commit other than the one it last reported (`headCommit`), or
+  a quarter of an hour passes. The push looks again a minute later,
+  where the run it started shows.
   An agent's finished turn forgets its own branch's stamps, on the
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.

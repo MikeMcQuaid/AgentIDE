@@ -128,7 +128,7 @@ extension PullRequestsModel {
                     // published ones go back up at once. A branch
                     // nobody has pushed stays unpushed, which Push
                     // is for.
-                    _ = try await stacking.pushPublished(worktree)
+                    try await markChecksPending(for: stacking.pushPublished(worktree))
                 } catch {
                     report("Rebasing the branches above `" + worktree.branch + "` failed: "
                         + error.localizedDescription)

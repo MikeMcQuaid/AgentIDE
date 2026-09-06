@@ -114,8 +114,9 @@ public struct PullRequestStore: Sendable {
                 return cached ?? []
 
             case let .changed(body, etag):
-                let fetched = GitHubClient.summaries(fromRESTJSON: body)
+                var fetched = GitHubClient.summaries(fromRESTJSON: body)
                 store.update { metadata in
+                    fetched = Self.painted(fetched, repositoryPath: repositoryPath, in: &metadata)
                     metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
                     metadata.etags[key] = etag
                     metadata.fetchedAt[key] = Date()
@@ -124,26 +125,13 @@ public struct PullRequestStore: Sendable {
             }
         }
 
-        let fetched = try await github.pullRequests(repositoryPath: repositoryPath, scope: scope, limit: limit)
+        var fetched = try await github.pullRequests(repositoryPath: repositoryPath, scope: scope, limit: limit)
         store.update { metadata in
+            fetched = Self.painted(fetched, repositoryPath: repositoryPath, in: &metadata)
             metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
             metadata.fetchedAt[key] = Date()
         }
         return fetched
-    }
-
-    /// Remembers a listing fetched elsewhere, so it answers later
-    /// reads and holds off later fetches like the store's own.
-    public func rememberListing(
-        repositoryPath: String,
-        scope: GitHubClient.ListScope,
-        summaries: [PullRequestSummary],
-    ) {
-        store.update { metadata in
-            metadata.pullRequestListsCache[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] =
-                CachedPullRequestList(summaries: summaries)
-            metadata.fetchedAt[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] = Date()
-        }
     }
 
     /// The pull request a branch is showing, as the sidebar's rows
@@ -154,36 +142,11 @@ public struct PullRequestStore: Sendable {
         store.load().pullRequestCache[Self.branchKey(repositoryPath: repositoryPath, branch: branch)]
     }
 
-    /// Records what a branch is showing; nil forgets it, which is
-    /// what a branch whose pull request has gone gets.
-    public func rememberBranchSummary(
-        _ summary: PullRequestSummary?,
-        repositoryPath: String,
-        branch: String,
-    ) {
-        let key = Self.branchKey(repositoryPath: repositoryPath, branch: branch)
-        store.update { metadata in
-            if let summary {
-                metadata.pullRequestCache[key] = summary
-            } else {
-                metadata.pullRequestCache.removeValue(forKey: key)
-            }
-        }
-    }
-
     /// The last full summary without asking anything.
     public func cachedSummary(repositoryPath: String, number: Int) -> PullRequestSummary? {
         store.load()
             .enrichedSummaryCache[Self.summaryKey(repositoryPath: repositoryPath, number: number)]?
             .summary
-    }
-
-    /// Remembers a summary fetched elsewhere.
-    public func rememberSummary(repositoryPath: String, summary: PullRequestSummary) {
-        store.update { metadata in
-            metadata.enrichedSummaryCache[Self.summaryKey(repositoryPath: repositoryPath, number: summary.number)] =
-                CachedSummary(summary: summary)
-        }
     }
 
     /// The last listing without asking anything, for painting before
@@ -211,12 +174,17 @@ public struct PullRequestStore: Sendable {
             return store.load().enrichedSummaryCache[key]?.summary
         }
 
-        let fetched = try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number)
-        guard let fetched else {
+        var fetched = try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number)
+        guard fetched != nil else {
             return store.load().enrichedSummaryCache[key]?.summary
         }
 
         store.update { metadata in
+            fetched = fetched.map { Self.painted($0, repositoryPath: repositoryPath, in: &metadata) }
+            guard let fetched else {
+                return
+            }
+
             metadata.enrichedSummaryCache[key] = CachedSummary(summary: fetched)
             metadata.fetchedAt[key] = Date()
             // The moment checks were first seen running, kept until they

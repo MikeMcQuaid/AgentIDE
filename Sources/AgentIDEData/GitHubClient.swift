@@ -225,7 +225,7 @@ public struct GitHubClient: Sendable {
     /// A remembered answer, including the answer that there is none.
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
-    static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"
+    static let coreFields = "number,title,url,headRefName,headRefOid,baseRefName,state,isDraft,author,body"
 
     /// The expensive dashboard fields; computing these across every
     /// open pull request timed out (HTTP 504) on busy repositories,
@@ -293,6 +293,7 @@ public struct GitHubClient: Sendable {
                 author: row.author?.login,
                 body: row.body,
                 closedAt: row.closedAt,
+                headCommit: row.headRefOid,
             )
         }
     }
@@ -343,6 +344,7 @@ public struct GitHubClient: Sendable {
         let title: String
         let url: String
         let headRefName: String
+        let headRefOid: String?
         let baseRefName: String?
         let state: String?
         let mergeable: String?

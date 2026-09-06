@@ -102,6 +102,7 @@ public extension GitHubClient {
                 author: row.user?.login,
                 body: row.body,
                 closedAt: row.closedAt,
+                headCommit: row.head.sha,
             )
         }
     }
@@ -125,6 +126,7 @@ public extension GitHubClient {
 private struct RESTPullRow: Decodable {
     struct Ref: Decodable {
         let ref: String
+        let sha: String?
     }
 
     struct User: Decodable {

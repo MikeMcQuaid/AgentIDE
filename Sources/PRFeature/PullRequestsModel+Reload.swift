@@ -65,13 +65,15 @@ extension PullRequestsModel {
                 return
             }
 
-            summaries = Self.worthShowing(fetched)
-            fetchedLimit = limit
-            pullRequests.rememberListing(
+            // As the caches took it: a pushed branch's row stays
+            // pending until GitHub has caught up with the push.
+            let kept = pullRequests.rememberListing(
                 repositoryPath: repository.path,
                 scope: scope.listScope(branch: listedBranch),
                 summaries: fetched,
             )
+            summaries = Self.worthShowing(kept)
+            fetchedLimit = limit
             // A branch with one live pull request opens it: there
             // is nothing else the list could be for.
             let chosen = summaries.first { $0.number == previous }
