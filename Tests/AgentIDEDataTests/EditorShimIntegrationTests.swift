@@ -11,6 +11,7 @@ struct EditorShimIntegrationTests {
 
     static let pollMilliseconds = 50
     static let waitAttempts = 100
+    static let tickMilliseconds = 100
     /// The shim as shipped, run straight from the repository: under
     /// test there is no app bundle to find it in.
     static let shimDirectory = URL(fileURLWithPath: #filePath)
@@ -118,6 +119,29 @@ struct EditorShimIntegrationTests {
 
         process.terminate()
         try await exit(of: process)
+    }
+
+    @Test
+    func `a safety tick leaves the watch waiting for the next event`() async {
+        let (events, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        var watch = SessionService.SpoolWatch(events: events, continuation: continuation)
+        let tick = Duration.milliseconds(Self.tickMilliseconds)
+        await watch.waitOrTimeout(tick)
+
+        // The tick that ran out must not have ended the stream: the
+        // next wait has to run its own tick out, where a stream ended
+        // by a cancelled wait answered at once and spun the watcher.
+        let started = ContinuousClock.now
+        await watch.waitOrTimeout(tick)
+        #expect(ContinuousClock.now - started >= tick)
+
+        // A real event still wakes the watch, well inside the six
+        // seconds it would otherwise wait; the bound is loose because
+        // a loaded runner can take a while to resume the task.
+        continuation.yield(())
+        let woke = ContinuousClock.now
+        await watch.waitOrTimeout(.seconds(Self.eventDeadlineSeconds))
+        #expect(ContinuousClock.now - woke < .milliseconds(Self.settleMilliseconds))
     }
 
     @Test

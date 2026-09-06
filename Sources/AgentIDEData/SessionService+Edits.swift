@@ -52,7 +52,7 @@ public extension SessionService {
         let directory = paths.editsDirectory
         return AsyncStream { continuation in
             let task = Task {
-                let wake = Self.directoryChanges(in: directory)
+                var watch = Self.directoryChanges(in: directory)
                 var previous = [ExternalEdit]()
                 var hasRead = false
                 while Task.isCancelled == false {
@@ -63,7 +63,7 @@ public extension SessionService {
                         continuation.yield(current)
                     }
                     let timeoutSeconds =
-                        if wake == nil {
+                        if watch == nil {
                             // No watch (the directory would not
                             // open): the old poll, a touch slower.
                             Self.unwatchedPollSeconds
@@ -73,8 +73,8 @@ public extension SessionService {
                             Self.activeSweepSeconds
                         }
                     let timeout = Duration.seconds(timeoutSeconds)
-                    if let wake {
-                        await Self.wakeOrTimeout(wake, timeout: timeout)
+                    if watch != nil {
+                        await watch?.waitOrTimeout(timeout)
                     } else {
                         try? await Task.sleep(for: timeout)
                     }
@@ -125,10 +125,10 @@ public extension SessionService {
         spool.pending()
     }
 
-    /// A stream that fires whenever the spool directory's listing
+    /// A watch that fires whenever the spool directory's listing
     /// changes, coalescing bursts; nil when the directory cannot be
     /// opened for watching.
-    private static func directoryChanges(in directory: String) -> AsyncStream<Void>? {
+    private static func directoryChanges(in directory: String) -> SpoolWatch? {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let descriptor = open(directory, O_EVTONLY)
         guard descriptor >= 0 else {
@@ -140,28 +140,55 @@ public extension SessionService {
             eventMask: .write,
             queue: .global(qos: .utility),
         )
-        return AsyncStream(Void.self, bufferingPolicy: .bufferingNewest(1)) { continuation in
-            source.setEventHandler { continuation.yield(()) }
-            source.setCancelHandler { close(descriptor) }
-            source.resume()
-            continuation.onTermination = { _ in source.cancel() }
-        }
+        let (events, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        source.setEventHandler { continuation.yield(()) }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        continuation.onTermination = { _ in source.cancel() }
+        return SpoolWatch(events: events, continuation: continuation)
     }
 
-    /// Waits for the next directory event or the timeout, whichever
-    /// comes first. Events that land mid-scan stay buffered, so the
-    /// next wait returns at once rather than losing them.
-    private static func wakeOrTimeout(_ wake: AsyncStream<Void>, timeout: Duration) async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask {
-                var events = wake.makeAsyncIterator()
-                _ = await events.next()
-            }
-            group.addTask {
-                try? await Task.sleep(for: timeout)
-            }
-            _ = await group.next()
-            group.cancelAll()
+    /// The spool directory's events, read through the one iterator
+    /// the watcher keeps for its whole life. A wait that raced the
+    /// next event against a sleep in a task group cancelled the
+    /// loser, and cancelling the task iterating a stream ends the
+    /// stream for good: from the first safety tick on, every wait
+    /// returned at once and the watcher spun at over a core and a
+    /// half for as long as the app ran. The timeout now arrives as
+    /// a tick through the same stream, so nothing is ever cancelled
+    /// mid-iteration.
+    internal struct SpoolWatch {
+        // MARK: Lifecycle
+
+        init(events: AsyncStream<Void>, continuation: AsyncStream<Void>.Continuation) {
+            iterator = events.makeAsyncIterator()
+            self.continuation = continuation
         }
+
+        // MARK: Internal
+
+        /// Waits for the next directory event or the timeout,
+        /// whichever comes first. Events that land mid-scan stay
+        /// buffered, so the next wait returns at once rather than
+        /// losing them; a tick that lands beside an event costs one
+        /// spare scan.
+        mutating func waitOrTimeout(_ timeout: Duration) async {
+            let wake = continuation
+            let tick = Task {
+                do {
+                    try await Task.sleep(for: timeout)
+                    wake.yield(())
+                } catch {
+                    // The event came first and cancelled the tick.
+                }
+            }
+            _ = await iterator.next(isolation: #isolation)
+            tick.cancel()
+        }
+
+        // MARK: Private
+
+        private var iterator: AsyncStream<Void>.Iterator
+        private let continuation: AsyncStream<Void>.Continuation
     }
 }
