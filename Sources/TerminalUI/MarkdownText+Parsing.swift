@@ -22,8 +22,16 @@ extension MarkdownText {
     /// Consecutive prose blocks merge, so one Text renders them and
     /// selection can span paragraphs and lists.
     static func proseBlocks(_ text: String) -> [ProseBlock] {
-        let document = Document(parsing: text)
         var blocks = [ProseBlock]()
+        var body = text
+        // Front matter leads as a table of its fields, the keys in
+        // bold, the way a site renders a post's metadata; left to
+        // the parser it read as a rule, a paragraph and a rule.
+        if let matter = frontMatter(in: text) {
+            blocks.append(.table(header: [], rows: matter.fields.map { ["**" + $0.key + "**", $0.value] }))
+            body = matter.body
+        }
+        let document = Document(parsing: body)
         for child in document.blockChildren {
             switch child {
             case let heading as Heading:
@@ -57,6 +65,49 @@ extension MarkdownText {
             }
         }
         return blocks
+    }
+
+    /// YAML front matter and what follows it, when the text opens
+    /// with a `---` line closed by another and every line between
+    /// is a `key: value` or continues the one before. Values are
+    /// kept as written, quotes off; a list or a nested map reads as
+    /// its lines joined, since a table cell has one line to give.
+    static func frontMatter(in text: String) -> (fields: [(key: String, value: String)], body: String)? {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard lines.first == "---", let close = lines.dropFirst().firstIndex(of: "---") else {
+            return nil
+        }
+
+        var fields = [(key: String, value: String)]()
+        for line in lines[1 ..< close] {
+            if line.first?.isWhitespace == true || line.hasPrefix("- "), fields.isEmpty == false {
+                let more = line.trimmingCharacters(in: .whitespaces)
+                let last = fields.removeLast()
+                fields.append((last.key, last.value.isEmpty ? more : last.value + " " + more))
+                continue
+            }
+            guard let colon = line.firstIndex(of: ":"), colon != line.startIndex,
+                  line[..<colon].contains(where: \.isWhitespace) == false
+            else {
+                return nil
+            }
+
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            fields.append((String(line[..<colon]), unquoted(value)))
+        }
+        guard fields.isEmpty == false else {
+            return nil
+        }
+
+        return (fields, lines[(close + 1)...].joined(separator: "\n"))
+    }
+
+    /// A value without the quotes YAML allows around it.
+    private static func unquoted(_ value: String) -> String {
+        for quote in ["\"", "'"] where value.count > 1 && value.hasPrefix(quote) && value.hasSuffix(quote) {
+            return String(value.dropFirst().dropLast())
+        }
+        return value
     }
 
     /// The image a paragraph is, when that is all it is: the source
