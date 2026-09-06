@@ -286,7 +286,15 @@ public extension SessionService {
             lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
         }
         let seen = metadata.seenAt[worktree.path] ?? session.flatMap { metadata.lastSeen[$0.name] } ?? startedAt
-        let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
+        // The selected worktree is on screen, so whatever arrived is
+        // seen as it is read, and written down only then: a stamp
+        // written on every reading rewrote the metadata file every
+        // few seconds to say nothing new.
+        let isSelected = worktree.path == UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
+        if isSelected, lastEvent > seen {
+            acknowledgeActivity(worktreePath: worktree.path)
+        }
+        let unread = metadata.unreadMarks.contains(worktree.path) || (isSelected == false && lastEvent > seen)
 
         // The counts and the date came with the repository's own
         // read; only uncommitted work is the worktree's to answer,

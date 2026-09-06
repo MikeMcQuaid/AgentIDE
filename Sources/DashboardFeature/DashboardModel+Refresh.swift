@@ -115,14 +115,12 @@ public extension DashboardModel {
     }
 
     /// One whole reading of the system; only `refresh` runs it, one
-    /// at a time. The selected worktree is on screen, so its
-    /// activity counts as seen; a manual unread mark survives.
+    /// at a time. The reading itself counts the selected worktree's
+    /// activity as seen, since it is on screen; a manual unread
+    /// mark survives.
     private func performRefresh() async {
         let forces = pendingForces
         pendingForces = []
-        if let selection {
-            service.acknowledgeActivity(worktreePath: selection.worktree.path)
-        }
         let overview = await service.overview(scope: gitReadScope(forcing: forces), kept: groups)
         let listed = Self.retainingLostRows(of: groups, in: overview.groups)
         notifyChanges(from: groups, to: listed)

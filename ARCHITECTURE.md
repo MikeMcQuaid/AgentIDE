@@ -447,8 +447,11 @@ page resumes any past conversation into a fresh worktree.
   `AGENTIDE_SESSION` with `SV_SESSION_ID` as fallback.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
-  and a context menu marks it unread again. Raw terminal output counts
-  for nothing: herdr keeps no output timestamp.
+  and a context menu marks it unread again. The selected worktree is
+  seen as the reading reads it, and its time is written only when
+  something has arrived since: stamping it on every reading rewrote
+  the metadata file every few seconds to say nothing new. Raw terminal
+  output counts for nothing: herdr keeps no output timestamp.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
