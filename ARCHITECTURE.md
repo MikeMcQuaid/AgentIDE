@@ -510,7 +510,12 @@ page resumes any past conversation into a fresh worktree.
   (`modelCacheFile`, Codex's `~/.codex/models_cache.json`), that file's
   modification time: keyed on the version alone, a model added
   server-side stayed out of the picker until the CLI itself was
-  upgraded. Names shown are the ids read as words (`gpt-5.6-sol` is GPT
+  upgraded. A cache written by a client older than the one installed
+  is left unread and the last accepted list stands: the server gives
+  each client the models it can use, and a session started before an
+  upgrade kept rewriting the cache with its own list, so a model the
+  new client knew vanished from the picker each time. Names shown are
+  the ids read as words (`gpt-5.6-sol` is GPT
   5.6 Sol). Claude takes an alias saying nothing about its version and
   has no listing to ask, so the version is read from the identifiers
   Claude Code recorded using in its own state (`modelNamesFile`,
