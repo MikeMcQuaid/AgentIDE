@@ -45,6 +45,23 @@ struct LastPanesTests {
         #expect(LastPanes().kept().isEmpty)
     }
 
+    @Test
+    func `a tick that does not ask reuses the last answer however old`() {
+        let held = LastPanes()
+        // Nothing yet: a reading has to ask.
+        #expect(held.hasAnswered == false)
+        #expect(held.last().isEmpty)
+
+        let answered = Date().addingTimeInterval(-3_600)
+        held.remember([Self.pane("agentide--r--b--claude")], at: answered)
+        // An hour old is past the hold a failed reading gets, and
+        // still what a tick that chose not to ask should show: the
+        // listing changes only through events that do ask.
+        #expect(held.kept().isEmpty)
+        #expect(held.last().map(\.sessionName) == ["agentide--r--b--claude"])
+        #expect(held.hasAnswered)
+    }
+
     // MARK: Private
 
     private static func pane(_ sessionName: String) -> HerdrPane {

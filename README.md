@@ -52,6 +52,8 @@ updates.
   branches stacked in one worktree.
 - Copies unresolved review comments and failing CI logs into a prompt,
   resolves conversations and merges or queues, each with a click.
+- Stays quiet while idle, and quieter still on battery, with agent
+  and file changes still landing at once.
 - Notifies when an agent finishes or needs input, badges the Dock, and
   marks a pane that has held several cores for ten minutes with what is
   running in it.

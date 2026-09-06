@@ -23,13 +23,23 @@ public extension SessionService {
     /// with their sessions, plus foreign sessions.
     /// `scope` says whose git is read this time; the others come
     /// back as `kept` gave them, with their sessions brought up to
-    /// date from the pane listing.
+    /// date from the pane listing. `readingPanes` says whether that
+    /// listing is asked for or the last one reused: asking is a
+    /// `sudo` login shell, and the listing changes only when a
+    /// session starts, ends or changes state, each of which wakes a
+    /// reading that asks.
     func overview(
         scope: GitReadScope = .all,
         kept: [RepositoryGroup] = [],
+        readingPanes: Bool = true,
     ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
         await configureHerdrOnce()
-        let panes = await panesOrLastAnswer()
+        let panes =
+            if readingPanes || lastPanes.hasAnswered == false {
+                await panesOrLastAnswer()
+            } else {
+                lastPanes.last()
+            }
         let activity = spool.activity()
         let metadata = store.load()
         let keptByPath = Dictionary(kept.map { ($0.repository.path, $0) }) { first, _ in first }

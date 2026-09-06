@@ -167,6 +167,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   rather than stack.
 - First paint reads only memory and caches; anything slower starts
   after the window is up and fills in.
+- Idle costs nothing worth noticing, and less still on battery: a
+  tick that finds nothing must not have spawned a process to find
+  it, and every herdr question is a `sudo` login shell.
+  `RefreshCadence` owns every interval; a new poll joins it rather
+  than picking its own number.
 
 ### Platform Notes
 

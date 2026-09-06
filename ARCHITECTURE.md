@@ -657,6 +657,17 @@ selects the worktree holding it, and `agentide new` starts a session.
   or closed over thirty days ago is a name collision, not the branch's
   work. No cached answer is final, however green: skipping approved
   passing pull requests froze rows as open forever.
+- **The tick is a safety net; events do the work.** A file changing
+  under a worktree (FSEvents), an agent changing state (`herdr agent
+  wait`) and every action of the app's own each wake a reading. The
+  poll behind them re-reads on Settings' interval while the window
+  shows, a minute while it is covered, and on battery a minute
+  showing and five covered (`RefreshCadence`, `PowerSource`). A tick
+  of its own asks herdr for the pane listing only once a minute
+  (five on battery) and reuses the last listing between, since that
+  listing changes only through the events above and asking is a
+  `sudo` login shell; git is read only for repositories the watcher
+  flagged or past their own safety interval.
 - **Polling is tiered by attention** with a minute floor per pull
   request: selected worktree first, then its repository, then expanded
   repositories, collapsed ones rarely. A pull request with checks

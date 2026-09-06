@@ -289,9 +289,6 @@ public final class DashboardModel {
 
     static let selectedWorktreeKey = "selectedWorktreePath"
 
-    /// How often that reading is worth taking.
-    static let paneLoadInterval: TimeInterval = 30
-
     /// Internal rather than private so the repository extension file
     /// can reach the service too.
     let service: SessionService
@@ -351,6 +348,15 @@ public final class DashboardModel {
     var refreshTask: Task<Void, Never>?
     var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
+
+    /// Whether the next reading asks herdr for its pane listing:
+    /// every action and agent change says so, the poll only when
+    /// the listing's safety interval has passed. True at launch,
+    /// since nothing has been listed yet.
+    var pendingPaneRead = true
+
+    /// When herdr was last asked, for the poll's safety interval.
+    var panesReadAt: Date?
 
     /// When the panes' cost was last read; see `readPaneLoads`.
     var paneLoadsReadAt: Date = .distantPast
