@@ -25,4 +25,10 @@ struct RefreshCadenceTests {
         #expect(RefreshCadence.panesDue(lastRead: now.addingTimeInterval(-301), now: now, onBattery: true))
         #expect(RefreshCadence.paneLoadSeconds(onBattery: true) > RefreshCadence.paneLoadSeconds(onBattery: false))
     }
+
+    @Test
+    func `every safety interval slows by the one factor on battery`() {
+        #expect(RefreshCadence.slowed(60, onBattery: false) == 60)
+        #expect(RefreshCadence.slowed(60, onBattery: true) == 300)
+    }
 }

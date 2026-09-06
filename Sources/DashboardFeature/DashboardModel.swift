@@ -91,6 +91,12 @@ public final class DashboardModel {
     /// which every row's summary read observes.
     public var pullRequestCacheGeneration = 0
 
+    /// Whether the machine is on battery, which slows every safety
+    /// interval. The app's composition wires the machine's own
+    /// answer in; left alone it says plugged in, so a test is never
+    /// at the mercy of the machine it runs on.
+    public var isOnBattery: () -> Bool = { false }
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {

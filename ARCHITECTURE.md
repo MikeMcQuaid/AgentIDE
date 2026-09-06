@@ -667,7 +667,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   (five on battery) and reuses the last listing between, since that
   listing changes only through the events above and asking is a
   `sudo` login shell; git is read only for repositories the watcher
-  flagged or past their own safety interval.
+  flagged or past their own safety interval. On battery every safety
+  interval, the stack rota and every pull request tier (floors
+  included) runs five times slower, one factor for the whole app.
 - **Polling is tiered by attention** with a minute floor per pull
   request: selected worktree first, then its repository, then expanded
   repositories, collapsed ones rarely. A pull request with checks

@@ -91,7 +91,7 @@ public extension DashboardModel {
             let interval = RefreshCadence.pollSeconds(
                 setting: Self.pollInterval,
                 visible: isWindowVisible,
-                onBattery: PowerSource.isOnBattery,
+                onBattery: isOnBattery(),
             )
             try? await Task.sleep(for: .seconds(interval))
         }
@@ -104,7 +104,7 @@ public extension DashboardModel {
     private func readPaneLoads() async {
         let now = Date()
         guard now.timeIntervalSince(paneLoadsReadAt)
-            >= RefreshCadence.paneLoadSeconds(onBattery: PowerSource.isOnBattery)
+            >= RefreshCadence.paneLoadSeconds(onBattery: isOnBattery())
         else {
             return
         }
@@ -135,7 +135,7 @@ public extension DashboardModel {
         let forces = pendingForces
         pendingForces = []
         let readsPanes = pendingPaneRead
-            || RefreshCadence.panesDue(lastRead: panesReadAt, now: Date(), onBattery: PowerSource.isOnBattery)
+            || RefreshCadence.panesDue(lastRead: panesReadAt, now: Date(), onBattery: isOnBattery())
         pendingPaneRead = false
         if readsPanes {
             panesReadAt = Date()

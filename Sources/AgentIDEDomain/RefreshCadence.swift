@@ -30,6 +30,9 @@ public enum RefreshCadence {
     /// The same on battery.
     public static let batteryPaneLoadSeconds: TimeInterval = 300
 
+    /// How much slower every safety interval runs on battery.
+    public static let batterySlowdown: TimeInterval = 5
+
     /// The tick while the window shows and the machine is plugged
     /// in, as Settings has it.
     public static func pollSeconds(setting: Int, visible: Bool, onBattery: Bool) -> Int {
@@ -59,6 +62,18 @@ public enum RefreshCadence {
         }
 
         return now.timeIntervalSince(lastRead) >= (onBattery ? batteryPanesSeconds : panesSeconds)
+    }
+
+    /// A safety interval as it stands on battery: five times longer.
+    /// Every interval that only guards against a lost event or a
+    /// stale answer slows by this one factor, so a machine on battery
+    /// has one cadence rather than a dozen numbers to reason about.
+    public static func slowed(_ interval: TimeInterval, onBattery: Bool) -> TimeInterval {
+        if onBattery {
+            interval * batterySlowdown
+        } else {
+            interval
+        }
     }
 
     /// How far apart the pane load readings (one `ps`) are.

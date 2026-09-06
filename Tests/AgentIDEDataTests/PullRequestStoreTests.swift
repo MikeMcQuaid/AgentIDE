@@ -82,7 +82,7 @@ struct PullRequestStoreTests {
     func `a pull request is asked about once a minute however often it is looked at`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-store") + "/state.json"
         let runner = CountingRunner()
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
 
         let first = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
         for _ in 0 ..< 5 {
@@ -96,7 +96,7 @@ struct PullRequestStoreTests {
         let relaunched = PullRequestStore(
             github: GitHubClient(runner: runner),
             store: MetadataStore(file: file),
-        )
+        ) { false }
         let afterRelaunch = try await relaunched.listing(repositoryPath: "/repo", scope: .branch("work"))
         #expect(afterRelaunch.map(\.number) == [7])
         #expect(runner.calls == 1)
@@ -120,7 +120,7 @@ struct PullRequestStoreTests {
     func `the branch cache is one structure both the row and the pane read`() throws {
         let file = try TestSupport.temporaryDirectory("pr-branch") + "/state.json"
         let metadata = MetadataStore(file: file)
-        let store = PullRequestStore(github: GitHubClient(runner: CountingRunner()), store: metadata)
+        let store = PullRequestStore(github: GitHubClient(runner: CountingRunner()), store: metadata) { false }
         let summary = PullRequestSummary(
             number: 7,
             title: "Work",
@@ -148,7 +148,7 @@ struct PullRequestStoreTests {
     func `a finished turn forgets one branch's stamps and no other's`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-turn") + "/state.json"
         let runner = CountingRunner()
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
 
         _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
         _ = try await store.listing(repositoryPath: "/repo", scope: .branch("other"))
@@ -167,7 +167,7 @@ struct PullRequestStoreTests {
     func `an entity tag is not sent back once the listing it stamped has gone`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-etag") + "/state.json"
         let runner = CountingRunner()
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
         let key = PullRequestStore.listingKey(repositoryPath: "/repo", scope: .branch("work"))
 
         // The listing caches are capped and age out; a tag left
@@ -196,7 +196,7 @@ struct PullRequestStoreTests {
     func `one pull request in flight may be asked about every half minute, a listing may not`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-inflight") + "/state.json"
         let runner = CountingRunner()
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
 
         // A summary stamped 40 seconds ago is due again at a 30
         // second interval; the listing beside it, stamped the same,
@@ -220,7 +220,7 @@ struct PullRequestStoreTests {
     func `checks are remembered as pending from when they were first seen running`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-pending") + "/state.json"
         let runner = CountingRunner(checks: "PENDING")
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
 
         #expect(store.pendingFor(repositoryPath: "/repo", number: 7) == nil)
         _ = try await store.summary(repositoryPath: "/repo", number: 7)
@@ -239,7 +239,7 @@ struct PullRequestStoreTests {
     func `a caller cannot ask for a shorter interval than the floor`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-floor") + "/state.json"
         let runner = CountingRunner()
-        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file))
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
 
         _ = try await store.listing(repositoryPath: "/repo", scope: .open, interval: 0)
         _ = try await store.listing(repositoryPath: "/repo", scope: .open, interval: 0)

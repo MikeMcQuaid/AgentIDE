@@ -15,10 +15,18 @@ public struct PullRequestStore: Sendable {
     // MARK: Lifecycle
 
     /// Creates the store over the GitHub client and the metadata
-    /// file the whole app shares.
-    public init(github: GitHubClient, store: MetadataStore) {
+    /// file the whole app shares. `onBattery` says whether the
+    /// machine is on battery, which slows every tier; injected so a
+    /// test is not at the mercy of the machine it runs on.
+    @preconcurrency
+    public init(
+        github: GitHubClient,
+        store: MetadataStore,
+        onBattery: @escaping @Sendable () -> Bool = { PowerSource.isOnBattery },
+    ) {
         self.github = github
         self.store = store
+        self.onBattery = onBattery
     }
 
     // MARK: Public
@@ -331,6 +339,7 @@ public struct PullRequestStore: Sendable {
     /// Internal so the conversation half, which lives in its own
     /// file for length, shares them.
     let github: GitHubClient
+    let onBattery: @Sendable () -> Bool
     let store: MetadataStore
 
     static func listingKey(repositoryPath: String, scope: GitHubClient.ListScope) -> String {
@@ -350,7 +359,10 @@ public struct PullRequestStore: Sendable {
     func due(_ key: String, interval: TimeInterval, floor: TimeInterval = minimumInterval) -> Bool {
         let isDue: Bool =
             if let last = store.load().fetchedAt[key] {
-                Date().timeIntervalSince(last) >= max(interval, floor)
+                // Every tier, floors included, is five times longer on
+                // battery: a check still running is still running.
+                Date().timeIntervalSince(last)
+                    >= RefreshCadence.slowed(max(interval, floor), onBattery: onBattery())
             } else {
                 true
             }
