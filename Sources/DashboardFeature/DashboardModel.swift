@@ -91,6 +91,12 @@ public final class DashboardModel {
     /// which every row's summary read observes.
     public var pullRequestCacheGeneration = 0
 
+    /// Whether the machine is on battery, which slows every safety
+    /// interval. The app's composition wires the machine's own
+    /// answer in; left alone it says plugged in, so a test is never
+    /// at the mercy of the machine it runs on.
+    public var isOnBattery: () -> Bool = { false }
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {
@@ -195,6 +201,7 @@ public final class DashboardModel {
             defaultModel: defaults.model,
             defaultEffort: defaults.effort,
             names: modelNames[agent] ?? [:],
+            version: installedVersions[agent],
         )
     }
 
@@ -289,9 +296,6 @@ public final class DashboardModel {
 
     static let selectedWorktreeKey = "selectedWorktreePath"
 
-    /// How often that reading is worth taking.
-    static let paneLoadInterval: TimeInterval = 30
-
     /// Internal rather than private so the repository extension file
     /// can reach the service too.
     let service: SessionService
@@ -342,6 +346,11 @@ public final class DashboardModel {
     /// picker draws from memory rather than a file.
     var modelNames: [AgentKind: [String: String]] = [:]
 
+    /// Each CLI's version as probed once at launch with the models,
+    /// shown beside the agent's name in the pickers; never probed
+    /// again for a render.
+    var installedVersions: [AgentKind: String] = [:]
+
     /// The newest reading (running or queued), the queued follow-up
     /// while one is joinable, and the repositories queued to be
     /// forced: what lets `refresh` coalesce callers instead of
@@ -351,6 +360,15 @@ public final class DashboardModel {
     var refreshTask: Task<Void, Never>?
     var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
+
+    /// Whether the next reading asks herdr for its pane listing:
+    /// every action and agent change says so, the poll only when
+    /// the listing's safety interval has passed. True at launch,
+    /// since nothing has been listed yet.
+    var pendingPaneRead = true
+
+    /// When herdr was last asked, for the poll's safety interval.
+    var panesReadAt: Date?
 
     /// When the panes' cost was last read; see `readPaneLoads`.
     var paneLoadsReadAt: Date = .distantPast

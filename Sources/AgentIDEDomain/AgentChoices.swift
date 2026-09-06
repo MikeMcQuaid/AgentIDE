@@ -14,18 +14,24 @@ public struct AgentChoices: Hashable, Sendable {
         defaultModel: String,
         defaultEffort: String,
         names: [String: String] = [:],
+        version: String? = nil,
     ) {
         self.models = models
         self.efforts = efforts
         self.defaultModel = defaultModel
         self.defaultEffort = defaultEffort
         self.names = names
+        self.version = version
     }
 
     // MARK: Public
 
     /// The models the agent offers, as it named them.
     public let models: [String]
+
+    /// The installed CLI's version, as probed once at launch; nil
+    /// until the probe has answered, or when no CLI answers.
+    public let version: String?
 
     /// Its reasoning tiers, strongest first.
     public let efforts: [String]

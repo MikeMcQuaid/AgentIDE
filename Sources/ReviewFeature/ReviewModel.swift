@@ -41,21 +41,6 @@ final class ReviewModel {
 
     // MARK: Internal
 
-    /// What the review diffs. Each scope always shows its own diff,
-    /// so switching between them reliably changes the display.
-    enum Scope: Hashable {
-        /// Uncommitted changes against `HEAD`.
-        case uncommitted
-        /// The last commit.
-        case lastCommit
-        /// Commits not yet on the branch's own origin ref; only
-        /// available once the branch has been pushed.
-        case upstream
-        /// Every commit on the branch against its merge base: the
-        /// open pull request's base branch, or the default branch.
-        case branch
-    }
-
     /// The repository this worktree belongs to, as the sidebar names
     /// it, so its messages say which repository they are about.
     let repositoryName: String
@@ -295,18 +280,19 @@ final class ReviewModel {
 
     // MARK: Private
 
+    private let git: GitClient
+    private let baseRefProvider: () async -> String?
+
     /// The commit's actual message, for dimming Amend until the
     /// editor differs from it.
     private var originalMessage = ""
 
-    private let git: GitClient
     private let draftMessage: () async -> String?
-    private let baseRefProvider: () async -> String?
     private let fetchThreads: () async -> [ReviewThread]
     private let setThreadResolved: (String, Bool) async throws -> Void
 
-    /// The upstream scope's commits and two-dot diff, empty with a
-    /// message until the branch has been pushed.
+    /// The upstream scope's commits and their own diff, empty with
+    /// a message until the branch has been pushed.
     private func loadUpstream(currentBranch: String?) async throws {
         branchCommits = []
         guard let currentBranch, hasUpstream else {
@@ -315,11 +301,20 @@ final class ReviewModel {
             return
         }
 
+        // Bounded by the base the branch is built on, as the branch
+        // scope is, so a rebase onto a moved base never shows the
+        // base's own changes as this branch's.
         let upstreamRef = "origin/" + currentBranch
-        branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: upstreamRef)
+        let baseRef = await baseRefProvider()
+        branchCommits = await git.unpushedCommitLines(
+            worktreePath: worktreePath,
+            upstreamRef: upstreamRef,
+            baseRef: baseRef,
+        )
         files = try await DiffParser.parse(git.upstreamDiff(
             worktreePath: worktreePath,
             upstreamRef: upstreamRef,
+            baseRef: baseRef,
             ignoringWhitespace: hidesWhitespace,
         ))
     }

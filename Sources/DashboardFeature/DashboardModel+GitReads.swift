@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import Foundation
 
@@ -45,7 +46,8 @@ extension DashboardModel {
                         || item.worktree.path.hasPrefix(changedPath)
                 }
             }
-            if touched || Date().timeIntervalSince(last) >= interval {
+            let safety = RefreshCadence.slowed(interval, onBattery: isOnBattery())
+            if touched || Date().timeIntervalSince(last) >= safety {
                 due.insert(path)
             }
         }

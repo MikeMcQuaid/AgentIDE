@@ -237,8 +237,11 @@ the host user: no sudo, no sandbox, full `gh` credentials, editor
 variables pointing at the app's shim, no server. Shells die with the
 app, a deliberate trade after server-backed shells kept wedging their
 control clients. Every running shell and browser page stays mounted
-whichever tab or worktree shows, since it dies with its view; the
-session manager lists them with a Close.
+whichever tab or worktree shows, since it dies with its view, but
+hidden in AppKit's sense while it is not the one shown, so it draws
+nothing and a page's animation frames stop; the session manager lists
+them with a Close, each agent session beside the CLI version it started
+with, which after an upgrade is not the installed one until it restarts.
 
 Remote access is SSH to the Mac as the sandbox user, landing on the same
 herdr server; `script/attach` covers the host user and the sandbox. No
@@ -445,8 +448,11 @@ page resumes any past conversation into a fresh worktree.
   `AGENTIDE_SESSION` with `SV_SESSION_ID` as fallback.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
-  and a context menu marks it unread again. Raw terminal output counts
-  for nothing: herdr keeps no output timestamp.
+  and a context menu marks it unread again. The selected worktree is
+  seen as the reading reads it, and its time is written only when
+  something has arrived since: stamping it on every reading rewrote
+  the metadata file every few seconds to say nothing new. Raw terminal
+  output counts for nothing: herdr keeps no output timestamp.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
@@ -505,7 +511,14 @@ page resumes any past conversation into a fresh worktree.
   (`modelCacheFile`, Codex's `~/.codex/models_cache.json`), that file's
   modification time: keyed on the version alone, a model added
   server-side stayed out of the picker until the CLI itself was
-  upgraded. Names shown are the ids read as words (`gpt-5.6-sol` is GPT
+  upgraded. A cache written by a client older than the one installed
+  is left unread and the last accepted list stands: the server gives
+  each client the models it can use, and a session started before an
+  upgrade kept rewriting the cache with its own list, so a model the
+  new client knew vanished from the picker each time. The version the
+  stamp was read from is kept for the launch and shown beside the
+  agent's name in the pickers, never probed again for a render. Names
+  shown are the ids read as words (`gpt-5.6-sol` is GPT
   5.6 Sol). Claude takes an alias saying nothing about its version and
   has no listing to ask, so the version is read from the identifiers
   Claude Code recorded using in its own state (`modelNamesFile`,
@@ -522,9 +535,18 @@ page resumes any past conversation into a fresh worktree.
 
 1. `GitClient` produces diffs with rename detection; `DiffParser` turns
    them into files, hunks and lines. Scope is the last commit (or
-   uncommitted changes when there are any) or the whole branch against
-   its merge base, remembered per worktree (`ReviewModel+Scope`). Only
-   the tip can be amended; other commits review read-only.
+   uncommitted changes when there are any), the unpushed commits, or
+   the whole branch against its merge base, remembered per worktree
+   (`ReviewModel+Scope`). Unpushed is what pushing would change on
+   the remote with the base's movement factored out: the upstream
+   replayed onto the base the branch now sits on (`git merge-tree`,
+   a rebase as a merge with no worktree) and diffed against `HEAD`,
+   so an amended commit shows the lines the amend changed, a rebase
+   onto a moved base shows nothing, and the base's changes never
+   show; the commits listed under it are those whose patch the
+   upstream lacks (`git cherry`, bounded the same way). A replay that
+   conflicts falls back to those commits' own patches. Only the tip
+   can be amended; other commits review read-only.
 2. Generated files (lockfiles and the like, by path fragment) hide by
    default.
 3. Highlighting uses tree-sitter grammars (Swift, Ruby, Bash, Python,
@@ -573,7 +595,11 @@ directory of your own is pinned to the centre slot; a worktree or
 repository page opens it from an Editor button on its conversations
 view, and the primary pane's branch order is what guarantees a live
 session always outranks the centre editor, so one can never cover the
-other. Each slot persists its own finder and open file under
+other. Every file remembers where it was scrolled to
+(`EditorScrollPositions`, capped at two hundred files, written when
+its editor goes away), so a worktree switch or a relaunch brings it
+back in place unless a line was asked for by name. Each slot persists
+its own finder and open file under
 role-suffixed defaults keys; open-file and finder-focus requests
 travel the shared keys and the window routes each to the preferred
 slot: the side editor unless the centre editor is on screen, and
@@ -607,7 +633,9 @@ The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
 request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
 written aside and renamed into place; the window watches the spool with
-a dispatch source, opens the file in the preferred editor slot and
+a dispatch source ringing a `DirectoryWake` that a loop waits on with a
+backstop timeout, nothing cancelled on either side (the platform notes
+say why), opens the file in the preferred editor slot and
 writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A symlinked file
 resolves to its target before it is asked for: the editor saves
@@ -637,12 +665,33 @@ selects the worktree holding it, and `agentide new` starts a session.
   or closed over thirty days ago is a name collision, not the branch's
   work. No cached answer is final, however green: skipping approved
   passing pull requests froze rows as open forever.
+- **The tick is a safety net; events do the work.** A file changing
+  under a worktree (FSEvents), an agent changing state (`herdr agent
+  wait`) and every action of the app's own each wake a reading. The
+  poll behind them re-reads on Settings' interval while the window
+  shows, a minute while it is covered, and on battery a minute
+  showing and five covered (`RefreshCadence`, `PowerSource`). A tick
+  of its own asks herdr for the pane listing only once a minute
+  (five on battery) and reuses the last listing between, since that
+  listing changes only through the events above and asking is a
+  `sudo` login shell; git is read only for repositories the watcher
+  flagged or past their own safety interval. On battery every safety
+  interval, the stack rota and every pull request tier (floors
+  included) runs five times slower, one factor for the whole app.
 - **Polling is tiered by attention** with a minute floor per pull
   request: selected worktree first, then its repository, then expanded
   repositories, collapsed ones rarely. A pull request with checks
   running or queued is asked every half minute, back to its tier after
   an hour (a stalled run or an outage must not be polled at that rate).
-  A push looks again a minute later, where the run it started shows.
+  A push paints its pull request's checks pending at once, in every
+  cache a row or a pane reads (`markChecksPending`), since the last
+  run's verdict is about commits that are gone; the mark outlives the
+  paint, since GitHub takes a minute to see the commits and a listing
+  fetched inside it still says what the old run did, so every fetched
+  summary of that branch is painted pending until GitHub reports a
+  head commit other than the one it last reported (`headCommit`), or
+  a quarter of an hour passes. The push looks again a minute later,
+  where the run it started shows.
   An agent's finished turn forgets its own branch's stamps, on the
   assumption the turn committed, so the same reading's pull request
   pass re-asks at once rather than waiting out the tier.
@@ -661,7 +710,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   button reads "Mark ready" while a pull request is a draft and runs
   `gh pr ready`; the next click is the Merge, Queue or Automerge it
   would always have been. Nothing is cleaned up behind it, since
-  nothing merged.
+  nothing merged. Draft stays in its place afterwards, taking an
+  open pull request back to a draft (`gh pr ready --undo`) for work
+  that turned out to need more.
 - **A pull request can open as a draft** through a button of its
   own: Open Draft beside Open PR, since the two make different pull
   requests and a toggle beside them said which without saying what a
@@ -669,6 +720,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.
+  Both wait for the listed entry's own commits to be on the remote:
+  a stack's entries each have their own count, and reading the
+  worktree's (the checked-out branch's) offered to open a pull
+  request for a branch nothing had pushed.
 - **Nothing is stat'd that macOS would ask permission for.** A
   directory of your own can be anywhere: inside Documents, on a
   network volume, on a disk that is not mounted. macOS asks the user
@@ -737,6 +792,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
   which the next fetch replaces.
+- **The default branch is not pushed from here.** Work belongs on a
+  branch of its own, and a push straight to `main` goes round the
+  pull request the rest of the tab is for (a protected branch would
+  refuse it anyway), so Push dims there and says why, and the menu
+  bar's Push, which has no button to dim, declines in the footer.
+  The tab already asks GitHub nothing about the default branch.
 - **Pushing** asks the branch first and GitHub second. A branch checked
   out from someone else's pull request carries that fork's URL in its
   config (all `gh pr checkout` leaves behind), so it is given a remote
@@ -779,6 +840,19 @@ selects the worktree holding it, and `agentide new` starts a session.
   the branch verifies, else origin/HEAD. The ancestor test keeps an
   amended branch out of that path (its pushed commit is a stale twin,
   not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
+- **The same form edits an open pull request.** The pencil beside the
+  browser button in the conversation's header puts the pull request's
+  title and body into
+  the creation form in the conversation's place, with the generate
+  and reset buttons working as they do before opening and the labels
+  and template sections left out, since those belong to the pull
+  request itself; Save sends `gh pr edit --title --body` and repaints
+  the row and the pane from the caches, Cancel is the one discard.
+  The form's draft is keyed by the pull request while it is edited,
+  so a half-done edit survives a tab switch and never touches the
+  draft of a pull request yet to open. What it is for is bringing a
+  description up to date with what was actually pushed before the
+  pull request merges.
 - **The creation form** shows when the branch has no open pull request:
   title, body and template as fields, drafts saved as typed and only
   ever filling an empty field, so reloads cannot take back typing.
@@ -824,12 +898,18 @@ selects the worktree holding it, and `agentide new` starts a session.
   answers that the queue sets the strategy, and that automerge is
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
-- **Last mile buttons**: copy unresolved review threads grouped per
+- **Last mile buttons** say what they copy: Reviews and Checks,
+  each carrying the app's copy symbol inline and its count in the run
+  the sidebar's arrows use (`Reviews ⎘3` as `Push ↑9`, the symbol the
+  same `doc.on.doc` every copy button uses), and nothing to copy is
+  the word alone, greyed out. Reviews copies unresolved review threads grouped per
   file, dimmed until one is unresolved (the count comes from the
   threads the conversation pane has read, since no listing query
-  carries it); one failing-checks button, dimmed until the rollup is
-  red,
-  that copies the tail of every failing run's `gh run view
+  carries it), with Cmd-click opening the pull request's files page,
+  where a review comment is anchored and answered, and Shift-click
+  opening it in the Browser tab; Checks is one button for the
+  failing checks, dimmed
+  until the rollup is red, that copies the tail of every failing run's `gh run view
   --log-failed` condensed (job and step named once in a heading,
   timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. A run still in progress has
@@ -1049,7 +1129,8 @@ organisation.
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
-No updater: releases will ship as a Homebrew cask once it exists.
+No updater of its own: releases ship as the `agentide` Homebrew cask,
+and `brew upgrade` is the updater.
 
 Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
 every rule enabled (per-line disables with a reason). Scripts:
@@ -1125,11 +1206,11 @@ A push that touches the workflow, packaging scripts or metadata uses
 `9999.0.0` as a reserved local-only version and repeats the build,
 signing and notarisation as a dry run, but uploads no artefact and
 pushes no tag or release. Dependabot cannot read Actions secrets, so
-its dry runs skip signing and notarisation. The disabled `bump-cask`
-job is ready to run `Homebrew/actions/bump-packages` after a release
-once the `agentide` cask exists and `HOMEBREW_GITHUB_API_TOKEN`, a
-personal access token with the `public_repo` and `workflow` scopes, is
-a repository secret.
+its dry runs skip signing and notarisation. Nothing here bumps the
+cask: the `agentide` cask in Homebrew/homebrew-cask is open source and
+Homebrew's own autobump reads each release through `brew livecheck`
+and opens the pull request itself, so the release needs no GitHub
+token of its own.
 
 The release contract is also the cask contract: the tag is the bare
 version, the zip is `AgentIDE-<version>.zip` and the app's

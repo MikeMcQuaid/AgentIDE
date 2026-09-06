@@ -49,9 +49,12 @@ updates.
 - Pushes, rebases and opens pull requests as drafts or ready for review,
   templates filled in, labels attached, forks used where the repository
   is not yours, pushes following a contributor's fork back to it, and
-  branches stacked in one worktree.
+  branches stacked in one worktree; an open pull request's title and
+  body are edited in the same form, to say what was actually pushed.
 - Copies unresolved review comments and failing CI logs into a prompt,
   resolves conversations and merges or queues, each with a click.
+- Stays quiet while idle, and quieter still on battery, with agent
+  and file changes still landing at once.
 - Notifies when an agent finishes or needs input, badges the Dock, and
   marks a pane that has held several cores for ten minutes with what is
   running in it.
@@ -85,14 +88,17 @@ updates.
 
 ## 📦 Installation
 
-Download `AgentIDE-<version>.zip` from the
-[releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip
-it and move `AgentIDE.app` to /Applications. Releases are signed with a
-Developer ID certificate and notarised by Apple.
+```bash
+brew install --cask agentide
+```
 
-Releases will also ship as a Homebrew cask
-(`brew install --cask agentide`) once the cask exists; `brew upgrade`
-then updates the app.
+The [`agentide` cask](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/a/agentide.rb)
+installs the latest release, and `brew upgrade` updates it. Releases are
+signed with a Developer ID certificate and notarised by Apple.
+
+Without Homebrew, download `AgentIDE-<version>.zip` from the
+[releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip
+it and move `AgentIDE.app` to /Applications.
 
 To run the current source instead:
 

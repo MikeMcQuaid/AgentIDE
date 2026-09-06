@@ -26,6 +26,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         unresolvedComments: Int = 0,
         isQueued: Bool = false,
         closedAt: Date? = nil,
+        headCommit: String? = nil,
     ) {
         self.number = number
         self.title = title
@@ -44,6 +45,7 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.unresolvedComments = unresolvedComments
         self.isQueued = isQueued
         self.closedAt = closedAt
+        self.headCommit = headCommit
     }
 
     // MARK: Public
@@ -106,6 +108,11 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// summaries cached by earlier releases still decode.
     public let closedAt: Date?
 
+    /// The commit GitHub last reported as the head, which is how a
+    /// listing fetched after a push is told from one fetched before
+    /// GitHub saw it; nil from a cache written before it was kept.
+    public let headCommit: String?
+
     /// Review conversations still open on it, which the listing
     /// query cannot answer: GitHub only counts them through GraphQL,
     /// so this stays zero until the pull request is looked at and
@@ -138,6 +145,62 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// The stable identity, the pull request number.
     public var id: Int {
         number
+    }
+
+    /// The summary with its title and body as an edit left them,
+    /// everything else standing.
+    public func retitled(_ title: String, body: String) -> Self {
+        var edited = Self(
+            number: number,
+            title: title,
+            url: url,
+            headBranch: headBranch,
+            mergeable: mergeable,
+            reviewDecision: reviewDecision,
+            checks: checks,
+            failingCheckLinks: failingCheckLinks,
+            baseBranch: baseBranch,
+            state: state,
+            isDraft: isDraft,
+            hasAutomerge: hasAutomerge,
+            author: author,
+            body: body,
+            unresolvedComments: unresolvedComments,
+            isQueued: isQueued,
+            closedAt: closedAt,
+            headCommit: headCommit,
+        )
+        edited.unresolvedComments = unresolvedComments
+        return edited
+    }
+
+    /// The summary as a push leaves it: its checks pending, since the
+    /// run the push starts has not reported yet, and no failing check
+    /// to go to, since the one that failed ran on commits that are
+    /// gone. Everything else stands until GitHub answers.
+    public func awaitingChecks() -> Self {
+        var pending = Self(
+            number: number,
+            title: title,
+            url: url,
+            headBranch: headBranch,
+            mergeable: mergeable,
+            reviewDecision: reviewDecision,
+            checks: "PENDING",
+            failingCheckLinks: [],
+            baseBranch: baseBranch,
+            state: state,
+            isDraft: isDraft,
+            hasAutomerge: hasAutomerge,
+            author: author,
+            body: body,
+            unresolvedComments: unresolvedComments,
+            isQueued: isQueued,
+            closedAt: closedAt,
+            headCommit: headCommit,
+        )
+        pending.unresolvedComments = unresolvedComments
+        return pending
     }
 }
 

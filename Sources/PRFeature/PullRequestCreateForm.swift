@@ -1,34 +1,31 @@
+import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
 /// The pull request creation form, shown in place of the list when
 /// the branch has no open pull request: title, body and the
 /// repository's template in three fields, with the template appended
-/// below the body when the pull request opens.
+/// below the body when the pull request opens. The same form edits
+/// an open pull request's title and body (`editing`), with the
+/// labels and the template left to the pull request itself.
 struct PullRequestCreateForm: View {
     // MARK: Internal
 
     @Bindable var model: PullRequestsModel
 
+    /// The open pull request being edited, nil when opening one.
+    var editing: PullRequestSummary?
+
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("No open pull request for this branch")
+            Text(editing.map { "Editing #" + String($0.number) } ?? "No open pull request for this branch")
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
             waitingLine
-            HStack(spacing: Self.spacing) {
-                TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
-                    .textFieldStyle(.plain)
-                    .readOnly(isGenerating || isBlocked)
-                    .hoverHelp("The pull request title; git convention keeps it short and imperative")
-                generateButton
-                resetButton
+            titleField
+            if editing == nil {
+                labelsSection
             }
-            .padding(.horizontal, Self.fieldPadding)
-            .padding(.vertical, Self.fieldVerticalPadding)
-            .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
-            .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
-            labelsSection
             Text("Body").font(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
                 .font(.body)
@@ -36,8 +33,12 @@ struct PullRequestCreateForm: View {
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
                 .readOnly(isGenerating || isBlocked)
-                .hoverHelp("The description in your own words; the template below is appended after it")
-            templateSection
+                .hoverHelp(editing == nil
+                    ? "The description in your own words; the template below is appended after it"
+                    : "The description as it will read on GitHub once saved")
+            if editing == nil {
+                templateSection
+            }
         }
         .padding(Self.spacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -74,7 +75,24 @@ struct PullRequestCreateForm: View {
     /// the fields grey out rather than racing a reload that could
     /// replace what is being typed.
     private var isBlocked: Bool {
-        model.unpushedBelow != nil || model.isOpening || model.isBranchActionRunning
+        (editing == nil && model.unpushedBelow != nil) || model.isOpening || model.isBranchActionRunning
+    }
+
+    /// The title, with the drafting and reset buttons inside its
+    /// field.
+    private var titleField: some View {
+        HStack(spacing: Self.spacing) {
+            TextField("Title", text: $model.prTitle.readOnly(isGenerating || isBlocked))
+                .textFieldStyle(.plain)
+                .readOnly(isGenerating || isBlocked)
+                .hoverHelp("The pull request title; git convention keeps it short and imperative")
+            generateButton
+            resetButton
+        }
+        .padding(.horizontal, Self.fieldPadding)
+        .padding(.vertical, Self.fieldVerticalPadding)
+        .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
+        .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
     }
 
     /// Back to what the commits say. Typed text asks first; blank
@@ -198,7 +216,7 @@ struct PullRequestCreateForm: View {
     /// are markup where a message is parsed, and two stray
     /// characters where it is not.
     @ViewBuilder private var waitingLine: some View {
-        if let below = model.unpushedBelow {
+        if editing == nil, let below = model.unpushedBelow {
             (Text("Waiting on ") + Text(below).font(NameStyle.small)
                 + Text(" below it to be pushed and opened first"))
                 .font(.caption)

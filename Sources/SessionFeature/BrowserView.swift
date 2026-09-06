@@ -42,7 +42,7 @@ public struct BrowserView: View {
             .padding(Self.padding)
             Divider()
             ZStack {
-                WebPane(request: $request, onProcess: record(processIdentifier:), onNavigate: follow(_:))
+                webPane
                 if request == nil || (address.isEmpty && editingAddress == false) {
                     ContentUnavailableView(
                         "Nothing loaded",
@@ -115,6 +115,16 @@ public struct BrowserView: View {
 
     private let worktreePath: String
     private let isActive: Bool
+
+    /// The page itself, hidden with the pane so it stops rendering.
+    private var webPane: some View {
+        WebPane(
+            request: $request,
+            isActive: isActive,
+            onProcess: record(processIdentifier:),
+            onNavigate: follow(_:),
+        )
+    }
 
     /// Parses the stored lines: a path, its address, and when it was
     /// last seen. Lines written before the time was kept have none,
@@ -253,6 +263,13 @@ private struct WebPane: NSViewRepresentable {
 
     @Binding var request: URLRequest?
 
+    /// Whether the page is the one on screen. A page behind another
+    /// tab or worktree is hidden in AppKit's sense rather than
+    /// merely transparent: WebKit then reports it hidden, stops its
+    /// animation frames and throttles its timers, where a page at
+    /// opacity zero kept rendering and compositing for nobody.
+    let isActive: Bool
+
     let onProcess: (Int32?) -> Void
     let onNavigate: (URL) -> Void
 
@@ -267,10 +284,12 @@ private struct WebPane: NSViewRepresentable {
         configuration.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
+        view.isHidden = isActive == false
         return view
     }
 
     func updateNSView(_ view: WKWebView, context _: Context) {
+        view.isHidden = isActive == false
         guard let request, view.url != request.url else {
             return
         }

@@ -22,6 +22,11 @@ final class LastPanes: Sendable {
 
     // MARK: Internal
 
+    /// Whether herdr has answered at all yet.
+    var hasAnswered: Bool {
+        held.withLock { $0.answeredAt != .distantPast }
+    }
+
     /// Records what herdr answered, empty answers included: nothing
     /// running is a fact when the reading itself succeeded.
     func remember(_ panes: [HerdrPane], at moment: Date = Date()) {
@@ -39,6 +44,15 @@ final class LastPanes: Sendable {
 
             return held.panes
         }
+    }
+
+    /// The last answer however old, for a tick that has chosen not
+    /// to ask: the listing changes only when a session starts, ends
+    /// or changes state, and each of those wakes a reading that
+    /// does ask. Empty before herdr has ever answered, which
+    /// `hasAnswered` tells from an empty answer.
+    func last() -> [HerdrPane] {
+        held.withLock { $0.panes }
     }
 
     // MARK: Private

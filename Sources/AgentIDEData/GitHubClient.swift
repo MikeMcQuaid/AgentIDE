@@ -175,6 +175,12 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "ready", String(number)], in: repositoryPath)
     }
 
+    /// Takes an open pull request back to a draft: it stays open,
+    /// and nobody is asked to review it while it is one.
+    public func markDraft(repositoryPath: String, number: Int) async throws {
+        try await gh(["pr", "ready", "--undo", String(number)], in: repositoryPath)
+    }
+
     /// Merges a pull request immediately.
     public func merge(repositoryPath: String, number: Int) async throws {
         let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
@@ -219,7 +225,7 @@ public struct GitHubClient: Sendable {
     /// A remembered answer, including the answer that there is none.
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
-    static let coreFields = "number,title,url,headRefName,baseRefName,state,isDraft,author,body"
+    static let coreFields = "number,title,url,headRefName,headRefOid,baseRefName,state,isDraft,author,body"
 
     /// The expensive dashboard fields; computing these across every
     /// open pull request timed out (HTTP 504) on busy repositories,
@@ -287,6 +293,7 @@ public struct GitHubClient: Sendable {
                 author: row.author?.login,
                 body: row.body,
                 closedAt: row.closedAt,
+                headCommit: row.headRefOid,
             )
         }
     }
@@ -337,6 +344,7 @@ public struct GitHubClient: Sendable {
         let title: String
         let url: String
         let headRefName: String
+        let headRefOid: String?
         let baseRefName: String?
         let state: String?
         let mergeable: String?

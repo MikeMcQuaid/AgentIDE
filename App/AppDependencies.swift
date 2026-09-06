@@ -43,6 +43,9 @@ final class AppDependencies {
             github: githubClient,
             launchProgress: launchProgress,
         )
+        // The machine's own power state, wired here rather than read
+        // by the model, so the model under test is always plugged in.
+        dashboard.isOnBattery = { PowerSource.isOnBattery }
         // Off the launch path: installing hooks writes into the
         // shared workspace and nothing about the first paint needs
         // it done first.

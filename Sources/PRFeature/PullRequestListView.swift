@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -163,11 +162,10 @@ struct PullRequestFooterView: View {
                     .textSelection(.enabled)
             }
             Spacer(minLength: Self.padding)
-            if model.needsCreateForm {
-                openDraftButton
-                openButton
-            }
-            if model.isStackedEntry {
+            draftAndOpenButtons
+            if model.isEditing {
+                // Saving is the one thing to do while editing.
+            } else if model.isStackedEntry {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(
@@ -193,6 +191,9 @@ struct PullRequestFooterView: View {
             "Draft",
             busy: "Opening",
             disabled: openDisabled,
+            // The spinner says it is opening; a wider word would
+            // widen the button for the whole of its life.
+            keepsTitle: true,
         ) {
             model.prIsDraft = true
             if await model.createPullRequest() == false {
@@ -200,6 +201,37 @@ struct PullRequestFooterView: View {
             }
         }
         .hoverHelp("Open it as a draft: work to read rather than work to merge")
+    }
+
+    /// Opening a pull request, and Draft either way: before one
+    /// exists it opens a draft, and after it takes the open one
+    /// back to being a draft, which work that turned out to need
+    /// more is.
+    @ViewBuilder var draftAndOpenButtons: some View {
+        if model.needsCreateForm {
+            openDraftButton
+            openButton
+        } else if model.isEditing {
+            cancelEditButton
+            saveEditButton
+        } else if model.canConvertToDraft {
+            draftButton
+        }
+    }
+
+    /// Takes the open pull request back to a draft.
+    var draftButton: some View {
+        BusyButton(
+            "Draft",
+            busy: "Drafting",
+            disabled: model.isBranchActionRunning,
+            keepsTitle: true,
+        ) {
+            if await model.convertToDraft() == false {
+                utilityTab = UtilityTabTarget.errors
+            }
+        }
+        .hoverHelp("Take it back to a draft: it stays open, and nobody is asked to review a draft")
     }
 
     var rebaseButton: some View {
@@ -324,46 +356,4 @@ struct PullRequestFooterView: View {
             shortcut: "⌘↩",
         )
     }
-
-    /// The copy actions for the open conversation, in the footer's
-    /// click-order run.
-    @ViewBuilder
-    private func copyButtons(for selected: PullRequestSummary) -> some View {
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "text.bubble",
-            accessibilityLabel: "Copy unresolved comments",
-            disabled: selected.unresolvedComments == 0,
-        ) {
-            await model.copyUnresolvedComments(selected)
-        }
-        .hoverHelp("Copy every unresolved review conversation to the clipboard; dimmed while none is unresolved")
-        // One button for the failing checks: a click copies their
-        // logs, and a modifier opens them instead, since the
-        // modifier is read at the click and `LinkOpener` already
-        // sends Cmd to the browser and anything else to the tab.
-        // Dimmed until the rollup is red with runs to read: pending
-        // and green have no failed log, and a red rollup whose
-        // failures are not Actions runs has none either.
-        BusyButton(
-            "",
-            busy: "",
-            systemImage: "exclamationmark.triangle",
-            accessibilityLabel: "Failing checks",
-            disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
-        ) {
-            if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
-                model.openFailingChecks(selected)
-            } else if await model.copyFailingLogs(selected) == false {
-                utilityTab = UtilityTabTarget.errors
-            }
-        }
-        .hoverHelp("Copy the last " + String(PullRequestsModel.logTailLines)
-            + " lines of every failing Actions run's log, a run still in progress answering with its "
-            + "already-failed jobs; Cmd-click opens the failing check in your browser, Shift-click "
-            + "in the Browser tab; dimmed until a check fails")
-    }
 }
-
-// MARK: - PullRequestScope

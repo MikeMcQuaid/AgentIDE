@@ -172,6 +172,11 @@ struct TerminalRepresentable: NSViewRepresentable {
     func updateNSView(_ view: PaneTerminalView, context: Context) {
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(transport, in: view)
+        // Hidden in AppKit's sense, not merely transparent: a pane
+        // at opacity zero still draws every frame its agent sends,
+        // and a hidden one keeps its buffer, its size and its client
+        // while drawing nothing until it is shown again.
+        view.isHidden = isActive == false
         context.coordinator.updateFocus(isActive: isActive, of: view)
         if case .shell = transport, isActive {
             context.coordinator.clearIfRequested(clearRequest, in: view)

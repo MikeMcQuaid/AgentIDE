@@ -23,13 +23,23 @@ public extension SessionService {
     /// with their sessions, plus foreign sessions.
     /// `scope` says whose git is read this time; the others come
     /// back as `kept` gave them, with their sessions brought up to
-    /// date from the pane listing.
+    /// date from the pane listing. `readingPanes` says whether that
+    /// listing is asked for or the last one reused: asking is a
+    /// `sudo` login shell, and the listing changes only when a
+    /// session starts, ends or changes state, each of which wakes a
+    /// reading that asks.
     func overview(
         scope: GitReadScope = .all,
         kept: [RepositoryGroup] = [],
+        readingPanes: Bool = true,
     ) async -> (groups: [RepositoryGroup], foreign: [AgentSession]) {
         await configureHerdrOnce()
-        let panes = await panesOrLastAnswer()
+        let panes =
+            if readingPanes || lastPanes.hasAnswered == false {
+                await panesOrLastAnswer()
+            } else {
+                lastPanes.last()
+            }
         let activity = spool.activity()
         let metadata = store.load()
         let keptByPath = Dictionary(kept.map { ($0.repository.path, $0) }) { first, _ in first }
@@ -286,7 +296,15 @@ public extension SessionService {
             lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
         }
         let seen = metadata.seenAt[worktree.path] ?? session.flatMap { metadata.lastSeen[$0.name] } ?? startedAt
-        let unread = metadata.unreadMarks.contains(worktree.path) || lastEvent > seen
+        // The selected worktree is on screen, so whatever arrived is
+        // seen as it is read, and written down only then: a stamp
+        // written on every reading rewrote the metadata file every
+        // few seconds to say nothing new.
+        let isSelected = worktree.path == selectedWorktreePath()
+        if isSelected, lastEvent > seen {
+            acknowledgeActivity(worktreePath: worktree.path)
+        }
+        let unread = metadata.unreadMarks.contains(worktree.path) || (isSelected == false && lastEvent > seen)
 
         // The counts and the date came with the repository's own
         // read; only uncommitted work is the worktree's to answer,

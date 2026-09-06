@@ -81,6 +81,13 @@ extension PullRequestsModel {
         note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }
 
+    /// Jumps to the review conversations on the web: the files
+    /// page, which is where a review comment is anchored and where
+    /// it is answered or resolved.
+    func openReviews(_ summary: PullRequestSummary) {
+        LinkOpener.open(summary.url + "/files")
+    }
+
     /// Jumps to the one failing check, or to the checks page when
     /// several fail or the row has not been enriched with their
     /// links yet; the logs themselves copy from the button beside.
@@ -149,6 +156,37 @@ extension PullRequestsModel {
         [summary.checks, summary.state, summary.mergeable, summary.reviewDecision, String(summary.isDraft)]
     }
 
+    /// Takes the open pull request back to a draft, which is what
+    /// work that turned out to need more is; false opens the errors
+    /// surface. Only an open one that is not already a draft can
+    /// go back, which is what the button's own state says.
+    func convertToDraft() async -> Bool {
+        guard let summary = selected else {
+            return true
+        }
+
+        do {
+            try await performDraftChange(summary)
+            await refreshSummary(summary.number)
+            note("took `#" + String(summary.number) + "` back to a draft")
+            return true
+        } catch {
+            report(error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Whether the open pull request could go back to being a
+    /// draft: one that is already a draft has nowhere to go, and a
+    /// merged or closed one is past caring.
+    var canConvertToDraft: Bool {
+        guard let selected, selected.state == "OPEN" else {
+            return false
+        }
+
+        return selected.isDraft == false
+    }
+
     /// The stack size, following base branches that are other listed
     /// pull requests' heads.
     func stackDepth(for summary: PullRequestSummary) -> Int {
@@ -163,10 +201,15 @@ extension PullRequestsModel {
         return depth
     }
 
-    /// Whether every local commit is already on the upstream; Open
-    /// PR stays dimmed until then.
+    /// Whether every local commit is already on the remote; Open
+    /// stays dimmed until then, since a pull request opened now
+    /// would not carry what has not gone up. The reading is the
+    /// listed entry's own (a stack's entries each have their own,
+    /// and the worktree's count is the checked-out branch's), or
+    /// the mark this tab's own push left, which survives a count
+    /// gathered while that push was still running.
     var isFullyPushed: Bool {
-        isPushed || branchItem?.aheadOfUpstream == 0
+        isPushed || hasUnpushedCommits == false
     }
 
     /// Fills the form from the branch's commits: the one commit's own

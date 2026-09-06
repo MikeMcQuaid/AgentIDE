@@ -16,43 +16,60 @@ extension ReviewModel {
     }
 
     private static let scopeKey = "reviewScope#"
-}
 
-extension ReviewModel.Scope {
-    /// Stored names, kept apart from the case names so a rename
-    /// never loses what was chosen.
-    var storageName: String {
-        switch self {
-        case .uncommitted:
-            "uncommitted"
+    /// What the review diffs. Each scope always shows its own diff,
+    /// so switching between them reliably changes the display.
+    enum Scope: Hashable {
+        /// Uncommitted changes against `HEAD`.
+        case uncommitted
+        /// The last commit.
+        case lastCommit
+        /// Commits not yet on the branch's own origin ref, by patch
+        /// rather than by hash; only once the branch has been pushed.
+        case upstream
+        /// Every commit on the branch against its merge base: the
+        /// open pull request's base branch, or the default branch.
+        case branch
 
-        case .lastCommit:
-            "lastCommit"
+        // MARK: Lifecycle
 
-        case .upstream:
-            "upstream"
+        init?(storageName: String) {
+            switch storageName {
+            case "uncommitted":
+                self = .uncommitted
 
-        case .branch:
-            "branch"
+            case "lastCommit":
+                self = .lastCommit
+
+            case "upstream":
+                self = .upstream
+
+            case "branch":
+                self = .branch
+
+            default:
+                return nil
+            }
         }
-    }
 
-    init?(storageName: String) {
-        switch storageName {
-        case "uncommitted":
-            self = .uncommitted
+        // MARK: Internal
 
-        case "lastCommit":
-            self = .lastCommit
+        /// Stored names, kept apart from the case names so a rename
+        /// never loses what was chosen.
+        var storageName: String {
+            switch self {
+            case .uncommitted:
+                "uncommitted"
 
-        case "upstream":
-            self = .upstream
+            case .lastCommit:
+                "lastCommit"
 
-        case "branch":
-            self = .branch
+            case .upstream:
+                "upstream"
 
-        default:
-            return nil
+            case .branch:
+                "branch"
+            }
         }
     }
 }

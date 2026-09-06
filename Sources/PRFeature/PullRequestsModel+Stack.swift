@@ -376,6 +376,7 @@ extension PullRequestsModel {
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
+            markChecksPending(for: pushed)
             recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
             note("Pushed " + Self.named(pushed) + ".")
             Self.requestSidebarRefresh()

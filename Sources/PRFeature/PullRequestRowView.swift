@@ -17,6 +17,11 @@ struct PullRequestRowView: View {
     let onCopyComments: @MainActor () async -> Void
     let onOpenChecks: @MainActor () async -> Void
 
+    /// Opens the title and body for editing; nil where the row is
+    /// not the open conversation's header, or the pull request is
+    /// no longer open to edit.
+    var onEdit: (@MainActor () -> Void)?
+
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
@@ -130,13 +135,25 @@ struct PullRequestRowView: View {
     }
 
     private var actions: some View {
-        Button {
-            LinkOpener.open(summary.url)
-        } label: {
-            Image(systemName: "safari")
-                .accessibilityLabel("Open pull request in browser")
+        HStack(spacing: Self.rowPadding) {
+            if let onEdit, summary.state == "OPEN" {
+                Button {
+                    onEdit()
+                } label: {
+                    Image(systemName: "pencil")
+                        .accessibilityLabel("Edit title and body")
+                }
+                .buttonStyle(.glass)
+                .hoverHelp("Edit the title and body, to say what was actually pushed before it merges")
+            }
+            Button {
+                LinkOpener.open(summary.url)
+            } label: {
+                Image(systemName: "safari")
+                    .accessibilityLabel("Open pull request in browser")
+            }
+            .buttonStyle(.glass)
+            .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
         }
-        .buttonStyle(.glass)
-        .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
     }
 }

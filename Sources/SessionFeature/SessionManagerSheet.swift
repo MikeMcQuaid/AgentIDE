@@ -69,6 +69,7 @@ public struct SessionManagerSheet: View {
                         icon: "cpu",
                         label: "Agent session",
                         title: session.name,
+                        detail: session.version,
                         directory: session.workingDirectory,
                         usage: usage(of: session),
                     ),
@@ -100,11 +101,19 @@ public struct SessionManagerSheet: View {
         let icon: String
         let label: String
         let title: String
+
+        /// Beside the title in secondary text: the CLI version a
+        /// session runs, which after an upgrade is not the installed
+        /// one until the session is restarted.
+        var detail: String?
         let directory: String
         let usage: String
     }
 
     private static let spacing: CGFloat = 10
+
+    /// Between a title and the detail beside it.
+    private static let detailSpacing: CGFloat = 5
     /// Roughly twenty rows: the list scrolls only past that.
     private static let listHeight: CGFloat = 560
     private static let minimumWidth: CGFloat = 640
@@ -130,7 +139,15 @@ public struct SessionManagerSheet: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(entry.label)
             VStack(alignment: .leading, spacing: 1) {
-                Text(entry.title).font(CodeStyle.font).lineLimit(1)
+                HStack(spacing: Self.detailSpacing) {
+                    Text(entry.title).font(CodeStyle.font).lineLimit(1)
+                    if let detail = entry.detail {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .hoverHelp("The agent CLI's version this session runs; an upgrade takes effect on restart")
+                    }
+                }
                 Text(location(of: entry.directory))
                     .font(.caption)
                     .foregroundStyle(.secondary)

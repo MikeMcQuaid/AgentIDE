@@ -108,7 +108,7 @@ public extension SessionService {
     /// the user is not looking at.
     internal func hostItems(of repository: Repository, metadata: AppMetadata) async -> [WorktreeItem] {
         let listed = metadata.hostDirectories[repository.path] ?? []
-        let selected = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
+        let selected = selectedWorktreePath()
         var items = [WorktreeItem]()
         for path in listed {
             let facts = path == selected ? await readHostFacts(of: path) : hostFacts.facts(of: path)

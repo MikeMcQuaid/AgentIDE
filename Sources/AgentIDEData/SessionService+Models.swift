@@ -25,6 +25,21 @@ public extension SessionService {
             return nil
         }
 
+        // A cache an older client wrote says what the server gives
+        // that client, which is less than the installed one gets: a
+        // session started before an upgrade kept rewriting Codex's
+        // cache with its own list, and a model the new client knew
+        // vanished from the picker each time. Such a cache is left
+        // unread, and the last list accepted stands.
+        if let file = runner.modelCacheFile,
+           let data = FileManager.default.contents(atPath: paths.sandboxHome + "/" + file),
+           let written = Self.clientVersion(inModelCache: data),
+           let installed = await probeVersion(of: agent),
+           ToolVersion.isOlder(written, than: installed)
+        {
+            return nil
+        }
+
         let argv = launcher.command(
             payload: runner.modelListingCommand.joined(separator: " ") + " </dev/null",
             initialDirectory: launcher.sharedWorkspace,
@@ -38,6 +53,13 @@ public extension SessionService {
 
         let models = runner.parseModelList(result.standardOutput)
         return models.isEmpty ? nil : models
+    }
+
+    /// The version of the client that wrote a model cache, when the
+    /// cache says; separated for tests.
+    static func clientVersion(inModelCache data: Data) -> String? {
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return object?["client_version"] as? String
     }
 
     /// Throws away what was once discovered for an agent, so a list

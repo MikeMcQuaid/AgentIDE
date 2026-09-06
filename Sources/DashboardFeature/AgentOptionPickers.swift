@@ -31,7 +31,11 @@ public struct AgentOptionPickers: View {
             Picker("Agent", selection: $agent) {
                 ForEach(AgentKind.allCases, id: \.self) { kind in
                     Label {
+                        // The installed CLI's version beside the
+                        // name, as probed once at launch.
                         Text(kind.displayName)
+                            + Text(choices(kind).version.map { " " + $0 } ?? "")
+                            .foregroundStyle(.secondary)
                     } icon: {
                         Image(kind.iconAssetName)
                             .resizable()

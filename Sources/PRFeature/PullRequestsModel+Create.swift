@@ -7,6 +7,20 @@ import TerminalUI
 /// so what the form opens is on the row before any poll. Split from
 /// the actions for length.
 extension PullRequestsModel {
+    /// Paints the pushed branches' pull requests as awaiting their
+    /// checks, in the caches every row and pane read and in what
+    /// this tab already holds, so the state shows the moment the
+    /// push lands rather than the last run's verdict for the minute
+    /// GitHub takes to see the new commits.
+    func markChecksPending(for branches: [String]) {
+        pullRequests.markChecksPending(repositoryPath: repository.path, branches: branches)
+        let pushed = Set(branches)
+        summaries = summaries.map { pushed.contains($0.headBranch) && $0.state == "OPEN" ? $0.awaitingChecks() : $0 }
+        if let selected, pushed.contains(selected.headBranch), selected.state == "OPEN" {
+            self.selected = selected.awaitingChecks()
+        }
+    }
+
     /// Pushes every branch of the stack, bottom first, and says so
     /// as one push rather than as the branch in view: what went up
     /// is the whole stack.
@@ -14,6 +28,7 @@ extension PullRequestsModel {
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
+            markChecksPending(for: pushed)
             if let tip = await fetchTipCommit(worktree) {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }
@@ -103,6 +118,18 @@ extension PullRequestsModel {
             return true
         }
 
+        // The menu bar's Push reaches this without a button to dim,
+        // and a push to the default branch goes round the pull
+        // request the rest of this tab is for.
+        guard isDefaultBranch == false else {
+            setStatus(
+                "Not pushed: this is the default branch.",
+                detail: "work belongs on a branch of its own; the default branch is what a pull "
+                    + "request merges into",
+            )
+            return true
+        }
+
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
         // The button dims on what the last read knew, and a tip
@@ -131,6 +158,7 @@ extension PullRequestsModel {
 
             let destination = try await performPush(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
+            markChecksPending(for: [listedBranch ?? worktree.branch])
             if let tip = await fetchTipCommit(worktree) {
                 pushedTip = PushedTip(branch: listedBranch ?? worktree.branch, commit: tip)
             }

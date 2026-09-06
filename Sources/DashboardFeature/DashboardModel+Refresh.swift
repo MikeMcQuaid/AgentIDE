@@ -8,14 +8,14 @@ import UserNotifications
 /// since extensions cannot hold state.
 public extension DashboardModel {
     /// How often the system is re-read while the dashboard is alive
-    /// (Settings can slow it), and the slower safety tick while the
-    /// window is minimised or fully covered: nobody reads a hidden
-    /// window, and notifications still fire, one tick later at worst.
+    /// (Settings can slow it); `RefreshCadence` slows it while the
+    /// window is minimised or fully covered, since nobody reads a
+    /// hidden window, and on battery, where a tick that finds
+    /// nothing should have cost nothing. Notifications still fire,
+    /// one tick later at worst, and events never wait for a tick.
     internal static var pollInterval: Int {
         AppSettings.pollInterval
     }
-
-    internal static let occludedPollInterval = 60
 
     /// Reloads everything and notifies about newly finished or
     /// newly unread sessions. Readings never stack: at most one
@@ -29,9 +29,16 @@ public extension DashboardModel {
     /// without yielding the actor, and a loop of waiters doing that
     /// starved the one task able to move the state on, which hung
     /// the app at startup.
-    func refresh(forcing repositoryPath: String? = nil) async {
+    /// `readingPanes` says whether this reading may ask herdr for
+    /// its pane listing: everything but the poll's own tick does,
+    /// since an action or an agent change is what changes it; the
+    /// tick reuses the last listing until its safety interval is up.
+    func refresh(forcing repositoryPath: String? = nil, readingPanes: Bool = true) async {
         if let repositoryPath {
             pendingForces.insert(repositoryPath)
+        }
+        if readingPanes {
+            pendingPaneRead = true
         }
         // A queued reading has not started, so it must begin after
         // this call: joining it keeps the promise.
@@ -80,8 +87,12 @@ public extension DashboardModel {
         await discoverModels()
         publishSessionChoices()
         while Task.isCancelled == false {
-            await refresh()
-            let interval = isWindowVisible ? Self.pollInterval : Self.occludedPollInterval
+            await refresh(readingPanes: false)
+            let interval = RefreshCadence.pollSeconds(
+                setting: Self.pollInterval,
+                visible: isWindowVisible,
+                onBattery: isOnBattery(),
+            )
             try? await Task.sleep(for: .seconds(interval))
         }
     }
@@ -92,7 +103,9 @@ public extension DashboardModel {
     /// lasted minutes by definition.
     private func readPaneLoads() async {
         let now = Date()
-        guard now.timeIntervalSince(paneLoadsReadAt) >= Self.paneLoadInterval else {
+        guard now.timeIntervalSince(paneLoadsReadAt)
+            >= RefreshCadence.paneLoadSeconds(onBattery: isOnBattery())
+        else {
             return
         }
 
@@ -115,15 +128,23 @@ public extension DashboardModel {
     }
 
     /// One whole reading of the system; only `refresh` runs it, one
-    /// at a time. The selected worktree is on screen, so its
-    /// activity counts as seen; a manual unread mark survives.
+    /// at a time. The reading itself counts the selected worktree's
+    /// activity as seen, since it is on screen; a manual unread
+    /// mark survives.
     private func performRefresh() async {
         let forces = pendingForces
         pendingForces = []
-        if let selection {
-            service.acknowledgeActivity(worktreePath: selection.worktree.path)
+        let readsPanes = pendingPaneRead
+            || RefreshCadence.panesDue(lastRead: panesReadAt, now: Date(), onBattery: isOnBattery())
+        pendingPaneRead = false
+        if readsPanes {
+            panesReadAt = Date()
         }
-        let overview = await service.overview(scope: gitReadScope(forcing: forces), kept: groups)
+        let overview = await service.overview(
+            scope: gitReadScope(forcing: forces),
+            kept: groups,
+            readingPanes: readsPanes,
+        )
         let listed = Self.retainingLostRows(of: groups, in: overview.groups)
         notifyChanges(from: groups, to: listed)
         groups = listed

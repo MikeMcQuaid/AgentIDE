@@ -41,7 +41,10 @@ extension DashboardModel {
             // A branch standing on its own is the common case and
             // the cheap answer to be wrong about for a while, so it
             // is asked about far less often than a real stack.
-            let interval = stack.isStacked ? Self.stackInterval : Self.loneInterval
+            let interval = RefreshCadence.slowed(
+                stack.isStacked ? Self.stackInterval : Self.loneInterval,
+                onBattery: isOnBattery(),
+            )
             nextStackDerivation[path] = Date().addingTimeInterval(interval)
         }
     }

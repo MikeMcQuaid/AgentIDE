@@ -51,10 +51,16 @@ extension EditorShimIntegrationTests {
     }
 
     /// A file's trimmed contents, waiting for it to be written.
+    /// Waiting for something in it, not for the file: the recording
+    /// `open` appends with `>>`, which creates the file a moment
+    /// before it writes, and a read in that moment answered empty.
     private func contents(of path: String) async -> String? {
         for _ in 0 ..< Self.waitAttempts {
             if let text = try? String(contentsOfFile: path, encoding: .utf8) {
-                return text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty == false {
+                    return trimmed
+                }
             }
 
             try? await Task.sleep(for: .milliseconds(Self.pollMilliseconds))

@@ -20,6 +20,12 @@ public extension GitHubClient {
         return Self.names(fromLines: output ?? "")
     }
 
+    /// Rewrites an open pull request's title and body, which is how
+    /// a description is brought up to date with what was pushed.
+    func editPullRequest(repositoryPath: String, number: Int, title: String, body: String) async throws {
+        try await gh(["pr", "edit", String(number), "--title", title, "--body", body], in: repositoryPath)
+    }
+
     /// Adds and removes labels on a pull request in one edit.
     func editLabels(repositoryPath: String, number: Int, add: [String], remove: [String]) async throws {
         let arguments = ["pr", "edit", String(number)]

@@ -76,4 +76,46 @@ struct MarkdownTextTests {
             Issue.record("The pipe rows should parse as a table")
         }
     }
+
+    @Test
+    func `front matter leads as a table of its fields, keys in bold`() {
+        let post = """
+        ---
+        title: "Homebrew 7.0.0"
+        date: 2026-09-05
+        tags:
+          - release
+          - homebrew
+        ---
+
+        # Homebrew 7.0.0
+
+        Today's release.
+        """
+        let blocks = MarkdownText.proseBlocks(post)
+        guard case let .table(header, rows) = blocks.first else {
+            Issue.record("front matter did not lead as a table")
+            return
+        }
+
+        #expect(header.isEmpty)
+        #expect(rows == [
+            ["**title**", "Homebrew 7.0.0"],
+            ["**date**", "2026-09-05"],
+            ["**tags**", "- release - homebrew"],
+        ])
+        // What follows parses as it always did.
+        #expect(blocks.contains { block in
+            if case .heading("Homebrew 7.0.0") = block {
+                true
+            } else {
+                false
+            }
+        })
+
+        // A document that merely opens with a rule is not front
+        // matter: the lines between are prose, not fields.
+        let ruled = "---\n\nSome prose\n\n---\n\nMore"
+        #expect(MarkdownText.frontMatter(in: ruled) == nil)
+    }
 }

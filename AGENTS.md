@@ -167,6 +167,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   rather than stack.
 - First paint reads only memory and caches; anything slower starts
   after the window is up and fills in.
+- Idle costs nothing worth noticing, and less still on battery: a
+  tick that finds nothing must not have spawned a process to find
+  it, and every herdr question is a `sudo` login shell.
+  `RefreshCadence` owns every interval; a new poll joins it rather
+  than picking its own number.
 
 ### Platform Notes
 
@@ -214,8 +219,24 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 - Toolbars need a non-empty `.principal` item and one trailing
   `ToolbarItemGroup`, or items reflow to the leading edge; segmented
   pickers in toolbars also move unpredictably, so tabs are buttons.
+- Cancelling a task that is awaiting `AsyncStream.next()` finishes
+  the stream: its termination handler runs and every later `next()`
+  returns nil at once. Racing an iterator against a sleep in a task
+  group and cancelling the loser therefore works exactly once; from
+  the first timeout on the "wait" returns immediately, and the loop
+  around it spins. The edit spool did this and held the app at a
+  core and a half from eight seconds after launch (`DirectoryWake`
+  is the shape that survives: a ring resumes a stored continuation,
+  a timeout resumes only the waiter it was set for, nothing is
+  cancelled). Anything that has to race a stream against time must
+  keep one consumer alive across the race.
 - `@State` objects outlive view re-initialisation: rebuild models
-  when their identity input changes (see `ReviewView`).
+  when their identity input changes (see `ReviewView`). That
+  identity is the worktree's path, never its branch: git detaches
+  HEAD for the whole of a rebase and a detached worktree reports its
+  directory's name as its branch, so a branch-keyed pane rebuilt its
+  model twice per rebase and painted an empty list in place of what
+  it was showing. A branch that really changes is a reload.
 - `Text("\(someInt)")` applies digit grouping; use `String(_:)`.
 - Trailing closures after multiline calls fight SwiftFormat; keep
   them single-line or make the closure a non-final argument.
@@ -319,6 +340,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   them showed a loading state every time. A model that can paint
   from its cache does so in its initialiser, not on its first
   reload.
+- A pane kept mounted at `opacity(0)` is only transparent: an
+  `NSViewRepresentable` under it still lays out and draws, so a
+  hidden terminal drew every frame its agent sent and a hidden
+  `WKWebView` kept rendering an animating page for nobody, with
+  WindowServer compositing all of it. Panes that stay mounted set
+  `isHidden` on their AppKit view when inactive (`TerminalPaneView`,
+  `BrowserView`), which keeps buffer, size and client and draws
+  nothing; SwiftUI-only surfaces can stay on opacity.
 - Every mounted terminal pane watches the wheel through its own
   event monitor, and panes stack: hidden shells and other
   worktrees' terminals hold the same frame. A pane takes a wheel

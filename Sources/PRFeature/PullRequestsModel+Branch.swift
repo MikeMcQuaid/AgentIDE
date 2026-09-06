@@ -128,7 +128,7 @@ extension PullRequestsModel {
                     // published ones go back up at once. A branch
                     // nobody has pushed stays unpushed, which Push
                     // is for.
-                    _ = try await stacking.pushPublished(worktree)
+                    try await markChecksPending(for: stacking.pushPublished(worktree))
                 } catch {
                     report("Rebasing the branches above `" + worktree.branch + "` failed: "
                         + error.localizedDescription)
@@ -259,11 +259,22 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
-        guard branchItem != nil, isPushed == false, tipSignature == .signed else {
+        guard branchItem != nil, isDefaultBranch == false, isPushed == false,
+              tipSignature == .signed
+        else {
             return false
         }
 
         return hasUnpushedCommits
+    }
+
+    /// Whether the entry in view is the repository's own default
+    /// branch. Work belongs on a branch of its own: pushing to the
+    /// default branch straight from here goes round the pull
+    /// request the rest of this tab is for, and a repository that
+    /// protects it would refuse the push anyway.
+    var isDefaultBranch: Bool {
+        listedBranch != nil && listedBranch == defaultBranch
     }
 
     /// Whether the listed branch has commits the remote lacks: the
@@ -281,6 +292,10 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
+        guard isDefaultBranch == false else {
+            return "This is the repository's default branch: put the work on a branch of its own "
+                + "and open a pull request for it"
+        }
         guard branchItem != nil, isPushed == false, hasUnpushedCommits else {
             return "Everything is already pushed"
         }

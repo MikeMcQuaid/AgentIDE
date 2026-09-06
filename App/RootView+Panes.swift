@@ -112,7 +112,9 @@ extension RootView {
     /// unmounting it, so the agent's terminal keeps its herdr client
     /// and its scrollback, and the utility toggle parks at its top
     /// right while the utility pane is hidden, in exactly the spot
-    /// that pane's header shows it, so it never moves on toggle.
+    /// that pane's header shows it, so it never moves on toggle:
+    /// inside the session strip when there is one, floating over a
+    /// page that has none.
     func primaryColumn(for item: WorktreeItem) -> some View {
         VStack(spacing: 0) {
             sessionStrip(for: item)
@@ -124,8 +126,11 @@ extension RootView {
         // A page fades over the pane rather than cutting; the panes
         // stay mounted either way.
         .animation(Motion.quick, value: isCovered)
+        // A column with a strip parks the toggle in the strip's own
+        // run, where nothing else can land on it; only a page with
+        // no strip floats it here.
         .overlay(alignment: .topTrailing) {
-            if showsUtility == false {
+            if showsUtility == false, hasSessionStrip(for: item) == false {
                 utilityToggleButton
                     .frame(height: Self.toggleRowHeight)
                     .padding(.trailing, Self.stripSpacing)

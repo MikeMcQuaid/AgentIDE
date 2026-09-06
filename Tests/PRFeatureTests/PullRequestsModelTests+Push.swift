@@ -250,4 +250,114 @@ extension PullRequestsModelTests {
         model.stacking.selected = "elsewhere"
         #expect(model.rebaseDoneTitle == nil)
     }
+
+    @Test
+    func `open waits for the entry's own commits to be pushed`() async {
+        // A stack's entries each have their own reading: the
+        // worktree's count is the checked-out branch's, and reading
+        // it for an entry above offered Open on a branch nothing
+        // had pushed.
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        await model.reload()
+        #expect(model.isFullyPushed)
+
+        model.stacking.stack = BranchStack(
+            base: "main",
+            branches: ["feature", "on_top"],
+            checkedOut: "feature",
+        )
+        model.stacking.selected = "on_top"
+        model.stacking.unpushedBranches = ["on_top"]
+        #expect(model.isFullyPushed == false)
+
+        // Pushed, and it opens.
+        model.stacking.unpushedBranches = []
+        #expect(model.isFullyPushed)
+    }
+
+    @Test
+    func `an open pull request can go back to being a draft`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var drafted = [Int]()
+        model.performDraftChange = { summary in drafted.append(summary.number) }
+        model.selected = PullRequestSummary(
+            number: 51,
+            title: "Ready, and then not",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+        )
+        #expect(model.canConvertToDraft)
+        #expect(await model.convertToDraft())
+        #expect(drafted == [51])
+
+        // A draft has nowhere to go back to, and neither has a
+        // pull request that is no longer open.
+        model.selected = PullRequestSummary(
+            number: 52,
+            title: "Already a draft",
+            url: "",
+            headBranch: "feature",
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: "SUCCESS",
+            baseBranch: "main",
+            state: "OPEN",
+            isDraft: true,
+        )
+        #expect(model.canConvertToDraft == false)
+        model.selected = nil
+        #expect(model.canConvertToDraft == false)
+    }
+
+    @Test
+    func `a rebase detaching HEAD leaves the creation form alone`() async {
+        let model = makeModel(
+            items: [item(branch: "feature", ahead: 0)],
+            worktreePath: "/worktrees/feature",
+        )
+        await model.reload()
+        #expect(model.needsCreateForm)
+        #expect(model.listedBranch == "feature")
+
+        // git detaches HEAD for the whole of a rebase, and a
+        // detached worktree reports its directory's name as its
+        // branch. The tab follows the worktree, so the form it was
+        // showing stays exactly where it was.
+        model.items = [item(branch: "pr-77", ahead: nil, path: "/worktrees/feature")]
+        #expect(model.branchItem != nil)
+        #expect(model.listedBranch == "feature")
+        #expect(model.needsCreateForm)
+    }
+
+    @Test
+    func `the default branch is not pushed from here`() async {
+        // The fixture's model calls `main` the default branch, and
+        // the sidebar's own checkout sits on it: commits made there
+        // belong on a branch of their own, and pushing them from
+        // here goes round the pull request this tab is for.
+        let model = makeModel(items: [item(branch: "main", ahead: 2)])
+        model.currentBranch = "main"
+        await model.reload()
+
+        #expect(model.isDefaultBranch)
+        #expect(model.canPush == false)
+        #expect(model.pushHelp.contains("branch of its own"))
+
+        // The menu bar's Push reaches the model without a button to
+        // dim, and declines in the footer rather than pushing.
+        #expect(await model.push())
+        #expect(model.status?.contains("default branch") == true)
+
+        // A branch of its own pushes as it always did.
+        model.currentBranch = "feature"
+        model.items = [item(branch: "feature", ahead: 2)]
+        await model.reload()
+        #expect(model.isDefaultBranch == false)
+        #expect(model.canPush)
+    }
 }

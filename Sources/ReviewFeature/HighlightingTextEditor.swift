@@ -29,6 +29,13 @@ struct HighlightingTextEditor: NSViewRepresentable {
             for observer in observers {
                 NotificationCenter.default.removeObserver(observer)
             }
+            // Written once, here, rather than on every wheel tick:
+            // an editor goes away on a worktree switch, a move to
+            // the other slot or a close, and each is the moment its
+            // file's place is worth keeping.
+            if let scrollKey, let origin = lastOrigin {
+                EditorScrollPositions.remember(origin, for: scrollKey)
+            }
         }
 
         // MARK: Internal
@@ -36,6 +43,10 @@ struct HighlightingTextEditor: NSViewRepresentable {
         var text: Binding<String>
         let language: SyntaxLanguage?
         var didJump = false
+
+        /// The file whose scroll position this editor keeps, nil for
+        /// an editor over nothing on disk.
+        var scrollKey: String?
 
         static func highlight(_ view: NSTextView, language: SyntaxLanguage?) {
             guard let language, let storage = view.textStorage else {
@@ -68,6 +79,19 @@ struct HighlightingTextEditor: NSViewRepresentable {
         /// window under its neighbours.
         func watchDisplayChanges(of scroll: NSScrollView) {
             scrollView = scroll
+            // Every scroll is noted in memory; the clip view's bounds
+            // are the one truth about where the document sits.
+            scroll.contentView.postsBoundsChangedNotifications = true
+            observers.append(NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: scroll.contentView,
+                queue: .main,
+            ) { [weak self] notification in
+                let origin = (notification.object as? NSClipView)?.bounds.origin
+                Task { @MainActor in
+                    self?.lastOrigin = origin
+                }
+            })
             let names: [Notification.Name] = [
                 NSWindow.didChangeScreenNotification,
                 NSApplication.didChangeScreenParametersNotification,
@@ -116,6 +140,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
         private weak var scrollView: NSScrollView?
         private var observers: [NSObjectProtocol] = []
 
+        /// Where the clip view last was, as the notifications said.
+        private var lastOrigin: CGPoint?
+
         private static func colour(for kind: SyntaxToken.Kind) -> NSColor {
             switch kind {
             case .keyword:
@@ -141,6 +168,10 @@ struct HighlightingTextEditor: NSViewRepresentable {
     let language: SyntaxLanguage?
     let jumpToLine: Int?
     var changedLines: Set<Int> = []
+
+    /// The file on disk, whose last scroll position the editor
+    /// comes back to when it has no line to jump to instead.
+    var scrollKey: String?
 
     /// What the file's `.editorconfig` says: the indentation Tab
     /// inserts and the width tabs render at.
@@ -190,7 +221,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
         scroll.verticalRulerView = ruler
         scroll.rulersVisible = true
         Coordinator.highlight(view, language: language)
+        context.coordinator.scrollKey = scrollKey
         context.coordinator.watchDisplayChanges(of: scroll)
+        restoreScrollPosition(in: scroll)
         return scroll
     }
 
@@ -224,6 +257,29 @@ struct HighlightingTextEditor: NSViewRepresentable {
     }
 
     // MARK: Private
+
+    /// Puts the file back where it was last scrolled to, a turn
+    /// later so the text has been laid out to that height; a line
+    /// asked for by name wins over where the file happened to be.
+    private func restoreScrollPosition(in scroll: NSScrollView) {
+        guard jumpToLine == nil, let scrollKey,
+              let origin = EditorScrollPositions.position(for: scrollKey)
+        else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            guard let view = scroll.documentView as? NSTextView,
+                  let layoutManager = view.layoutManager, let container = view.textContainer
+            else {
+                return
+            }
+
+            layoutManager.ensureLayout(for: container)
+            scroll.contentView.scroll(to: origin)
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
+    }
 
     /// Scrolls to and selects a one-based line.
     private func jump(to line: Int, in view: NSTextView) {
