@@ -902,16 +902,19 @@ selects the worktree holding it, and `agentide new` starts a session.
 
 The window's own shape is the exception to the metadata store.
 `WindowConfigurator` keeps the frame, the display it was on and whether
-it was fullscreen in `UserDefaults`. The autosave SwiftUI names is
-cleared rather than used: since Monterey, AppKit's own restoration moves
-a window that was on a second display to the main one, keeping where it
-sat within that screen, so the window came back the right size in the
-wrong place however it was stored. With nothing left for AppKit to
-restore, the frame is put back by hand: once as the window is
-configured, so nothing shows at a default size, and again once the
-window is really on a screen, since a frame set before then is
+it was fullscreen in `UserDefaults`. AppKit's frame autosave is not
+used: SwiftUI names it when it makes the window and restores that entry
+before the configurator runs, refuses the app a name of its own, and
+since Monterey its restoration moves a window that was on a second
+display to the main one, keeping where it sat within that screen, so the
+window came back the right size in the wrong place however it was
+stored. The configurator clears the name, so AppKit writes nothing more
+under it, and sets the frame over whatever was restored: once as the
+window is configured, so nothing shows at a default size, and again once
+the window is really on a screen, since a frame set before then is
 constrained to the main display. Only then is the window moved onto its
-display and into fullscreen, and only then are its moves recorded.
+display and into fullscreen, and only then are its moves recorded, once
+each drag or resize pauses rather than per step.
 
 The metadata store is `~/Library/Application Support/AgentIDE/state.json`,
 outside the shared workspace so agents can neither read nor corrupt it.

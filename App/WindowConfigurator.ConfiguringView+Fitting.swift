@@ -1,10 +1,18 @@
 import AppKit
 
-/// Fitting the window to the screen it lands on, used by the window
-/// configurator; its own file for that file's length.
+/// Getting the window onto its screen and fitting it there, used by
+/// the window configurator; its own file for that file's length.
 extension WindowConfigurator.ConfiguringView {
-    /// The margin left around a window filling its screen.
+    /// The margin left around a window filling its screen, and what
+    /// centring divides by.
     private static let screenInset: CGFloat = 8
+    private static let halves: CGFloat = 2
+
+    /// How long the window gets to appear before a saved frame or a
+    /// remembered fullscreen is given up on: a fifth of a second at
+    /// a time, for a couple of seconds.
+    private static let readyAttempts = 20
+    private static let readySeconds = 0.2
 
     /// Fills whichever screen the window is on, less a margin: a
     /// fixed default is either too big for a laptop or too small
@@ -84,5 +92,55 @@ extension WindowConfigurator.ConfiguringView {
         }
 
         window.setFrame(frame, display: true, animate: false)
+    }
+
+    /// Centres the window on the display it was left on, named by
+    /// that display's own identity since numbers move, when it has
+    /// come back anywhere else.
+    func move(_ window: NSWindow, ontoDisplay name: String?) {
+        let screen = name.flatMap { name in
+            NSScreen.screens.first { $0.displayID.map(NSScreen.uuid(of:)) == name }
+        }
+        guard let screen, screen.frame.contains(CGPoint(x: window.frame.midX, y: window.frame.midY)) == false else {
+            return
+        }
+
+        window.setFrameOrigin(CGPoint(
+            x: screen.visibleFrame.midX - window.frame.width / Self.halves,
+            y: screen.visibleFrame.midY - window.frame.height / Self.halves,
+        ))
+    }
+
+    /// Goes fullscreen once the window is really on a screen:
+    /// AppKit drops the toggle on a window it has not shown yet.
+    func enterFullScreen(_ window: NSWindow) {
+        guard window.styleMask.contains(.fullScreen) == false else {
+            return
+        }
+
+        whenOnScreen(window) { onScreen in
+            if onScreen {
+                window.toggleFullScreen(nil)
+            }
+        }
+    }
+
+    /// Calls back once the window is visible and on a screen, a
+    /// fifth of a second at a time for a couple of seconds, and
+    /// with `false` when it never appeared.
+    func whenOnScreen(
+        _ window: NSWindow,
+        attempts: Int = WindowConfigurator.ConfiguringView.readyAttempts,
+        then act: @escaping (Bool) -> Void,
+    ) {
+        if window.isVisible, window.screen != nil {
+            act(true)
+        } else if attempts > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.readySeconds) { [weak self] in
+                self?.whenOnScreen(window, attempts: attempts - 1, then: act)
+            }
+        } else {
+            act(false)
+        }
     }
 }
