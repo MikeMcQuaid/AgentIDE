@@ -72,8 +72,15 @@ extension PullRequestFooterView {
             return Text(name)
         }
 
-        return Text(name + " ") + Text(Image(systemName: copyIcon)) + Text(String(count))
+        return Text(name + " ")
+            + Text(Image(systemName: copyIcon)).font(.system(size: copyIconSize))
+            + Text(String(count))
     }
+
+    /// The symbol's size: the label's own is thirteen points, and
+    /// a symbol drawn at that overhung the digits beside it; about
+    /// a third smaller sits on the baseline with them.
+    private static let copyIconSize: CGFloat = 9
 
     /// The same as VoiceOver reads it.
     static func copyTitle(_ name: String, count: Int) -> String {
