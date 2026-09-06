@@ -226,6 +226,7 @@ extension RootView {
                     .padding(.horizontal, Self.tabHorizontalPadding)
                     .padding(.vertical, Self.tabVerticalPadding)
                 Spacer(minLength: 0)
+                parkedUtilityToggle
             }
             .padding(Self.stripSpacing)
             .hoverHelp("A directory of your own: this shell runs as you, and no agent runs here")
@@ -243,6 +244,7 @@ extension RootView {
                     Spacer(minLength: 0)
                     closeSessionButton(session, in: item)
                         .padding(.trailing, Self.tabHorizontalPadding)
+                    parkedUtilityToggle
                 }
                 Text(session.name)
                     // Monospaced: it is the workspace label herdr
@@ -257,7 +259,22 @@ extension RootView {
         }
     }
 
+    /// Whether the column has a strip along its top, which is
+    /// where the utility toggle parks while its pane is hidden.
+    func hasSessionStrip(for item: WorktreeItem) -> Bool {
+        item.worktree.isHostDirectory || item.session != nil
+    }
+
     // MARK: Private
+
+    /// The utility toggle in the strip's own run while its pane is
+    /// hidden, after the close button rather than floating over it:
+    /// the two shared the corner, and the toggle won.
+    @ViewBuilder private var parkedUtilityToggle: some View {
+        if showsUtility == false {
+            utilityToggleButton.fixedSize()
+        }
+    }
 
     static let stripSpacing: CGFloat = 4
 
