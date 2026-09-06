@@ -4,20 +4,21 @@ import SwiftUI
 import TerminalUI
 
 /// The footer's copy buttons: what a click takes to the
-/// clipboard, said in a word, a count and the glyph every copy
-/// in the app carries. Split from the footer for length.
+/// clipboard, said in a word and, when there is any of it, a copy
+/// glyph and a count in the run the sidebar's arrows use. Split
+/// from the footer for length.
 extension PullRequestFooterView {
     /// The copy actions for the open conversation, in the footer's
     /// click-order run.
     @ViewBuilder
     func copyButtons(for selected: PullRequestSummary) -> some View {
-        // The glyph says a click copies, the word says what, and
-        // the count how much of it there is; none of it dims the
-        // button, which is the same fact the count reports.
+        // The word says what, the glyph that a click copies it and
+        // the count how much there is; none of it dims the button
+        // to the word alone, which is the same fact the count
+        // would have reported.
         BusyButton(
             Self.copyLabel("Reviews", count: selected.unresolvedComments),
             busy: "Copying",
-            systemImage: Self.copyIcon,
             disabled: selected.unresolvedComments == 0,
         ) {
             // Both buttons read the modifier at the click, as
@@ -41,7 +42,6 @@ extension PullRequestFooterView {
         BusyButton(
             Self.copyLabel("Failures", count: selected.failingCheckLinks.count),
             busy: "Copying",
-            systemImage: Self.copyIcon,
             disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
         ) {
             if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
@@ -56,14 +56,19 @@ extension PullRequestFooterView {
             + "in the Browser tab; dimmed until a check fails")
     }
 
-    /// The glyph a copy carries everywhere in the app.
-    static let copyIcon = "doc.on.doc"
+    /// The copy glyph, a character like the sidebar's arrows so it
+    /// sits in the label at the text's own size: `Reviews ⧉3` reads
+    /// as `Push ↑9` does.
+    static let copyGlyph = "\u{29C9}"
 
-    /// A copy button's label: what it copies and how much of it
-    /// there is, a nothing to copy included. The count is always
-    /// there, so the button says what it has rather than changing
-    /// width as it arrives, and none of it greys the button out.
+    /// A copy button's label: what it copies and, when there is
+    /// any, the glyph and the count. Nothing to copy is the word
+    /// alone, greyed out.
     static func copyLabel(_ name: String, count: Int) -> String {
-        name + " " + String(count)
+        if count > 0 {
+            name + " " + copyGlyph + String(count)
+        } else {
+            name
+        }
     }
 }
