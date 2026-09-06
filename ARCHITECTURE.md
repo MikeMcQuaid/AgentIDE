@@ -237,8 +237,10 @@ the host user: no sudo, no sandbox, full `gh` credentials, editor
 variables pointing at the app's shim, no server. Shells die with the
 app, a deliberate trade after server-backed shells kept wedging their
 control clients. Every running shell and browser page stays mounted
-whichever tab or worktree shows, since it dies with its view; the
-session manager lists them with a Close.
+whichever tab or worktree shows, since it dies with its view, but
+hidden in AppKit's sense while it is not the one shown, so it draws
+nothing and a page's animation frames stop; the session manager lists
+them with a Close.
 
 Remote access is SSH to the Mac as the sandbox user, landing on the same
 herdr server; `script/attach` covers the host user and the sandbox. No

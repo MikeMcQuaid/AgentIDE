@@ -335,6 +335,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   them showed a loading state every time. A model that can paint
   from its cache does so in its initialiser, not on its first
   reload.
+- A pane kept mounted at `opacity(0)` is only transparent: an
+  `NSViewRepresentable` under it still lays out and draws, so a
+  hidden terminal drew every frame its agent sent and a hidden
+  `WKWebView` kept rendering an animating page for nobody, with
+  WindowServer compositing all of it. Panes that stay mounted set
+  `isHidden` on their AppKit view when inactive (`TerminalPaneView`,
+  `BrowserView`), which keeps buffer, size and client and draws
+  nothing; SwiftUI-only surfaces can stay on opacity.
 - Every mounted terminal pane watches the wheel through its own
   event monitor, and panes stack: hidden shells and other
   worktrees' terminals hold the same frame. A pane takes a wheel
