@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 /// Where each file was last scrolled to in an editor, so a worktree

@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 @testable import ReviewFeature
 import Testing
