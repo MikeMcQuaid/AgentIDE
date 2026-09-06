@@ -194,4 +194,27 @@ struct MetadataStoreTests {
         #expect(cached.first?.fullName == "octocat/example")
         #expect(cached.first?.worktrees.first?.branch == "agent/fix")
     }
+
+    @Test
+    func `an update that changes nothing writes nothing`() throws {
+        let root = try TestSupport.temporaryDirectory("store-unchanged")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+        store.update { $0.prompts["session"] = "prompt" }
+        let written = try #require(
+            FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date,
+        )
+
+        // The sidebar cache and the seen times are written on every
+        // reading; holding what the file already holds must not
+        // re-encode and replace it.
+        store.update { $0.prompts["session"] = "prompt" }
+        let after = try #require(FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date)
+        #expect(after == written)
+
+        // A real change still lands.
+        store.update { $0.prompts["session"] = "another" }
+        #expect(store.load().prompts["session"] == "another")
+    }
 }
