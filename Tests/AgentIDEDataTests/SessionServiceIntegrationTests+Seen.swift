@@ -11,9 +11,9 @@ extension SessionServiceIntegrationTests {
         let world = try await World.make()
         defer { world.tearDown() }
         let path = world.repository.path
-        let defaults = UserDefaults.standard
-        let selectedBefore = defaults.string(forKey: "selectedWorktreePath")
-        defer { defaults.set(selectedBefore, forKey: "selectedWorktreePath") }
+        // The selection is named on this copy of the service, never
+        // through the defaults every test in the process shares.
+        var service = world.service
 
         // Activity: a transcript newer than anything seen.
         let directory = try #require(PromptCaptureRunner().transcriptDirectory(
@@ -31,20 +31,20 @@ extension SessionServiceIntegrationTests {
         let store = MetadataStore(file: world.paths.metadataFile)
 
         // Not on screen: unread, and nothing is written about it.
-        defaults.set("/somewhere/else", forKey: "selectedWorktreePath")
-        let elsewhere = await world.service.overview()
+        service.selectedWorktreePath = { "/somewhere/else" }
+        let elsewhere = await service.overview()
         #expect(elsewhere.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == true)
         #expect(store.load().seenAt[path] == nil)
 
         // On screen: seen as it is read, once, and the reading says
         // so without a second pass.
-        defaults.set(path, forKey: "selectedWorktreePath")
-        let shown = await world.service.overview()
+        service.selectedWorktreePath = { path }
+        let shown = await service.overview()
         #expect(shown.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == false)
         let written = try #require(store.load().seenAt[path])
 
         // Nothing new: read again, nothing rewritten.
-        _ = await world.service.overview()
+        _ = await service.overview()
         #expect(store.load().seenAt[path] == written)
     }
 

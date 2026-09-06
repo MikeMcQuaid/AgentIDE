@@ -300,7 +300,7 @@ public extension SessionService {
         // seen as it is read, and written down only then: a stamp
         // written on every reading rewrote the metadata file every
         // few seconds to say nothing new.
-        let isSelected = worktree.path == UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
+        let isSelected = worktree.path == selectedWorktreePath()
         if isSelected, lastEvent > seen {
             acknowledgeActivity(worktreePath: worktree.path)
         }

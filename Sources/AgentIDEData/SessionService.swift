@@ -61,6 +61,15 @@ public struct SessionService: Sendable {
 
     // MARK: Public
 
+    /// The worktree the sidebar has selected, as the storage bus
+    /// names it: what is read from disk among directories of your
+    /// own, and whose activity a reading counts as seen. A closure
+    /// with the defaults behind it, so a test can name one without
+    /// writing a global every other test in the process reads.
+    public var selectedWorktreePath: @Sendable () -> String? = {
+        UserDefaults.standard.string(forKey: selectedWorktreeKey)
+    }
+
     /// The repositories in the shared workspace.
     public func repositories() -> [Repository] {
         git.repositories(under: paths.repositoriesDirectory)
