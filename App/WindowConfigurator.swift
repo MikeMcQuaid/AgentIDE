@@ -186,7 +186,7 @@ struct WindowConfigurator: NSViewRepresentable {
                 object: window,
                 queue: .main,
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.rememberDisplay() }
+                MainActor.assumeIsolated { self?.placedByHand() }
             })
             reportWindowState()
         }
@@ -207,11 +207,27 @@ struct WindowConfigurator: NSViewRepresentable {
         /// landed.
         private func movedByHand() {
             guard window?.styleMask.contains(.fullScreen) == true else {
-                rememberDisplay()
+                placedByHand()
                 return
             }
 
             moved(displayGone: false)
+        }
+
+        /// Records the frame the window was dragged or resized to,
+        /// under this app's own name. Naming the autosave is not
+        /// enough: SwiftUI names the window's autosave itself once
+        /// its content is up, after which AppKit saves every change
+        /// under that name and none under this one, and the next
+        /// launch found nothing and filled the main display. A
+        /// fullscreen frame is never the one to come back to.
+        private func placedByHand() {
+            guard let window, window.styleMask.contains(.fullScreen) == false else {
+                return
+            }
+
+            window.saveFrame(usingName: Self.autosaveName)
+            rememberDisplay()
         }
 
         /// The window changed screen or fullscreen state. Fitting
