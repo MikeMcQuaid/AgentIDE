@@ -119,39 +119,6 @@ public struct FoundationModelClient: OnDeviceSummarising, Sendable {
         return filled.isEmpty ? nil : filled
     }
 
-    // MARK: Internal
-
-    /// Forwards to `ModelAnswerParsing` so existing tests keep calling
-    /// these names on the client.
-    static func commitDigest(_ commits: [String], branch: String?, limit: Int) -> String {
-        ModelAnswerParsing.commitDigest(commits, branch: branch, limit: limit)
-    }
-
-    /// Forwards to `ModelAnswerParsing`.
-    static func pullRequestDescription(fromModelAnswer raw: String) -> (title: String, body: String)? {
-        ModelAnswerParsing.pullRequestDescription(fromModelAnswer: raw)
-    }
-
-    /// Forwards to `ModelAnswerParsing`.
-    static func strippedCodeFences(_ text: String) -> String {
-        ModelAnswerParsing.strippedCodeFences(text)
-    }
-
-    /// Forwards to `ModelAnswerParsing`.
-    static func capitalisedFirst(_ text: String) -> String {
-        ModelAnswerParsing.capitalisedFirst(text)
-    }
-
-    /// Forwards to `ModelAnswerParsing`.
-    static func collapsedListMarker(_ line: Substring) -> String {
-        ModelAnswerParsing.collapsedListMarker(line)
-    }
-
-    /// Forwards to `ModelAnswerParsing`.
-    static func branchName(fromModelAnswer raw: String) -> String? {
-        ModelAnswerParsing.branchName(fromModelAnswer: raw)
-    }
-
     // MARK: Private
 
     /// Enough of a diff to summarise without paying for a whole
