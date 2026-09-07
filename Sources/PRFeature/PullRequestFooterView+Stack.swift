@@ -2,7 +2,7 @@ import SwiftUI
 import TerminalUI
 
 /// The footer's actions when the entry on screen is stacked work:
-/// the same icons in the same places as a lone branch's, doing the
+/// the same titles in the same places as a lone branch's, doing the
 /// stack's version of each. Split from the footer for length.
 extension PullRequestFooterView {
     /// The branch actions: a stacked entry's stand where a lone
@@ -18,15 +18,19 @@ extension PullRequestFooterView {
     }
 
     /// A stack's own pair, in the place and dress of the branch
-    /// pair they stand in for: the same icons, the same order, the
-    /// same counts, doing the stack's version of the work. Both dim
-    /// when there is nothing to do.
+    /// pair they stand in for: the same titles through
+    /// `actionTitle`, the same order, the same counts and the same
+    /// past tense while dim, doing the stack's version of the work.
     private var restackButton: some View {
         BusyButton(
-            model.canRestack ? rebaseCount : model.rebaseDoneTitle ?? "",
-            busy: "Rebasing",
-            systemImage: "arrow.triangle.2.circlepath",
-            accessibilityLabel: "Rebase the stack",
+            actionTitle(
+                stackSignsOnly ? "Sign" : "Rebase",
+                arrow: Self.downArrow,
+                count: stackSignsOnly ? "" : rebaseCount,
+                active: model.canRestack,
+                done: model.rebaseDoneTitle,
+            ),
+            busy: stackSignsOnly ? "Signing" : "Rebasing",
             disabled: model.canRestack == false,
         ) {
             if await model.restack() == false {
@@ -42,12 +46,22 @@ extension PullRequestFooterView {
         )
     }
 
+    /// Whether the stack's rebase would only sign: every branch is
+    /// on the one below it and a tip is unsigned.
+    private var stackSignsOnly: Bool {
+        model.stacking.needsRestack == false
+    }
+
     private var pushStackButton: some View {
         BusyButton(
-            model.canPushStack ? stackPushCount : model.pushDoneTitle ?? "",
+            actionTitle(
+                "Push",
+                arrow: Self.upArrow,
+                count: stackPushCount,
+                active: model.canPushStack,
+                done: model.pushDoneTitle,
+            ),
             busy: "Pushing",
-            systemImage: "arrow.up",
-            accessibilityLabel: "Push stack",
             disabled: model.canPushStack == false,
         ) {
             if await model.pushStack() == false {

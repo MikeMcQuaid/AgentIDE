@@ -120,6 +120,13 @@ struct PullRequestListView: View {
 struct PullRequestFooterView: View {
     // MARK: Internal
 
+    /// The arrows the sidebar's own counts use, so a number means
+    /// the same thing in both places: up is what has yet to go to
+    /// the remote, down what has yet to come from it. A button draws
+    /// one of them at most, beside one count.
+    static let upArrow = "\u{2191}"
+    static let downArrow = "\u{2193}"
+
     @Bindable var model: PullRequestsModel
 
     /// The cross-module signal that switches the utility pane's tab.
@@ -260,16 +267,20 @@ struct PullRequestFooterView: View {
         .hoverHelp(model.pushHelp, shortcut: "⇧⌘P")
     }
 
+    /// One shape for every branch action's title, lone or stacked:
+    /// what a click is about to do and the count it is about to
+    /// send, or what the last click did while the button stays dim.
+    func actionTitle(_ verb: String, arrow: String, count: String, active: Bool, done: String?) -> String {
+        if active == false, let done {
+            return done
+        }
+
+        return count.isEmpty ? verb : verb + " " + arrow + count
+    }
+
     // MARK: Private
 
     private static let padding: CGFloat = 8
-
-    /// The arrows the sidebar's own counts use, so a number means
-    /// the same thing in both places: up is what has yet to go to
-    /// the remote, down what has yet to come from it. A button draws
-    /// one of them at most, beside one count.
-    private static let upArrow = "\u{2191}"
-    private static let downArrow = "\u{2193}"
 
     /// Whether the button would only sign: the base has not moved,
     /// so nothing is being rebased onto anything.
@@ -286,24 +297,19 @@ struct PullRequestFooterView: View {
     /// rebasing in it, otherwise the rebase and how far behind the
     /// branch is.
     private var rebaseLabel: String {
-        if model.canRebase == false, let done = model.rebaseDoneTitle {
-            return done
-        }
-        guard signsOnly == false else {
-            return "Sign"
-        }
-
-        return rebaseCount.isEmpty ? "Rebase" : "Rebase " + Self.downArrow + rebaseCount
+        actionTitle(
+            signsOnly ? "Sign" : "Rebase",
+            arrow: Self.downArrow,
+            count: signsOnly ? "" : rebaseCount,
+            active: model.canRebase,
+            done: model.rebaseDoneTitle,
+        )
     }
 
     /// The same for the push: what it would send, or that it sent
     /// it, while it stays dim.
     private var pushLabel: String {
-        if model.canPush == false, let done = model.pushDoneTitle {
-            return done
-        }
-
-        return pushCount.isEmpty ? "Push" : "Push " + Self.upArrow + pushCount
+        actionTitle("Push", arrow: Self.upArrow, count: pushCount, active: model.canPush, done: model.pushDoneTitle)
     }
 
     /// The commits this branch has above the base it was rebased
