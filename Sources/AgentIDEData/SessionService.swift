@@ -42,7 +42,7 @@ public struct SessionService: Sendable {
         runners: [any AgentRunner],
         launcher: any SandboxLaunching,
         processes: any ProcessRunner = FoundationProcessRunner(),
-        summariser: any OnDeviceSummarising = FoundationModelClient(),
+        summariser: any OnDeviceSummarising = NullSummariser(),
         progress: @escaping LaunchReporter = silentLaunchReporter,
     ) {
         self.paths = paths

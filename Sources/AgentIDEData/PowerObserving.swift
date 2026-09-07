@@ -12,16 +12,16 @@ public protocol PowerObserving: Sendable {
 
 /// Always reports plugged in: the default for tests and for machines
 /// that have no battery observer wired.
-public struct PluggedInPower: PowerObserving {
+struct PluggedInPower: PowerObserving {
     // MARK: Lifecycle
 
-    public init() {
+    init() {
         // Always plugged in.
     }
 
     // MARK: Public
 
-    public var isOnBattery: Bool {
+    var isOnBattery: Bool {
         false
     }
 }
