@@ -1,4 +1,5 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Testing
 
 /// Exercises the branch-name normalisation over model answers; the
@@ -17,7 +18,7 @@ struct FoundationModelClientTests {
         - Show failures inline
           continuation lines and --flags stay untouched
         """
-        let parsed = FoundationModelClient.pullRequestDescription(fromModelAnswer: doubled)
+        let parsed = ModelAnswerParsing.pullRequestDescription(fromModelAnswer: doubled)
         #expect(parsed?.title == "Attach herdr terminal controllers")
         #expect(parsed?.body == """
         - Fix protocol decoding at the byte level
@@ -25,12 +26,12 @@ struct FoundationModelClientTests {
         - Show failures inline
           continuation lines and --flags stay untouched
         """)
-        #expect(FoundationModelClient.pullRequestDescription(fromModelAnswer: "  \n\n") == nil)
+        #expect(ModelAnswerParsing.pullRequestDescription(fromModelAnswer: "  \n\n") == nil)
 
         // Fence lines carry no content and disappear; the body
         // inside survives untouched.
         let fenced = "Title line\n\n```\n- First point\n- Second point\n```"
-        let unfenced = FoundationModelClient.pullRequestDescription(fromModelAnswer: fenced)
+        let unfenced = ModelAnswerParsing.pullRequestDescription(fromModelAnswer: fenced)
         #expect(unfenced?.title == "Title line")
         #expect(unfenced?.body == "- First point\n- Second point")
     }
@@ -42,7 +43,7 @@ struct FoundationModelClientTests {
             "Second change",
             "Third change\n\nA very long explanation of the third change's why.",
         ]
-        let full = FoundationModelClient.commitDigest(commits, branch: "fix_login", limit: 1_000)
+        let full = ModelAnswerParsing.commitDigest(commits, branch: "fix_login", limit: 1_000)
         #expect(full.hasPrefix("Branch: fix_login\n\nSubjects:\nFirst change\nSecond change\nThird change"))
         #expect(full.contains("Why the first change happened."))
         #expect(full.contains("A very long explanation"))
@@ -51,7 +52,7 @@ struct FoundationModelClientTests {
 
         // A tight budget keeps every subject and drops later bodies
         // rather than truncating the subject list.
-        let tight = FoundationModelClient.commitDigest(commits, branch: nil, limit: 120)
+        let tight = ModelAnswerParsing.commitDigest(commits, branch: nil, limit: 120)
         #expect(tight.contains("Subjects:\nFirst change\nSecond change\nThird change"))
         #expect(tight.contains("Why the first change happened."))
         #expect(tight.contains("A very long explanation") == false)
@@ -59,17 +60,17 @@ struct FoundationModelClientTests {
 
     @Test
     func `model answers normalise into safe branch names`() {
-        #expect(FoundationModelClient.branchName(fromModelAnswer: "Fix Login Crash") == "fix_login_crash")
-        #expect(FoundationModelClient.branchName(fromModelAnswer: "`fix_login`.\n") == "fix_login")
+        #expect(ModelAnswerParsing.branchName(fromModelAnswer: "Fix Login Crash") == "fix_login_crash")
+        #expect(ModelAnswerParsing.branchName(fromModelAnswer: "`fix_login`.\n") == "fix_login")
         #expect(
-            FoundationModelClient.branchName(fromModelAnswer: "fix the crash-on-launch")
+            ModelAnswerParsing.branchName(fromModelAnswer: "fix the crash-on-launch")
                 == "fix_the_crash_on_launch",
         )
     }
 
     @Test
     func `long answers truncate at a word boundary`() throws {
-        let truncated = try #require(FoundationModelClient.branchName(
+        let truncated = try #require(ModelAnswerParsing.branchName(
             fromModelAnswer: "summarise every prompt into a very long branch name indeed",
         ))
         #expect(truncated.count <= 40)
@@ -78,9 +79,9 @@ struct FoundationModelClientTests {
 
     @Test
     func `unusable answers become nil`() {
-        #expect(FoundationModelClient.branchName(fromModelAnswer: "!!!") == nil)
-        #expect(FoundationModelClient.branchName(fromModelAnswer: "12 34") == nil)
-        #expect(FoundationModelClient.branchName(fromModelAnswer: "") == nil)
+        #expect(ModelAnswerParsing.branchName(fromModelAnswer: "!!!") == nil)
+        #expect(ModelAnswerParsing.branchName(fromModelAnswer: "12 34") == nil)
+        #expect(ModelAnswerParsing.branchName(fromModelAnswer: "") == nil)
     }
 
     @Test

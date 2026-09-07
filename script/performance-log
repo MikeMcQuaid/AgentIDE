@@ -6,7 +6,11 @@
 set -euo pipefail
 
 user="${USER#sandvault-}"
-directory="/Users/Shared/sv-${user}/tmp/agentide"
+if [[ "$(uname -s)" == Darwin ]]; then
+  directory="/Users/Shared/sv-${user}/tmp/agentide"
+else
+  directory="/var/lib/agentide/${user}/tmp/agentide"
+fi
 marker="${directory}/performance-log"
 log="${directory}/performance.log"
 

@@ -40,9 +40,9 @@ public struct SessionService: Sendable {
         spool: EventSpool,
         store: MetadataStore,
         runners: [any AgentRunner],
+        launcher: any SandboxLaunching,
         processes: any ProcessRunner = FoundationProcessRunner(),
-        launcher: SandvaultLauncher? = nil,
-        summariser: FoundationModelClient = FoundationModelClient(),
+        summariser: any OnDeviceSummarising = FoundationModelClient(),
         progress: @escaping LaunchReporter = silentLaunchReporter,
     ) {
         self.paths = paths
@@ -53,8 +53,8 @@ public struct SessionService: Sendable {
         self.spool = spool
         self.store = store
         self.runners = runners
+        self.launcher = launcher
         self.processes = processes
-        self.launcher = launcher ?? SandvaultLauncher(hostUser: paths.hostUser)
         self.summariser = summariser
         self.progress = progress
     }
@@ -77,8 +77,15 @@ public struct SessionService: Sendable {
 
     /// A watcher over the workspace roots whose file-system events
     /// decide when a repository's git is worth reading again.
-    public func makeWorkspaceWatcher() -> WorkspaceWatcher {
-        WorkspaceWatcher(roots: [paths.repositoriesDirectory, paths.worktreesDirectory])
+    public func makeWorkspaceWatcher() -> any FileWatching {
+        let roots = [paths.repositoriesDirectory, paths.worktreesDirectory]
+        #if os(macOS)
+            return WorkspaceWatcher(roots: roots)
+        #elseif os(Linux)
+            return InotifyWorkspaceWatcher(roots: roots)
+        #else
+            fatalError("File watching is only implemented on macOS and Linux")
+        #endif
     }
 
     /// Creates a worktree and branch for a prompt and starts the
@@ -128,7 +135,7 @@ public struct SessionService: Sendable {
     let codexIndex: CodexTranscriptIndex = .init()
 
     /// Names branches from prompts on device.
-    let summariser: FoundationModelClient
+    let summariser: any OnDeviceSummarising
 
     let paths: WorkspacePaths
     let git: GitClient
@@ -140,7 +147,7 @@ public struct SessionService: Sendable {
     let store: MetadataStore
     let runners: [any AgentRunner]
     let processes: any ProcessRunner
-    let launcher: SandvaultLauncher
+    let launcher: any SandboxLaunching
 
     /// Where launches narrate their steps.
     let progress: LaunchReporter

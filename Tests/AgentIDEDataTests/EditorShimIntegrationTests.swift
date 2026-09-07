@@ -99,6 +99,7 @@ struct EditorShimIntegrationTests {
             spool: EventSpool(directory: workspace.eventsDirectory),
             store: MetadataStore(file: root + "/state.json"),
             runners: [],
+            launcher: SandvaultLauncher(hostUser: "test"),
         )
 
         var edits = service.pendingEdits().makeAsyncIterator()

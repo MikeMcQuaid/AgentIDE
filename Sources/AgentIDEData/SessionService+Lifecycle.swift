@@ -178,7 +178,6 @@ public extension SessionService {
     /// Deletes a path as the sandbox user through the launcher, for
     /// files the host user does not own.
     private func removeAsSandboxUser(path: String) async throws {
-        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
         let command = launcher.command(
             payload: "rm -rf " + path.shellQuoted,
             initialDirectory: launcher.sharedWorkspace,

@@ -99,15 +99,12 @@ public struct WorkspacePaths: Sendable {
     /// Creates paths for the current process, stripping any sandvault
     /// prefix so the same paths work inside and outside the sandbox.
     public static func current() -> Self {
-        let user = NSUserName()
-        let prefix = "sandvault-"
-        let host = user.hasPrefix(prefix) ? String(user.dropFirst(prefix.count)) : user
-        let support = NSHomeDirectory() + "/Library/Application Support/AgentIDE"
+        let roots = PlatformRoots.detect()
         return Self(
-            hostUser: host,
-            sharedWorkspace: "/Users/Shared/sv-" + host,
-            sandboxHome: "/Users/sandvault-" + host,
-            metadataFile: support + "/state.json",
+            hostUser: roots.hostUser,
+            sharedWorkspace: roots.sharedWorkspace,
+            sandboxHome: roots.sandboxHome,
+            metadataFile: roots.metadataFile,
         )
     }
 

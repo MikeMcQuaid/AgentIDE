@@ -22,7 +22,7 @@ public struct PullRequestStore: Sendable {
     public init(
         github: GitHubClient,
         store: MetadataStore,
-        onBattery: @escaping @Sendable () -> Bool = { PowerSource.isOnBattery },
+        onBattery: @escaping @Sendable () -> Bool = { false },
     ) {
         self.github = github
         self.store = store
@@ -236,16 +236,18 @@ public struct PullRequestStore: Sendable {
         let queued = store.load().queuedCache
         // One batched query for every repository is cheap enough to
         // allow under the floor while something is queued.
-        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
+        let duePaths = repositoryPaths.filter { path in
+            due("queue#" + path, interval: interval, floor: Self.inFlightFloor)
+        }
         var answers = [String: Set<Int>]()
-        for path in repositoryPaths where due.contains(path) == false {
+        for path in repositoryPaths where duePaths.contains(path) == false {
             answers[path] = Set(queued[path] ?? [])
         }
-        guard due.isEmpty == false else {
+        guard duePaths.isEmpty == false else {
             return answers
         }
 
-        let fetched = await github.queuedNumbers(repositoryPaths: due)
+        let fetched = await github.queuedNumbers(repositoryPaths: duePaths)
         store.update { metadata in
             for (path, numbers) in fetched {
                 metadata.queuedCache[path] = numbers.sorted()

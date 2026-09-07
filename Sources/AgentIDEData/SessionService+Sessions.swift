@@ -260,7 +260,6 @@ public extension SessionService {
             return
         }
 
-        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
         let command = launcher.command(
             payload: "rm -f " + past.path.shellQuoted,
             initialDirectory: launcher.sharedWorkspace,

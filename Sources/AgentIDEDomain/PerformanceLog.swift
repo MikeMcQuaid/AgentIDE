@@ -81,6 +81,13 @@ public enum PerformanceLog {
         directory + "/performance.log"
     }
 
+    /// Configured by the app from `PlatformRoots` so Domain never
+    /// hardcodes a host path. Nil until the composition root sets it.
+    public static var sharedTemporaryDirectory: String? {
+        get { sharedTemporaryDirectoryState.withLock { $0 } }
+        set { sharedTemporaryDirectoryState.withLock { $0 = newValue } }
+    }
+
     /// Creates or removes the marker file, the same switch
     /// `script/performance-log` flips, and forgets the cached
     /// answer so the change takes effect now rather than in a few
@@ -165,22 +172,28 @@ public enum PerformanceLog {
     /// The shared temporary directory: readable by the host user and
     /// the sandbox user alike, unlike either one's own home. Tests
     /// point it elsewhere through the environment, since a test
-    /// must never write into the real one.
+    /// must never write into the real one. When neither the
+    /// environment nor `sharedTemporaryDirectory` is set, falls back
+    /// to the process temporary directory.
     static var directory: String {
         if let override = ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG_DIRECTORY"] {
             return override
         }
 
-        let user = NSUserName()
-        let prefix = "sandvault-"
-        let host = user.hasPrefix(prefix) ? String(user.dropFirst(prefix.count)) : user
-        return "/Users/Shared/sv-" + host + "/tmp/agentide"
+        if let shared = sharedTemporaryDirectory {
+            return shared
+        }
+
+        return NSTemporaryDirectory() + "agentide"
     }
 
     // MARK: Private
 
     private static let queue: DispatchQueue = .init(label: "agentide.performance-log", qos: .utility)
     private static let sweepInterval: TimeInterval = 3_600
+
+    /// The shared temporary directory the app configured, if any.
+    private static let sharedTemporaryDirectoryState: Mutex<String?> = .init(nil)
 
     /// The cached enablement answer and how long it holds; the
     /// marker file can be toggled at runtime, so the file is asked

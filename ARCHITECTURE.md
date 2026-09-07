@@ -92,7 +92,9 @@ plus resume.
 sandvault's sudoers rules let the host user run exactly `/bin/zsh`,
 `/usr/bin/env` and `/usr/bin/true` as the sandbox user without a
 password, so every sandbox interaction uses one launch shape, assembled
-in exactly one place (`SandvaultLauncher`):
+in exactly one place through the `SandboxLaunching` protocol
+(`SandvaultLauncher` is the macOS implementation). Call sites hold
+one injected launcher and never reconstruct it:
 
 ```bash
 sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
@@ -313,7 +315,7 @@ flowchart TD
   network and database APIs are banned.
 - **AgentIDEData**: the adapters, composed by `SessionService`:
   `GitClient`, `GitHubClient` (every question through the host's `gh`),
-  `SandvaultLauncher`, `HerdrClient`, `HerdrTerminalChannel`,
+  `SandboxLaunching` (`SandvaultLauncher`), `HerdrClient`, `HerdrTerminalChannel`,
   `TranscriptReader` and `CodexTranscriptIndex`, `EventSpool`,
   `MetadataStore` (one JSON file), `PullRequestStore`, `ProcessRunner`
   (Foundation `Process`), `WorkspaceWatcher` (FSEvents),
@@ -1255,5 +1257,5 @@ Not scheduled, recorded so the pieces already built line up with them:
 | R1 | herdr is pre-1.0; releases may change behaviour | schema'd protocol; integration tests run against the real server so drift fails loudly; app-owned PTYs are not acceptable because they forfeit resilience |
 | R2 | the `xcode-27` runner image may change or lag betas | jobs assert Xcode 27 and fail loudly; self-hosted is the fallback |
 | R3 | agent transcript formats drift | tolerant decoders, per-release fixtures |
-| R4 | sandvault updates could change paths, profile or sudoers | `SandvaultLauncher` is the single construction point |
+| R4 | sandvault updates could change paths, profile or sudoers | `SandboxLaunching` / `SandvaultLauncher` is the single construction point |
 | R5 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree |

@@ -1,4 +1,5 @@
 import AgentIDEData
+import AgentIDEDomain
 import DashboardFeature
 import TerminalUI
 
@@ -10,15 +11,19 @@ final class AppDependencies {
 
     init() {
         defer { Self.shared = self }
+        let roots = PlatformRoots.detect()
+        PerformanceLog.sharedTemporaryDirectory = roots.sharedTemporaryDirectory
         let paths = WorkspacePaths.current()
         let runner = FoundationProcessRunner()
         let gitClient = GitClient(runner: runner)
         let githubClient = GitHubClient(runner: runner)
         let metadataStore = MetadataStore(file: paths.metadataFile)
         let launchProgress = LaunchProgress()
+        let launcher = SandvaultLauncher(hostUser: paths.hostUser)
+        let power: any PowerObserving = IOKitPower()
         let herdr = HerdrClient(
             runner: runner,
-            launcher: SandvaultLauncher(hostUser: paths.hostUser),
+            launcher: launcher,
             isInsideSandbox: WorkspacePaths.isInsideSandbox,
             progress: launchProgress.reporter,
         )
@@ -31,6 +36,8 @@ final class AppDependencies {
             spool: EventSpool(directory: paths.eventsDirectory),
             store: metadataStore,
             runners: [ClaudeCodeRunner(), CodexRunner()],
+            launcher: launcher,
+            summariser: FoundationModelClient(),
             progress: launchProgress.reporter,
         )
         git = gitClient
@@ -45,7 +52,7 @@ final class AppDependencies {
         )
         // The machine's own power state, wired here rather than read
         // by the model, so the model under test is always plugged in.
-        dashboard.isOnBattery = { PowerSource.isOnBattery }
+        dashboard.isOnBattery = { power.isOnBattery }
         // Off the launch path: installing hooks writes into the
         // shared workspace and nothing about the first paint needs
         // it done first.

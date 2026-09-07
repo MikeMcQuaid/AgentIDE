@@ -84,6 +84,7 @@ extension PullRequestsModelTests {
             spool: EventSpool(directory: paths.eventsDirectory),
             store: MetadataStore(file: paths.metadataFile),
             runners: [],
+            launcher: SandvaultLauncher(hostUser: "test"),
         )
         return PullRequestsModel(
             repository: Repository(name: "repo", path: "/repo"),

@@ -24,6 +24,7 @@ struct FileListingTests {
             spool: EventSpool(directory: world.paths.eventsDirectory),
             store: MetadataStore(file: world.paths.metadataFile),
             runners: [],
+            launcher: SandvaultLauncher(hostUser: "test"),
             processes: runner,
         )
 

@@ -140,7 +140,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentIDEDataTests",
-            dependencies: ["AgentIDEData"],
+            dependencies: ["AgentIDEData", "AgentIDEDomain"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(

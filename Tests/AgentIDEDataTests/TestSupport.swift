@@ -221,9 +221,10 @@ struct World {
         try await TestSupport.makeRepository(at: repoPath)
         let runner = FoundationProcessRunner()
         let home = try TestSupport.configHome()
+        let launcher = SandvaultLauncher(hostUser: "test")
         let herdrClient = HerdrClient(
             runner: runner,
-            launcher: SandvaultLauncher(hostUser: "test"),
+            launcher: launcher,
             isInsideSandbox: true,
             configHome: home,
         )
@@ -236,6 +237,7 @@ struct World {
             spool: EventSpool(directory: workspace.eventsDirectory),
             store: MetadataStore(file: workspace.metadataFile),
             runners: [PromptCaptureRunner()],
+            launcher: launcher,
             // Disabled so branch names always come from the
             // deterministic prompt fallback, whatever this machine's
             // Apple Intelligence state.

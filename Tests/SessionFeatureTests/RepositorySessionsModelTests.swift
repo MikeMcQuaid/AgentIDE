@@ -106,6 +106,7 @@ struct RepositorySessionsModelTests {
             spool: EventSpool(directory: paths.eventsDirectory),
             store: MetadataStore(file: paths.metadataFile),
             runners: [],
+            launcher: SandvaultLauncher(hostUser: "test"),
         )
         let model = RepositorySessionsModel(
             repository: Repository(name: "repo", path: "/repo"),

@@ -40,6 +40,16 @@ struct SandvaultLauncherTests {
         #expect(path?.contains("/opt/homebrew/bin") == true)
         #expect(path?.contains("/usr/local/bin") == true)
         #expect(path?.contains("/usr/bin") == true)
+        #expect(path == "PATH=" + launcher.sandboxPath)
+    }
+
+    @Test
+    func `exposes shell, detach and profile seams for herdr`() {
+        let launching: any SandboxLaunching = launcher
+        #expect(launching.loginShell == "/bin/zsh")
+        #expect(launching.detachSuffix == "&!")
+        #expect(launching.profileBootstrap.contains("~/.zshrc"))
+        #expect(launching.sandboxPath.contains("/opt/homebrew/bin"))
     }
 
     // MARK: Private

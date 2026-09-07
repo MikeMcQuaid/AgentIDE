@@ -79,7 +79,7 @@ public struct HerdrClient: Sendable {
     /// config home, so neither can list or kill the other's.
     public init(
         runner: any ProcessRunner,
-        launcher: SandvaultLauncher,
+        launcher: any SandboxLaunching,
         isInsideSandbox: Bool,
         configHome: String? = nil,
         progress: @escaping LaunchReporter = silentLaunchReporter,
@@ -146,15 +146,14 @@ public struct HerdrClient: Sendable {
         let log = "\"${XDG_CONFIG_HOME:-$HOME/.config}/herdr/agentide-server.log\""
         let payload = exportPrefix
             + "herdr api snapshot &>/dev/null && exit 0; "
-            + (isInsideSandbox ? "" : "cd ~ && ~/configure; "
-                + "source ~/.zshenv; source ~/.zprofile; source ~/.zshrc; ")
+            + (isInsideSandbox ? "" : launcher.profileBootstrap)
             + "mkdir -p \"$(dirname " + log + ")\"; "
-            + "herdr server &> " + log + " &!; "
+            + "herdr server &> " + log + " " + launcher.detachSuffix + "; "
             + "for _ in {1..50}; do herdr api snapshot &>/dev/null && exit 0; sleep 0.1; done; "
             + "cat " + log + " >&2; exit 1"
         let argv =
             if isInsideSandbox {
-                ["/bin/zsh", "-c", payload]
+                [launcher.loginShell, "-c", payload]
             } else {
                 launcher.command(
                     payload: payload,
@@ -184,7 +183,7 @@ public struct HerdrClient: Sendable {
             + "herdr server reload-config &>/dev/null; exit 0"
         let argv =
             if isInsideSandbox {
-                ["/bin/zsh", "-c", payload]
+                [launcher.loginShell, "-c", payload]
             } else {
                 launcher.command(
                     payload: payload,
@@ -226,7 +225,7 @@ public struct HerdrClient: Sendable {
     private let sessionName: String
 
     private let runner: any ProcessRunner
-    private let launcher: SandvaultLauncher
+    private let launcher: any SandboxLaunching
     private let isInsideSandbox: Bool
     private let configHome: String?
 

@@ -336,7 +336,7 @@ public final class DashboardModel {
 
     /// The file-system events that say which repository is worth
     /// asking git about; the git reads extension consumes it.
-    let watcher: WorkspaceWatcher
+    let watcher: any FileWatching
 
     /// Models each CLI reported, seeded from the last launch's answer
     /// by the cache extension; absent agents fall back.
