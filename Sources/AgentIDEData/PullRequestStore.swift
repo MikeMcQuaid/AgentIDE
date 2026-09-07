@@ -40,8 +40,9 @@ public struct PullRequestStore: Sendable {
     /// The floor for a single pull request's summary.
     public static let inFlightFloor: TimeInterval = 30
 
-    /// How long a repository's settings are taken at their word.
-    public static let capabilityInterval: TimeInterval = 3_600
+    /// How long a repository's settings are taken at their word:
+    /// a day, since they change about as often as its settings do.
+    public static let capabilityInterval: TimeInterval = 86_400
 
     /// How often a listing nobody is looking at is asked for.
     public static let backgroundInterval: TimeInterval = 300
@@ -208,7 +209,7 @@ public struct PullRequestStore: Sendable {
     }
 
     /// Whether the repository merges through a queue, which changes
-    /// about as often as its settings do; asked once an hour rather
+    /// about as often as its settings do; asked once a day rather
     /// than on every visit to the tab.
     public func hasMergeQueue(
         repositoryPath: String,
