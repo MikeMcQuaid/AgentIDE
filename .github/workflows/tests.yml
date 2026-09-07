@@ -165,14 +165,13 @@ jobs:
       - name: Compile for macOS 15 deployment
         run: |
           export MACOSX_DEPLOYMENT_TARGET=15.0
+          # Domain and Data only: TerminalUI pulls SwiftTerm Metal,
+          # which the compile-only deployment check does not need.
           swift build --disable-sandbox --jobs 6 \
             --target AgentIDEDomain \
             -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
           swift build --disable-sandbox --jobs 6 \
             --target AgentIDEData \
-            -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
-          swift build --disable-sandbox --jobs 6 \
-            --target TerminalUI \
             -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
 
 # `style`, `tests` and `analyze` always run, so they are the required
