@@ -55,8 +55,12 @@ extension RootView {
                 // paths type into the agent.
                 // The drop-session overload answers nothing, so the
                 // staging's own verdict is let go here.
+                // Returning Bool selects the macOS 13+ overload; a Void body
+                // resolves to the macOS 26 isEnabled variant and fails
+                // the 15.0 deployment target.
                 .dropDestination(for: URL.self) { urls, _ in
-                    _ = dropFiles(urls, into: session.name)
+                    dropFiles(urls, into: session.name)
+                    return true
                 }
         } else if centreShowsEditor(for: item) {
             // Chosen from the conversations page; the branches above
@@ -347,7 +351,7 @@ private struct StartShellButton: View {
         Button(action: onStart) {
             Label("Start shell", systemImage: "terminal")
         }
-        .buttonStyle(.glass)
+        .agentGlassButtonStyle()
         .controlSize(.large)
         .hoverHelp("Open a host-user shell here; it runs until you close it or the app quits")
     }

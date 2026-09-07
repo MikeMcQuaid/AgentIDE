@@ -54,7 +54,7 @@ extension RootView {
                     Image(systemName: "xmark")
                         .accessibilityLabel("Close shell")
                 }
-                .buttonStyle(.glass)
+                .agentGlassButtonStyle()
                 .controlSize(.small)
                 .fixedSize()
                 .hoverHelp("End this shell and its process immediately")

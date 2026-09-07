@@ -76,7 +76,10 @@ updates.
 
 ## 📋 Requirements
 
-- macOS Golden Gate (27) or later.
+- macOS Sequoia (15) or later. One binary; Liquid Glass needs macOS
+  26+. Built with Xcode 27. If a Sequoia host cannot load the Swift
+  6.4 stdlib, raise the floor to macOS 26 rather than shipping a
+  broken binary.
 - [Homebrew](https://brew.sh), which installs the rest.
 - [sandvault](https://github.com/webcoyote/sandvault), which creates the
   sandbox user and the shared workspace.

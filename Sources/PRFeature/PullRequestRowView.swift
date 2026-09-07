@@ -143,7 +143,7 @@ struct PullRequestRowView: View {
                     Image(systemName: "pencil")
                         .accessibilityLabel("Edit title and body")
                 }
-                .buttonStyle(.glass)
+                .agentGlassButtonStyle()
                 .hoverHelp("Edit the title and body, to say what was actually pushed before it merges")
             }
             Button {
@@ -152,7 +152,7 @@ struct PullRequestRowView: View {
                 Image(systemName: "safari")
                     .accessibilityLabel("Open pull request in browser")
             }
-            .buttonStyle(.glass)
+            .agentGlassButtonStyle()
             .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
         }
     }

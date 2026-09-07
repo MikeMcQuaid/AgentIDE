@@ -151,7 +151,7 @@ struct PullRequestCreateForm: View {
                 // what wrote the branch are the same act: the box
                 // claims a disclosure and the disclosure answers it.
                 Button("Fill template", systemImage: "checklist") { model.tickTemplateBoxes() }
-                    .buttonStyle(.glass)
+                    .agentGlassButtonStyle()
                     .controlSize(.small)
                     .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
                     .hoverHelp(

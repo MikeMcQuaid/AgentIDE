@@ -3,7 +3,7 @@ options:
   bundleIdPrefix: com.mikemcquaid
   createIntermediateGroups: true
   deploymentTarget:
-    macOS: "27.0"
+    macOS: "15.0"
 packages:
   AgentIDEPackage:
     path: .
@@ -73,7 +73,7 @@ targets:
           AgentIDE reads a directory you listed yourself, or a repository on a
           removable disk. Deny this and keep your work on the internal disk if
           you would rather it never looked.
-        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
         SWIFT_VERSION: "6.0"
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
@@ -98,7 +98,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
         SWIFT_VERSION: "6.0"
         SWIFT_STRICT_CONCURRENCY: complete
         CODE_SIGN_STYLE: Manual

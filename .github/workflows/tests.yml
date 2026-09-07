@@ -133,6 +133,48 @@ jobs:
       - name: Analyze
         run: script/analyze
 
+  build-macos15:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 27
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::Xcode 27 is not installed on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      - name: Cache Swift package dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .DerivedData/SourcePackages
+            .build/checkouts
+          key: ${{ runner.os }}-swiftpm-macos15-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-macos15-
+
+      - name: Compile for macOS 15 deployment
+        run: |
+          export MACOSX_DEPLOYMENT_TARGET=15.0
+          swift build --disable-sandbox --jobs 6 \
+            --target AgentIDEDomain \
+            -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
+          swift build --disable-sandbox --jobs 6 \
+            --target AgentIDEData \
+            -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
+          swift build --disable-sandbox --jobs 6 \
+            --target TerminalUI \
+            -Xswiftc -target -Xswiftc arm64-apple-macosx15.0
+
 # `style`, `tests` and `analyze` always run, so they are the required
 # checks in branch protection directly. If any job ever becomes
 # conditionally skipped (a job-level `if:`, a path filter, or a

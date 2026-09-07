@@ -7,7 +7,7 @@ extension PullRequestFooterView {
     /// Leaves the edit without saving; Escape does the same.
     var cancelEditButton: some View {
         Button("Cancel") { model.cancelEditing() }
-            .buttonStyle(.glass)
+            .agentGlassButtonStyle()
             .keyboardShortcut(.cancelAction)
             .hoverHelp("Leave the title and body as they are on GitHub")
     }

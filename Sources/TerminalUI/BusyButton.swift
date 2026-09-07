@@ -62,9 +62,9 @@ public struct BusyButton: View {
 
     public var body: some View {
         if isProminent {
-            core.buttonStyle(.glassProminent)
+            core.agentGlassProminentButtonStyle()
         } else {
-            core.buttonStyle(.glass)
+            core.agentGlassButtonStyle()
         }
     }
 

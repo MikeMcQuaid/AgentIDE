@@ -264,7 +264,7 @@ struct FileEditorView: View {
     @ViewBuilder private var waitingActions: some View {
         if let onFinish {
             Button("Cancel") { onFinish(false) }
-                .buttonStyle(.glass)
+                .agentGlassButtonStyle()
                 .hoverHelp("Leave the file as it was and fail the waiting command, which aborts a rebase")
             // Only a file that actually reached the disk lets the
             // command carry on: a failed write would otherwise leave
@@ -274,7 +274,7 @@ struct FileEditorView: View {
                     onFinish(true)
                 }
             }
-            .buttonStyle(.glassProminent)
+            .agentGlassProminentButtonStyle()
             .keyboardShortcut(.return, modifiers: .command)
             .hoverHelp("Write the file and let the waiting command carry on (Cmd-Return)")
         }

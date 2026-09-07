@@ -9,7 +9,7 @@ let mainActorByDefault = approachableConcurrency + [.defaultIsolation(MainActor.
 
 let package = Package(
     name: "AgentIDE",
-    platforms: [.macOS("27.0")],
+    platforms: [.macOS("15.0")],
     products: [
         .library(name: "AgentIDEDomain", targets: ["AgentIDEDomain"]),
         .library(name: "AgentIDEData", targets: ["AgentIDEData"]),
@@ -140,7 +140,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentIDEDataTests",
-            dependencies: ["AgentIDEData"],
+            dependencies: ["AgentIDEData", "AgentIDEDomain"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(
