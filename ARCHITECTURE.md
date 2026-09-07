@@ -869,11 +869,14 @@ selects the worktree holding it, and `agentide new` starts a session.
   ticks every box and writes the AI disclosure from the session's model
   and effort, and only into a template. The template is read from the
   working copy or, for sparse checkouts, from git.
-- **A stack moves as one.** Rebasing any entry restacks the branches
-  above it and pushes the ones the remote already has, since GitHub
-  reads a pull request whose parent moved as no stack at all; pushing
-  any entry pushes every branch of the stack, bottom first, whether or
-  not each has a pull request open yet. A branch nobody has pushed is
+- **A stack moves as one.** Rebase on any layer, the bottom included
+  and the menu bar's Rebase with it, restacks the whole stack and
+  pushes the branches the remote already has, since GitHub reads a
+  pull request whose parent moved as no stack at all. Rebasing one
+  layer on its own rewrote what the layers above fork from, and the
+  stack derived afterwards no longer reached them. Pushing any entry
+  pushes every branch of the stack, bottom first, whether or not each
+  has a pull request open yet. A branch nobody has pushed is
   published by Push and never by a rebase.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
@@ -884,8 +887,8 @@ selects the worktree holding it, and `agentide new` starts a session.
   what a stack is. The Stack popover drops branches by name (remembered
   per worktree) and cuts new ones. Restacking records every tip, then
   rebases bottom up with `--onto <parent> <recorded tip>`, signed,
-  skipping a branch already in place, and carries the branches above
-  the entry rebased. Each pull request opens against the branch below
+  skipping a branch already in place and signed, from whichever entry
+  asked. Each pull request opens against the branch below
   with both `--head` and `--base` named; `gh stack link` links what is
   open (idempotent, additive), and stack merge is
   `gh stack merge <number> --yes --merge-method <method>` after

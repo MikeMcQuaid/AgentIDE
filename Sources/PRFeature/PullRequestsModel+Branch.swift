@@ -102,6 +102,14 @@ extension PullRequestsModel {
     }
 
     func rebaseSigned() async -> Bool {
+        // Any layer of a stack rebases the whole of it. Rebasing one
+        // entry on its own rewrites what the branches above fork
+        // from, and a stack derived afterwards no longer reaches
+        // them: signing the bottom of an unopened stack lost the
+        // rest of it.
+        guard stacking.stack.isStacked == false else {
+            return await restack()
+        }
         guard let worktree = listedWorktree else {
             return true
         }
@@ -113,27 +121,6 @@ extension PullRequestsModel {
         let onlySigns = rebaseNeed == SessionService.RebaseNeed.sign
         do {
             let target = try await performRebase(worktree)
-            // A stack member that moves takes the branches above it
-            // with it. Left where they were, they fork from the
-            // default branch instead of from it, which is not a
-            // stack at all: the tab lost the entry that had just
-            // moved and showed whichever branch was checked out, so
-            // the next press rebased that one instead.
-            if stacking.stack.isStacked {
-                do {
-                    _ = try await stacking.restack(worktree)
-                    // Every branch the restack moved is now behind
-                    // what the remote has, and GitHub reads a stack
-                    // whose parents moved as no stack at all: the
-                    // published ones go back up at once. A branch
-                    // nobody has pushed stays unpushed, which Push
-                    // is for.
-                    try await markChecksPending(for: stacking.pushPublished(worktree))
-                } catch {
-                    report("Rebasing the branches above `" + worktree.branch + "` failed: "
-                        + error.localizedDescription)
-                }
-            }
             await reload(keepingSelection: true)
             // Done means Push agrees; reporting success with the tip
             // still unsigned took a second press to notice.

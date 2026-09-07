@@ -2,8 +2,9 @@ import AgentIDEData
 import AgentIDEDomain
 
 /// A stack of branches in one worktree, as the pull request tab sees
-/// it: which branch is listed, and the two things a stack is asked
-/// to do as a whole.
+/// it: which branch is listed and what it would take to put the
+/// stack in order; the two things a stack is asked to do as a whole
+/// are in `+StackActions`.
 extension PullRequestsModel {
     /// Points the stack's work at the service; kept here so the
     /// model's own initialiser stays about pull requests.
@@ -322,70 +323,5 @@ extension PullRequestsModel {
         }
 
         return stacking.stack.branches[..<index].last { isBlocking($0) }
-    }
-
-    /// Puts every branch back on the one below it and says what
-    /// moved; a branch already there is left alone, so no commit is
-    /// renamed for nothing.
-    func restack() async -> Bool {
-        guard let worktree = branchItem?.worktree else {
-            return true
-        }
-
-        isBranchActionRunning = true
-        defer { isBranchActionRunning = false }
-        do {
-            let moved = try await stacking.restack(worktree)
-            await loadStack()
-            await reload(keepingSelection: true)
-            // Done means Push agrees; reporting success with the
-            // stack still unsigned took a second press to notice.
-            if let unsigned = stacking.unsignedBranches.first {
-                report("Restacked, but `" + unsigned + "`'s tip still reads unsigned; "
-                    + "check the signing key and hit Rebase again")
-                return false
-            }
-            let verb = AppSettings.requiresSignedCommits ? "Rebased and signed" : "Rebased"
-            guard moved.isEmpty == false else {
-                // Nothing moved, so nothing was done: the button
-                // must not claim otherwise.
-                setStatus("Already in order.", detail: "The stack was already in order.")
-                Self.requestSidebarRefresh()
-                return true
-            }
-
-            recordFinished(.rebased, branch: actedBranch ?? worktree.branch)
-            note(verb + " " + Self.named(moved) + ".")
-            Self.requestSidebarRefresh()
-            return true
-        } catch {
-            report(error.localizedDescription)
-            return false
-        }
-    }
-
-    /// Pushes the stack bottom up, so each pull request's base is on
-    /// the remote before the branch that points at it.
-    func pushStack() async -> Bool {
-        guard let worktree = branchItem?.worktree else {
-            return true
-        }
-
-        isBranchActionRunning = true
-        defer { isBranchActionRunning = false }
-        do {
-            let pushed = try await stacking.push(worktree)
-            pullRequests.invalidateListings(repositoryPath: repository.path)
-            markChecksPending(for: pushed)
-            recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
-            note("Pushed " + Self.named(pushed) + ".")
-            Self.requestSidebarRefresh()
-            await reload(keepingSelection: true)
-            refreshAfterPush()
-            return true
-        } catch {
-            report(error.localizedDescription)
-            return false
-        }
     }
 }

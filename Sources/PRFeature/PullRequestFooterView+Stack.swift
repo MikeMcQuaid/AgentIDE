@@ -5,20 +5,25 @@ import TerminalUI
 /// the same titles in the same places as a lone branch's, doing the
 /// stack's version of each. Split from the footer for length.
 extension PullRequestFooterView {
-    /// The branch actions: a stacked entry's stand where a lone
-    /// branch's do, so the flow does not move about.
+    /// The branch actions: a stacked entry's buttons stand where a
+    /// lone branch's buttons do, so the flow does not move about. Rebase is the
+    /// stack's from any layer, its bottom included, since rebasing
+    /// one layer alone is what loses the layers above it.
     @ViewBuilder var branchActions: some View {
-        if model.isStackedEntry {
+        if model.stacking.stack.isStacked {
             restackButton
-            pushStackButton
         } else {
             rebaseButton
+        }
+        if model.isStackedEntry {
+            pushStackButton
+        } else {
             pushButton
         }
     }
 
-    /// A stack's own pair, in the place and dress of the branch
-    /// pair they stand in for: the same titles through
+    /// A stack's own pair of buttons, in the place and dress of the
+    /// branch pair it stands in for: the same titles through
     /// `actionTitle`, the same order, the same counts and the same
     /// past tense while dim, doing the stack's version of the work.
     private var restackButton: some View {
@@ -43,6 +48,7 @@ extension PullRequestFooterView {
                 + "replays and leaving alone any branch already in place and signed; a conflict "
                 + "aborts and reports to Messages"
                 : "Every branch is already on the one below it, with its tip signed",
+            shortcut: "⌥⌘R",
         )
     }
 

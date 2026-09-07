@@ -183,7 +183,7 @@ struct PullRequestStackTests {
     }
 
     @Test
-    func `rebasing one entry carries the branches above it`() async {
+    func `rebasing any entry rebases the whole stack`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
@@ -199,15 +199,18 @@ struct PullRequestStackTests {
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
+        // Done means Push agrees: the stack is read as signed after.
+        model.stacking.unsigned = { _ in [] }
         await model.reload()
 
         #expect(await model.rebaseSigned())
 
-        // Left where they were, the branches above fork from the
-        // default branch instead of from the one that moved, and the
-        // stack stops being one: the tab then lost the entry that
-        // had just moved and showed whatever was checked out.
-        #expect(done.withLock { $0 } == ["rebase", "restack"])
+        // Rebasing the entry on its own first rewrote what the
+        // branches above fork from, and the stack derived after it
+        // no longer reached them: signing the bottom of an unopened
+        // stack lost the rest. The stack's restack records every
+        // tip before anything moves, so it is the only rebase.
+        #expect(done.withLock { $0 } == ["restack"])
     }
 
     @Test
@@ -283,6 +286,7 @@ struct PullRequestStackTests {
             done.withLock { $0.append("push published") }
             return ["upper"]
         }
+        model.stacking.unsigned = { _ in [] }
         await model.reload()
 
         #expect(await model.rebaseSigned())
@@ -290,7 +294,7 @@ struct PullRequestStackTests {
         // A branch the restack moved is behind what the remote has,
         // and GitHub reads a stack whose parents moved as no stack
         // at all until the remote copies catch up.
-        #expect(done.withLock { $0 } == ["rebase", "restack", "push published"])
+        #expect(done.withLock { $0 } == ["restack", "push published"])
     }
 
     @Test
