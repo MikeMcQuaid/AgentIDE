@@ -40,8 +40,9 @@ public struct PullRequestStore: Sendable {
     /// The floor for a single pull request's summary.
     public static let inFlightFloor: TimeInterval = 30
 
-    /// How long a repository's settings are taken at their word.
-    public static let capabilityInterval: TimeInterval = 3_600
+    /// How long a repository's settings are taken at their word:
+    /// a day, since they change about as often as its settings do.
+    public static let capabilityInterval: TimeInterval = 86_400
 
     /// How often a listing nobody is looking at is asked for.
     public static let backgroundInterval: TimeInterval = 300
@@ -208,7 +209,7 @@ public struct PullRequestStore: Sendable {
     }
 
     /// Whether the repository merges through a queue, which changes
-    /// about as often as its settings do; asked once an hour rather
+    /// about as often as its settings do; asked once a day rather
     /// than on every visit to the tab.
     public func hasMergeQueue(
         repositoryPath: String,
@@ -225,6 +226,42 @@ public struct PullRequestStore: Sendable {
             metadata.fetchedAt[key] = Date()
         }
         return answer
+    }
+
+    /// Whether the repository's default branch takes a push. Asked
+    /// once per repository and kept until `forgetDefaultPushPolicy`,
+    /// which the tab's refresh button is for: protection changes
+    /// about as often as a repository's settings do. A GitHub that
+    /// cannot be asked stores nothing, so the next visit asks again,
+    /// and nothing known is a no.
+    public func acceptsDefaultPushes(repositoryPath: String, branch: String) async -> Bool {
+        let key = "push-capability#" + repositoryPath
+        if let known = store.load().directPushCapability[repositoryPath] {
+            PerformanceLog.record(cacheHit: true, key)
+            return known
+        }
+
+        PerformanceLog.record(cacheHit: false, key)
+
+        let answer: Bool
+        switch await github.pushPolicy(repositoryPath: repositoryPath, branch: branch) {
+        case .unknown:
+            return false
+
+        case .takesPushes:
+            answer = true
+
+        case .guarded:
+            answer = false
+        }
+        store.update { $0.directPushCapability[repositoryPath] = answer }
+        return answer
+    }
+
+    /// Forgets whether the default branch takes a push, so the next
+    /// reading asks GitHub again.
+    public func forgetDefaultPushPolicy(repositoryPath: String) {
+        store.update { $0.directPushCapability[repositoryPath] = nil }
     }
 
     /// Every repository's merge queue, those due asked for in one

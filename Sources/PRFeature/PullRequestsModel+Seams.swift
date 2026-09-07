@@ -25,6 +25,18 @@ extension PullRequestsModel {
         }
     }
 
+    /// Whether the default branch takes a push, a no when there is
+    /// no default branch to ask about.
+    static func acceptsDefaultPushes(gate: PullRequestStore, repository: Repository, defaultBranch: String?) async
+        -> Bool
+    {
+        guard let defaultBranch else {
+            return false
+        }
+
+        return await gate.acceptsDefaultPushes(repositoryPath: repository.path, branch: defaultBranch)
+    }
+
     /// Tidies up after a merge and says what it did and could not.
     static func cleanUpAfterMerge(worktree: Worktree, mergedBranch: String, service: SessionService) async {
         let report = await service.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch)

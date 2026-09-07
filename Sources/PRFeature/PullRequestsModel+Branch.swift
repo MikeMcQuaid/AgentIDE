@@ -102,6 +102,14 @@ extension PullRequestsModel {
     }
 
     func rebaseSigned() async -> Bool {
+        // Any layer of a stack rebases the whole of it. Rebasing one
+        // entry on its own rewrites what the branches above fork
+        // from, and a stack derived afterwards no longer reaches
+        // them: signing the bottom of an unopened stack lost the
+        // rest of it.
+        guard stacking.stack.isStacked == false else {
+            return await restack()
+        }
         guard let worktree = listedWorktree else {
             return true
         }
@@ -113,27 +121,6 @@ extension PullRequestsModel {
         let onlySigns = rebaseNeed == SessionService.RebaseNeed.sign
         do {
             let target = try await performRebase(worktree)
-            // A stack member that moves takes the branches above it
-            // with it. Left where they were, they fork from the
-            // default branch instead of from it, which is not a
-            // stack at all: the tab lost the entry that had just
-            // moved and showed whichever branch was checked out, so
-            // the next press rebased that one instead.
-            if stacking.stack.isStacked {
-                do {
-                    _ = try await stacking.restack(worktree)
-                    // Every branch the restack moved is now behind
-                    // what the remote has, and GitHub reads a stack
-                    // whose parents moved as no stack at all: the
-                    // published ones go back up at once. A branch
-                    // nobody has pushed stays unpushed, which Push
-                    // is for.
-                    try await markChecksPending(for: stacking.pushPublished(worktree))
-                } catch {
-                    report("Rebasing the branches above `" + worktree.branch + "` failed: "
-                        + error.localizedDescription)
-                }
-            }
             await reload(keepingSelection: true)
             // Done means Push agrees; reporting success with the tip
             // still unsigned took a second press to notice.
@@ -259,7 +246,7 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
-        guard branchItem != nil, isDefaultBranch == false, isPushed == false,
+        guard branchItem != nil, isGuardedDefaultBranch == false, isPushed == false,
               tipSignature == .signed
         else {
             return false
@@ -269,12 +256,17 @@ extension PullRequestsModel {
     }
 
     /// Whether the entry in view is the repository's own default
-    /// branch. Work belongs on a branch of its own: pushing to the
-    /// default branch straight from here goes round the pull
-    /// request the rest of this tab is for, and a repository that
-    /// protects it would refuse the push anyway.
+    /// branch.
     var isDefaultBranch: Bool {
         listedBranch != nil && listedBranch == defaultBranch
+    }
+
+    /// Whether the entry in view is a default branch that refuses a
+    /// push: one GitHub protects, or wants a pull request or passing
+    /// checks on, which is most shared repositories. A repository of
+    /// your own with none of that takes the push, and Push runs.
+    var isGuardedDefaultBranch: Bool {
+        isDefaultBranch && acceptsDefaultPushes == false
     }
 
     /// Whether the listed branch has commits the remote lacks: the
@@ -292,8 +284,8 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
-        guard isDefaultBranch == false else {
-            return "This is the repository's default branch: put the work on a branch of its own "
+        guard isGuardedDefaultBranch == false else {
+            return "This repository guards its default branch: put the work on a branch of its own "
                 + "and open a pull request for it"
         }
         guard branchItem != nil, isPushed == false, hasUnpushedCommits else {

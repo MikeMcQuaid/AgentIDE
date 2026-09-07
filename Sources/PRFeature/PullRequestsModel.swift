@@ -55,6 +55,9 @@ final class PullRequestsModel {
         fetchHasMergeQueue = {
             await gate.hasMergeQueue(repositoryPath: repository.path)
         }
+        fetchAcceptsDefaultPushes = {
+            await Self.acceptsDefaultPushes(gate: gate, repository: repository, defaultBranch: defaultBranch)
+        }
         fetchThreads = { number in
             let answer = try? await gate.conversation(
                 repositoryPath: repository.path,
@@ -273,6 +276,9 @@ final class PullRequestsModel {
     var fetchList: (GitHubClient.ListScope, Int) async throws -> [PullRequestSummary]
     var fetchSummary: (Int) async throws -> PullRequestSummary?
     var fetchHasMergeQueue: () async -> Bool
+
+    var fetchAcceptsDefaultPushes: () async -> Bool
+    var acceptsDefaultPushes = false
     var fetchThreads: (Int) async -> [ReviewThread]
     var performCreate: (Worktree, String, String, [String], Bool) async throws -> String
 

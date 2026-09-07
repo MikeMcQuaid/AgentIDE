@@ -335,18 +335,26 @@ extension PullRequestsModelTests {
     }
 
     @Test
-    func `the default branch is not pushed from here`() async {
+    func `a guarded default branch is not pushed from here, an open one is`() async {
         // The fixture's model calls `main` the default branch, and
-        // the sidebar's own checkout sits on it: commits made there
-        // belong on a branch of their own, and pushing them from
-        // here goes round the pull request this tab is for.
+        // the sidebar's own checkout sits on it. GitHub guards it
+        // (classic protection, or a rule wanting a pull request), so
+        // a push would be refused and the button says so.
         let model = makeModel(items: [item(branch: "main", ahead: 2)])
         model.currentBranch = "main"
         await model.reload()
+        await model.loadDefaultBranchPolicy()
 
         #expect(model.isDefaultBranch)
         #expect(model.canPush == false)
         #expect(model.pushHelp.contains("branch of its own"))
+
+        // A repository of your own guards nothing, and takes it.
+        model.fetchAcceptsDefaultPushes = { true }
+        await model.loadDefaultBranchPolicy()
+        #expect(model.canPush)
+        model.fetchAcceptsDefaultPushes = { false }
+        await model.loadDefaultBranchPolicy()
 
         // The menu bar's Push reaches the model without a button to
         // dim, and declines in the footer rather than pushing.

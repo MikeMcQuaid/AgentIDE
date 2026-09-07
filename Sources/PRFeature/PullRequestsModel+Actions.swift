@@ -348,12 +348,14 @@ extension PullRequestsModel {
         // click, so the listing, the pull request in view and its
         // conversation are all forgotten before the reading.
         pullRequests.invalidateListings(repositoryPath: repository.path)
+        pullRequests.forgetDefaultPushPolicy(repositoryPath: repository.path)
         if let number = selected?.number {
             pullRequests.invalidate(repositoryPath: repository.path, number: number)
         }
         conversationRefreshes += 1
         await reload(keepingSelection: true)
         await loadMergeQueue()
+        await loadDefaultBranchPolicy()
     }
 
     static func requestSidebarRefresh() {

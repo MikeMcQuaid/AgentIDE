@@ -99,6 +99,7 @@ public struct PullRequestsView: View {
                 loadedIdentity = identity
                 await model.reload()
                 await model.loadMergeQueue()
+                await model.loadDefaultBranchPolicy()
             } else if model.needsCreateForm == false {
                 await model.reload(keepingSelection: true)
             }

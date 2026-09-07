@@ -246,4 +246,32 @@ struct PullRequestStoreTests {
 
         #expect(runner.calls == 1)
     }
+
+    @Test
+    func `the default branch policy is asked once and again after a refresh forgets it`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-store-policy") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        // The runner protects nothing: the branch and its rules are
+        // one question each, and a second look asks nothing.
+        let first = await store.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
+        let second = await store.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
+        #expect(first)
+        #expect(second)
+        #expect(runner.calls == 2)
+
+        // Relaunched, it still knows; forgotten, it asks again.
+        let relaunched = PullRequestStore(
+            github: GitHubClient(runner: runner),
+            store: MetadataStore(file: file),
+        ) { false }
+        let remembered = await relaunched.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
+        #expect(remembered)
+        #expect(runner.calls == 2)
+        relaunched.forgetDefaultPushPolicy(repositoryPath: "/repo")
+        let reasked = await relaunched.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
+        #expect(reasked)
+        #expect(runner.calls == 4)
+    }
 }

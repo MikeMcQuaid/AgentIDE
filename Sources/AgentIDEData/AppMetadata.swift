@@ -131,6 +131,8 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
         mergeQueueCapability = try container
             .decodeIfPresent([String: Bool].self, forKey: .mergeQueueCapability) ?? [:]
+        directPushCapability = try container
+            .decodeIfPresent([String: Bool].self, forKey: .directPushCapability) ?? [:]
         // The newer ledgers decode as one value from the same
         // decoder, which keeps this initialiser within its length.
         let ledgers = try Ledgers(from: decoder)
@@ -155,8 +157,10 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// relaunch shows the queue it knew rather than asking at once.
     public var queuedCache: [String: [Int]] = [:]
 
-    /// Whether each repository merges through a queue at all.
+    /// Whether each repository merges through a queue at all, and
+    /// whether its default branch takes a push.
     public var mergeQueueCapability: [String: Bool] = [:]
+    public var directPushCapability: [String: Bool] = [:]
 
     /// The models each CLI last reported, by agent raw value, so the
     /// pickers open on a relaunch with the real list while the CLI
@@ -175,11 +179,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// limit, which is most polls.
     public var etags: [String: String] = [:]
 
-    /// The head commit GitHub last reported for each pushed branch,
-    /// keyed like `pullRequestCache`, held from a push until GitHub
-    /// reports another: until then a fetched summary is painted as
-    /// awaiting its checks, since what GitHub says is about commits
-    /// that are gone. Empty when the cache held no commit to compare.
+    /// The head GitHub last reported for each pushed branch, keyed
+    /// like `pullRequestCache`, until it reports another; see
+    /// `PullRequestStore+Pending`. Empty when none was known.
     public var pendingChecks: [String: String] = [:]
 
     /// When each pull request's checks were first seen still running,
