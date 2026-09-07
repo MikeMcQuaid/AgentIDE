@@ -10,11 +10,11 @@
     /// Blind polling read `git status` and `git worktree list` across
     /// the whole workspace every few seconds for rows that never
     /// changed; the file system already knows.
-    public final class WorkspaceWatcher: FileWatching, Sendable {
+    final class WorkspaceWatcher: FileWatching, Sendable {
         // MARK: Lifecycle
 
         /// Creates a watcher over some root directories.
-        public init(roots: [String]) {
+        init(roots: [String]) {
             box = ChangeBox(roots: roots)
         }
 
@@ -29,13 +29,13 @@
         /// Whether the stream is running; false answers every question
         /// with "assume changed", so a machine where FSEvents fails
         /// falls back to time-based reads.
-        public var isWatching: Bool {
+        var isWatching: Bool {
             watching.withLock { $0 }
         }
 
         /// Starts watching; safe to call more than once, and a failed
         /// attempt may be retried, since nothing was left half started.
-        public func start() {
+        func start() {
             guard started.withLock({ let was = $0; $0 = true; return was }) == false else {
                 return
             }
@@ -75,7 +75,7 @@
         /// The directories changed since last asked, trimmed to at most
         /// two levels under their root (a repository, or a worktree's
         /// `repository/branch`), and cleared by the asking.
-        public func consumeChangedPaths() -> Set<String> {
+        func consumeChangedPaths() -> Set<String> {
             box.changed.withLock { changed in
                 let consumed = changed
                 changed = []

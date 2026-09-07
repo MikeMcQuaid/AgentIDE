@@ -22,7 +22,7 @@ public struct PullRequestStore: Sendable {
     public init(
         github: GitHubClient,
         store: MetadataStore,
-        onBattery: @escaping @Sendable () -> Bool = { false },
+        onBattery: @escaping @Sendable () -> Bool = { PluggedInPower().isOnBattery },
     ) {
         self.github = github
         self.store = store

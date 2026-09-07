@@ -4,12 +4,15 @@
 /// never reconstruct a concrete launcher.
 public protocol SandboxLaunching: Sendable {
     /// The host (GUI) user the sandbox identity is derived from.
+    // periphery:ignore - concrete launchers expose this; callers take command()
     var hostUser: String { get }
 
     /// The sandbox user that owns herdr and the agent processes.
+    // periphery:ignore - used inside concrete command() builders
     var sandboxUser: String { get }
 
     /// The sandbox user's home directory.
+    // periphery:ignore - used inside concrete command() builders
     var sandboxHome: String { get }
 
     /// The workspace directory both users read and write.
@@ -28,6 +31,7 @@ public protocol SandboxLaunching: Sendable {
     var profileBootstrap: String { get }
 
     /// The `PATH` injected into the clean sandbox environment.
+    // periphery:ignore - used inside concrete command() builders
     var sandboxPath: String { get }
 
     /// The full argv that runs `payload` inside the sandbox.
