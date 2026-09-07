@@ -259,7 +259,7 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
-        guard branchItem != nil, isDefaultBranch == false, isPushed == false,
+        guard branchItem != nil, isGuardedDefaultBranch == false, isPushed == false,
               tipSignature == .signed
         else {
             return false
@@ -269,12 +269,17 @@ extension PullRequestsModel {
     }
 
     /// Whether the entry in view is the repository's own default
-    /// branch. Work belongs on a branch of its own: pushing to the
-    /// default branch straight from here goes round the pull
-    /// request the rest of this tab is for, and a repository that
-    /// protects it would refuse the push anyway.
+    /// branch.
     var isDefaultBranch: Bool {
         listedBranch != nil && listedBranch == defaultBranch
+    }
+
+    /// Whether the entry in view is a default branch that refuses a
+    /// push: one GitHub protects, or wants a pull request or passing
+    /// checks on, which is most shared repositories. A repository of
+    /// your own with none of that takes the push, and Push runs.
+    var isGuardedDefaultBranch: Bool {
+        isDefaultBranch && acceptsDefaultPushes == false
     }
 
     /// Whether the listed branch has commits the remote lacks: the
@@ -292,8 +297,8 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
-        guard isDefaultBranch == false else {
-            return "This is the repository's default branch: put the work on a branch of its own "
+        guard isGuardedDefaultBranch == false else {
+            return "This repository guards its default branch: put the work on a branch of its own "
                 + "and open a pull request for it"
         }
         guard branchItem != nil, isPushed == false, hasUnpushedCommits else {

@@ -227,6 +227,42 @@ public struct PullRequestStore: Sendable {
         return answer
     }
 
+    /// Whether the repository's default branch takes a push. Asked
+    /// once per repository and kept until `forgetDefaultPushPolicy`,
+    /// which the tab's refresh button is for: protection changes
+    /// about as often as a repository's settings do. A GitHub that
+    /// cannot be asked stores nothing, so the next visit asks again,
+    /// and nothing known is a no.
+    public func acceptsDefaultPushes(repositoryPath: String, branch: String) async -> Bool {
+        let key = "push-capability#" + repositoryPath
+        if let known = store.load().directPushCapability[repositoryPath] {
+            PerformanceLog.record(cacheHit: true, key)
+            return known
+        }
+
+        PerformanceLog.record(cacheHit: false, key)
+
+        let answer: Bool
+        switch await github.pushPolicy(repositoryPath: repositoryPath, branch: branch) {
+        case .unknown:
+            return false
+
+        case .takesPushes:
+            answer = true
+
+        case .guarded:
+            answer = false
+        }
+        store.update { $0.directPushCapability[repositoryPath] = answer }
+        return answer
+    }
+
+    /// Forgets whether the default branch takes a push, so the next
+    /// reading asks GitHub again.
+    public func forgetDefaultPushPolicy(repositoryPath: String) {
+        store.update { $0.directPushCapability[repositoryPath] = nil }
+    }
+
     /// Every repository's merge queue, those due asked for in one
     /// query and the rest answered from what they last said.
     public func queuedNumbers(

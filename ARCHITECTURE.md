@@ -792,12 +792,18 @@ selects the worktree holding it, and `agentide new` starts a session.
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
   which the next fetch replaces.
-- **The default branch is not pushed from here.** Work belongs on a
-  branch of its own, and a push straight to `main` goes round the
-  pull request the rest of the tab is for (a protected branch would
-  refuse it anyway), so Push dims there and says why, and the menu
-  bar's Push, which has no button to dim, declines in the footer.
-  The tab already asks GitHub nothing about the default branch.
+- **A guarded default branch is not pushed from here.** Whether the
+  default branch takes a push is GitHub's to say: the branch's own
+  summary says whether classic protection is on it, and the rules
+  endpoint lists every ruleset rule active on it, both readable with
+  read access. Protection, or a rule wanting a pull request or
+  passing checks, means a push would be refused, so Push dims there
+  and says why and the menu bar's Push declines in the footer; a
+  repository of your own with none of that takes the push and Push
+  runs. Asked once per repository and kept until the tab's refresh
+  button is pressed, since protection changes about as often as a
+  repository's settings do; nothing known counts as guarded. The tab
+  asks GitHub nothing else about the default branch.
 - **Pushing** asks the branch first and GitHub second. A branch checked
   out from someone else's pull request carries that fork's URL in its
   config (all `gh pr checkout` leaves behind), so it is given a remote

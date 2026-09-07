@@ -11,6 +11,13 @@ extension PullRequestsModel {
         hasMergeQueue = await fetchHasMergeQueue()
     }
 
+    /// Whether the default branch takes a push, which is the one
+    /// thing that lets Push run on it: a repository of your own
+    /// usually does, a shared one guards it and refuses.
+    func loadDefaultBranchPolicy() async {
+        acceptsDefaultPushes = await fetchAcceptsDefaultPushes()
+    }
+
     /// The cached listing paints instantly while the fetch runs; a
     /// kept selection is re-selected once the fetch answers, and a
     /// single result opens its conversation directly. Extending

@@ -121,11 +121,11 @@ extension PullRequestsModel {
         // The menu bar's Push reaches this without a button to dim,
         // and a push to the default branch goes round the pull
         // request the rest of this tab is for.
-        guard isDefaultBranch == false else {
+        guard isGuardedDefaultBranch == false else {
             setStatus(
-                "Not pushed: this is the default branch.",
-                detail: "work belongs on a branch of its own; the default branch is what a pull "
-                    + "request merges into",
+                "Not pushed: the default branch is guarded.",
+                detail: "the default branch is protected or wants a pull request; work belongs "
+                    + "on a branch of its own",
             )
             return true
         }
