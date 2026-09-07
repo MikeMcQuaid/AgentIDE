@@ -1,4 +1,4 @@
-import AgentIDEData
+@testable import AgentIDEData
 import Foundation
 import Testing
 

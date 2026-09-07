@@ -24,7 +24,53 @@
             // state, and the one watcher lives for the process anyway.
         }
 
-        // MARK: Public
+        // MARK: Internal
+
+        /// What the event callback writes into: separate from the
+        /// watcher so the never-stopped stream can never point at a
+        /// deallocated object.
+        final class ChangeBox: Sendable {
+            // MARK: Lifecycle
+
+            init(roots: [String]) {
+                self.roots = roots
+            }
+
+            deinit {
+                // Owned by the stream for the life of the process.
+            }
+
+            // MARK: Internal
+
+            let roots: [String]
+            let changed: Mutex<Set<String>> = .init([])
+
+            /// Records event paths trimmed to their root plus two
+            /// components: deep churn inside one worktree collapses to
+            /// one entry however busy the agent in it is.
+            func record(_ paths: [String]) {
+                changed.withLock { set in
+                    for path in paths {
+                        guard let root = roots.first(where: { candidate in
+                            path == candidate || path.hasPrefix(candidate + "/")
+                        }) else {
+                            continue
+                        }
+
+                        let suffix = path.dropFirst(root.count)
+                            .split(separator: "/")
+                            .prefix(Self.keptComponents)
+                        set.insert(suffix.isEmpty ? root : root + "/" + suffix.joined(separator: "/"))
+                    }
+                }
+            }
+
+            // MARK: Private
+
+            /// `repositories/<repo>` is one component under its root,
+            /// `worktrees/<repo>/<branch>` two; nothing needs more.
+            private static let keptComponents = 2
+        }
 
         /// Whether the stream is running; false answers every question
         /// with "assume changed", so a machine where FSEvents fails
@@ -81,54 +127,6 @@
                 changed = []
                 return consumed
             }
-        }
-
-        // MARK: Internal
-
-        /// What the event callback writes into: separate from the
-        /// watcher so the never-stopped stream can never point at a
-        /// deallocated object.
-        final class ChangeBox: Sendable {
-            // MARK: Lifecycle
-
-            init(roots: [String]) {
-                self.roots = roots
-            }
-
-            deinit {
-                // Owned by the stream for the life of the process.
-            }
-
-            // MARK: Internal
-
-            let roots: [String]
-            let changed: Mutex<Set<String>> = .init([])
-
-            /// Records event paths trimmed to their root plus two
-            /// components: deep churn inside one worktree collapses to
-            /// one entry however busy the agent in it is.
-            func record(_ paths: [String]) {
-                changed.withLock { set in
-                    for path in paths {
-                        guard let root = roots.first(where: { candidate in
-                            path == candidate || path.hasPrefix(candidate + "/")
-                        }) else {
-                            continue
-                        }
-
-                        let suffix = path.dropFirst(root.count)
-                            .split(separator: "/")
-                            .prefix(Self.keptComponents)
-                        set.insert(suffix.isEmpty ? root : root + "/" + suffix.joined(separator: "/"))
-                    }
-                }
-            }
-
-            // MARK: Private
-
-            /// `repositories/<repo>` is one component under its root,
-            /// `worktrees/<repo>/<branch>` two; nothing needs more.
-            private static let keptComponents = 2
         }
 
         // MARK: Private
