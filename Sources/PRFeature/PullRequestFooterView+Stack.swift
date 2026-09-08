@@ -10,7 +10,7 @@ extension PullRequestFooterView {
     /// stack's from any layer, its bottom included, since rebasing
     /// one layer alone is what loses the layers above it.
     @ViewBuilder var branchActions: some View {
-        if model.stacking.stack.isStacked {
+        if model.isInStack {
             restackButton
         } else {
             rebaseButton
@@ -102,15 +102,14 @@ extension PullRequestFooterView {
 
     /// A stacked entry merges with everything under it or not at
     /// all: merging one out of order would land its parent's commits
-    /// under another pull request's name. One word, since which of
-    /// merge, queue or automerge happens is the repository's
-    /// business rather than this button's, and dim until GitHub
-    /// knows the stack.
+    /// under another pull request's name. Queue where the repository
+    /// merges through a queue and Merge otherwise, as the lone
+    /// button says it, and dim until GitHub knows the stack.
     @ViewBuilder var mergeStackButton: some View {
         if model.selected?.state == "OPEN" {
             BusyButton(
-                "Merge",
-                busy: "Merging",
+                model.hasMergeQueue ? "Queue" : "Merge",
+                busy: model.hasMergeQueue ? "Queueing" : "Merging",
                 prominent: true,
                 disabled: model.canMergeStack == false,
             ) {

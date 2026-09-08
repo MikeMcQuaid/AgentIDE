@@ -181,10 +181,21 @@ extension PullRequestsModel {
 
     /// Whether the entry on screen is stacked work: only a branch
     /// opening against another branch is. At the bottom of a stack
-    /// the tab is the ordinary one branch tab, actions and all,
-    /// however many branches sit above it.
+    /// the tab is the ordinary one branch tab for its form and its
+    /// push, however many branches sit above it; its rebase and its
+    /// merge are the stack's, see `isInStack`.
     var isStackedEntry: Bool {
         listedParent != nil
+    }
+
+    /// Whether the entry on screen belongs to a stack at all, its
+    /// bottom included. Rebase and Merge are the stack's from any
+    /// layer: rebasing the bottom alone loses the layers above it,
+    /// and merging it as a lone pull request fails on a merge
+    /// queue, which gh joins through auto-merge and GitHub refuses
+    /// for a stacked pull request.
+    var isInStack: Bool {
+        stacking.stack.isStacked
     }
 
     /// Whether every pull request below this entry could merge on
@@ -220,7 +231,7 @@ extension PullRequestsModel {
     /// stack at all, so asking it would dim the button forever.
     var isStackLinked: Bool {
         guard let listed = listedBranch,
-              let index = stacking.stack.branches.firstIndex(of: listed), index > 0
+              let index = stacking.stack.branches.firstIndex(of: listed)
         else {
             return false
         }

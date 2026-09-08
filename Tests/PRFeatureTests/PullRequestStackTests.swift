@@ -66,11 +66,15 @@ struct PullRequestStackTests {
         await model.reload()
 
         // Nothing above it makes the bottom entry stacked work: it
-        // opens against the default branch, so the tab is the plain
-        // one branch tab, actions and all.
+        // opens against the default branch, so the form is the plain
+        // one branch form. Its rebase and merge are still the
+        // stack's, since merging the bottom as a lone pull request
+        // fails on a merge queue and rebasing it alone loses the
+        // layers above.
         #expect(model.listedBranch == "lower")
         #expect(model.listedParent == nil)
         #expect(model.isStackedEntry == false)
+        #expect(model.isInStack)
 
         model.prTitle = "Lower work"
         #expect(await model.createPullRequest())

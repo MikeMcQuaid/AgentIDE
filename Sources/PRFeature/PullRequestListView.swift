@@ -172,7 +172,7 @@ struct PullRequestFooterView: View {
             draftAndOpenButtons
             if model.isEditing {
                 // Saving is the one thing to do while editing.
-            } else if model.isStackedEntry {
+            } else if model.isInStack {
                 mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(
