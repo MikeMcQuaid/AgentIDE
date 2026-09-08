@@ -361,6 +361,10 @@ public final class DashboardModel {
     var queuedRefresh: Task<Void, Never>?
     var pendingForces: Set<String> = []
 
+    /// The identifier of the task running the reading in flight, and whether it asked for another; see `refresh`.
+    var readingTaskID: Int?
+    var followUpDue = false
+
     /// Whether the next reading asks herdr for its pane listing:
     /// every action and agent change says so, the poll only when
     /// the listing's safety interval has passed. True at launch,

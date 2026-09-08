@@ -382,7 +382,10 @@ work is `@concurrent`. Events flow as `AsyncStream`s consumed via
 `HerdrTerminalChannel`, `StackCache` and `RepositoryFacts`; another
 needs a written justification here. `@unchecked Sendable` and
 `nonisolated(unsafe)` are banned. Never loop awaiting a maybe-finished
-task on an actor: keep one running and one queued follow-up.
+task on an actor: keep one running and one queued follow-up. A reading
+that asks for a reading (cleaning up after a merge does) gets the next
+one rather than waiting: the one it is inside is waiting for it, and
+each waited on the other until the app was restarted.
 
 ## Key data flows
 

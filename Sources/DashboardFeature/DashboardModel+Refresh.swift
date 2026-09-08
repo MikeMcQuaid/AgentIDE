@@ -28,7 +28,12 @@ public extension DashboardModel {
     /// waiting loop: awaiting an already-finished task resumes
     /// without yielding the actor, and a loop of waiters doing that
     /// starved the one task able to move the state on, which hung
-    /// the app at startup.
+    /// the app at startup. The one exception to that promise is a
+    /// reading asking for a reading, which cleaning up after a merge
+    /// does: it cannot wait for one, since the reading it is inside
+    /// is waiting for it, and each waited on the other until the app
+    /// was restarted. Its call returns at once and what it asked for
+    /// runs as the next reading, straight after this one.
     /// `readingPanes` says whether this reading may ask herdr for
     /// its pane listing: everything but the poll's own tick does,
     /// since an action or an agent change is what changes it; the
@@ -40,6 +45,11 @@ public extension DashboardModel {
         if readingPanes {
             pendingPaneRead = true
         }
+        guard isInsideReading == false else {
+            followUpDue = true
+            return
+        }
+
         // A queued reading has not started, so it must begin after
         // this call: joining it keeps the promise.
         if let queued = queuedRefresh {
@@ -55,7 +65,7 @@ public extension DashboardModel {
                 // replace a queued reading.
                 refreshTask = queuedRefresh
                 queuedRefresh = nil
-                await performRefresh()
+                await performReadings()
                 refreshTask = nil
             }
             queuedRefresh = queued
@@ -64,7 +74,7 @@ public extension DashboardModel {
         }
 
         let task = Task {
-            await performRefresh()
+            await performReadings()
             refreshTask = nil
         }
         refreshTask = task
@@ -125,6 +135,23 @@ public extension DashboardModel {
     /// pane's buttons gate on those counts.
     func refreshSelected() async {
         await refresh(forcing: selection?.worktree.repositoryPath)
+    }
+
+    /// Whether the caller is the reading in flight, which is what
+    /// its own clean-up is when it asks for another reading.
+    private var isInsideReading: Bool {
+        readingTaskID != nil && withUnsafeCurrentTask { $0?.hashValue } == readingTaskID
+    }
+
+    /// One reading, then another straight after when the first
+    /// asked for one, unless a queued reading is about to run anyway.
+    private func performReadings() async {
+        readingTaskID = withUnsafeCurrentTask { $0?.hashValue }
+        defer { readingTaskID = nil }
+        repeat {
+            followUpDue = false
+            await performRefresh()
+        } while followUpDue && queuedRefresh == nil
     }
 
     /// One whole reading of the system; only `refresh` runs it, one
