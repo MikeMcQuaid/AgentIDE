@@ -560,10 +560,12 @@ page resumes any past conversation into a fresh worktree.
    are memoised by content.
 4. Rejecting lines builds a reverse patch with `PatchBuilder`, validates
    with `git apply --check -R`, applies with `git apply -R --index` and
-   amends. Uncommitted changes skip the amend and are editable in
-   place: context and added lines are text fields armed per file (arming
-   every file at once made the pane lag), removed lines are history and
-   are not, and a never-committed file can be deleted after a prompt.
+   amends. Uncommitted changes skip the amend. Every file's header
+   opens it in the editor; an uncommitted tracked file can be put back
+   to what HEAD has (`git checkout HEAD -- <path>`, staged changes
+   included) and a never-committed one deleted, each after a prompt.
+   Lines once turned into fields on a click, which could not be
+   selected across and read as jank, so a diff is now only ever read.
    Each file appears once in the diff.
 5. Every text surface has macOS text substitution off: curly quotes and
    em dashes are wrong in code and commit messages.
@@ -573,9 +575,8 @@ page resumes any past conversation into a fresh worktree.
    (`DiffHunkTextView`): a drag crosses lines, a copy strips the
    embedded gutter so it pastes as code, gutter clicks still toggle
    rejection, and the view declines the find action so Cmd-F falls
-   through to the review bar. Uncommitted hunks stay line by line,
-   since their lines become fields on a click, and there Copy hunk
-   is what takes several lines. The messages pane is one selectable
+   through to the review bar, in every scope, uncommitted included.
+   The messages pane is one selectable
    document the same way (`SelectableTextView` over the whole log),
    and every line in it reads the same: `repository: branch: what
    happened`, the repository bold and the branch monospaced, with
@@ -875,7 +876,12 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **A stack moves as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
   pushes the branches the remote already has, since GitHub reads a
-  pull request whose parent moved as no stack at all. Rebasing one
+  pull request whose parent moved as no stack at all. Merge on any
+  layer, the bottom included, is the stack's merge of that layer and
+  everything below it: a stacked pull request merged as a lone one
+  fails on a merge queue, which `gh pr merge` joins through
+  auto-merge and GitHub refuses for stacked pull requests, where
+  `gh stack merge` queues the layers in order. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Pushing any entry
   pushes every branch of the stack, bottom first, whether or not each

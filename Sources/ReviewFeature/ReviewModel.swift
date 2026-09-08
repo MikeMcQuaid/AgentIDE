@@ -70,9 +70,6 @@ final class ReviewModel {
     /// The selected lines per file path.
     var selections: [String: Set<DiffSelection>] = [:]
 
-    /// Typing in a diff line, by the edits extension's key.
-    var lineDrafts: [String: String] = [:]
-
     /// The last action's outcome, for display.
     var status: String?
 
@@ -105,6 +102,9 @@ final class ReviewModel {
     /// which decides if a reload failure is worth reporting; the
     /// real file system by default.
     var worktreeExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+
+    /// Internal, since the edits extension file resets files through it.
+    let git: GitClient
 
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
@@ -280,7 +280,6 @@ final class ReviewModel {
 
     // MARK: Private
 
-    private let git: GitClient
     private let baseRefProvider: () async -> String?
 
     /// The commit's actual message, for dimming Amend until the

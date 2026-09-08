@@ -53,18 +53,10 @@ struct DiffStatText: View {
 struct DiffFileView: View {
     // MARK: Internal
 
-    /// One line of one hunk, which is what a field stands in for.
-    struct EditKey: Hashable {
-        let hunkIndex: Int
-        let lineIndex: Int
-    }
-
-    /// A diff line with its numbers drawn and the new-side number
-    /// kept, which is the line the working file holds.
+    /// A diff line with its numbers drawn.
     struct NumberedLine {
         let line: DiffLine
         let numbers: String
-        let new: Int?
     }
 
     static let statSpacing: CGFloat = 4
@@ -80,10 +72,6 @@ struct DiffFileView: View {
     let isCollapsed: Bool
     let onToggleCollapse: () -> Void
     let onEdit: () -> Void
-
-    /// The line being typed into; what has been typed lives in the
-    /// model. Internal, since the editing extension file reads it.
-    @FocusState var editing: EditKey?
 
     /// The highlighter language for this file, judged by extension.
     var language: SyntaxLanguage? {
@@ -103,9 +91,6 @@ struct DiffFileView: View {
             }
         }
         .padding(.bottom, isCollapsed ? Self.collapsedPadding : Self.filePadding)
-        // Leaving a field is what writes it, and focus moving is
-        // what says a field was left.
-        .onChange(of: editing) { previous, _ in commitFocusLoss(from: previous) }
     }
 
     static func pad(_ number: Int?) -> String {
@@ -170,8 +155,6 @@ struct DiffFileView: View {
     private static let collapsedPadding: CGFloat = 1
 
     private static let lineSpacing: CGFloat = 2
-    private static let gutterSpacing: CGFloat = 6
-    private static let selectionBarWidth: CGFloat = 3
 
     /// Enough to find a match at a glance without hiding the code.
     private static let foundOpacity = 0.45
@@ -182,10 +165,8 @@ struct DiffFileView: View {
     /// Whether Delete is asking before removing the file.
     @State private var isConfirmingDelete = false
 
-    /// Whether this file's lines have become fields: a field per
-    /// line across every file made the pane drag, so a file arms on
-    /// the first click into it and stays armed.
-    @State private var isLive = false
+    /// Whether Reset is asking before putting the file back.
+    @State private var isConfirmingReset = false
 
     /// Beside the name rather than at the end of the row: it copies
     /// that name, and among the actions it read as one of them.
@@ -219,19 +200,48 @@ struct DiffFileView: View {
             }
             Spacer()
             DiffStatText(additions: file.additions, deletions: file.deletions)
-            // Uncommitted work edits in place, line by line, and a
-            // file never committed can be thrown away; a commit's
-            // diff is history, so its pencil opens the editor instead.
-            if model.showsUncommitted, file.isNew {
-                deleteButton
-            } else if model.showsUncommitted == false {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .accessibilityLabel("Edit file")
-                }
-                .buttonStyle(.borderless)
-                .hoverHelp("Open this file in the built-in editor for review-time fixes")
+            // The pencil opens the editor in every scope: a diff is
+            // for reading, and lines that turned into fields on a
+            // click could not be selected across. Uncommitted work
+            // can also be put back: a tracked file to what HEAD has,
+            // a file never committed thrown away, each after asking.
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .accessibilityLabel("Edit file")
             }
+            .buttonStyle(.borderless)
+            .hoverHelp("Open this file in the built-in editor for review-time fixes")
+            if model.showsUncommitted {
+                if file.isNew {
+                    deleteButton
+                } else {
+                    resetButton
+                }
+            }
+        }
+    }
+
+    /// Puts a tracked file back to what HEAD has, asking first: it
+    /// throws away every uncommitted change to the file, staged or
+    /// not, and nothing holds a copy of those.
+    private var resetButton: some View {
+        Button {
+            isConfirmingReset = true
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .accessibilityLabel("Reset file")
+        }
+        .buttonStyle(.borderless)
+        .hoverHelp("Put this file back to what HEAD has, losing its uncommitted changes; asks first")
+        .confirmationDialog(
+            "Reset " + file.path + " to HEAD?",
+            isPresented: $isConfirmingReset,
+            titleVisibility: .visible,
+        ) {
+            Button("Reset", role: .destructive) { Task { await model.resetFile(file) } }
+            Button("Cancel", role: .cancel) { isConfirmingReset = false }
+        } message: {
+            Text("Every uncommitted change to the file is thrown away, and nothing holds a copy.")
         }
     }
 
@@ -259,42 +269,17 @@ struct DiffFileView: View {
         }
     }
 
-    /// Numbers and markers sit in a tappable gutter beside each
-    /// line, which wraps to the pane's width as the editor's does:
-    /// a long line is read rather than scrolled sideways to. Each
-    /// line is its own text, so Copy hunk rather than a drag is
-    /// what takes several lines at once, markers and numbers left
-    /// behind.
+    /// One hunk as one selectable text in every scope, its gutter
+    /// of numbers and markers at the head of each line and long
+    /// lines wrapped to the pane's width as the editor's are: a drag
+    /// selects across lines and a copy leaves the gutter behind.
     private func hunkView(hunkIndex: Int, hunk: DiffHunk) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("@@ -\(hunk.oldStart) +\(hunk.newStart) @@")
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            if model.showsUncommitted {
-                // Line by line, since these lines become fields on a
-                // click; only Copy hunk takes several at once here.
-                // Lazy: a long file's lines are built as they scroll
-                // in, not all at once when the file expands.
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(numbered(hunk).enumerated()), id: \.offset) { lineIndex, entry in
-                        HStack(alignment: .top, spacing: Self.gutterSpacing) {
-                            gutterRow(hunkIndex: hunkIndex, lineIndex: lineIndex, entry: entry)
-                                .hoverHelp("Click a changed line's number to select it for rejection")
-                            lineView(
-                                entry,
-                                key: EditKey(hunkIndex: hunkIndex, lineIndex: lineIndex),
-                                arm: { isLive = true },
-                                isLive: isLive,
-                            )
-                        }
-                    }
-                }
-            } else {
-                // History never edits, so its hunk is one text and a
-                // drag selects across lines.
-                selectableHunk(hunkIndex: hunkIndex, hunk: hunk)
-            }
+            selectableHunk(hunkIndex: hunkIndex, hunk: hunk)
         }
         .contextMenu { copyHunkAction(hunk) }
     }
@@ -307,37 +292,6 @@ struct DiffFileView: View {
             NSPasteboard.general.setString(Self.copyText(of: hunk), forType: .string)
         }
         .hoverHelp("Copy this hunk's lines without their numbers or change markers")
-    }
-
-    /// One gutter line: numbers and the change marker, tappable on
-    /// changed lines and carrying the rejection selection bar. Only
-    /// changed lines carry the gesture and button trait.
-    @ViewBuilder
-    private func gutterRow(
-        hunkIndex: Int,
-        lineIndex: Int,
-        entry: NumberedLine,
-    ) -> some View {
-        let selected = isSelected(hunkIndex: hunkIndex, lineIndex: lineIndex)
-        let label = Text(entry.numbers + " " + Self.marker(for: entry.line.kind))
-            .font(CodeStyle.font)
-            .foregroundStyle(.secondary)
-            .background(Self.background(for: entry.line.kind, selected: selected))
-            .overlay(alignment: .leading) {
-                if selected {
-                    Rectangle().fill(.blue).frame(width: Self.selectionBarWidth)
-                }
-            }
-        if entry.line.kind == .context {
-            label
-        } else {
-            label
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    model.toggle(file: file, selection: DiffSelection(hunkIndex: hunkIndex, lineIndex: lineIndex))
-                }
-                .accessibilityAddTraits(.isButton)
-        }
     }
 
     /// Splits a token into runs, marked when a character is a tab or

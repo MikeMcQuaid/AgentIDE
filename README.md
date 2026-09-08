@@ -39,10 +39,11 @@ updates.
 - Code reviews uncommitted work, the last commit, unpushed commits, the
   whole branch or any single commit, as a syntax-highlighted diff with
   the pull request's conversations inline under their files.
-- Edits uncommitted lines in place in the diff, and files in a built-in
-  editor that reads `.editorconfig`, comments with Cmd-/, moves and
-  duplicates lines, guides columns 80 and 118 and bars every uncommitted
-  line.
+- Edits files in a built-in editor that reads `.editorconfig`, comments
+  with Cmd-/, moves and duplicates lines, guides columns 80 and 118 and
+  bars every uncommitted line; an uncommitted file can also be put back
+  to what HEAD has, or deleted if it was never committed, after a
+  prompt.
 - Commits the files you tick rather than the worktree, or adds them to
   the previous commit, with the message drafted by the on-device Apple
   model.

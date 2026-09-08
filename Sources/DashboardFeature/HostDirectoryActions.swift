@@ -23,6 +23,13 @@ struct HostDirectoryActions: View {
             NSPasteboard.general.setString(item.worktree.path, forType: .string)
         }
         .hoverHelp("Copy this directory's full path")
+        if let pullRequest = model.pullRequest(for: item) {
+            Button("Copy pull request URL") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(pullRequest.url, forType: .string)
+            }
+            .hoverHelp("Copy the URL of pull request #" + String(pullRequest.number))
+        }
         Divider()
         Button("Forget this directory", role: .destructive) {
             Task { await model.forgetHostDirectory(item) }
