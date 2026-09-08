@@ -120,13 +120,11 @@ extension PullRequestsModel {
         // and leaves nothing to read it from.
         let onlySigns = rebaseNeed == SessionService.RebaseNeed.sign
         do {
-            let target = try await performRebase(worktree)
-            await reload(keepingSelection: true)
+            let target = try await rebaseUntilSigned(worktree)
             // Done means Push agrees; reporting success with the tip
             // still unsigned took a second press to notice.
             if tipSignature != .signed {
-                report("Rebased, but the tip still reads unsigned; check the signing key "
-                    + "and hit Rebase again")
+                report("Rebased twice, but the tip still reads unsigned; check the signing key")
                 return false
             }
             recordFinished(onlySigns ? .signed : .rebased, branch: listedBranch ?? worktree.branch)
@@ -138,6 +136,29 @@ extension PullRequestsModel {
             return false
         }
     }
+
+    /// Rebases and reads the tip back. A tip that reads unsigned is
+    /// read again after a moment, since the read after a rebase has
+    /// landed before the rebase did; one that still reads unsigned
+    /// is rebased once more before the signing key is questioned.
+    /// What the branch was rebased on.
+    private func rebaseUntilSigned(_ worktree: Worktree) async throws -> String {
+        var target = try await performRebase(worktree)
+        await reload(keepingSelection: true)
+        if tipSignature != .signed {
+            try? await Task.sleep(for: .milliseconds(Self.signatureSettleMilliseconds))
+            await reload(keepingSelection: true)
+        }
+        if tipSignature != .signed {
+            target = try await performRebase(worktree)
+            await reload(keepingSelection: true)
+        }
+        return target
+    }
+
+    /// How long a tip that reads unsigned straight after a rebase
+    /// is given before it is read again.
+    static let signatureSettleMilliseconds = 500
 
     /// The one merge action's label, naming exactly what a click
     /// does right now; nil when no open conversation is selected.
