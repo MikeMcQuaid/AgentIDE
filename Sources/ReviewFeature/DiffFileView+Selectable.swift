@@ -6,8 +6,8 @@ import TerminalUI
 // NSTextView renders NSAttributedString, so it is the currency here.
 // swiftlint:disable legacy_objc_type
 
-/// The read-only hunk as one selectable text: history never edits,
-/// so its lines can share a view and a drag can cross them. Split
+/// The hunk as one selectable text in every scope: a diff is only
+/// read, so its lines share a view and a drag can cross them. Split
 /// from the view body for length; internal rather than private
 /// throughout, since the formatter deletes a private declaration
 /// nothing in its own file reads.

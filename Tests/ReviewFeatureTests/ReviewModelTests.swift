@@ -64,7 +64,7 @@ struct ReviewModelTests {
     }
 
     @Test
-    func `a working line is replaced by the typed lines and the diff follows`() async throws {
+    func `a working file goes back to HEAD, and a deleted one shows as deleted`() async throws {
         let path = FileManager.default
             .temporaryDirectory
             .appendingPathComponent("agentide-edit-" + UUID().uuidString, isDirectory: true)
@@ -83,12 +83,12 @@ struct ReviewModelTests {
         model.scope = .uncommitted
         await model.reload()
         let file = try #require(model.files.first)
-        #expect(await model.replaceLine(in: file, newLineNumber: 2, with: "B2\nB3"))
-        #expect(try String(contentsOfFile: path + "/file.txt", encoding: .utf8) == "a\nB2\nB3\nc\n")
-        #expect(model.files.first?.additions == 2)
-        // A line the file no longer has is refused, and said so.
-        #expect(await model.replaceLine(in: file, newLineNumber: 9, with: "x") == false)
-        #expect(model.status?.contains("no longer") == true)
+        // Reset puts the file back as HEAD has it, staged or not,
+        // and the diff then has nothing to show for it.
+        try await runGit(["add", "file.txt"], in: path)
+        #expect(await model.resetFile(file))
+        #expect(try String(contentsOfFile: path + "/file.txt", encoding: .utf8) == "a\nb\nc\n")
+        #expect(model.files.isEmpty)
 
         // Deleting the file shows as the deletion it now is.
         #expect(await model.deleteFile(file))
