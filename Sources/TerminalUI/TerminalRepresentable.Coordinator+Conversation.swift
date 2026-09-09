@@ -34,7 +34,12 @@ extension TerminalRepresentable.Coordinator {
     /// retry: a slow sudo or sandbox launch recovers by itself.
     func armFrameDeadline() {
         frameDeadline = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.frameTimeoutSeconds))
+            // A deadline cut short was cancelled for a fresh client,
+            // whose own deadline is the one that counts.
+            guard await (try? Task.sleep(for: .seconds(Self.frameTimeoutSeconds))) != nil else {
+                return
+            }
+
             self?.reportIfBlank()
         }
     }
@@ -49,6 +54,9 @@ extension TerminalRepresentable.Coordinator {
         switch event {
         case let .frame(bytes):
             framesSeen += 1
+            // The first frame is recovery succeeding: whatever the
+            // attempt before it did wrong is not news.
+            heldFailure = nil
             view?.feed(byteArray: bytes[...])
             blockSelector?.follow()
 
@@ -83,8 +91,7 @@ extension TerminalRepresentable.Coordinator {
             let expected = Self.isExpectedExit(reason)
             if (detail.isEmpty == false && expected == false) || sawFrames == false {
                 let message = detail.isEmpty ? "the herdr client exited before attaching" : detail
-                ErrorLog.shared.report("Terminal: " + message)
-                self?.view?.feed(text: "\r\n[herdr client exited: " + message + "]\r\n")
+                self?.failed(message)
             } else if let reason, expected {
                 ErrorLog.shared.note("Terminal: " + reason)
             }
@@ -92,7 +99,32 @@ extension TerminalRepresentable.Coordinator {
         }
     }
 
+    /// A client that ended without drawing. Held while recovery has
+    /// yet to be tried: a stale pane target is replaced by the next
+    /// listing's transport, and a running client that draws nothing
+    /// is reattached, and either drawing a frame makes the failure
+    /// not news. Once recovery has been tried, reported at once with
+    /// what was held.
+    func failed(_ message: String) {
+        guard reattachments >= Self.automaticReattachments || heldFailure != nil else {
+            heldFailure = message
+            PerformanceLog.recordMessage("Terminal: " + message + " (held while recovery is tried)", isError: true)
+            return
+        }
+
+        report(message)
+    }
+
     // MARK: Private
+
+    /// Reports a failure and whatever was held before it, and says
+    /// so in the pane.
+    private func report(_ message: String) {
+        let whole = heldFailure.map { $0 + "; then " + message } ?? message
+        heldFailure = nil
+        ErrorLog.shared.report("Terminal: " + whole)
+        view?.feed(text: "\r\n[herdr client exited: " + whole + "]\r\n")
+    }
 
     /// Whether the client's reason for ending is the terminal simply
     /// being gone: herdr words a closed target as the session having
@@ -105,12 +137,12 @@ extension TerminalRepresentable.Coordinator {
         return reason.contains(" exited") || reason.contains("not found")
     }
 
-    /// The deadline fired before any frame. A slow sudo or sandbox
-    /// launch renders late rather than never, so this reports, with
-    /// enough state to name the failing layer, and a client that is
-    /// running yet drew nothing is discarded and attached afresh,
-    /// once: every pane once went blank at the same time with its
-    /// sessions running on, and only a relaunch brought them back.
+    /// The deadline fired before any frame. A client that is running
+    /// yet drew nothing is discarded and attached afresh, once and
+    /// silently: every pane once went blank at the same time with
+    /// its sessions running on, and only a relaunch brought them
+    /// back. Only a pane still blank after that is reported, with
+    /// enough state to name the failing layer.
     private func reportIfBlank() {
         guard framesSeen == 0, tornDown == false else {
             return
@@ -120,15 +152,22 @@ extension TerminalRepresentable.Coordinator {
         Task { [weak self] in
             let running = await ended?.isRunning() ?? false
             let chain = await ended?.launchChainSnapshot() ?? "gone"
-            let reattaches = running && (self?.reattachments ?? 0) < Self.automaticReattachments
-            ErrorLog.shared.report(
-                "Terminal: no frames after \(Self.frameTimeoutSeconds)s"
-                    + " (client running: \(running); chain: \(chain))"
-                    + (reattaches ? "; reattaching" : ""),
-            )
-            if reattaches, let self, let view {
-                reattach(in: view)
+            let state = " (client running: \(running); chain: \(chain))"
+            guard let self else {
+                return
             }
+
+            if running, reattachments < Self.automaticReattachments, let view {
+                PerformanceLog.recordMessage(
+                    "Terminal: no frames after \(Self.frameTimeoutSeconds)s" + state + "; reattaching",
+                    isError: false,
+                )
+                reattach(in: view)
+                return
+            }
+
+            report("no frames after \(Self.frameTimeoutSeconds)s"
+                + (reattachments > 0 ? " and none after reattaching" : "") + state)
         }
     }
 }

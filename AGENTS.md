@@ -139,6 +139,12 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   system selection colours and greys out when the window is not
   key, text surfaces use `textColor` over `textBackgroundColor`.
   Literal white or black belongs only in terminal palettes.
+- Errors reach the Messages pane only after automatic recovery has
+  been tried and failed. A surface that can recover on its own (a
+  terminal reattaching, a stale target replaced by the next listing)
+  does so silently first, keeping the diagnostic in the performance
+  log's `messages.log`, and reports once, naming both attempts, only
+  when the recovery fails too. A recovery that succeeds says nothing.
 - A shortcut or action that opens a surface with a text field
   focuses that field, and Escape closes or cancels what it opened.
   The window title always names the selection (repository and

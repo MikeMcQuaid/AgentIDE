@@ -54,6 +54,12 @@ extension TerminalRepresentable {
         /// afresh; the blank-pane deadline does it once by itself.
         var reattachments = 0
 
+        /// A client's failure kept back while recovery has its go:
+        /// the next attach drawing a frame discards it, the next
+        /// failure reports both. Nothing reaches the messages pane
+        /// until recovery has been tried and failed.
+        var heldFailure: String?
+
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
 
