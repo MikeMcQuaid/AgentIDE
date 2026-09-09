@@ -1,4 +1,5 @@
 import AgentIDEData
+import AgentIDEDomain
 import Foundation
 import Observation
 
@@ -43,9 +44,11 @@ public final class ServiceStatus {
     public private(set) var hasNetwork = true
 
     /// Records a failure. An outage is announced once and then kept
-    /// quiet; anything else is a real failure and always reported,
-    /// since a broken request the user could fix must not be
-    /// swallowed by an outage's silence.
+    /// quiet. Anything else is held until the same read fails again
+    /// on the next poll, which is the recovery every read has, and
+    /// then reported once naming both; a success in between makes
+    /// the first not news. Held or reported, it is never swallowed
+    /// by an outage's silence.
     public func record(failure error: any Error, doing what: String) {
         // A machine with no route explains every failure at once and
         // has said so already: repeating it per branch per poll is
@@ -54,7 +57,17 @@ public final class ServiceStatus {
             return
         }
         guard GitHubOutage.isLikely(error) else {
-            ErrorLog.shared.report(what + ": " + error.localizedDescription)
+            let description = error.localizedDescription
+            guard let earlier = held.removeValue(forKey: what) else {
+                held[what] = description
+                PerformanceLog.recordMessage(
+                    what + ": " + description + " (held while the next read is tried)",
+                    isError: true,
+                )
+                return
+            }
+
+            ErrorLog.shared.report(what + ": " + earlier + "; then again: " + description)
             return
         }
         guard isUnavailable == false else {
@@ -96,8 +109,10 @@ public final class ServiceStatus {
         ErrorLog.shared.note("The network is back" + waited + "; pull request state is refreshing.")
     }
 
-    /// Records a success, which ends an outage and says so once.
-    public func recordSuccess() {
+    /// Records a success, which makes a failure held for what was
+    /// done not news, and ends an outage, saying so once.
+    public func recordSuccess(doing what: String) {
+        held.removeValue(forKey: what)
         guard isUnavailable else {
             return
         }
@@ -112,6 +127,10 @@ public final class ServiceStatus {
     // MARK: Private
 
     private static let secondsPerMinute = 60.0
+
+    /// Failures held while the next read has its go, by what was
+    /// being done.
+    private var held: [String: String] = [:]
 
     /// A rough human duration; the exact seconds of an outage are
     /// nobody's business.

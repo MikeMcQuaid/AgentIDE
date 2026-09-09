@@ -235,6 +235,12 @@ struct PullRequestConversationView: View {
         PullRequestStore(github: github, store: store)
     }
 
+    /// What this read is, for holding its failures apart from every
+    /// other repository's #n.
+    private var readingWhat: String {
+        "Conversation of #" + String(number) + " in " + URL(fileURLWithPath: repositoryPath).lastPathComponent
+    }
+
     @ViewBuilder private var content: some View {
         if description.isEmpty == false {
             MarkdownText(description)
@@ -319,13 +325,19 @@ struct PullRequestConversationView: View {
             }
 
             if let failure = answer.graphQLFailure {
-                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+                PerformanceLog.recordMessage(
+                    "Conversations fell back to REST (no resolve buttons): " + failure,
+                    isError: false,
+                )
             }
             description = answer.body
             events = answer.events
             threads = answer.threads
+            ServiceStatus.shared.recordSuccess(doing: readingWhat)
         } catch {
-            ErrorLog.shared.report(error.localizedDescription)
+            // The painted cache stays, and the next refresh is the
+            // recovery: only a read that fails again is news.
+            ServiceStatus.shared.record(failure: error, doing: readingWhat)
         }
     }
 

@@ -25,4 +25,22 @@ extension ReviewModel {
     static let generatedFragments = [
         ".pbxproj", "Package.resolved", ".lock", "Gemfile.lock", ".xcassets",
     ]
+
+    /// What a reload's reads came to. A failure is held for the next
+    /// reload, which is the recovery a read has, unless the worktree
+    /// itself has gone: one can vanish between the poll that mounted
+    /// this pane and the reload that reads it (a branch renamed away,
+    /// cleanup after a merge), which is the workspace changing, not
+    /// a failure, and the sidebar drops the row on its own.
+    func recordReload(_ error: (any Error)?) {
+        let what = "Review of " + repositoryName
+        guard let error else {
+            ServiceStatus.shared.recordSuccess(doing: what)
+            return
+        }
+
+        if worktreeExists(worktreePath) {
+            ServiceStatus.shared.record(failure: error, doing: what)
+        }
+    }
 }

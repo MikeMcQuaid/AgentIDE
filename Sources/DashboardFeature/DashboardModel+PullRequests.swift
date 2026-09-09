@@ -148,7 +148,7 @@ extension DashboardModel {
                         branch: item.worktree.branch,
                     )
                     await cleanUpIfMerged(item, previous: previous, fresh: summaries)
-                    ServiceStatus.shared.recordSuccess()
+                    ServiceStatus.shared.recordSuccess(doing: "Pull requests for " + group.repository.name)
                 } catch {
                     ServiceStatus.shared.record(
                         failure: error,

@@ -26,11 +26,15 @@ struct ReviewModelVanishedTests {
     }
 
     @Test
-    func `a reload failing in a worktree still there reports`() async {
+    func `a reload failing in a worktree still there reports once it fails again`() async {
         let marker = "held-" + UUID().uuidString
         let model = makeModel(marker: marker)
         model.worktreeExists = { _ in true }
 
+        // The next reload is the recovery a read has: the first
+        // failure is held, the second reports both.
+        await model.reload()
+        #expect(ErrorLog.shared.entries.contains { $0.message.contains(marker) } == false)
         await model.reload()
         #expect(ErrorLog.shared.entries.contains { $0.message.contains(marker) })
     }
@@ -40,7 +44,9 @@ struct ReviewModelVanishedTests {
     private func makeModel(marker: String) -> ReviewModel {
         ReviewModel(
             worktreePath: "/worktrees/repo/renamed-away",
-            repositoryName: "repo",
+            // Its own name, so no other test's success clears what
+            // this one holds.
+            repositoryName: marker,
             git: GitClient(runner: FailingRunner(marker: marker)),
         )
     }

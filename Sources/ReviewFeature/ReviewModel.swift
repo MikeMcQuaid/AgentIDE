@@ -200,15 +200,9 @@ final class ReviewModel {
                 originalMessage = commitMessage
             }
             threads = await fetchThreads()
+            recordReload(nil)
         } catch {
-            // A worktree can vanish between the poll that mounted
-            // this pane and the reload that reads it (a branch
-            // renamed away, cleanup after a merge): that is the
-            // workspace changing, not a failure, and the sidebar
-            // drops the row on its own.
-            if worktreeExists(worktreePath) {
-                report(error.localizedDescription)
-            }
+            recordReload(error)
         }
         hasLoaded = true
     }

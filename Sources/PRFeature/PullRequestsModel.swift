@@ -2,7 +2,6 @@ import AgentIDEData
 import AgentIDEDomain
 import Foundation
 import Observation
-import TerminalUI
 
 /// The pull request tab's state and actions: listing, pagination,
 /// selection enrichment, caching and the branch actions, kept out of
@@ -59,15 +58,7 @@ final class PullRequestsModel {
             await Self.acceptsDefaultPushes(gate: gate, repository: repository, defaultBranch: defaultBranch)
         }
         fetchThreads = { number in
-            let answer = try? await gate.conversation(
-                repositoryPath: repository.path,
-                number: number,
-                seededBody: nil,
-            )
-            if let failure = answer?.graphQLFailure {
-                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
-            }
-            return answer?.threads ?? []
+            await Self.threads(of: number, gate: gate, repository: repository)
         }
         performCreate = { worktree, title, body, labels, isDraft in
             try await service.createPullRequest(

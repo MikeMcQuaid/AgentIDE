@@ -471,7 +471,12 @@ page resumes any past conversation into a fresh worktree.
   `OfflineError`, which `GitHubOutage` reads as an outage, so it is
   pooled rather than repeated. `ServiceStatus`
   keeps that apart from GitHub itself being down, and reports nothing
-  at all while the machine is off the network.
+  at all while the machine is off the network. Any other read failure
+  (a branch's pull requests, a conversation, the review pane's diff)
+  is held until the same read fails again on its next poll or reload,
+  then reported once naming both; a success in between makes the
+  first not news. A conversation that fell back to REST is a recovery
+  that worked, and goes only to the messages log.
   Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
