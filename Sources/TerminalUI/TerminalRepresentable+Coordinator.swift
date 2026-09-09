@@ -28,6 +28,8 @@ extension TerminalRepresentable {
         /// afterwards, so a slow attach recovers by itself.
         static let frameTimeoutSeconds = 5
 
+        static let automaticReattachments = 1
+
         /// The last applied appearance; re-applying identical colours
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
@@ -39,6 +41,24 @@ extension TerminalRepresentable {
         var channel: HerdrTerminalChannel?
         var framesSeen = 0
         var frameDeadline: Task<Void, Never>?
+
+        /// The size herdr was last told, so the same size is never
+        /// sent twice in a row: the attach sends the view's size and
+        /// the terminal's own size callback fires straight after with
+        /// the same numbers, and herdr 0.8.2 dropped the repaint that
+        /// should follow such a transient resize, leaving the pane
+        /// blank with a cursor.
+        var sentSize: (columns: Int, rows: Int)?
+
+        /// How many times the client was discarded and attached
+        /// afresh; the blank-pane deadline does it once by itself.
+        var reattachments = 0
+
+        /// A client's failure kept back while recovery has its go:
+        /// the next attach drawing a frame discards it, the next
+        /// failure reports both. Nothing reaches the messages pane
+        /// until recovery has been tried and failed.
+        var heldFailure: String?
 
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
@@ -117,6 +137,21 @@ extension TerminalRepresentable {
             }
         }
 
+        /// Discards the client and attaches afresh: by hand from the
+        /// pane's menu, and once by itself when no frame arrived
+        /// within the deadline while the client was still running,
+        /// which is a pane that would otherwise sit blank with a
+        /// cursor until the app was relaunched.
+        func reattach(in view: PaneTerminalView) {
+            guard let transport = startedTransport, tornDown == false else {
+                return
+            }
+
+            reattachments += 1
+            discardClient(of: view)
+            startWhenSized(transport, in: view)
+        }
+
         /// Cmd-K on the shell: a full terminal reset wipes the screen
         /// and local scrollback, then Ctrl-L asks the running shell to
         /// redraw its prompt, which is what a terminal app's clear
@@ -157,7 +192,7 @@ extension TerminalRepresentable {
                 return
             }
 
-            channel?.send(HerdrTerminal.resizeCommand(columns: newCols, rows: newRows))
+            sendResize(columns: newCols, rows: newRows)
         }
 
         /// Bytes for the pane. A bracketed paste arrives as three
@@ -265,6 +300,7 @@ extension TerminalRepresentable {
             }
             channel = nil
             framesSeen = 0
+            sentSize = nil
             exitReason = nil
             started = false
             view.feed(text: "\u{1B}c")

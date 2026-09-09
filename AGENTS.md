@@ -139,6 +139,12 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   system selection colours and greys out when the window is not
   key, text surfaces use `textColor` over `textBackgroundColor`.
   Literal white or black belongs only in terminal palettes.
+- Errors reach the Messages pane only after automatic recovery has
+  been tried and failed. A surface that can recover on its own (a
+  terminal reattaching, a stale target replaced by the next listing)
+  does so silently first, keeping the diagnostic in the performance
+  log's `messages.log`, and reports once, naming both attempts, only
+  when the recovery fails too. A recovery that succeeds says nothing.
 - A shortcut or action that opens a surface with a text field
   focuses that field, and Escape closes or cancels what it opened.
   The window title always names the selection (repository and
@@ -459,3 +465,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    in that user's macOS temporary directory, and test scratch in the
    gitignored `.test-scratch` of the checkout, which each run sweeps.
 10. Keep diffs minimal and follow existing structure.
+11. One branch per session: every change made in a session goes on
+    that session's one branch, cut from `origin/main` and named for
+    the work, so it opens as one pull request; a further change joins
+    that branch rather than starting another. Delete a branch once
+    its pull request is merged.

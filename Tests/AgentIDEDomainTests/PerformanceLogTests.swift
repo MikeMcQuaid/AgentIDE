@@ -5,6 +5,8 @@ import Testing
 /// The performance log is off unless asked for, lives where both
 /// users can read it, keeps a day and never grows past its cap.
 struct PerformanceLogTests {
+    // MARK: Internal
+
     @Test
     func `a line older than a day is not kept`() {
         let now = Date()
@@ -46,4 +48,35 @@ struct PerformanceLogTests {
             #expect(PerformanceLog.file.hasPrefix("/Users/Shared/sv-"))
         }
     }
+
+    @Test
+    func `every message is kept beside the performance log while it is on`() async throws {
+        // Only where script/test pointed the log: the real shared
+        // file must never take a test's line.
+        let override = try #require(ProcessInfo.processInfo.environment["AGENTIDE_PERFORMANCE_LOG_DIRECTORY"])
+
+        #expect(PerformanceLog.messagesFile == override + "/messages.log")
+        let marker = "kept-" + UUID().uuidString
+        let quiet = "quiet-" + UUID().uuidString
+        PerformanceLog.recordMessage("nothing to see " + quiet, isError: false, enabled: false)
+        PerformanceLog.recordMessage("first line\nsecond line " + marker, isError: true, enabled: true)
+        // The write is queued; the file has it within a moment.
+        var text = ""
+        for _ in 0 ..< Self.readAttempts where text.contains(marker) == false {
+            try await Task.sleep(for: .milliseconds(Self.readWaitMilliseconds))
+            text = (try? String(contentsOfFile: PerformanceLog.messagesFile, encoding: .utf8)) ?? ""
+        }
+        let line = try #require(text.split(separator: "\n").first { $0.contains(marker) })
+        // Stamp, kind, message: newlines folded so a message stays
+        // one line of the file; and off, nothing is written at all.
+        #expect(line.split(separator: "\t").count == 3)
+        #expect(line.contains("\terror\t"))
+        #expect(line.contains("first line \u{23CE} second line"))
+        #expect(text.contains(quiet) == false)
+    }
+
+    // MARK: Private
+
+    private static let readAttempts = 20
+    private static let readWaitMilliseconds = 50
 }

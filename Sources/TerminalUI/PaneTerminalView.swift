@@ -43,6 +43,10 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// menu item.
     var onCopyAllOutput: (() async -> String?)?
 
+    /// Discards the herdr client and attaches afresh, for a pane
+    /// that stopped drawing; nil on a local shell, which has none.
+    var onReattach: (() -> Void)?
+
     /// Keeps a selection while output arrives. SwiftTerm drops the
     /// selection on every line feed whenever mouse reporting is on,
     /// which it always is here so that an agent's own scrolling and
@@ -65,8 +69,22 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// word dropped its last letter unless it carried on into the
     /// next one. A word or line drag (`clickCount` above one) picks
     /// its own boundaries and is left alone.
+    override func mouseDown(with event: NSEvent) {
+        pressPoint = convert(event.locationInWindow, from: nil)
+        super.mouseDown(with: event)
+    }
+
+    /// The first drag is where SwiftTerm anchors the selection, at
+    /// the cell the pointer went down in; the start moves to the
+    /// boundary nearest the press the way the end moves to the
+    /// boundary nearest the pointer, so a drag begun past the middle
+    /// of a character does not take that character with it.
     override func mouseDragged(with event: NSEvent) {
+        let wasActive = selection?.active ?? false
         super.mouseDragged(with: event)
+        if wasActive == false {
+            roundSelectionStart()
+        }
         roundSelectionEnd(at: event)
     }
 
@@ -90,6 +108,12 @@ final class PaneTerminalView: LocalProcessTerminalView {
             let allItem = NSMenuItem(title: "Copy All Output", action: #selector(copyAllOutput(_:)), keyEquivalent: "")
             allItem.target = self
             menu.addItem(allItem)
+        }
+        if onReattach != nil {
+            menu.addItem(.separator())
+            let reattachItem = NSMenuItem(title: "Reattach", action: #selector(reattach(_:)), keyEquivalent: "")
+            reattachItem.target = self
+            menu.addItem(reattachItem)
         }
         return menu
     }
@@ -262,6 +286,9 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// seeing the same event does nothing with it.
     private static var lastWheel: (timestamp: TimeInterval, window: Int)?
 
+    /// Where the mouse went down, for the selection's start.
+    private var pressPoint: CGPoint?
+
     /// The wheel's fractional line carry between events.
     private var wheelRemainder: CGFloat = 0
 
@@ -299,6 +326,30 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
         lastWheel = identity
         return true
+    }
+
+    @objc
+    private func reattach(_: Any?) {
+        onReattach?()
+    }
+
+    /// See `mouseDragged`: the start column SwiftTerm chose, moved
+    /// on to the boundary nearest the press. The soft start resets
+    /// the end with it, and the end rounding that follows puts the
+    /// end back under the pointer.
+    private func roundSelectionStart() {
+        guard let pressPoint, let selection, selection.active,
+              let column = TerminalSelection.endColumn(
+                  across: pressPoint.x,
+                  cellWidth: Self.cellSize(of: self).width,
+                  columns: getTerminal().cols,
+              ), column != selection.start.col
+        else {
+            return
+        }
+
+        selection.setSoftStart(bufferPosition: Position(col: column, row: selection.start.row))
+        selection.startSelection()
     }
 
     /// See `mouseDragged`: the end column SwiftTerm chose, moved on

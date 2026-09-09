@@ -35,32 +35,32 @@ extension PullRequestsModel {
             return nil
         }
 
-        return switch finished.outcome {
-        case .rebased:
-            "Rebased"
-
-        case .signed:
-            "Signed"
-
-        case .pushed:
-            nil
+        if finished.outcomes.contains(.rebased) {
+            return "Rebased"
         }
+
+        return finished.outcomes.contains(.signed) ? "Signed" : nil
     }
 
-    /// The same for the push button.
+    /// The same for the push button; a stack's rebase pushes back
+    /// the branches the remote already had, and says so here.
     var pushDoneTitle: String? {
-        guard let finished, finished.branch == actedBranch, finished.outcome == .pushed else {
+        guard let finished, finished.branch == actedBranch, finished.outcomes.contains(.pushed) else {
             return nil
         }
 
         return "Pushed"
     }
 
-    /// Records what an action finished, for the button that did it.
+    /// Records what an action finished, for the buttons that did it.
     /// The line in the middle of the bar is for what went wrong, so
     /// a success clears whatever refusal is still standing there.
-    func recordFinished(_ outcome: BranchOutcome, branch: String) {
-        finished = (outcome, branch)
+    func recordFinished(_ outcomes: Set<BranchOutcome>, branch: String) {
+        finished = (outcomes, branch)
         status = nil
+    }
+
+    func recordFinished(_ outcome: BranchOutcome, branch: String) {
+        recordFinished([outcome], branch: branch)
     }
 }

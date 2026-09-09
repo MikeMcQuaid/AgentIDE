@@ -203,6 +203,8 @@ struct PullRequestStackTests {
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
+        // The rebase pushes the stack after; nothing real to push here.
+        model.stacking.push = { _ in [] }
         // Done means Push agrees: the stack is read as signed after.
         model.stacking.unsigned = { _ in [] }
         await model.reload()
@@ -270,7 +272,7 @@ struct PullRequestStackTests {
     }
 
     @Test
-    func `a rebase anywhere in a stack puts the published branches back`() async {
+    func `a rebase anywhere in a stack pushes the stack back`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
@@ -286,10 +288,11 @@ struct PullRequestStackTests {
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
-        model.stacking.pushPublished = { _ in
-            done.withLock { $0.append("push published") }
-            return ["upper"]
+        model.stacking.push = { _ in
+            done.withLock { $0.append("push") }
+            return ["lower", "upper"]
         }
+        model.stacking.pending = { _ in true }
         model.stacking.unsigned = { _ in [] }
         await model.reload()
 
@@ -297,8 +300,12 @@ struct PullRequestStackTests {
 
         // A branch the restack moved is behind what the remote has,
         // and GitHub reads a stack whose parents moved as no stack
-        // at all until the remote copies catch up.
-        #expect(done.withLock { $0 } == ["restack", "push published"])
+        // at all until the remote copies catch up; the whole stack
+        // goes, a branch nobody has pushed included, as the button
+        // says. Both buttons say what happened to the entry in view.
+        #expect(done.withLock { $0 } == ["restack", "push"])
+        #expect(model.rebaseDoneTitle == "Rebased")
+        #expect(model.pushDoneTitle == "Pushed")
     }
 
     @Test

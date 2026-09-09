@@ -471,7 +471,15 @@ page resumes any past conversation into a fresh worktree.
   `OfflineError`, which `GitHubOutage` reads as an outage, so it is
   pooled rather than repeated. `ServiceStatus`
   keeps that apart from GitHub itself being down, and reports nothing
-  at all while the machine is off the network.
+  at all while the machine is off the network. Any other read failure
+  (a branch's pull requests, a conversation, the review pane's diff)
+  is held until the same read fails again on its next poll or reload,
+  then reported once naming both; a success in between makes the
+  first not news, and one nobody reads again within a minute and a
+  half is reported as it stands, saying so. Resuming a session is
+  tried twice the same way (`ErrorLog.attemptingTwice`). A
+  conversation that fell back to REST is a recovery that worked, and
+  goes only to the messages log.
   Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the
@@ -875,8 +883,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   working copy or, for sparse checkouts, from git.
 - **A stack moves as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
-  pushes the branches the remote already has, since GitHub reads a
-  pull request whose parent moved as no stack at all. Merge on any
+  then pushes it, bottom first, since GitHub reads a pull request
+  whose parent moved as no stack at all; the button reads Rebase and
+  Push (or Sign and Push) with what comes down and what goes up, its
+  help says why, the note names what was pushed, and Push then reads
+  Pushed. While that button is live Push is not shown at all: two
+  buttons for one job, and Push pressed first pushed branches about
+  to be moved.
+  Only one branch action runs at a time: while one does, Rebase and
+  Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and
   everything below it: a stacked pull request merged as a lone one
   fails on a merge queue, which `gh pr merge` joins through
@@ -885,8 +900,8 @@ selects the worktree holding it, and `agentide new` starts a session.
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Pushing any entry
   pushes every branch of the stack, bottom first, whether or not each
-  has a pull request open yet. A branch nobody has pushed is
-  published by Push and never by a rebase.
+  has a pull request open yet, and Rebase and Push publishes such a
+  branch the same way.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.
@@ -1105,7 +1120,21 @@ Owner avatars cache per owner under `Application Support/AgentIDE/Avatars`;
 a failed fetch is silent. The performance log
 (`<workspace>/tmp/agentide/performance.log`, off by default, on with
 `script/performance-log on`) records every process, `gh` call and cache
-hit or miss; tests point it into the scratch directory.
+hit or miss; tests point it into the scratch directory. While it is on, every
+message the Messages pane shows is also appended to `messages.log`
+beside it: the pane does not survive a relaunch, and a fault worth
+relaunching for is exactly what needs reading afterwards. One such
+fault is a terminal pane that draws nothing: a control pane with no
+frame five seconds after attaching, its client still running, is
+discarded and attached afresh once by itself, silently, and reported
+only if that draws nothing either; a client that exits before drawing
+(a stale pane target after a herdr restart, say) is held the same way
+until the next attach draws or fails. Reattach in the pane's menu does
+the same by hand. A size herdr was
+already told is not sent again: the attach and the terminal's own size
+callback both said the same size, and herdr 0.8.2 dropped the repaint
+after that transient pair (0.9.0 says it repaints after transient
+resizes).
 
 ## Security model
 

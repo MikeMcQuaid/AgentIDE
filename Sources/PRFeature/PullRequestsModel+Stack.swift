@@ -18,9 +18,6 @@ extension PullRequestsModel {
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
         }
-        stacking.pushPublished = { worktree in
-            try await service.pushStack(worktree: worktree, publishedOnly: true)
-        }
         stacking.pending = { worktree in
             await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
         }
@@ -71,13 +68,13 @@ extension PullRequestsModel {
     /// second half an in-place stack with unsigned commits greyed
     /// this button while Push waited on exactly this.
     var canRestack: Bool {
-        stacking.needsRestack || stacking.unsignedBranches.isEmpty == false
+        isBranchActionRunning == false && (stacking.needsRestack || stacking.unsignedBranches.isEmpty == false)
     }
 
     /// Whether any branch of the stack has commits the remote does
     /// not carry.
     var canPushStack: Bool {
-        stacking.needsPush && stacking.unsignedBranches.isEmpty
+        isBranchActionRunning == false && stacking.needsPush && stacking.unsignedBranches.isEmpty
     }
 
     /// Why the stack's push is in its current state, said the way a

@@ -88,7 +88,7 @@ extension PullRequestsModel {
             if let chosen {
                 select(chosen)
             }
-            ServiceStatus.shared.recordSuccess()
+            ServiceStatus.shared.recordSuccess(doing: "Pull requests for " + repository.name)
             prefetchStack()
         } catch {
             ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)

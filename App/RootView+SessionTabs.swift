@@ -144,7 +144,9 @@ extension RootView {
             return
         }
 
-        do {
+        // Tried twice before a failure is reported: a launch that
+        // fails once mostly launches the second time.
+        _ = await ErrorLog.shared.attemptingTwice("Resuming " + item.worktree.branch) {
             try await PerformanceLog.time(.process, "resume: launch", context: context) {
                 if let past = item.pastSessions.first {
                     let name = try await dependencies.service.resumePast(past, worktree: item.worktree)
@@ -155,8 +157,6 @@ extension RootView {
                     try await dependencies.service.resumeWorktree(item.worktree)
                 }
             }
-        } catch {
-            dependencies.dashboard.report(error.localizedDescription)
         }
         await PerformanceLog.time(.process, "resume: list until running", context: context) {
             await sessionStarted(in: item.worktree.path)

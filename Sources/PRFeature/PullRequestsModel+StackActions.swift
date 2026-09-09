@@ -19,7 +19,7 @@ extension PullRequestsModel {
         // and leaves nothing to read it from.
         let onlySigns = stacking.needsRestack == false
         do {
-            let moved = try await restackUntilSigned(worktree)
+            let (moved, pushed) = try await restackUntilSigned(worktree)
             // Done means Push agrees; reporting success with the
             // stack still unsigned took a second press to notice.
             if let unsigned = stacking.unsignedBranches.first {
@@ -41,8 +41,13 @@ extension PullRequestsModel {
                 return true
             }
 
-            recordFinished(onlySigns ? .signed : .rebased, branch: actedBranch ?? worktree.branch)
-            note(verb + " " + Self.named(moved) + ".")
+            let acted = actedBranch ?? worktree.branch
+            var outcomes: Set<BranchOutcome> = [onlySigns ? .signed : .rebased]
+            if pushed.contains(acted) {
+                outcomes.insert(.pushed)
+            }
+            recordFinished(outcomes, branch: acted)
+            note(verb + " " + Self.named(moved) + (pushed.isEmpty ? "." : "; pushed " + Self.named(pushed) + "."))
             Self.requestSidebarRefresh()
             return true
         } catch {
@@ -55,32 +60,35 @@ extension PullRequestsModel {
     /// tip that reads unsigned is read again after a moment, and one
     /// that still does gets one more restack before the signing key
     /// is questioned. The branches moved, each named once.
-    private func restackUntilSigned(_ worktree: Worktree) async throws -> [String] {
-        var moved = try await restackAndPushPublished(worktree)
+    private func restackUntilSigned(_ worktree: Worktree) async throws -> (moved: [String], pushed: [String]) {
+        var (moved, pushed) = try await restackAndPush(worktree)
         await readStack()
         if stacking.unsignedBranches.isEmpty == false {
             try? await Task.sleep(for: .milliseconds(Self.signatureSettleMilliseconds))
             await readStack()
         }
         if stacking.unsignedBranches.isEmpty == false {
-            for branch in try await restackAndPushPublished(worktree) where moved.contains(branch) == false {
-                moved.append(branch)
-            }
+            let again = try await restackAndPush(worktree)
+            moved += again.moved.filter { moved.contains($0) == false }
+            pushed += again.pushed.filter { pushed.contains($0) == false }
             await readStack()
         }
-        return moved
+        return (moved, pushed)
     }
 
-    /// One restack. Every branch it moved is behind what the remote
-    /// has, and GitHub reads a stack whose parents moved as no stack
-    /// at all, so the published ones go back up at once; a branch
-    /// nobody has pushed stays unpushed, which Push is for.
-    private func restackAndPushPublished(_ worktree: Worktree) async throws -> [String] {
+    /// One restack, then the whole stack pushed bottom first, a
+    /// branch nobody has pushed included: every branch that moved is
+    /// behind what the remote has, GitHub reads a stack whose parents
+    /// moved as no stack at all, and the button says and Push.
+    private func restackAndPush(_ worktree: Worktree) async throws -> (moved: [String], pushed: [String]) {
         let moved = try await stacking.restack(worktree)
-        if moved.isEmpty == false {
-            try await markChecksPending(for: stacking.pushPublished(worktree))
+        guard moved.isEmpty == false else {
+            return (moved, [])
         }
-        return moved
+
+        let pushed = try await stacking.push(worktree)
+        markChecksPending(for: pushed)
+        return (moved, pushed)
     }
 
     private func readStack() async {

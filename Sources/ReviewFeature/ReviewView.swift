@@ -33,7 +33,10 @@ public struct ReviewView: View {
                 seededBody: nil,
             )
             if let failure = answer?.graphQLFailure {
-                ErrorLog.shared.report("Conversations fell back to REST (no resolve buttons): " + failure)
+                PerformanceLog.recordMessage(
+                    "Conversations fell back to REST (no resolve buttons): " + failure,
+                    isError: false,
+                )
             }
             return answer?.threads ?? []
         }
