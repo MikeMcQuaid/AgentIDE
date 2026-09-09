@@ -14,8 +14,18 @@ extension TerminalRepresentable.Coordinator {
     /// there is nothing to seed and pastes bracket themselves.
     func requestInitialState(of view: PaneTerminalView) {
         let terminal = view.getTerminal()
-        channel?.send(HerdrTerminal.resizeCommand(columns: terminal.cols, rows: terminal.rows))
+        sendResize(columns: terminal.cols, rows: terminal.rows)
         armFrameDeadline()
+    }
+
+    /// Tells herdr the pane's size, once per size: see `sentSize`.
+    func sendResize(columns: Int, rows: Int) {
+        guard sentSize?.columns != columns || sentSize?.rows != rows else {
+            return
+        }
+
+        sentSize = (columns, rows)
+        channel?.send(HerdrTerminal.resizeCommand(columns: columns, rows: rows))
     }
 
     /// A stream that never renders must not hold the pane blank

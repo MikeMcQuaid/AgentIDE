@@ -42,6 +42,14 @@ extension TerminalRepresentable {
         var framesSeen = 0
         var frameDeadline: Task<Void, Never>?
 
+        /// The size herdr was last told, so the same size is never
+        /// sent twice in a row: the attach sends the view's size and
+        /// the terminal's own size callback fires straight after with
+        /// the same numbers, and herdr 0.8.2 dropped the repaint that
+        /// should follow such a transient resize, leaving the pane
+        /// blank with a cursor.
+        var sentSize: (columns: Int, rows: Int)?
+
         /// How many times the client was discarded and attached
         /// afresh; the blank-pane deadline does it once by itself.
         var reattachments = 0
@@ -178,7 +186,7 @@ extension TerminalRepresentable {
                 return
             }
 
-            channel?.send(HerdrTerminal.resizeCommand(columns: newCols, rows: newRows))
+            sendResize(columns: newCols, rows: newRows)
         }
 
         /// Bytes for the pane. A bracketed paste arrives as three
@@ -286,6 +294,7 @@ extension TerminalRepresentable {
             }
             channel = nil
             framesSeen = 0
+            sentSize = nil
             exitReason = nil
             started = false
             view.feed(text: "\u{1B}c")

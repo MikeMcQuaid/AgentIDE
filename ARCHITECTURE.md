@@ -1112,7 +1112,11 @@ relaunching for is exactly what needs reading afterwards. One such
 fault is a terminal pane that draws nothing: a control pane with no
 frame five seconds after attaching, its client still running, is
 reported there and discarded and attached afresh once by itself, and
-Reattach in the pane's menu does the same by hand.
+Reattach in the pane's menu does the same by hand. A size herdr was
+already told is not sent again: the attach and the terminal's own size
+callback both said the same size, and herdr 0.8.2 dropped the repaint
+after that transient pair (0.9.0 says it repaints after transient
+resizes).
 
 ## Security model
 
