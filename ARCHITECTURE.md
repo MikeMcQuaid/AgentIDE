@@ -884,8 +884,10 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **A stack moves as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
   pushes the branches the remote already has, since GitHub reads a
-  pull request whose parent moved as no stack at all; its help says
-  so, the note names what was pushed, and Push then reads Pushed.
+  pull request whose parent moved as no stack at all; the button
+  itself reads Rebase and push (or Sign and push) whenever a branch
+  is on the remote, its help says why, the note names what was
+  pushed, and Push then reads Pushed.
   Only one branch action runs at a time: while one does, Rebase and
   Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and

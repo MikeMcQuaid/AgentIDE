@@ -29,13 +29,13 @@ extension PullRequestFooterView {
     private var restackButton: some View {
         BusyButton(
             actionTitle(
-                stackSignsOnly ? "Sign" : "Rebase",
+                (stackSignsOnly ? "Sign" : "Rebase") + (stackPushesToo ? " and push" : ""),
                 arrow: Self.downArrow,
                 count: stackSignsOnly ? "" : rebaseCount,
                 active: model.canRestack,
                 done: model.rebaseDoneTitle,
             ),
-            busy: stackSignsOnly ? "Signing" : "Rebasing",
+            busy: (stackSignsOnly ? "Signing" : "Rebasing") + (stackPushesToo ? " and pushing" : ""),
             disabled: model.canRestack == false,
         ) {
             if await model.restack() == false {
@@ -57,6 +57,13 @@ extension PullRequestFooterView {
     /// on the one below it and a tip is unsigned.
     private var stackSignsOnly: Bool {
         model.stacking.needsRestack == false
+    }
+
+    /// Whether the stack's rebase would push as well: any branch the
+    /// remote already has goes back up after it moves, and the
+    /// button says so rather than leaving the push to the help.
+    private var stackPushesToo: Bool {
+        model.stacking.stack.branches.contains { model.stacking.unpushedBranches.contains($0) == false }
     }
 
     private var pushStackButton: some View {
