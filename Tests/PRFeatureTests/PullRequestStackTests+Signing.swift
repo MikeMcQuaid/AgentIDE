@@ -20,6 +20,8 @@ extension PullRequestStackTests {
             restacks.withLock { $0 += 1 }
             return ["upper"]
         }
+        // The rebase pushes the stack after; nothing real to push here.
+        model.stacking.push = { _ in [] }
         model.stacking.unsigned = { _ in
             guard restacks.withLock({ $0 }) > 0 else {
                 return []
@@ -49,6 +51,8 @@ extension PullRequestStackTests {
             restacks.withLock { $0 += 1 }
             return ["upper"]
         }
+        // The rebase pushes the stack after; nothing real to push here.
+        model.stacking.push = { _ in [] }
         model.stacking.unsigned = { _ in restacks.withLock { $0 } >= 2 ? [] : ["lower"] }
         await model.reload()
 

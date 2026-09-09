@@ -883,12 +883,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   working copy or, for sparse checkouts, from git.
 - **A stack moves as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
-  pushes the branches the remote already has, since GitHub reads a
-  pull request whose parent moved as no stack at all; the button
-  itself reads Rebase and Push (or Sign and Push) whenever a branch
-  is on the remote, its help says why, the note names what was
-  pushed, and Push then reads Pushed. While that button is live and
-  no branch is still unpublished, Push is not shown at all: two
+  then pushes it, bottom first, since GitHub reads a pull request
+  whose parent moved as no stack at all; the button reads Rebase and
+  Push (or Sign and Push) with what comes down and what goes up, its
+  help says why, the note names what was pushed, and Push then reads
+  Pushed. While that button is live Push is not shown at all: two
   buttons for one job, and Push pressed first pushed branches about
   to be moved.
   Only one branch action runs at a time: while one does, Rebase and
@@ -901,8 +900,8 @@ selects the worktree holding it, and `agentide new` starts a session.
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Pushing any entry
   pushes every branch of the stack, bottom first, whether or not each
-  has a pull request open yet. A branch nobody has pushed is
-  published by Push and never by a rebase.
+  has a pull request open yet, and Rebase and Push publishes such a
+  branch the same way.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.

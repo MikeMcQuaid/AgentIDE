@@ -15,10 +15,10 @@ extension PullRequestFooterView {
         } else {
             rebaseButton
         }
-        // No Push beside a Rebase and Push that would push everything
-        // there is to push: two buttons for one job, and the second
-        // pressed first pushed branches about to be moved.
-        if restackPushesEverything {
+        // No Push beside a live Rebase and Push: two buttons for one
+        // job, and the second pressed first pushed branches about to
+        // be moved.
+        if model.isInStack, model.canRestack {
             EmptyView()
         } else if model.isStackedEntry {
             pushStackButton
@@ -33,14 +33,8 @@ extension PullRequestFooterView {
     /// past tense while dim, doing the stack's version of the work.
     private var restackButton: some View {
         BusyButton(
-            actionTitle(
-                (stackSignsOnly ? "Sign" : "Rebase") + (stackPushesToo ? " and Push" : ""),
-                arrow: Self.downArrow,
-                count: stackSignsOnly ? "" : rebaseCount,
-                active: model.canRestack,
-                done: model.rebaseDoneTitle,
-            ),
-            busy: (stackSignsOnly ? "Signing" : "Rebasing") + (stackPushesToo ? " and Pushing" : ""),
+            restackTitle,
+            busy: (stackSignsOnly ? "Signing" : "Rebasing") + " and Pushing",
             disabled: model.canRestack == false,
         ) {
             if await model.restack() == false {
@@ -50,9 +44,9 @@ extension PullRequestFooterView {
         .hoverHelp(
             model.canRestack
                 ? "Fetch, then rebase every branch onto the one below it, signing every commit it "
-                + "replays and leaving alone any branch already in place and signed, then push back "
-                + "every branch the remote already has, since GitHub reads a moved stack as no stack "
-                + "until then; a conflict aborts and reports to Messages"
+                + "replays and leaving alone any branch already in place and signed, then push the whole "
+                + "stack bottom first, publishing any branch nobody has pushed yet; a conflict aborts and "
+                + "reports to Messages"
                 : "Every branch is already on the one below it, with its tip signed",
             shortcut: "⌥⌘R",
         )
@@ -64,17 +58,21 @@ extension PullRequestFooterView {
         model.stacking.needsRestack == false
     }
 
-    /// Whether the stack's rebase would push as well: any branch the
-    /// remote already has goes back up after it moves, and the
-    /// button says so rather than leaving the push to the help.
-    private var stackPushesToo: Bool {
-        model.stacking.stack.branches.contains { model.stacking.unpushedBranches.contains($0) == false }
-    }
+    /// The rebase's title with the push it ends in: the branch pair's
+    /// shape for each half, what comes down and what goes up.
+    private var restackTitle: String {
+        let title = actionTitle(
+            stackSignsOnly ? "Sign" : "Rebase",
+            arrow: Self.downArrow,
+            count: stackSignsOnly ? "" : rebaseCount,
+            active: model.canRestack,
+            done: model.rebaseDoneTitle,
+        )
+        guard model.canRestack else {
+            return title
+        }
 
-    /// Whether Rebase and Push would leave nothing for Push to do:
-    /// it is live, it pushes, and no branch is still unpublished.
-    private var restackPushesEverything: Bool {
-        model.isInStack && model.canRestack && stackPushesToo && model.stacking.unpushedBranches.isEmpty
+        return title + " and Push" + (stackPushCount.isEmpty ? "" : " " + Self.upArrow + stackPushCount)
     }
 
     private var pushStackButton: some View {
