@@ -465,3 +465,8 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    in that user's macOS temporary directory, and test scratch in the
    gitignored `.test-scratch` of the checkout, which each run sweeps.
 10. Keep diffs minimal and follow existing structure.
+11. One branch per session: every change made in a session goes on
+    that session's one branch, cut from `origin/main` and named for
+    the work, so it opens as one pull request; a further change joins
+    that branch rather than starting another. Delete a branch once
+    its pull request is merged.
