@@ -15,7 +15,12 @@ extension PullRequestFooterView {
         } else {
             rebaseButton
         }
-        if model.isStackedEntry {
+        // No Push beside a Rebase and Push that would push everything
+        // there is to push: two buttons for one job, and the second
+        // pressed first pushed branches about to be moved.
+        if restackPushesEverything {
+            EmptyView()
+        } else if model.isStackedEntry {
             pushStackButton
         } else {
             pushButton
@@ -29,13 +34,13 @@ extension PullRequestFooterView {
     private var restackButton: some View {
         BusyButton(
             actionTitle(
-                (stackSignsOnly ? "Sign" : "Rebase") + (stackPushesToo ? " and push" : ""),
+                (stackSignsOnly ? "Sign" : "Rebase") + (stackPushesToo ? " and Push" : ""),
                 arrow: Self.downArrow,
                 count: stackSignsOnly ? "" : rebaseCount,
                 active: model.canRestack,
                 done: model.rebaseDoneTitle,
             ),
-            busy: (stackSignsOnly ? "Signing" : "Rebasing") + (stackPushesToo ? " and pushing" : ""),
+            busy: (stackSignsOnly ? "Signing" : "Rebasing") + (stackPushesToo ? " and Pushing" : ""),
             disabled: model.canRestack == false,
         ) {
             if await model.restack() == false {
@@ -64,6 +69,12 @@ extension PullRequestFooterView {
     /// button says so rather than leaving the push to the help.
     private var stackPushesToo: Bool {
         model.stacking.stack.branches.contains { model.stacking.unpushedBranches.contains($0) == false }
+    }
+
+    /// Whether Rebase and Push would leave nothing for Push to do:
+    /// it is live, it pushes, and no branch is still unpublished.
+    private var restackPushesEverything: Bool {
+        model.isInStack && model.canRestack && stackPushesToo && model.stacking.unpushedBranches.isEmpty
     }
 
     private var pushStackButton: some View {
