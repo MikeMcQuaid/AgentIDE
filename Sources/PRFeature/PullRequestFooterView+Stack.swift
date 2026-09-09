@@ -45,8 +45,9 @@ extension PullRequestFooterView {
         .hoverHelp(
             model.canRestack
                 ? "Fetch, then rebase every branch onto the one below it, signing every commit it "
-                + "replays and leaving alone any branch already in place and signed; a conflict "
-                + "aborts and reports to Messages"
+                + "replays and leaving alone any branch already in place and signed, then push back "
+                + "every branch the remote already has, since GitHub reads a moved stack as no stack "
+                + "until then; a conflict aborts and reports to Messages"
                 : "Every branch is already on the one below it, with its tip signed",
             shortcut: "⌥⌘R",
         )

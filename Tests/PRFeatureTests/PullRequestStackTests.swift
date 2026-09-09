@@ -288,8 +288,9 @@ struct PullRequestStackTests {
         }
         model.stacking.pushPublished = { _ in
             done.withLock { $0.append("push published") }
-            return ["upper"]
+            return ["lower", "upper"]
         }
+        model.stacking.pending = { _ in true }
         model.stacking.unsigned = { _ in [] }
         await model.reload()
 
@@ -297,8 +298,11 @@ struct PullRequestStackTests {
 
         // A branch the restack moved is behind what the remote has,
         // and GitHub reads a stack whose parents moved as no stack
-        // at all until the remote copies catch up.
+        // at all until the remote copies catch up. Both buttons say
+        // what happened to the entry in view.
         #expect(done.withLock { $0 } == ["restack", "push published"])
+        #expect(model.rebaseDoneTitle == "Rebased")
+        #expect(model.pushDoneTitle == "Pushed")
     }
 
     @Test

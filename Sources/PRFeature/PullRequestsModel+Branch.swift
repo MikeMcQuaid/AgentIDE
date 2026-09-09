@@ -98,7 +98,7 @@ extension PullRequestsModel {
     /// otherwise never be pushed, since Push waits for the signature
     /// only this can give it.
     var canRebase: Bool {
-        branchItem != nil && rebaseNeed != SessionService.RebaseNeed.nothing
+        branchItem != nil && isBranchActionRunning == false && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
     func rebaseSigned() async -> Bool {
@@ -267,8 +267,10 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
-        guard branchItem != nil, isGuardedDefaultBranch == false, isPushed == false,
-              tipSignature == .signed
+        // One branch action at a time: a push pressed while a rebase
+        // still runs failed against the branch mid-move.
+        guard branchItem != nil, isBranchActionRunning == false, isGuardedDefaultBranch == false,
+              isPushed == false, tipSignature == .signed
         else {
             return false
         }

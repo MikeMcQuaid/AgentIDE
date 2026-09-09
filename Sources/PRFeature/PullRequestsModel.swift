@@ -204,7 +204,7 @@ final class PullRequestsModel {
     /// What the last branch action finished here, and on which
     /// branch: its button reads it in the past tense while it stays
     /// dim, so the work says so where the click was.
-    var finished: (outcome: BranchOutcome, branch: String)?
+    var finished: (outcomes: Set<BranchOutcome>, branch: String)?
 
     /// What a signed rebase would change right now, refreshed on
     /// reload; the button dims and names its work from this.
