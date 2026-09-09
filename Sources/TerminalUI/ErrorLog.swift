@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 import Observation
 
@@ -115,6 +116,7 @@ public final class ErrorLog {
     }
 
     private func append(_ message: String, isError: Bool, repository: String? = nil) {
+        PerformanceLog.recordMessage(message, isError: isError)
         nextID += 1
         entries.append(Entry(
             id: nextID,

@@ -148,6 +148,11 @@ struct TerminalRepresentable: NSViewRepresentable {
             view.hideScroller()
             view.dropLocalScrollback()
             view.bracketsPastes = true
+            view.onReattach = { [weak coordinator = context.coordinator, weak view] in
+                if let view {
+                    coordinator?.reattach(in: view)
+                }
+            }
         } else {
             view.processDelegate = context.coordinator
         }

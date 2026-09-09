@@ -1105,7 +1105,14 @@ Owner avatars cache per owner under `Application Support/AgentIDE/Avatars`;
 a failed fetch is silent. The performance log
 (`<workspace>/tmp/agentide/performance.log`, off by default, on with
 `script/performance-log on`) records every process, `gh` call and cache
-hit or miss; tests point it into the scratch directory.
+hit or miss; tests point it into the scratch directory. While it is on, every
+message the Messages pane shows is also appended to `messages.log`
+beside it: the pane does not survive a relaunch, and a fault worth
+relaunching for is exactly what needs reading afterwards. One such
+fault is a terminal pane that draws nothing: a control pane with no
+frame five seconds after attaching, its client still running, is
+reported there and discarded and attached afresh once by itself, and
+Reattach in the pane's menu does the same by hand.
 
 ## Security model
 

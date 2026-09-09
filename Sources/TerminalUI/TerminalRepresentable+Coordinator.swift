@@ -28,6 +28,8 @@ extension TerminalRepresentable {
         /// afterwards, so a slow attach recovers by itself.
         static let frameTimeoutSeconds = 5
 
+        static let automaticReattachments = 1
+
         /// The last applied appearance; re-applying identical colours
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
@@ -39,6 +41,10 @@ extension TerminalRepresentable {
         var channel: HerdrTerminalChannel?
         var framesSeen = 0
         var frameDeadline: Task<Void, Never>?
+
+        /// How many times the client was discarded and attached
+        /// afresh; the blank-pane deadline does it once by itself.
+        var reattachments = 0
 
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
@@ -115,6 +121,21 @@ extension TerminalRepresentable {
             } else {
                 observeFrame(transport, in: view)
             }
+        }
+
+        /// Discards the client and attaches afresh: by hand from the
+        /// pane's menu, and once by itself when no frame arrived
+        /// within the deadline while the client was still running,
+        /// which is a pane that would otherwise sit blank with a
+        /// cursor until the app was relaunched.
+        func reattach(in view: PaneTerminalView) {
+            guard let transport = startedTransport, tornDown == false else {
+                return
+            }
+
+            reattachments += 1
+            discardClient(of: view)
+            startWhenSized(transport, in: view)
         }
 
         /// Cmd-K on the shell: a full terminal reset wipes the screen

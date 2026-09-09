@@ -96,21 +96,29 @@ extension TerminalRepresentable.Coordinator {
     }
 
     /// The deadline fired before any frame. A slow sudo or sandbox
-    /// launch renders late rather than never, so this only reports;
-    /// the report carries enough state to name the failing layer.
+    /// launch renders late rather than never, so this reports, with
+    /// enough state to name the failing layer, and a client that is
+    /// running yet drew nothing is discarded and attached afresh,
+    /// once: every pane once went blank at the same time with its
+    /// sessions running on, and only a relaunch brought them back.
     private func reportIfBlank() {
         guard framesSeen == 0, tornDown == false else {
             return
         }
 
         let ended = channel
-        Task {
+        Task { [weak self] in
             let running = await ended?.isRunning() ?? false
             let chain = await ended?.launchChainSnapshot() ?? "gone"
+            let reattaches = running && (self?.reattachments ?? 0) < Self.automaticReattachments
             ErrorLog.shared.report(
                 "Terminal: no frames after \(Self.frameTimeoutSeconds)s"
-                    + " (client running: \(running); chain: \(chain))",
+                    + " (client running: \(running); chain: \(chain))"
+                    + (reattaches ? "; reattaching" : ""),
             )
+            if reattaches, let self, let view {
+                reattach(in: view)
+            }
         }
     }
 }

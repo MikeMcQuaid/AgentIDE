@@ -43,6 +43,10 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// menu item.
     var onCopyAllOutput: (() async -> String?)?
 
+    /// Discards the herdr client and attaches afresh, for a pane
+    /// that stopped drawing; nil on a local shell, which has none.
+    var onReattach: (() -> Void)?
+
     /// Keeps a selection while output arrives. SwiftTerm drops the
     /// selection on every line feed whenever mouse reporting is on,
     /// which it always is here so that an agent's own scrolling and
@@ -90,6 +94,12 @@ final class PaneTerminalView: LocalProcessTerminalView {
             let allItem = NSMenuItem(title: "Copy All Output", action: #selector(copyAllOutput(_:)), keyEquivalent: "")
             allItem.target = self
             menu.addItem(allItem)
+        }
+        if onReattach != nil {
+            menu.addItem(.separator())
+            let reattachItem = NSMenuItem(title: "Reattach", action: #selector(reattach(_:)), keyEquivalent: "")
+            reattachItem.target = self
+            menu.addItem(reattachItem)
         }
         return menu
     }
@@ -299,6 +309,11 @@ final class PaneTerminalView: LocalProcessTerminalView {
 
         lastWheel = identity
         return true
+    }
+
+    @objc
+    private func reattach(_: Any?) {
+        onReattach?()
     }
 
     /// See `mouseDragged`: the end column SwiftTerm chose, moved on

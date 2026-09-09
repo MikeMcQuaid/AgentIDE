@@ -81,6 +81,11 @@ public enum PerformanceLog {
         directory + "/performance.log"
     }
 
+    /// The messages pane's own file, beside the performance log.
+    public static var messagesFile: String {
+        directory + "/messages.log"
+    }
+
     /// Creates or removes the marker file, the same switch
     /// `script/performance-log` flips, and forgets the cached
     /// answer so the change takes effect now rather than in a few
@@ -136,6 +141,25 @@ public enum PerformanceLog {
             sweepIfDue()
             trimIfHuge()
             append(line)
+        }
+    }
+
+    /// Keeps every message the messages pane shows, beside the
+    /// performance log and under its switch: the pane does not
+    /// survive a relaunch, and a fault worth relaunching for is
+    /// exactly what needs reading afterwards. One line a message,
+    /// newlines folded, the oldest half dropped once the file is
+    /// as large as the performance log is allowed to be.
+    public static func recordMessage(_ text: String, isError: Bool, enabled: Bool = isEnabled) {
+        guard enabled else {
+            return
+        }
+
+        let line = Date().formatted(Self.stampStyle) + "\t" + (isError ? "error" : "note") + "\t"
+            + text.replacing("\n", with: " \u{23CE} ") + "\n"
+        queue.async {
+            trimIfHuge(at: messagesFile)
+            append(line, to: messagesFile)
         }
     }
 
@@ -229,21 +253,21 @@ public enum PerformanceLog {
     /// Drops the oldest half of the file once it passes the cap.
     /// The size is one stat; reading the file only happens on the
     /// rare write that finds it over.
-    private static func trimIfHuge() {
-        let attributes = try? FileManager.default.attributesOfItem(atPath: file)
+    private static func trimIfHuge(at path: String = file) {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
         guard let size = attributes?[.size] as? Int, size > sizeCap,
-              let text = try? String(contentsOfFile: file, encoding: .utf8)
+              let text = try? String(contentsOfFile: path, encoding: .utf8)
         else {
             return
         }
 
-        try? newest(of: text, within: sizeFloor).write(toFile: file, atomically: true, encoding: .utf8)
+        try? newest(of: text, within: sizeFloor).write(toFile: path, atomically: true, encoding: .utf8)
     }
 
-    private static func append(_ line: String) {
+    private static func append(_ line: String, to path: String = file) {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        guard let handle = FileHandle(forWritingAtPath: file) else {
-            try? line.write(toFile: file, atomically: true, encoding: .utf8)
+        guard let handle = FileHandle(forWritingAtPath: path) else {
+            try? line.write(toFile: path, atomically: true, encoding: .utf8)
             return
         }
 
