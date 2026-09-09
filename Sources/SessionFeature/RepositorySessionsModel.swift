@@ -120,15 +120,10 @@ final class RepositorySessionsModel {
 
         isResuming = true
         progress?.begin("Resuming into a fresh worktree")
-        Task {
-            do {
-                _ = try await service.resumeInNewWorktree(selected, repository: repository)
-                await onResumed()
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-            isResuming = false
+        let work: () async throws -> Void = { [service, repository] in
+            _ = try await service.resumeInNewWorktree(selected, repository: repository)
         }
+        Task { await resume(Self.name(of: selected), work, onResumed: onResumed) }
     }
 
     /// Resumes the selected conversation in the worktree it ran in;
@@ -141,15 +136,11 @@ final class RepositorySessionsModel {
 
         isResuming = true
         progress?.begin("Resuming here")
-        Task {
-            do {
-                _ = try await service.resumePast(selected, worktree: resumeWorktree(at: path))
-                await onResumed()
-            } catch {
-                ErrorLog.shared.report(error.localizedDescription)
-            }
-            isResuming = false
+        let worktree = resumeWorktree(at: path)
+        let work: () async throws -> Void = { [service] in
+            _ = try await service.resumePast(selected, worktree: worktree)
         }
+        Task { await resume(Self.name(of: selected), work, onResumed: onResumed) }
     }
 
     /// The worktree shape a here-resume launches into: the path's
@@ -166,4 +157,27 @@ final class RepositorySessionsModel {
     // MARK: Private
 
     private static let locationComponents = 2
+
+    /// A conversation's name for a report: its title, or that it
+    /// has none.
+    private static func name(of session: TranscriptSession) -> String {
+        if session.title.isEmpty {
+            "an untitled conversation"
+        } else {
+            session.title
+        }
+    }
+
+    /// One resume, tried twice before its failure is reported, then
+    /// what follows a success; the button stays busy throughout.
+    private func resume(
+        _ name: String,
+        _ work: () async throws -> Void,
+        onResumed: @MainActor () async -> Void,
+    ) async {
+        if await ErrorLog.shared.attemptingTwice("Resuming " + name, work) {
+            await onResumed()
+        }
+        isResuming = false
+    }
 }

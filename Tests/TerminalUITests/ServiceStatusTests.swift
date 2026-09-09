@@ -12,28 +12,52 @@ struct ServiceStatusTests {
     func `a read failure is reported only when it repeats`() {
         let status = ServiceStatus.shared
         let what = "Reading " + UUID().uuidString
-        let before = ErrorLog.shared.entries.count
 
         status.record(failure: Failure(errorDescription: "first"), doing: what)
-        #expect(ErrorLog.shared.entries.count == before)
+        #expect(reported(what) == nil)
 
         // A success in between makes the first not news.
         status.recordSuccess(doing: what)
         status.record(failure: Failure(errorDescription: "second"), doing: what)
-        #expect(ErrorLog.shared.entries.count == before)
+        #expect(reported(what) == nil)
 
         status.record(failure: Failure(errorDescription: "third"), doing: what)
-        #expect(ErrorLog.shared.entries.count == before + 1)
-        let reported = ErrorLog.shared.entries.last?.message ?? ""
-        #expect(reported.contains(what))
-        #expect(reported.contains("second"))
-        #expect(reported.contains("third"))
-        #expect(reported.contains("first") == false)
+        let message = reported(what) ?? ""
+        #expect(message.contains("second"))
+        #expect(message.contains("third"))
+        #expect(message.contains("first") == false)
+    }
+
+    @Test
+    func `a held failure nobody reads again is reported anyway`() async throws {
+        let what = "Reading " + UUID().uuidString
+        ServiceStatus.shared.record(
+            failure: Failure(errorDescription: "once"),
+            doing: what,
+            holdingFor: .milliseconds(50),
+        )
+        #expect(reported(what) == nil)
+
+        // The deadline is a task on a loaded test run; give it a
+        // moment, then a few more.
+        for _ in 0 ..< Self.readAttempts where reported(what) == nil {
+            try await Task.sleep(for: .milliseconds(Self.readWaitMilliseconds))
+        }
+        #expect(reported(what)?.contains("not read again") == true)
     }
 
     // MARK: Private
 
     private struct Failure: LocalizedError {
         let errorDescription: String?
+    }
+
+    private static let readAttempts = 40
+    private static let readWaitMilliseconds = 100
+
+    /// The log's message about one read, if any; other suites write
+    /// to the same log beside this one.
+    private func reported(_ what: String) -> String? {
+        ErrorLog.shared.entries.last { $0.message.contains(what) }?.message
     }
 }

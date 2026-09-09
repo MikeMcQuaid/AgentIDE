@@ -475,8 +475,11 @@ page resumes any past conversation into a fresh worktree.
   (a branch's pull requests, a conversation, the review pane's diff)
   is held until the same read fails again on its next poll or reload,
   then reported once naming both; a success in between makes the
-  first not news. A conversation that fell back to REST is a recovery
-  that worked, and goes only to the messages log.
+  first not news, and one nobody reads again within a minute and a
+  half is reported as it stands, saying so. Resuming a session is
+  tried twice the same way (`ErrorLog.attemptingTwice`). A
+  conversation that fell back to REST is a recovery that worked, and
+  goes only to the messages log.
   Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime (any audio file, played
   through `AudioServicesPlayAlertSound` so alert volume and the

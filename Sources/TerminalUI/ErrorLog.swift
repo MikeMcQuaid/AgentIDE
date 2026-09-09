@@ -88,6 +88,28 @@ public final class ErrorLog {
         )
     }
 
+    /// Runs work that can simply be tried again, once more before
+    /// its failure is reported: the second try is the recovery, so
+    /// the first failure goes only to the messages log, and a second
+    /// reports both. Whether either try succeeded.
+    public func attemptingTwice(_ what: String, _ work: () async throws -> Void) async -> Bool {
+        let first: String
+        do {
+            try await work()
+            return true
+        } catch {
+            first = error.localizedDescription
+        }
+        PerformanceLog.recordMessage(what + ": " + first + " (trying once more)", isError: true)
+        do {
+            try await work()
+            return true
+        } catch {
+            report(what + ": " + first + "; then again: " + error.localizedDescription)
+            return false
+        }
+    }
+
     /// Empties the log; the messages tab stays either way.
     public func clear() {
         entries = []

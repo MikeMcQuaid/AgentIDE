@@ -30,6 +30,11 @@ public final class ServiceStatus {
     /// The one status every GitHub caller reports through.
     public static let shared: ServiceStatus = .init()
 
+    /// How long a held failure waits for the read to run again
+    /// before it is reported anyway: longer than any poll tier but
+    /// short enough that a read nobody repeats is not lost.
+    public static let holdSeconds = 90
+
     /// Whether GitHub last failed in a way that reads as an outage;
     /// callers poll far less while this holds.
     public private(set) var isUnavailable = false
@@ -49,7 +54,11 @@ public final class ServiceStatus {
     /// then reported once naming both; a success in between makes
     /// the first not news. Held or reported, it is never swallowed
     /// by an outage's silence.
-    public func record(failure error: any Error, doing what: String) {
+    public func record(
+        failure error: any Error,
+        doing what: String,
+        holdingFor hold: Duration = .seconds(holdSeconds),
+    ) {
         // A machine with no route explains every failure at once and
         // has said so already: repeating it per branch per poll is
         // what buried the pane.
@@ -58,12 +67,22 @@ public final class ServiceStatus {
         }
         guard GitHubOutage.isLikely(error) else {
             let description = error.localizedDescription
-            guard let earlier = held.removeValue(forKey: what) else {
+            guard let earlier = release(what) else {
                 held[what] = description
                 PerformanceLog.recordMessage(
                     what + ": " + description + " (held while the next read is tried)",
                     isError: true,
                 )
+                // A read that never runs again would never be news:
+                // one nobody has repeated by then is reported as it
+                // stands.
+                deadlines[what] = Task { [weak self] in
+                    guard await (try? Task.sleep(for: hold)) != nil, let unconfirmed = self?.release(what) else {
+                        return
+                    }
+
+                    ErrorLog.shared.report(what + ": " + unconfirmed + " (not read again since)")
+                }
                 return
             }
 
@@ -112,7 +131,7 @@ public final class ServiceStatus {
     /// Records a success, which makes a failure held for what was
     /// done not news, and ends an outage, saying so once.
     public func recordSuccess(doing what: String) {
-        held.removeValue(forKey: what)
+        _ = release(what)
         guard isUnavailable else {
             return
         }
@@ -129,8 +148,9 @@ public final class ServiceStatus {
     private static let secondsPerMinute = 60.0
 
     /// Failures held while the next read has its go, by what was
-    /// being done.
+    /// being done, and the deadline each is reported at regardless.
     private var held: [String: String] = [:]
+    private var deadlines: [String: Task<Void, Never>] = [:]
 
     /// A rough human duration; the exact seconds of an outage are
     /// nobody's business.
@@ -146,5 +166,11 @@ public final class ServiceStatus {
         default:
             return String(minutes) + " minutes"
         }
+    }
+
+    /// Takes a held failure out, deadline and all.
+    private func release(_ what: String) -> String? {
+        deadlines.removeValue(forKey: what)?.cancel()
+        return held.removeValue(forKey: what)
     }
 }
