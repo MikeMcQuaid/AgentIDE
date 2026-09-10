@@ -1,5 +1,4 @@
 import AppKit
-import AudioToolbox
 import Synchronization
 import UniformTypeIdentifiers
 
@@ -44,71 +43,57 @@ public enum CompletionSound {
         return sounds
     }
 
-    /// Plays a sound file as an alert, so the system's alert volume
-    /// and accessibility flash apply. The empty path is silence by
-    /// choice, and a file that no longer plays is silence rather
-    /// than an error: a missing sound must never break the
-    /// notification it rode.
-    public static func play(path: String) {
-        // A chime started as the machine suspends is the one that
-        // gets stuck: its completion never runs, the audio daemon
-        // holds it across the sleep, and it comes back looping until
-        // some other alert displaces it. Nobody is there to hear it
-        // either, so a sleeping machine is played nothing at all.
-        guard path.isEmpty == false, isSleeping.withLock({ $0 == false }) else {
-            return
+    /// Plays a sound file in the app's own process, through
+    /// `NSSound`, the way a Mac app plays a sound of its own, and off
+    /// the main thread: the system's alert path handed a sound to
+    /// the audio daemon, which replayed one whose completion it lost
+    /// in a loop, and the same daemon can stall the first play for
+    /// seconds, which on the main thread was the app hanging at
+    /// launch with its "done" chimes. One at a time on a queue of
+    /// its own, held there until it finishes. The empty path is
+    /// silence by choice, a file that no longer plays is silence
+    /// rather than an error, and a machine that has announced sleep
+    /// is played nothing, since nobody is there to hear it. Whether
+    /// a sound was handed to the queue.
+    @discardableResult
+    public static func play(path: String) -> Bool {
+        guard path.isEmpty == false, FileManager.default.isReadableFile(atPath: path),
+              isSleeping.withLock({ $0 == false })
+        else {
+            return false
         }
 
-        var sound: SystemSoundID = 0
-        let made = AudioServicesCreateSystemSoundID(URL(fileURLWithPath: path) as CFURL, &sound)
-        guard made == kAudioServicesNoError else {
-            NSSound(contentsOfFile: path, byReference: true)?.play()
-            return
-        }
+        queue.async {
+            guard let sound = NSSound(contentsOfFile: path, byReference: true) else {
+                return
+            }
 
-        lingering.withLock { _ = $0.insert(sound) }
-        AudioServicesPlayAlertSoundWithCompletion(sound, Self.disposal(of: sound))
+            sound.play()
+            // Held here for as long as it plays, and cut off should
+            // the machine announce sleep while it does.
+            while sound.isPlaying {
+                if isSleeping.withLock({ $0 }) {
+                    sound.stop()
+                    return
+                }
+                Thread.sleep(forTimeInterval: Self.pollSeconds)
+            }
+        }
+        return true
     }
 
-    /// Stops chiming and disposes whatever is mid-play, called when
-    /// the machine announces sleep: what is not playing as the
-    /// machine suspends cannot be stuck across it, which curing
-    /// afterwards proved unable to do on its own.
+    /// Stops chiming, called when the machine announces sleep: a
+    /// sound cut off then is silent, never stuck.
     public static func beginSleeping() {
         isSleeping.withLock { $0 = true }
-        stopLingering()
     }
 
-    /// Chimes again on wake, disposing anything the sleep left
-    /// behind as a backstop.
+    /// Chimes again on wake.
     public static func endSleeping() {
         isSleeping.withLock { $0 = false }
-        stopLingering()
-    }
-
-    /// Disposes every sound whose completion never ran, called on
-    /// wake: sleep can interrupt an alert mid-play and swallow its
-    /// completion, and the audio daemon then replays the undisposed
-    /// sound in a loop until something disposes it (playing any
-    /// other alert did too, which is why a Settings preview used to
-    /// stop the noise).
-    public static func stopLingering() {
-        let stuck = lingering.withLock { sounds in
-            let all = sounds
-            sounds = []
-            return all
-        }
-        for sound in stuck {
-            AudioServicesDisposeSystemSoundID(sound)
-        }
     }
 
     // MARK: Internal
-
-    /// The sounds playing right now, each removed by whoever
-    /// disposes it, so a drain and a late completion can never
-    /// dispose one sound twice.
-    nonisolated static let lingering: Mutex<Set<SystemSoundID>> = .init([])
 
     /// Whether the machine is asleep or on its way there, which is
     /// the one time nothing is played.
@@ -128,19 +113,9 @@ public enum CompletionSound {
 
     // MARK: Private
 
-    /// The completion runs on the sound service's own queue, so it
-    /// must not be a main-actor closure: the runtime's executor
-    /// check traps there. Formed in a nonisolated context it stays
-    /// free of any actor. Only the closure that still finds its
-    /// sound registered disposes it; a wake drain may have got
-    /// there first.
-    private nonisolated static func disposal(of sound: SystemSoundID) -> @Sendable () -> Void {
-        {
-            guard lingering.withLock({ $0.remove(sound) != nil }) else {
-                return
-            }
+    /// How often a playing sound is checked for the sleep flag.
+    private static let pollSeconds: TimeInterval = 0.05
 
-            AudioServicesDisposeSystemSoundID(sound)
-        }
-    }
+    /// One sound at a time, away from the main thread.
+    private static let queue: DispatchQueue = .init(label: "agentide.chime", qos: .userInitiated)
 }

@@ -36,6 +36,8 @@ updates.
   locations.
 - Says what a pull request is doing in GitHub's own icons, one glyph per
   fact, watching checks and queued merges until they settle.
+- Fetch and Fetch and Reset on a repository follow its default branch
+  when it has moved on GitHub, switching the checkout to the new one.
 - Code reviews uncommitted work, the last commit, unpushed commits, the
   whole branch or any single commit, as a syntax-highlighted diff with
   the pull request's conversations inline under their files.

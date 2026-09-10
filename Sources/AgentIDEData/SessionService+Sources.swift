@@ -177,16 +177,19 @@ public extension SessionService {
     }
 
     /// Fetches origin and hard-resets the main checkout to its
-    /// default branch.
-    @discardableResult
-    func fetchAndReset(repository: Repository) async throws -> String {
+    /// default branch, following that branch first when GitHub has
+    /// moved it, so the reset lands on the branch that is now the
+    /// default rather than the one that was. The follow is the
+    /// fetch: it asks origin before anything else.
+    func fetchAndReset(repository: Repository) async throws -> (ref: String, move: GitClient.DefaultBranchMove?) {
+        let move = try await git.followDefaultBranch(of: repository)
         guard let ref = await git.defaultBaseRef(of: repository) else {
             throw SessionServiceError("\(repository.name) has no default branch to reset to.")
         }
 
-        try await git.fetchAndReset(repositoryPath: repository.path, onto: ref)
+        try await git.resetHard(repositoryPath: repository.path, onto: ref)
         rememberFetch(repositoryPath: repository.path)
-        return ref
+        return (ref, move)
     }
 
     /// Fetches, then rebases the worktree onto the signed-rebase

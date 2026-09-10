@@ -261,37 +261,6 @@ public final class DashboardModel {
         await (try? service.openPullRequests(repository: repository)) ?? []
     }
 
-    /// Fetches the item's repository and refreshes.
-    public func fetch(item: WorktreeItem) async {
-        do {
-            let repository = Repository(
-                name: item.worktree.repositoryName,
-                path: item.worktree.repositoryPath,
-            )
-            try await service.fetch(repository: repository)
-            ErrorLog.shared.note("fetched", about: repository.name)
-            await refresh()
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
-    /// Fetches origin and hard-resets the main checkout to its
-    /// default branch, then refreshes.
-    public func fetchAndReset(item: WorktreeItem) async {
-        do {
-            let repository = Repository(
-                name: item.worktree.repositoryName,
-                path: item.worktree.repositoryPath,
-            )
-            let ref = try await service.fetchAndReset(repository: repository)
-            ErrorLog.shared.note("reset the checkout to `" + ref + "`", about: repository.name)
-            await refresh()
-        } catch {
-            ErrorLog.shared.report(error.localizedDescription)
-        }
-    }
-
     // MARK: Internal
 
     static let selectedWorktreeKey = "selectedWorktreePath"

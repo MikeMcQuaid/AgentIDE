@@ -111,9 +111,14 @@ public extension SessionService {
     }
 
     /// Fetches and prunes the repository's remotes.
-    func fetch(repository: Repository) async throws {
+    /// An explicit fetch, which also follows the default branch when
+    /// GitHub has moved it; the poll's fetches never do, since a
+    /// move is rare and the check is a round trip.
+    @discardableResult
+    func fetch(repository: Repository) async throws -> GitClient.DefaultBranchMove? {
         try await git.fetch(repositoryPath: repository.path)
         rememberFetch(repositoryPath: repository.path)
+        return try await git.followDefaultBranch(of: repository)
     }
 
     /// A tracked file's committed content; see `GitClient`.

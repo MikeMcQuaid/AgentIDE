@@ -40,8 +40,15 @@ struct WorkspaceWatcherIntegrationTests {
         #expect(changed.isEmpty == false)
         #expect(changed.allSatisfy { $0.hasPrefix(root + "/brew") })
 
-        // Consuming clears; quiet directories stay quiet.
-        #expect(watcher.consumeChangedPaths().isEmpty)
+        // Consuming clears. An atomic write is a file and a rename,
+        // which FSEvents may deliver in two batches, so what trickles
+        // in after belongs to the same directory and nothing else.
+        var late = Set<String>()
+        for _ in 0 ..< Self.drainAttempts {
+            late.formUnion(watcher.consumeChangedPaths())
+            try await Task.sleep(for: .milliseconds(Self.pollMilliseconds))
+        }
+        #expect(late.allSatisfy { $0.hasPrefix(root + "/brew") })
     }
 
     // MARK: Private
@@ -49,6 +56,7 @@ struct WorkspaceWatcherIntegrationTests {
     /// Generous: FSEvents delivery on a loaded CI runner can lag
     /// far behind the half-second latency asked for.
     private static let waitAttempts = 240
+    private static let drainAttempts = 10
     private static let pollMilliseconds = 50
     private static let settleSeconds = 2
 }
