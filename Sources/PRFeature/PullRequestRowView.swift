@@ -22,6 +22,15 @@ struct PullRequestRowView: View {
     /// no longer open to edit.
     var onEdit: (@MainActor () -> Void)?
 
+    /// Asks Copilot for a review, or another after a push; nil where
+    /// the row is not the open conversation's header.
+    var onAskCopilot: (@MainActor () async -> Bool)?
+
+    /// Whether Copilot can be asked now, which the model decides
+    /// from GitHub's pending request and its own record of the last
+    /// ask.
+    var canAskCopilot = true
+
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
@@ -45,6 +54,9 @@ struct PullRequestRowView: View {
     }
 
     // MARK: Private
+
+    /// Whether the ask is on its way to GitHub.
+    @State private var isAskingCopilot = false
 
     private var stateHelp: String {
         if summary.state != "OPEN" {
@@ -134,6 +146,33 @@ struct PullRequestRowView: View {
         )
     }
 
+    /// Asks Copilot for a review. While a request is still waiting
+    /// on Copilot, asking again would only queue the same review, so
+    /// the icon dims until it answers.
+    @ViewBuilder private var copilotButton: some View {
+        if let onAskCopilot, summary.state == "OPEN" {
+            Button {
+                isAskingCopilot = true
+                Task {
+                    _ = await onAskCopilot()
+                    isAskingCopilot = false
+                }
+            } label: {
+                // Dimmed in its own colour as well as by the button,
+                // so a request still waiting reads at a glance.
+                Octicon("octicon-copilot", colour: canAskCopilot && isAskingCopilot == false ? .primary : .secondary)
+                    .accessibilityLabel("Ask Copilot to review")
+            }
+            .buttonStyle(.glass)
+            .disabled(canAskCopilot == false || isAskingCopilot)
+            .hoverHelp(
+                canAskCopilot
+                    ? "Ask Copilot to review this pull request, or to review it again after a push"
+                    : "Copilot has been asked to review this pull request and has not answered yet",
+            )
+        }
+    }
+
     private var actions: some View {
         HStack(spacing: Self.rowPadding) {
             if let onEdit, summary.state == "OPEN" {
@@ -146,6 +185,7 @@ struct PullRequestRowView: View {
                 .buttonStyle(.glass)
                 .hoverHelp("Edit the title and body, to say what was actually pushed before it merges")
             }
+            copilotButton
             Button {
                 LinkOpener.open(summary.url)
             } label: {

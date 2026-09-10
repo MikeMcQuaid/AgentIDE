@@ -103,6 +103,11 @@ public extension GitHubClient {
                 body: row.body,
                 closedAt: row.closedAt,
                 headCommit: row.head.sha,
+                // Read here as well as by `gh pr view`: the poll's
+                // listing repaints the header, and a flag only the
+                // other reader carried lit the Copilot icon again
+                // while GitHub still showed the request waiting.
+                awaitsCopilotReview: (row.requestedReviewers ?? []).contains { Self.isCopilot($0.login) },
             )
         }
     }
@@ -138,6 +143,9 @@ private struct RESTPullRow: Decodable {
     }
 
     let number: Int
+    // Absent when nobody is asked.
+    // swiftlint:disable:next discouraged_optional_collection
+    let requestedReviewers: [User]?
     let title: String
     // Snake-case decoding maps `html_url` to exactly this name.
     // swiftformat:disable:next acronyms

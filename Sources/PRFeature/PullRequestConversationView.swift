@@ -30,6 +30,8 @@ struct PullRequestConversationPane: View {
 
     /// Opens the title and body for editing.
     var onEdit: (@MainActor () -> Void)?
+    var onAskCopilot: (@MainActor () async -> Bool)?
+    var canAskCopilot = true
 
     /// Toggles one label against GitHub the moment a menu item is
     /// clicked; declared before the lists so the call site's
@@ -84,6 +86,8 @@ struct PullRequestConversationPane: View {
             onCopyComments: onCopyComments,
             onOpenChecks: onOpenChecks,
             onEdit: onEdit,
+            onAskCopilot: onAskCopilot,
+            canAskCopilot: canAskCopilot,
         )
     }
 }
@@ -111,6 +115,8 @@ struct PullRequestHeaderRow: View {
     /// Opens the title and body for editing, on the conversation's
     /// header alone.
     var onEdit: (@MainActor () -> Void)?
+    var onAskCopilot: (@MainActor () async -> Bool)?
+    var canAskCopilot = true
 
     var body: some View {
         HStack(spacing: Self.spacing) {
@@ -127,6 +133,8 @@ struct PullRequestHeaderRow: View {
                 onCopyComments: onCopyComments,
                 onOpenChecks: onOpenChecks,
                 onEdit: onEdit,
+                onAskCopilot: onAskCopilot,
+                canAskCopilot: canAskCopilot,
             )
         }
         .padding(.horizontal, Self.padding)

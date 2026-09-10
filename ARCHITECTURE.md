@@ -869,7 +869,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   amended branch out of that path (its pushed commit is a stale twin,
   not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
 - **The same form edits an open pull request.** The pencil beside the
-  browser button in the conversation's header puts the pull request's
+  browser button in the conversation's header (with Primer's Copilot
+  Octicon between them, which asks Copilot for a review, or another
+  after a push, through a review request naming
+  `copilot-pull-request-reviewer[bot]` and dims from the ask until
+  a Copilot review newer than it is seen: the ask's time is kept in
+  the metadata's stamps, so a relaunch changes nothing, and GitHub's
+  own pending request, which both readers carry, dims it too, since
+  asking again then only queues the same review) puts the pull
+  request's
   title and body into
   the creation form in the conversation's place, with the generate
   and reset buttons working as they do before opening and the labels
@@ -952,9 +960,13 @@ selects the worktree holding it, and `agentide new` starts a session.
   where a review comment is anchored and answered, and Shift-click
   opening it in the Browser tab; Checks is one button for the
   failing checks, dimmed
-  until the rollup is red, that copies the tail of every failing run's `gh run view
-  --log-failed` condensed (job and step named once in a heading,
-  timestamps and colour stripped), Cmd opening the check in the
+  until the rollup is red, that copies the head and tail of every
+  failing run's `gh run view --log-failed` (forty lines of what was
+  run and in what environment, a hundred and sixty of the failure,
+  the progress between cut and counted, each end bounded in bytes
+  too, 4 KiB and 16 KiB, since one dumped blob can outweigh the rest)
+  condensed (job and step named
+  once in a heading, timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. A run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than
