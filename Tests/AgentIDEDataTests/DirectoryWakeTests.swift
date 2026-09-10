@@ -56,17 +56,21 @@ struct DirectoryWakeTests {
         // The check for a pending ring and the installing of the
         // waiter were once two lock takes, and a ring between them
         // waited out the whole timeout. Raced two hundred times with
-        // a two-second timeout, that version overran on some; every
-        // wait here has to return well inside it.
+        // a two-second timeout, that version overran on some. Each
+        // round is bounded on its own: a lost ring costs one round
+        // the whole timeout, where a loaded runner only spreads a
+        // few seconds thinly over all of them.
         let wake = DirectoryWake()
         let timeout = Duration.seconds(2)
         let rounds = 200
-        let started = ContinuousClock.now
+        var slowest = Duration.zero
         for _ in 0 ..< rounds {
             let ringing = Task { wake.ring() }
+            let started = ContinuousClock.now
             await wake.wait(timeout: timeout)
+            slowest = max(slowest, ContinuousClock.now - started)
             await ringing.value
         }
-        #expect(ContinuousClock.now - started < timeout)
+        #expect(slowest < timeout)
     }
 }
