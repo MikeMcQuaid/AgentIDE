@@ -38,6 +38,9 @@ updates.
   fact, watching checks and queued merges until they settle.
 - Fetch and Fetch and Reset on a repository follow its default branch
   when it has moved on GitHub, switching the checkout to the new one.
+- Asks Copilot to review a pull request, or to review it again after
+  a push, from the Copilot icon in the conversation's header; it dims
+  while a request is still waiting on it.
 - Code reviews uncommitted work, the last commit, unpushed commits, the
   whole branch or any single commit, as a syntax-highlighted diff with
   the pull request's conversations inline under their files.

@@ -869,7 +869,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   amended branch out of that path (its pushed commit is a stale twin,
   not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
 - **The same form edits an open pull request.** The pencil beside the
-  browser button in the conversation's header puts the pull request's
+  browser button in the conversation's header (with Primer's Copilot
+  Octicon between them, which asks Copilot for a review, or another
+  after a push, through a review request naming
+  `copilot-pull-request-reviewer[bot]` and dims from the ask until
+  a Copilot review newer than it is seen: the ask's time is kept in
+  the metadata's stamps, so a relaunch changes nothing, and GitHub's
+  own pending request, which both readers carry, dims it too, since
+  asking again then only queues the same review) puts the pull
+  request's
   title and body into
   the creation form in the conversation's place, with the generate
   and reset buttons working as they do before opening and the labels

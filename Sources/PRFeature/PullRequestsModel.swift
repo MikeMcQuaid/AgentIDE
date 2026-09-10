@@ -138,6 +138,10 @@ final class PullRequestsModel {
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             try await github.markDraft(repositoryPath: repository.path, number: summary.number)
         }
+        performCopilotRequest = { number in
+            defer { gate.invalidate(repositoryPath: repository.path, number: number) }
+            try await github.requestCopilotReview(repositoryPath: repository.path, number: number)
+        }
         performPostMergeCleanup = { worktree, mergedBranch in
             await Self.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch, service: service)
         }
@@ -325,6 +329,11 @@ final class PullRequestsModel {
 
     /// Takes an open pull request back to a draft.
     var performDraftChange: (PullRequestSummary) async throws -> Void
+    var performCopilotRequest: (Int) async throws -> Void
+
+    /// Bumped as each ask of Copilot is recorded, so the header's
+    /// icon, which reads the record, repaints at once.
+    var copilotAsks = 0
     var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed

@@ -191,6 +191,8 @@ public struct PullRequestsView: View {
             onResolvedChanged: { await model.refreshSummary(summary.number) },
             onThreadsChanged: { model.updateUnresolved($0, number: summary.number) },
             onEdit: { model.beginEditing() },
+            onAskCopilot: { await model.requestCopilotReview(summary) },
+            canAskCopilot: model.canRequestCopilotReview(summary),
             onToggleLabel: { _ = await model.toggleLabel($0) },
             labels: model.selectedLabels,
             availableLabels: model.availableLabels,

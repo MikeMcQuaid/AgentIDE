@@ -231,7 +231,7 @@ public struct GitHubClient: Sendable {
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields =
-        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt"
+        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt,reviewRequests,latestReviews"
 
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one
@@ -294,6 +294,11 @@ public struct GitHubClient: Sendable {
                 body: row.body,
                 closedAt: row.closedAt,
                 headCommit: row.headRefOid,
+                awaitsCopilotReview: (row.reviewRequests ?? []).contains { Self.isCopilot($0.login) },
+                copilotReviewedAt: (row.latestReviews ?? [])
+                    .filter { Self.isCopilot($0.author?.login) }
+                    .compactMap(\.submittedAt)
+                    .max(),
             )
         }
     }
@@ -331,44 +336,6 @@ public struct GitHubClient: Sendable {
     // MARK: Private
 
     /// Present when automerge is enabled; the contents are unused.
-    private struct AutoMergeRow: Decodable {
-        // Presence is the signal.
-    }
-
-    private struct RowAuthor: Decodable {
-        let login: String?
-    }
-
-    private struct PullRequestRow: Decodable {
-        let number: Int
-        let title: String
-        let url: String
-        let headRefName: String
-        let headRefOid: String?
-        let baseRefName: String?
-        let state: String?
-        let mergeable: String?
-        let reviewDecision: String?
-        let author: RowAuthor?
-        let body: String?
-        // Optional because older gh versions omit the field.
-        // swiftlint:disable:next discouraged_optional_boolean
-        let isDraft: Bool?
-        let autoMergeRequest: AutoMergeRow?
-        let closedAt: Date?
-        // Absent from the JSON when a pull request has no checks.
-        // swiftlint:disable:next discouraged_optional_collection
-        let statusCheckRollup: [CheckRow]?
-    }
-
-    private struct CheckRow: Decodable {
-        let state: String?
-        let conclusion: String?
-        // The property must match gh's JSON key exactly.
-        // swiftformat:disable:next acronyms
-        let detailsUrl: String?
-    }
-
     private let runner: any ProcessRunner
     private let isOnline: @Sendable () -> Bool
 

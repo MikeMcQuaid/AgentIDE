@@ -27,6 +27,8 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         isQueued: Bool = false,
         closedAt: Date? = nil,
         headCommit: String? = nil,
+        awaitsCopilotReview: Bool = false,
+        copilotReviewedAt: Date? = nil,
     ) {
         self.number = number
         self.title = title
@@ -46,6 +48,36 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
         self.isQueued = isQueued
         self.closedAt = closedAt
         self.headCommit = headCommit
+        self.awaitsCopilotReview = awaitsCopilotReview
+        self.copilotReviewedAt = copilotReviewedAt
+    }
+
+    /// Decodes a summary a cache wrote, an older release's included:
+    /// every field added since the first one takes its default when
+    /// its key is missing, so an upgrade never throws the metadata
+    /// away over one summary it cannot read.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        number = try container.decode(Int.self, forKey: .number)
+        title = try container.decode(String.self, forKey: .title)
+        url = try container.decode(String.self, forKey: .url)
+        headBranch = try container.decode(String.self, forKey: .headBranch)
+        mergeable = try container.decodeIfPresent(String.self, forKey: .mergeable) ?? ""
+        reviewDecision = try container.decodeIfPresent(String.self, forKey: .reviewDecision) ?? ""
+        checks = try container.decodeIfPresent(String.self, forKey: .checks) ?? ""
+        failingCheckLinks = try container.decodeIfPresent([String].self, forKey: .failingCheckLinks) ?? []
+        baseBranch = try container.decodeIfPresent(String.self, forKey: .baseBranch) ?? ""
+        state = try container.decodeIfPresent(String.self, forKey: .state) ?? "OPEN"
+        isDraft = try container.decodeIfPresent(Bool.self, forKey: .isDraft) ?? false
+        hasAutomerge = try container.decodeIfPresent(Bool.self, forKey: .hasAutomerge) ?? false
+        author = try container.decodeIfPresent(String.self, forKey: .author)
+        body = try container.decodeIfPresent(String.self, forKey: .body)
+        unresolvedComments = try container.decodeIfPresent(Int.self, forKey: .unresolvedComments) ?? 0
+        isQueued = try container.decodeIfPresent(Bool.self, forKey: .isQueued) ?? false
+        closedAt = try container.decodeIfPresent(Date.self, forKey: .closedAt)
+        headCommit = try container.decodeIfPresent(String.self, forKey: .headCommit)
+        awaitsCopilotReview = try container.decodeIfPresent(Bool.self, forKey: .awaitsCopilotReview) ?? false
+        copilotReviewedAt = try container.decodeIfPresent(Date.self, forKey: .copilotReviewedAt)
     }
 
     // MARK: Public
@@ -113,6 +145,15 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
     /// GitHub saw it; nil from a cache written before it was kept.
     public let headCommit: String?
 
+    /// Whether a review is still requested of Copilot and not yet
+    /// given: asking again then only queues the same review.
+    public let awaitsCopilotReview: Bool
+
+    /// When Copilot last submitted a review, nil when it never has
+    /// or the reader did not ask; an ask older than this has been
+    /// answered.
+    public let copilotReviewedAt: Date?
+
     /// Review conversations still open on it, which the listing
     /// query cannot answer: GitHub only counts them through GraphQL,
     /// so this stays zero until the pull request is looked at and
@@ -169,6 +210,8 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
             isQueued: isQueued,
             closedAt: closedAt,
             headCommit: headCommit,
+            awaitsCopilotReview: awaitsCopilotReview,
+            copilotReviewedAt: copilotReviewedAt,
         )
         edited.unresolvedComments = unresolvedComments
         return edited
@@ -198,6 +241,8 @@ public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
             isQueued: isQueued,
             closedAt: closedAt,
             headCommit: headCommit,
+            awaitsCopilotReview: awaitsCopilotReview,
+            copilotReviewedAt: copilotReviewedAt,
         )
         pending.unresolvedComments = unresolvedComments
         return pending
