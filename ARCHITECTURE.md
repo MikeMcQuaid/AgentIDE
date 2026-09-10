@@ -489,17 +489,19 @@ page resumes any past conversation into a fresh worktree.
   conversation that fell back to REST is a recovery that worked, and
   goes only to the messages log.
   Notifications fire for a finished turn and for input
-  needed, each with its own toggle and chime (any audio file, played
-  through `AudioServicesPlayAlertSound` so alert volume and the
-  accessibility flash apply; its completion handler must be formed in a
-  nonisolated context or the executor check traps). A chime sleep
-  interrupted mid-play loses its completion and the audio daemon
-  replays it in a loop after wake, which disposing it afterwards did
-  not cure: nothing is played into a machine that has announced
-  sleep, and what was mid-play is disposed then rather than on the
-  way back. Wake still drains as a backstop; whoever removes a sound
-  from that registry owns its disposal, so a drain and a late
-  completion never dispose one twice. An exit posts nothing. The Dock badge counts worktrees
+  needed, each with its own toggle and chime: any audio file, played
+  in the app's own process through `NSSound`, the way a Mac app plays
+  a sound of its own. The system's alert path
+  (`AudioServicesPlayAlertSound`) handed each chime to the audio
+  daemon, which replayed one whose completion it lost, after a sleep
+  and then for no reason it gave, in a loop until something displaced
+  it; disposing on completion, on sleep and on wake each cured one
+  case and not the next. Other apps either hand the sound to the
+  notification itself, which macOS plays unreliably for custom files,
+  or play it in-process as this now does; the cost is that the alert
+  volume and the accessibility flash no longer apply. Nothing is
+  played into a machine that has announced sleep, and what is
+  mid-play stops then. An exit posts nothing. The Dock badge counts worktrees
   needing attention, each contribution behind a toggle.
 - **Git reads are driven by the file system.** One FSEvents stream
   over the repository and worktree roots (`WorkspaceWatcher`) remembers
