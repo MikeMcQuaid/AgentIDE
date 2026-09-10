@@ -52,10 +52,11 @@ extension PullRequestFooterView {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp("Copy the last " + String(PullRequestsModel.logTailLines)
-            + " lines of every failing Actions run's log, a run still in progress answering with its "
-            + "already-failed jobs; Cmd-click opens the failing check in your browser, Shift-click "
-            + "in the Browser tab; dimmed until a check fails")
+        .hoverHelp("Copy the head and tail of every failing Actions run's log, the first "
+            + String(PullRequestsModel.logHeadLines) + " lines and the last "
+            + String(PullRequestsModel.logTailLines) + " with the bytes of each end capped, a run still "
+            + "in progress answering with its already-failed jobs; Cmd-click opens the failing check in "
+            + "your browser, Shift-click in the Browser tab; dimmed until a check fails")
     }
 
     /// The symbol every copy in the app carries, drawn inline at the

@@ -32,6 +32,25 @@ extension PullRequestsModelTests {
     }
 
     @Test
+    func `an end is bounded in bytes, a giant line cut to fit`() {
+        let heading = "job\tstep\t"
+        let blob = String(repeating: "x", count: 100_000)
+        let lines = (1 ... 300).map { heading + "line " + String($0) }
+        // A blob at the tail keeps only its last bytes; a blob at the
+        // head keeps only its first; the line count still says what
+        // was cut between.
+        let tailed = PullRequestsModel.condensed(log: (lines + [heading + blob]).joined(separator: "\n"))
+        let last = tailed.last?.lines.last ?? ""
+        #expect(last.hasPrefix("\u{2026}"))
+        #expect(last.utf8.count <= PullRequestsModel.logTailBytes)
+        let headed = PullRequestsModel.condensed(log: ([heading + blob] + lines).joined(separator: "\n"))
+        let first = headed.first?.lines.first ?? ""
+        #expect(first.hasSuffix("\u{2026}"))
+        #expect(first.utf8.count <= PullRequestsModel.logHeadBytes)
+        #expect(headed.flatMap(\.lines).contains { $0.hasSuffix(" lines cut]") })
+    }
+
+    @Test
     func `a run with nothing readable never sinks the ones that have logs`() async throws {
         let links = [
             "https://github.com/o/r/actions/runs/123/job/1",

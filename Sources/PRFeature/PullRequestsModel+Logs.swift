@@ -14,9 +14,18 @@ extension PullRequestsModel {
     /// repeats and a fix needs to reproduce it. Whole logs run to
     /// megabytes; two hundred lines a run keeps a pull request with
     /// several failing runs pasteable into a prompt, and the middle
-    /// is progress that neither end needs.
+    /// is progress that neither end needs. Each end is bounded in
+    /// bytes as well, since one line of minified output or a dumped
+    /// blob can cost more than the other hundred and ninety-nine:
+    /// whole lines go first from the far side of the end, and a line
+    /// larger than the budget on its own is cut to it.
     static let logHeadLines = 40
     static let logTailLines = 160
+    static let logHeadBytes = 4_096
+    static let logTailBytes = 16_384
+
+    /// One log line, its job and step heading and its text.
+    typealias LogLine = (heading: String, text: String)
 
     /// Job, step and text: the columns `gh` tabs apart.
     private static let logColumns = 3
@@ -49,17 +58,23 @@ extension PullRequestsModel {
     /// marks and colour codes.
     static func condensed(log: String) -> [LogSection] {
         let lines = log.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { raw -> (heading: String, text: String) in
+            .map { raw -> LogLine in
                 let parts = raw.split(separator: "\t", maxSplits: Self.logColumns - 1, omittingEmptySubsequences: false)
                 let tabbed = parts.count == Self.logColumns
                 let heading = tabbed ? String(parts[0]) + " · " + String(parts[1]) : ""
                 return (heading, Self.stripped(tabbed ? String(parts.last ?? "") : String(raw)))
             }
-        var kept = lines
-        if lines.count > logHeadLines + logTailLines {
-            let cut = ("", "[" + String(lines.count - logHeadLines - logTailLines) + " lines cut]")
-            kept = Array(lines.prefix(logHeadLines)) + [cut] + Array(lines.suffix(logTailLines))
-        }
+        // The first lines are the head and the rest is the tail,
+        // each within its own budget, so a short log with one giant
+        // line still keeps what was run as well as how it ended.
+        let head = Self.capped(Array(lines.prefix(logHeadLines)), toBytes: logHeadBytes, keepingEnd: false)
+        let tail = Self.capped(
+            Array(lines.dropFirst(logHeadLines).suffix(logTailLines)),
+            toBytes: logTailBytes,
+            keepingEnd: true,
+        )
+        let cut = lines.count - head.count - tail.count
+        let kept = head + (cut > 0 ? [("", "[" + String(cut) + " lines cut]")] : []) + tail
         var sections = [LogSection]()
         for line in kept {
             if let last = sections.indices.last, sections[last].heading == line.heading {
@@ -69,6 +84,49 @@ extension PullRequestsModel {
             }
         }
         return sections
+    }
+
+    /// The lines that fit a byte budget, kept from one end: whole
+    /// lines are dropped from the other end first, and a single line
+    /// larger than the budget on its own is cut to it, an ellipsis
+    /// where the cut was.
+    static func capped(_ lines: [LogLine], toBytes budget: Int, keepingEnd: Bool) -> [LogLine] {
+        var fitted = [LogLine]()
+        var used = 0
+        for line in keepingEnd ? lines.reversed() : lines {
+            let bytes = line.text.utf8.count + 1
+            guard used + bytes <= budget else {
+                if fitted.isEmpty {
+                    let room = max(budget - Self.ellipsis.utf8.count, 0)
+                    let cut = keepingEnd
+                        ? Self.ellipsis + Self.utf8Cut(line.text, bytes: room, fromEnd: true)
+                        : Self.utf8Cut(line.text, bytes: room, fromEnd: false) + Self.ellipsis
+                    fitted.append((line.heading, cut))
+                }
+                break
+            }
+
+            used += bytes
+            fitted.append(line)
+        }
+        return keepingEnd ? fitted.reversed() : fitted
+    }
+
+    /// Where a line was cut.
+    private static let ellipsis = "\u{2026}"
+
+    /// At most so many bytes of a line from one end, backed off to
+    /// a character boundary so the cut never lands inside one.
+    private static func utf8Cut(_ text: String, bytes: Int, fromEnd: Bool) -> String {
+        var room = bytes
+        while room > 0 {
+            let slice = fromEnd ? text.utf8.suffix(room) : text.utf8.prefix(room)
+            if let cut = String(bytes: slice, encoding: .utf8) {
+                return cut
+            }
+            room -= 1
+        }
+        return ""
     }
 
     /// A log line without its timestamp, byte order mark or colour.
