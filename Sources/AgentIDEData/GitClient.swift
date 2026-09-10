@@ -215,13 +215,12 @@ public struct GitClient: Sendable {
         try await git(["fetch", "--all", "--prune"], in: repositoryPath)
     }
 
-    /// Fetches origin and hard-resets the checkout to a ref, for
-    /// main checkouts that should mirror the remote. The caller
-    /// resolves the ref: `origin/HEAD` is a symbolic name a clone
-    /// need never have been given, and resetting to one git cannot
-    /// resolve fails where naming the branch works.
-    public func fetchAndReset(repositoryPath: String, onto ref: String) async throws {
-        try await git(["fetch", "origin"], in: repositoryPath)
+    /// Hard-resets the checkout to a ref, for main checkouts that
+    /// should mirror the remote; the caller has fetched. The caller
+    /// resolves the ref too: `origin/HEAD` is a symbolic name a clone
+    /// need never have been given, and resetting to one the clone
+    /// cannot resolve fails where naming the branch works.
+    public func resetHard(repositoryPath: String, onto ref: String) async throws {
         try await git(["reset", "--hard", ref], in: repositoryPath)
     }
 

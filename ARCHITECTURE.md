@@ -449,6 +449,14 @@ page resumes any past conversation into a fresh worktree.
   SessionEnd in the defensive `[ -x … ] && … || true` shape. The hook
   appends a JSON line to `agentide/events/<session>.jsonl`, keyed by
   `AGENTIDE_SESSION` with `SV_SESSION_ID` as fallback.
+- **An explicit fetch follows the default branch.** `origin/HEAD` is
+  set at clone time and a fetch never moves it, so a repository whose
+  default branch went from `trunk` to `main` kept reading as `trunk`.
+  Fetch and Fetch and Reset on a row ask origin again (`git remote
+  set-head origin --auto`), and a main checkout sitting on the old
+  default is checked out on the new, made from origin's if there is
+  no local one, before any reset; the note says so. The poll's own
+  fetches never pay that round trip.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
   and a context menu marks it unread again. The selected worktree is
