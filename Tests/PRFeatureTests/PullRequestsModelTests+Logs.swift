@@ -5,10 +5,11 @@ import TerminalUI
 import Testing
 
 /// The failing logs: Actions runs found in the check links, each
-/// log cut to its tail, condensed to what a fix prompt needs.
+/// log cut to its head and tail, condensed to what a fix prompt
+/// needs.
 extension PullRequestsModelTests {
     @Test
-    func `failing logs gather each run's tail once`() async throws {
+    func `failing logs gather each run's head and tail once`() async throws {
         let links = [
             "https://github.com/o/r/actions/runs/123/job/1",
             "https://github.com/o/r/actions/runs/123/job/2",
@@ -21,8 +22,12 @@ extension PullRequestsModelTests {
         let long = (1 ... 300).map { "line " + String($0) }.joined(separator: "\n")
         model.fetchFailedRunLog = { runID in runID == 123 ? long : "short" }
         let text = try await model.failingLogs(for: summary(1, head: "feature", failingCheckLinks: links))
-        #expect(text.hasPrefix("## Run 123\n[100 earlier lines cut]\nline 101\n"))
-        #expect(text.hasSuffix("\n\n## Run 456\nshort"))
+        // The first forty lines, then what was cut, then the last
+        // hundred and sixty: the command and its environment at the
+        // top, the failure at the bottom, the progress between gone.
+        #expect(text.hasPrefix("## Run 123\nline 1\n"))
+        #expect(text.contains("\nline 40\n[100 lines cut]\nline 141\n"))
+        #expect(text.hasSuffix("\nline 300\n\n## Run 456\nshort"))
         #expect(text.contains("line 100\n") == false)
     }
 

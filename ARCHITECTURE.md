@@ -952,9 +952,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   where a review comment is anchored and answered, and Shift-click
   opening it in the Browser tab; Checks is one button for the
   failing checks, dimmed
-  until the rollup is red, that copies the tail of every failing run's `gh run view
-  --log-failed` condensed (job and step named once in a heading,
-  timestamps and colour stripped), Cmd opening the check in the
+  until the rollup is red, that copies the head and tail of every
+  failing run's `gh run view --log-failed` (forty lines of what was
+  run and in what environment, a hundred and sixty of the failure,
+  the progress between cut and counted) condensed (job and step named
+  once in a heading, timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. A run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than

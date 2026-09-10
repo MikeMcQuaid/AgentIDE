@@ -2,13 +2,21 @@ import AgentIDEData
 import AgentIDEDomain
 import AppKit
 
-/// Copying the tail of every failing Actions run's log, the raw
-/// material a fix prompt needs, condensed so no token is spent on
-/// what `gh` repeats per line. Split from the actions for length.
+/// Copying the head and tail of every failing Actions run's log,
+/// the raw material a fix prompt needs, condensed so no token is
+/// spent on what `gh` repeats per line. Split from the actions for
+/// length.
 extension PullRequestsModel {
-    /// How many lines of each run's failed-step log are kept: the
-    /// end is where the failure is, and whole logs run to megabytes.
-    static let logTailLines = 200
+    /// How many lines of each run's failed-step log are kept, and
+    /// from which end. The tail is where the failure is: the
+    /// assertion, the exit code, the last thing printed. The head is
+    /// what was run and in what environment, which the tail rarely
+    /// repeats and a fix needs to reproduce it. Whole logs run to
+    /// megabytes; two hundred lines a run keeps a pull request with
+    /// several failing runs pasteable into a prompt, and the middle
+    /// is progress that neither end needs.
+    static let logHeadLines = 40
+    static let logTailLines = 160
 
     /// Job, step and text: the columns `gh` tabs apart.
     private static let logColumns = 3
@@ -47,9 +55,10 @@ extension PullRequestsModel {
                 let heading = tabbed ? String(parts[0]) + " · " + String(parts[1]) : ""
                 return (heading, Self.stripped(tabbed ? String(parts.last ?? "") : String(raw)))
             }
-        var kept = Array(lines.suffix(logTailLines))
-        if lines.count > logTailLines {
-            kept.insert(("", "[" + String(lines.count - logTailLines) + " earlier lines cut]"), at: 0)
+        var kept = lines
+        if lines.count > logHeadLines + logTailLines {
+            let cut = ("", "[" + String(lines.count - logHeadLines - logTailLines) + " lines cut]")
+            kept = Array(lines.prefix(logHeadLines)) + [cut] + Array(lines.suffix(logTailLines))
         }
         var sections = [LogSection]()
         for line in kept {
