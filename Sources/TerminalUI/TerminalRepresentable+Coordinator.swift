@@ -60,6 +60,15 @@ extension TerminalRepresentable {
         /// until recovery has been tried and failed.
         var heldFailure: String?
 
+        /// Whether the pane still shows nothing after the deadline
+        /// and a reattach, when it draws Reattach over itself.
+        var isStalled = false
+        var onStalled: ((Bool) -> Void)?
+
+        /// The last Reattach pressed on the pane, so a repaint never
+        /// reattaches twice for one press.
+        var seenReattachRequest = 0
+
         /// The Option-drag selector, owned by its event monitor.
         weak var blockSelector: BlockSelector?
 
@@ -147,6 +156,7 @@ extension TerminalRepresentable {
                 return
             }
 
+            setStalled(false)
             reattachments += 1
             discardClient(of: view)
             startWhenSized(transport, in: view)

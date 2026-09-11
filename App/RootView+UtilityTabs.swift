@@ -26,6 +26,7 @@ extension RootView {
             fixedAppearance: dependencies.service.launchAppearance(worktreePath: worktreePath),
             onPasteFiles: pasteFiles,
             onCopyAllOutput: readAll,
+            reattachRequest: dependencies.dashboard.reattachRequests[session.name] ?? 0,
         )
         // A hair of room either side: the agent's own frames draw to
         // their last column, which sat against the pane's edges.

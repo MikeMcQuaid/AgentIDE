@@ -21,7 +21,9 @@ public struct TerminalPaneView: View {
     /// give up keyboard focus or it swallows keystrokes and pastes
     /// meant for the visible one. `onProcessTerminated` fires on the
     /// main actor when the client exits, letting owners show a
-    /// restart affordance instead of a dead pane.
+    /// restart affordance instead of a dead pane. Each raise of
+    /// `reattachRequest` discards the client and attaches afresh,
+    /// for an owner's own Reattach beside the pane's.
     @preconcurrency
     public init(
         command: [String],
@@ -31,6 +33,7 @@ public struct TerminalPaneView: View {
         onPasteFiles: (([URL]) -> Bool)? = nil,
         onCopyAllOutput: (() async -> String?)? = nil,
         onProcessTerminated: (@MainActor () -> Void)? = nil,
+        reattachRequest: Int = 0,
     ) {
         transport = .control(command: command)
         self.reflowsCopies = reflowsCopies
@@ -39,6 +42,7 @@ public struct TerminalPaneView: View {
         self.onPasteFiles = onPasteFiles
         self.onCopyAllOutput = onCopyAllOutput
         self.onProcessTerminated = onProcessTerminated
+        ownerReattachRequest = reattachRequest
     }
 
     /// Creates a terminal running the user's login shell in a
@@ -59,21 +63,32 @@ public struct TerminalPaneView: View {
         onPasteFiles = nil
         onCopyAllOutput = nil
         self.onProcessTerminated = onProcessTerminated
+        ownerReattachRequest = 0
     }
 
     // MARK: Public
 
     public var body: some View {
-        TerminalRepresentable(
-            transport: transport,
-            reflowsCopies: reflowsCopies,
-            isActive: isActive,
-            fixedAppearance: fixedAppearance,
-            onPasteFiles: onPasteFiles,
-            onCopyAllOutput: onCopyAllOutput,
-            clearRequest: clearShellRequest,
-            onProcessTerminated: onProcessTerminated,
-        )
+        ZStack {
+            TerminalRepresentable(
+                transport: transport,
+                reflowsCopies: reflowsCopies,
+                isActive: isActive,
+                fixedAppearance: fixedAppearance,
+                onPasteFiles: onPasteFiles,
+                onCopyAllOutput: onCopyAllOutput,
+                clearRequest: clearShellRequest,
+                onProcessTerminated: onProcessTerminated,
+                onStalled: { isStalled = $0 },
+                reattachRequest: ownerReattachRequest + reattachRequest,
+            )
+            // Only once recovery has been tried and failed: a pane
+            // still showing nothing offers the one thing that fixes
+            // it, where a relaunch used to be the only way.
+            if isStalled, isActive {
+                StalledPaneOverlay { reattachRequest += 1 }
+            }
+        }
     }
 
     // MARK: Private
@@ -84,7 +99,13 @@ public struct TerminalPaneView: View {
     @AppStorage("clearShellRequest")
     private var clearShellRequest = 0
 
+    /// Whether the pane has drawn nothing through the deadline and a
+    /// reattach, and how many times Reattach has been pressed since.
+    @State private var isStalled = false
+    @State private var reattachRequest = 0
+
     private let transport: TerminalTransport
+    private let ownerReattachRequest: Int
     private let reflowsCopies: Bool
     private let isActive: Bool
 
@@ -131,6 +152,8 @@ struct TerminalRepresentable: NSViewRepresentable {
     let onCopyAllOutput: (() async -> String?)?
     let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
+    let onStalled: (Bool) -> Void
+    let reattachRequest: Int
 
     /// Detaches the coordinator's client with the view.
     static func dismantleNSView(_: PaneTerminalView, coordinator: Coordinator) {
@@ -153,6 +176,10 @@ struct TerminalRepresentable: NSViewRepresentable {
                     coordinator?.reattach(in: view)
                 }
             }
+            context.coordinator.onStalled = onStalled
+            // The owner's count outlives this view: a fresh
+            // coordinator takes it as the baseline, not as a press.
+            context.coordinator.seenReattachRequest = reattachRequest
         } else {
             view.processDelegate = context.coordinator
         }
@@ -183,6 +210,10 @@ struct TerminalRepresentable: NSViewRepresentable {
         // while drawing nothing until it is shown again.
         view.isHidden = isActive == false
         context.coordinator.updateFocus(isActive: isActive, of: view)
+        if reattachRequest != context.coordinator.seenReattachRequest {
+            context.coordinator.seenReattachRequest = reattachRequest
+            context.coordinator.reattach(in: view)
+        }
         if case .shell = transport, isActive {
             context.coordinator.clearIfRequested(clearRequest, in: view)
         }

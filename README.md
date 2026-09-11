@@ -38,6 +38,9 @@ updates.
   fact, watching checks and queued merges until they settle.
 - Fetch and Fetch and Reset on a repository follow its default branch
   when it has moved on GitHub, switching the checkout to the new one.
+- Reattaches a pane that shows nothing by itself, once, and offers
+  Reattach in the pane when that does not draw either; a right-click
+  on the pane or on the session strip above it offers it any time.
 - Asks Copilot to review a pull request, or to review it again after
   a push, from the Copilot icon in the conversation's header; it dims
   while a request is still waiting on it.
