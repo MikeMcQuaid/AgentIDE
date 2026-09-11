@@ -255,6 +255,14 @@ extension RootView {
                         + "` joins this session from a terminal")
             }
             .padding(Self.stripSpacing)
+            // The strip's own Reattach: the pane's menu offers it too,
+            // but a pane showing only a cursor gives no hint that a
+            // right-click on it would help. The shape makes the empty
+            // run of the strip take the click, not only its glyphs.
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button("Reattach") { dependencies.dashboard.reattachRequests[session.name, default: 0] += 1 }
+            }
             Divider()
         }
     }

@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import Foundation
+import Synchronization
 
 /// A live `herdr terminal session control` client over pipes: JSON
 /// command lines go in on standard input, parsed frame events stream
@@ -39,29 +40,41 @@ public actor HerdrTerminalChannel {
 
         let reading = output.fileHandleForReading
         return AsyncStream { continuation in
-            let pump = Task {
-                var line = [UInt8]()
-                do {
-                    // Lines split at the byte level; each is ASCII
-                    // JSON (frame bytes travel as base64), so the
-                    // string round trip is lossless.
-                    for try await byte in reading.bytes {
-                        if byte == UInt8(ascii: "\n") {
-                            let text = String(bytes: line, encoding: .utf8) ?? ""
-                            if let event = HerdrTerminal.parse(line: text) {
-                                continuation.yield(event)
-                            }
-                            line.removeAll(keepingCapacity: true)
-                        } else {
-                            line.append(byte)
-                        }
-                    }
-                } catch {
-                    // A read error ends the stream like an exit.
+            // Event-driven, never a blocking read: `FileHandle.bytes`
+            // serialises its reads across every handle in the
+            // process, so one idle client held every later attach
+            // at nothing until it spoke. The handler runs on the
+            // handle's own serial queue, and the buffer's lock only
+            // says so to the compiler.
+            let line = Mutex([UInt8]())
+            reading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard data.isEmpty == false else {
+                    // End of the pipe: the client is gone.
+                    handle.readabilityHandler = nil
+                    continuation.finish()
+                    return
                 }
-                continuation.finish()
+
+                // Lines split at the byte level; each is ASCII JSON
+                // (frame bytes travel as base64), so the string round
+                // trip is lossless.
+                for byte in data {
+                    guard byte == UInt8(ascii: "\n") else {
+                        line.withLock { $0.append(byte) }
+                        continue
+                    }
+
+                    let text = line.withLock { pending in
+                        defer { pending.removeAll(keepingCapacity: true) }
+                        return String(bytes: pending, encoding: .utf8) ?? ""
+                    }
+                    if let event = HerdrTerminal.parse(line: text) {
+                        continuation.yield(event)
+                    }
+                }
             }
-            continuation.onTermination = { _ in pump.cancel() }
+            continuation.onTermination = { _ in reading.readabilityHandler = nil }
         }
     }
 

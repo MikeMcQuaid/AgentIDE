@@ -91,6 +91,10 @@ public final class DashboardModel {
     /// which every row's summary read observes.
     public var pullRequestCacheGeneration = 0
 
+    /// How many times each session's strip has asked its pane to
+    /// discard the herdr client and attach afresh, by session name.
+    public var reattachRequests: [String: Int] = [:]
+
     /// Whether the machine is on battery, which slows every safety
     /// interval. The app's composition wires the machine's own
     /// answer in; left alone it says plugged in, so a test is never

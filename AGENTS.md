@@ -382,6 +382,15 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   `HerdrSlowReaderIntegrationTests` reproduces it under load, and
   `HerdrLargeInputIntegrationTests` meets it whenever the run is
   contended; both stay disabled until herdr waits or retries.
+- `FileHandle.bytes` serialises its reads across every handle in
+  the process: with one reader waiting on a silent pipe, a fresh
+  reader on another pipe received nothing (reproduced with plain
+  pipes, no herdr involved). Every mounted agent pane keeps a herdr
+  client, and an idle agent's client is silent, so a new pane sat
+  blank with a cursor until some other pane's agent drew, and a
+  relaunch, which dropped every reader, was the only sure fix.
+  Read pipes through `readabilityHandler` (`HerdrTerminalChannel`);
+  `HerdrTerminalChannelReaderTests` pins it.
 - SwiftTerm encodes Option and an arrow the way the kitty keyboard
   protocol does (`ESC [ 1 ; 3 D`) whether or not anything turned that
   protocol on, so a shell read as far as `ESC [ 1`, found nothing

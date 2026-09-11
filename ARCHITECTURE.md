@@ -191,7 +191,11 @@ rather than drawing a remote screen over a PTY. herdr streams
 repaint, which the pane decodes (`HerdrTerminal` in Domain,
 `HerdrTerminalChannel` in DataAccess) into a local SwiftTerm view;
 keystrokes go back as `terminal.input`, resizes as `terminal.resize` and
-the wheel as `terminal.scroll`. Rules that follow from that shape:
+the wheel as `terminal.scroll`. The channel reads its client through
+the pipe's readability handler, never a blocking read: every mounted
+pane keeps a client, most of them silent, and reads that wait on each
+other left a fresh attach blank until some other pane's agent spoke.
+Rules that follow from that shape:
 
 - **Frames carry the screen, never the modes.** Cursor moves, colours
   and synchronised updates arrive; the private modes an agent set
@@ -1147,12 +1151,14 @@ message the Messages pane shows is also appended to `messages.log`
 beside it: the pane does not survive a relaunch, and a fault worth
 relaunching for is exactly what needs reading afterwards. One such
 fault is a terminal pane that draws nothing: a control pane with no
-frame five seconds after attaching, its client still running, is
-discarded and attached afresh once by itself, silently, and reported
-only if that draws nothing either; a client that exits before drawing
+frame, or only a blank screen, five seconds after attaching, its
+client still running, is discarded and attached afresh once by
+itself, silently, and reported only if that draws nothing either,
+when the pane draws Reattach over itself (`StalledPaneOverlay`) so a
+relaunch is never the only way back; a client that exits before drawing
 (a stale pane target after a herdr restart, say) is held the same way
-until the next attach draws or fails. Reattach in the pane's menu does
-the same by hand. A size herdr was
+until the next attach draws or fails. Reattach in the pane's menu, or
+the session strip's, does the same by hand. A size herdr was
 already told is not sent again: the attach and the terminal's own size
 callback both said the same size, and herdr 0.8.2 dropped the repaint
 after that transient pair (0.9.0 says it repaints after transient

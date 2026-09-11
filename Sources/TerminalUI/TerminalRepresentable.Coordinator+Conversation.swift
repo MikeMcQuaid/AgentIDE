@@ -59,6 +59,9 @@ extension TerminalRepresentable.Coordinator {
             heldFailure = nil
             view?.feed(byteArray: bytes[...])
             blockSelector?.follow()
+            if isStalled, let view, Self.isScreenBlank(view.getTerminal()) == false {
+                setStalled(false)
+            }
 
         case let .closed(reason):
             exitReason = reason
@@ -137,18 +140,32 @@ extension TerminalRepresentable.Coordinator {
         return reason.contains(" exited") || reason.contains("not found")
     }
 
-    /// The deadline fired before any frame. A client that is running
-    /// yet drew nothing is discarded and attached afresh, once and
-    /// silently: every pane once went blank at the same time with
-    /// its sessions running on, and only a relaunch brought them
-    /// back. Only a pane still blank after that is reported, with
-    /// enough state to name the failing layer.
+    /// Whether every visible row shows nothing: the blank pane with
+    /// a cursor is a frame that painted an empty screen, which a
+    /// frame count never saw. A cell never written is a NUL, which
+    /// is not whitespace to Swift but is nothing on screen.
+    static func isScreenBlank(_ terminal: Terminal) -> Bool {
+        (0 ..< terminal.rows).allSatisfy { row in
+            terminal.getLine(row: row)?
+                .translateToString(trimRight: true)
+                .allSatisfy { $0.isWhitespace || $0 == "\0" } ?? true
+        }
+    }
+
+    /// The deadline fired. A client that is running yet has drawn
+    /// nothing, no frame or only an empty screen, is discarded and
+    /// attached afresh, once and silently: every pane once went
+    /// blank at the same time with its sessions running on, and only
+    /// a relaunch brought them back. Only a pane still blank after
+    /// that is reported, with enough state to name the failing
+    /// layer, and then offers Reattach over itself.
     private func reportIfBlank() {
-        guard framesSeen == 0, tornDown == false else {
+        guard tornDown == false, let view, framesSeen == 0 || Self.isScreenBlank(view.getTerminal()) else {
             return
         }
 
         let ended = channel
+        let what = framesSeen == 0 ? "no frames" : "a blank screen after \(framesSeen) frames"
         Task { [weak self] in
             let running = await ended?.isRunning() ?? false
             let chain = await ended?.launchChainSnapshot() ?? "gone"
@@ -157,17 +174,28 @@ extension TerminalRepresentable.Coordinator {
                 return
             }
 
-            if running, reattachments < Self.automaticReattachments, let view {
+            if running, reattachments < Self.automaticReattachments {
                 PerformanceLog.recordMessage(
-                    "Terminal: no frames after \(Self.frameTimeoutSeconds)s" + state + "; reattaching",
+                    "Terminal: " + what + " after \(Self.frameTimeoutSeconds)s" + state + "; reattaching",
                     isError: false,
                 )
                 reattach(in: view)
                 return
             }
 
-            report("no frames after \(Self.frameTimeoutSeconds)s"
-                + (reattachments > 0 ? " and none after reattaching" : "") + state)
+            report(what + " after \(Self.frameTimeoutSeconds)s"
+                + (reattachments > 0 ? ", after reattaching" : "") + state)
+            setStalled(true)
         }
+    }
+
+    /// Tells the pane whether to draw its Reattach.
+    func setStalled(_ stalled: Bool) {
+        guard isStalled != stalled else {
+            return
+        }
+
+        isStalled = stalled
+        onStalled?(stalled)
     }
 }
