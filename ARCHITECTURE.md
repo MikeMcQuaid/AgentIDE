@@ -191,7 +191,11 @@ rather than drawing a remote screen over a PTY. herdr streams
 repaint, which the pane decodes (`HerdrTerminal` in Domain,
 `HerdrTerminalChannel` in DataAccess) into a local SwiftTerm view;
 keystrokes go back as `terminal.input`, resizes as `terminal.resize` and
-the wheel as `terminal.scroll`. Rules that follow from that shape:
+the wheel as `terminal.scroll`. The channel reads its client through
+the pipe's readability handler, never a blocking read: every mounted
+pane keeps a client, most of them silent, and reads that wait on each
+other left a fresh attach blank until some other pane's agent spoke.
+Rules that follow from that shape:
 
 - **Frames carry the screen, never the modes.** Cursor moves, colours
   and synchronised updates arrive; the private modes an agent set
