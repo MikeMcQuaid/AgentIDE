@@ -31,6 +31,9 @@ struct StackPopover: View {
                     .foregroundStyle(.secondary)
             }
             Divider()
+            if let blocker = stack?.stackingBlocker {
+                Text(blocker).font(.caption).foregroundStyle(.secondary)
+            }
             newBranchField
         }
         .padding(Self.padding)
@@ -60,13 +63,13 @@ struct StackPopover: View {
         HStack(spacing: Self.rowSpacing) {
             TextField("Stack a new branch on top", text: $newBranch)
                 .textFieldStyle(.roundedBorder)
-                .disabled(isCreating)
+                .disabled(isCreating || stack == nil || stack?.stackingBlocker != nil)
                 .onSubmit { Task { await create() } }
             BusyButton(
                 "Create",
                 busy: "Creating",
                 prominent: true,
-                disabled: newBranch.isEmpty,
+                disabled: newBranch.isEmpty || stack == nil || stack?.stackingBlocker != nil,
             ) {
                 await create()
             }
@@ -175,7 +178,7 @@ struct StackPopover: View {
 
     private func create() async {
         let branch = newBranch
-        guard branch.isEmpty == false else {
+        guard branch.isEmpty == false, let stack, stack.stackingBlocker == nil else {
             return
         }
 

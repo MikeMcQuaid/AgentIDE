@@ -64,10 +64,17 @@ public extension GitHubClient {
             )
         }
 
-        let owner = fullName.split(separator: "/").first.map(String.init) ?? ""
+        let git = GitClient(runner: runner)
+        let remote = await git.branchRemote(worktreePath: repositoryPath, branch: branch) ?? "origin"
+        let owner =
+            if GitHubRemote.isURL(remote) {
+                GitHubRemote.owner(ofURL: remote)
+            } else {
+                await git.remoteURL(named: remote, worktreePath: repositoryPath).flatMap(GitHubRemote.owner(ofURL:))
+            }
         // Encoded as a query value: a branch name may hold `#`, `&`
         // or a space, any of which cuts the query short or splits it.
-        let head = (owner + ":" + branch)
+        let head = ((owner ?? fullName.split(separator: "/").first.map(String.init) ?? "") + ":" + branch)
             .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? branch
         let path = "repos/" + fullName + "/pulls?state=all&per_page=" + String(Self.listLimit)
             + "&head=" + head

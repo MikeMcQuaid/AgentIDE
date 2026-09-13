@@ -16,7 +16,12 @@ public extension SessionService {
         let baseRef = await git.defaultBaseRef(of: repository)
         let base = baseRef.map(Self.branchName(fromBaseRef:))
         guard let baseRef else {
-            return BranchStack(base: nil, branches: [checkedOut], checkedOut: checkedOut)
+            return await BranchStack(
+                base: nil,
+                branches: [checkedOut],
+                checkedOut: checkedOut,
+                stackingBlocker: stackingBlocker(branches: [checkedOut], worktreePath: path),
+            )
         }
 
         // The default branch is not part of any stack, and neither
@@ -29,6 +34,7 @@ public extension SessionService {
         // day, and almost none of them have moved since last time.
         let fingerprint = await git.refFingerprint(worktreePath: path)
             + checkedOut + baseRef + excluded.sorted().joined(separator: ",")
+            + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
         if let known = await StackCache.shared.stack(for: path, derivedFrom: fingerprint) {
             PerformanceLog.record(cacheHit: true, "stack#" + path)
             return known
@@ -74,10 +80,11 @@ public extension SessionService {
         // same commit, so the actions that move what is checked out
         // stay live rather than dimming on a name that has gone.
         let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
-        let derived = BranchStack(
+        let derived = await BranchStack(
             base: base,
             branches: branches.isEmpty ? fallback : branches,
             checkedOut: standingIn ?? checkedOut,
+            stackingBlocker: stackingBlocker(branches: related.map(\.branch) + [checkedOut], worktreePath: path),
         )
         await StackCache.shared.remember(derived, for: path, derivedFrom: fingerprint)
         return derived
@@ -106,7 +113,10 @@ public extension SessionService {
         var pushed = Set<String>()
         for entry in related {
             tips[entry.branch] = await git.tip(of: entry.branch, worktreePath: worktreePath)
-            if await git.remoteBranchExists(worktreePath: worktreePath, branch: entry.branch) {
+            if await git.refExists(
+                worktreePath: worktreePath,
+                ref: remoteBranchRef(worktreePath: worktreePath, branch: entry.branch),
+            ) {
                 pushed.insert(entry.branch)
             }
         }
@@ -177,7 +187,7 @@ public extension SessionService {
         let stack = await stack(for: worktree)
         var pending = [String]()
         for branch in stack.branches {
-            let remote = "refs/remotes/origin/" + branch
+            let remote = await remoteBranchRef(worktreePath: path, branch: branch)
             guard await git.refExists(worktreePath: path, ref: remote) else {
                 pending.append(branch)
                 continue
@@ -199,7 +209,7 @@ public extension SessionService {
     /// the branch it started on.
     func restack(worktree: Worktree) async throws -> [String] {
         let path = worktree.path
-        let stack = await stack(for: worktree)
+        let stack = try await requireStackable(stack(for: worktree))
         try await requireQuiet(worktree: worktree, action: "restack")
         // The bottom entry rebases onto the default branch, which is
         // only worth rebasing onto if the remote is current.
@@ -272,7 +282,7 @@ public extension SessionService {
     /// at it. Each push carries the lease and the includes check the
     /// single-branch push does.
     func pushStack(worktree: Worktree) async throws -> [String] {
-        let stack = await stack(for: worktree)
+        let stack = try await requireStackable(stack(for: worktree))
         var pushed = [String]()
         for branch in stack.branches {
             // A branch checked out from a fork's pull request belongs
@@ -347,6 +357,7 @@ public extension SessionService {
     /// worktree, which is how a stack grows: the session carries on
     /// where it was, now building on what it just finished.
     func stackBranch(named name: String, on worktree: Worktree) async throws {
+        try await requireStackable(stack(for: worktree))
         try await requireQuiet(worktree: worktree, action: "branch")
         await progress("Creating `" + name + "` on `" + worktree.branch + "`")
         try await git.createBranch(named: name, worktreePath: worktree.path)

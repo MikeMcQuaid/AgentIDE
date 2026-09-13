@@ -47,7 +47,7 @@ extension PullRequestFooterView {
                 + "replays and leaving alone any branch already in place and signed, then push the whole "
                 + "stack bottom first, publishing any branch nobody has pushed yet; a conflict aborts and "
                 + "reports to Messages"
-                : "Every branch is already on the one below it, with its tip signed",
+                : model.stack.stackingBlocker ?? "Every branch is already on the one below it, with its tip signed",
             shortcut: "⌥⌘R",
         )
     }
@@ -97,6 +97,9 @@ extension PullRequestFooterView {
     /// Why the stacked merge is in its current state: what it does
     /// when it can, and what it is waiting for when it cannot.
     private var mergeStackHelp: String {
+        if let blocker = model.stack.stackingBlocker {
+            return blocker
+        }
         guard model.isStackLinked else {
             return "The pull requests below this one are not all open, so there is no stack to "
                 + "merge and this branch must not be merged into its base on its own"

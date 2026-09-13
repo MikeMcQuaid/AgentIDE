@@ -267,6 +267,9 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
+        if isInStack, stack.stackingBlocker != nil {
+            return false
+        }
         // One branch action at a time: a push pressed while a rebase
         // still runs failed against the branch mid-move.
         guard branchItem != nil, isBranchActionRunning == false, isGuardedDefaultBranch == false,
@@ -307,6 +310,9 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
+        if isInStack, let blocker = stack.stackingBlocker {
+            return blocker
+        }
         guard isGuardedDefaultBranch == false else {
             return "This repository guards its default branch: put the work on a branch of its own "
                 + "and open a pull request for it"
