@@ -68,18 +68,23 @@ extension PullRequestsModel {
     /// second half an in-place stack with unsigned commits greyed
     /// this button while Push waited on exactly this.
     var canRestack: Bool {
-        isBranchActionRunning == false && (stacking.needsRestack || stacking.unsignedBranches.isEmpty == false)
+        stack.stackingBlocker == nil && isBranchActionRunning == false
+            && (stacking.needsRestack || stacking.unsignedBranches.isEmpty == false)
     }
 
     /// Whether any branch of the stack has commits the remote does
     /// not carry.
     var canPushStack: Bool {
-        isBranchActionRunning == false && stacking.needsPush && stacking.unsignedBranches.isEmpty
+        stack.stackingBlocker == nil && isBranchActionRunning == false
+            && stacking.needsPush && stacking.unsignedBranches.isEmpty
     }
 
     /// Why the stack's push is in its current state, said the way a
     /// branch's own push says it.
     var pushStackHelp: String {
+        if let blocker = stack.stackingBlocker {
+            return blocker
+        }
         guard stacking.needsPush else {
             return "Every branch of the stack is already pushed"
         }
@@ -248,7 +253,7 @@ extension PullRequestsModel {
     /// Whether the stacked merge can run: GitHub holds the chain as
     /// a stack, and everything below is ready to go with it.
     var canMergeStack: Bool {
-        isStackLinked && isStackBelowReady
+        stack.stackingBlocker == nil && isStackLinked && isStackBelowReady
     }
 
     /// The listed entry's own commits as a git range, nil for a

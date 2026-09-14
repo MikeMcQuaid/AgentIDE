@@ -233,6 +233,8 @@ public struct GitHubClient: Sendable {
     static let statusFields =
         "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt,reviewRequests,latestReviews"
 
+    let runner: any ProcessRunner
+
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one
     /// method nearly every repository here allows. Plain substring
@@ -335,8 +337,6 @@ public struct GitHubClient: Sendable {
 
     // MARK: Private
 
-    /// Present when automerge is enabled; the contents are unused.
-    private let runner: any ProcessRunner
     private let isOnline: @Sendable () -> Bool
 
     private static func aggregateChecks(_ rows: [CheckRow]) -> String {

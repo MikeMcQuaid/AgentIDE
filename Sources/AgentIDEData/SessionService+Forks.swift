@@ -11,7 +11,11 @@ public extension SessionService {
     /// first time and tracking the branch there. Nil when the branch
     /// belongs to origin, which is every branch of your own.
     func forkRemote(worktreePath: String, branch: String) async -> (owner: String, remote: String)? {
-        switch forkRemotes.answer(worktreePath: worktreePath, branch: branch) {
+        switch forkRemotes.answer(
+            worktreePath: worktreePath,
+            branch: branch,
+            modified: GitClient.configModified(at: worktreePath),
+        ) {
         case .origin:
             return nil
 
@@ -24,6 +28,7 @@ public extension SessionService {
                 found.map { ForkAnswer.fork(owner: $0.owner, remote: $0.remote) } ?? .origin,
                 worktreePath: worktreePath,
                 branch: branch,
+                modified: GitClient.configModified(at: worktreePath),
             )
             return found
         }
@@ -48,28 +53,48 @@ public extension SessionService {
             return nil
         }
 
-        // The fork's owner names its remote, as the viewer's own fork
-        // is named after the viewer. A name already taken by another
-        // URL keeps its own, and the push goes to the URL instead,
-        // which works without a tracking ref to count against.
-        let taken = await git.remoteURL(named: owner, worktreePath: worktreePath)
-        guard taken == nil || taken == configured else {
-            return (owner, configured)
+        var name = owner
+        var suffix = 2
+        while let taken = await git.remoteURL(named: name, worktreePath: worktreePath), taken != configured {
+            name = owner + "-" + String(suffix)
+            suffix += 1
         }
 
         do {
             try await git.adoptRemote(
-                named: owner,
+                named: name,
                 url: configured,
                 branch: branch,
                 worktreePath: worktreePath,
             )
         } catch {
-            // Offline, or a fork that has since gone: the URL is
-            // still where this branch belongs.
-            return (owner, configured)
+            // A failed fetch still leaves a named remote to retry.
+            return await (
+                owner,
+                git.remoteURL(named: name, worktreePath: worktreePath) == configured ? name : configured,
+            )
         }
 
-        return (owner, owner)
+        return (owner, name)
+    }
+
+    internal func remoteBranchRef(worktreePath: String, branch: String) async -> String {
+        let remote = await forkRemote(worktreePath: worktreePath, branch: branch)?.remote ?? "origin"
+        return "refs/remotes/" + remote + "/" + branch
+    }
+
+    internal func stackingBlocker(branches: [String], worktreePath: String) async -> String? {
+        for branch in branches where await forkRemote(worktreePath: worktreePath, branch: branch) != nil {
+            return "GitHub does not support pull request stacks across forks."
+        }
+        return nil
+    }
+
+    @discardableResult
+    internal func requireStackable(_ stack: BranchStack) throws -> BranchStack {
+        if let blocker = stack.stackingBlocker {
+            throw SessionServiceError(blocker)
+        }
+        return stack
     }
 }

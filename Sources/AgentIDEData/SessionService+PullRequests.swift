@@ -90,6 +90,11 @@ public extension SessionService {
     /// that make a stack.
     func linkStack(worktree: Worktree) async throws {
         let stack = await stack(for: worktree)
+        guard stack.isStacked else {
+            return
+        }
+
+        try requireStackable(stack)
         var numbers = [Int]()
         for branch in stack.branches {
             let listed = try? await github.pullRequests(
@@ -120,6 +125,7 @@ public extension SessionService {
     func base(for branch: String, in stack: BranchStack, of worktree: Worktree) async throws -> String {
         let parent = stack.parent(of: branch)
         if let parent, parent != stack.base {
+            try requireStackable(stack)
             return parent
         }
 
@@ -136,6 +142,7 @@ public extension SessionService {
 
     /// Merges a stacked pull request and every one below it.
     func mergeStack(worktree: Worktree, number: Int) async throws {
+        try await requireStackable(stack(for: worktree))
         try await github.mergeStack(repositoryPath: worktree.repositoryPath, number: number)
     }
 

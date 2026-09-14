@@ -1,3 +1,4 @@
+import Foundation
 import Synchronization
 
 // MARK: - ForkAnswer
@@ -15,7 +16,7 @@ enum ForkAnswer: Equatable {
 // MARK: - ForkRemotes
 
 /// Which fork each checked-out pull request belongs to, worked out
-/// once per branch and held for the rest of the run.
+/// once per branch until the repository's config changes.
 ///
 /// Answering costs two config reads and, the first time, a fetch:
 /// cheap once, wasteful on every refresh of a tab that asks who a
@@ -34,18 +35,24 @@ final class ForkRemotes: Sendable {
 
     /// What was worked out for a branch, `unasked` until something
     /// has been.
-    func answer(worktreePath: String, branch: String) -> ForkAnswer {
-        held.withLock { $0[Self.key(worktreePath, branch)] ?? .unasked }
+    func answer(worktreePath: String, branch: String, modified: Date? = nil) -> ForkAnswer {
+        held.withLock { entries in
+            guard let entry = entries[Self.key(worktreePath, branch)], entry.modified == modified else {
+                return .unasked
+            }
+
+            return entry.answer
+        }
     }
 
     /// Records an answer, a branch that pushes to origin included.
-    func remember(_ answer: ForkAnswer, worktreePath: String, branch: String) {
-        held.withLock { $0[Self.key(worktreePath, branch)] = answer }
+    func remember(_ answer: ForkAnswer, worktreePath: String, branch: String, modified: Date? = nil) {
+        held.withLock { $0[Self.key(worktreePath, branch)] = (answer, modified) }
     }
 
     // MARK: Private
 
-    private let held: Mutex<[String: ForkAnswer]> = .init([:])
+    private let held: Mutex<[String: (answer: ForkAnswer, modified: Date?)]> = .init([:])
 
     private static func key(_ worktreePath: String, _ branch: String) -> String {
         worktreePath + "\t" + branch

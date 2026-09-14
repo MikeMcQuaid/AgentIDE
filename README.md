@@ -60,6 +60,11 @@ updates.
   is not yours, pushes following a contributor's fork back to it, and
   branches stacked in one worktree; an open pull request's title and
   body are edited in the same form, to say what was actually pushed.
+- Connects fork worktrees to their upstream pull requests for comments
+  and checks, signing and pushing back to the contributor's branch;
+  a push refused by the fork reports the error in the pane. Fork
+  branches cannot create or publish PR stacks, which GitHub does not
+  support across forks.
 - Copies unresolved review comments and failing CI logs into a prompt,
   resolves conversations and merges or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent

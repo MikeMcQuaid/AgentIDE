@@ -686,11 +686,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   branch's listing is conditional REST (`If-None-Match`, a 304 costs no
   rate limit); a tag is dropped with the listing it stamped, since a
   304 answering for a listing no longer held reported no pull request
-  at all. Merge queue membership is one aliased GraphQL query per
-  repository (no pull request field reports it). A pull request merged
-  or closed over thirty days ago is a name collision, not the branch's
-  work. No cached answer is final, however green: skipping approved
-  passing pull requests froze rows as open forever.
+  at all. The head filter takes its owner from the branch's push
+  remote, whether a URL or a named remote, while the request itself
+  targets origin's repository. Fork comments and checks therefore
+  belong to the upstream pull request. Merge queue membership is one
+  aliased GraphQL query per repository (no pull request field reports
+  it). A pull request merged or closed over thirty days ago is a name
+  collision, not the branch's work. No cached answer is final, however
+  green: skipping approved passing pull requests froze rows as open
+  forever.
 - **The tick is a safety net; events do the work.** A file changing
   under a worktree (FSEvents), an agent changing state (`herdr agent
   wait`) and every action of the app's own each wake a reading. The
@@ -833,10 +837,13 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **Pushing** asks the branch first and GitHub second. A branch checked
   out from someone else's pull request carries that fork's URL in its
   config (all `gh pr checkout` leaves behind), so it is given a remote
-  named after the fork's owner and tracked there, and every push,
-  count and stack push follows it back to the fork. Otherwise
-  `viewerPermission` decides: write access pushes to the repository,
-  anything less to the viewer's fork (`gh repo fork` on first use).
+  named after the fork's owner, with both its tracking and push remote
+  set there; occupied names gain a numeric suffix so remote refs and
+  leases still work. Every push and count follows that remote back to
+  the fork. A fork's refusal reaches the pane without trying another
+  destination. Otherwise `viewerPermission` decides: write access
+  pushes to the repository, anything less to the viewer's fork
+  (`gh repo fork` on first use).
   Either fork names the pull request's head `owner:branch`. Rewritten
   history pushes with `--force-with-lease --force-if-includes`. The bare
   lease protects nothing under constant background fetches;
@@ -868,10 +875,11 @@ selects the worktree holding it, and `agentide new` starts a session.
   the click reads it once more, declining in the footer with Rebase
   relit to sign; the service's own refusal stays as the backstop no
   user path reaches. The signed rebase picks the branch's own
-  origin ref when it is still an ancestor and every commit unique to
-  the branch verifies, else origin/HEAD. The ancestor test keeps an
-  amended branch out of that path (its pushed commit is a stale twin,
-  not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
+  remote ref, including a contributor's fork, when it is still an
+  ancestor and every commit unique to the branch verifies, else
+  origin/HEAD. The ancestor test keeps an amended branch out of that
+  path (its pushed commit is a stale twin, not a parent). A fetch
+  inside the minute is reused (`gitFetchedAt`).
 - **The same form edits an open pull request.** The pencil beside the
   browser button in the conversation's header (with Primer's Copilot
   Octicon between them, which asks Copilot for a review, or another
@@ -924,6 +932,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   pushes every branch of the stack, bottom first, whether or not each
   has a pull request open yet, and Rebase and Push publishes such a
   branch the same way.
+- **Forks cannot publish stacks across repositories.** Local ancestry
+  stays inspectable, with counts and twin selection using each
+  branch's own remote. A stack containing a fork disables creation,
+  restacking, stack pushes and stack merges, and the service refuses
+  them before changing any branch. A lone fork branch keeps its usual
+  signing, rebase and push actions.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.

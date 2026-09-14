@@ -7,10 +7,11 @@ public struct BranchStack: Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a stack, bottom first.
-    public init(base: String?, branches: [String], checkedOut: String) {
+    public init(base: String?, branches: [String], checkedOut: String, stackingBlocker: String? = nil) {
         self.base = base
         self.branches = branches
         self.checkedOut = checkedOut
+        self.stackingBlocker = stackingBlocker
     }
 
     // MARK: Public
@@ -24,6 +25,9 @@ public struct BranchStack: Hashable, Sendable {
     /// The branch the worktree actually holds; the only one that can
     /// be written to without checking another out first.
     public let checkedOut: String
+
+    /// Why stack actions are unavailable, while ancestry remains browsable.
+    public let stackingBlocker: String?
 
     /// Whether this is a stack at all: one branch on the default
     /// branch is just a branch, and the app shows it as it always did.

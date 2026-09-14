@@ -51,7 +51,8 @@ public extension SessionService {
             try await git.rebaseSigned(worktreePath: worktree.path, branch: branch, onto: target)
             overwriteTips.forget(worktreePath: worktree.path, branch: branch)
         } catch {
-            let remote = "origin/" + branch
+            let remote = await (forkRemote(worktreePath: worktree.path, branch: branch)?.remote ?? "origin")
+                + "/" + branch
             guard target == remote,
                   let tip = await git.commitHash(of: remote, worktreePath: worktree.path)
             else {
@@ -108,7 +109,7 @@ public extension SessionService {
         }
     }
 
-    /// The ref a signed rebase lands on. The branch's own origin ref
+    /// The ref a signed rebase lands on. The branch's own remote ref
     /// wins when it exists, is still an ancestor of the branch,
     /// every commit unique to it verifies and local commits sit on
     /// top needing signatures: rebasing there signs only the new
@@ -126,8 +127,8 @@ public extension SessionService {
     /// twin was once this branch's own tip, and a tip pushed
     /// elsewhere never was.
     func signedRebaseTarget(worktreePath: String, branch: String) async -> String {
-        let remote = "origin/" + branch
-        guard await git.remoteBranchExists(worktreePath: worktreePath, branch: branch) else {
+        let remote = await (forkRemote(worktreePath: worktreePath, branch: branch)?.remote ?? "origin") + "/" + branch
+        guard await git.refExists(worktreePath: worktreePath, ref: "refs/remotes/" + remote) else {
             return "origin/HEAD"
         }
         guard await git.isAncestor(remote, of: "HEAD", worktreePath: worktreePath) else {
@@ -136,7 +137,7 @@ public extension SessionService {
         }
 
         // With signing waived the pushed commits need no verifying:
-        // the point of preferring the branch's own origin ref is
+        // the point of preferring the branch's own remote ref is
         // keeping pushed history's hashes, which holds either way.
         let pushedSigned =
             if AppSettings.requiresSignedCommits {

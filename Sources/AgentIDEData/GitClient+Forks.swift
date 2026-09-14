@@ -45,5 +45,6 @@ public extension GitClient {
             ["branch", "--set-upstream-to", name + "/" + branch, branch],
             in: worktreePath,
         )
+        try await git(["config", "branch." + branch + ".pushremote", name], in: worktreePath)
     }
 }

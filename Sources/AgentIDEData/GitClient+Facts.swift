@@ -145,9 +145,11 @@ public extension GitClient {
     /// When the repository's config was last written, which is what
     /// a remote's URL lives in; nil when there is no config to
     /// watch, and then nothing is remembered.
-    private static func configModified(at repositoryPath: String) -> Date? {
+    internal static func configModified(at repositoryPath: String) -> Date? {
         try? FileManager.default
-            .attributesOfItem(atPath: repositoryPath + "/.git/config")[.modificationDate] as? Date
+            .attributesOfItem(
+                atPath: (owningCheckout(of: repositoryPath) ?? repositoryPath) + "/.git/config",
+            )[.modificationDate] as? Date
     }
 
     private func readFullName(of repository: Repository) async -> String? {

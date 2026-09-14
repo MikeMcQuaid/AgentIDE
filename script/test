@@ -27,6 +27,7 @@ sweep_test_servers() {
       sed -n 's/^n//p' | grep 'herdr\.sock$' | head -1)"
     case "${socket}" in
       "${scratch}"*) kill "${pid}" 2>/dev/null || true ;;
+      *) ;;
     esac
   done
 }
