@@ -27,7 +27,7 @@ updates.
 
 - Starts a worktree, a branch and an agent from a prompt, a GitHub issue
   or a pull request, narrating each step until the agent is up; the
-  issue and pull request pickers search as you type, by number or title.
+  issue and pull request pickers search by title or number.
   New branches start from origin's default branch, fetching first when
   the last fetch was over an hour ago, including with `agentide new`.
 - Runs Claude Code or Codex CLI as a sandboxed, non-admin user, with

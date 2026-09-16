@@ -12,6 +12,31 @@ struct NumberedItemSearchTests {
         #expect(rank("9").isEmpty)
     }
 
+    @Test(arguments: [
+        ("12", [12, 123]),
+        ("#12", [12, 123]),
+        (" \t#12 \t", [12, 123]),
+        ("\n#12\r\n", [12, 123]),
+        ("2", [123, 12]),
+        ("#23", [123]),
+        ("13", []),
+        ("picker", [123]),
+    ])
+    func `pull requests match numbers and titles in the same search`(query: String, expected: [Int]) {
+        let pullRequests = issues.reversed().map { issue in
+            PullRequestSummary(
+                number: issue.number,
+                title: issue.title,
+                url: "",
+                headBranch: "",
+                mergeable: "",
+                reviewDecision: "",
+                checks: "",
+            )
+        }
+        #expect(NumberedItemSearch.rank(pullRequests, query: query).map(\.number) == expected)
+    }
+
     @Test
     func `text matches titles`() {
         #expect(rank("picker") == [123])

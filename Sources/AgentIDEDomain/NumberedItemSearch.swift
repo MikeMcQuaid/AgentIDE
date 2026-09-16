@@ -2,13 +2,13 @@ import Foundation
 
 /// Filters numbered items (issues, pull requests) by what is typed
 /// into their picker: digits, with or without a leading `#`, match
-/// numbers, the exact one first and then those starting with the
-/// digits; anything else ranks titles through `FuzzyMatcher`.
+/// any part of a number, exact matches first; anything else ranks
+/// titles through `FuzzyMatcher`.
 public enum NumberedItemSearch {
     /// The items matching the query, best first. An empty query
     /// returns the items unchanged.
     public static func rank<Item: NumberedItem>(_ items: [Item], query: String) -> [Item] {
-        var trimmed = query.trimmingCharacters(in: .whitespaces)
+        var trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("#") {
             trimmed.removeFirst()
         }
@@ -17,9 +17,8 @@ public enum NumberedItemSearch {
         }
 
         if trimmed.allSatisfy(\.isASCII), trimmed.allSatisfy(\.isNumber) {
-            let exact = items.filter { String($0.number) == trimmed }
-            let prefixed = items.filter { String($0.number) != trimmed && String($0.number).hasPrefix(trimmed) }
-            return exact + prefixed
+            return items.filter { String($0.number) == trimmed }
+                + items.filter { String($0.number) != trimmed && String($0.number).contains(trimmed) }
         }
 
         let normalised = FuzzyMatcher.normalise(trimmed)
