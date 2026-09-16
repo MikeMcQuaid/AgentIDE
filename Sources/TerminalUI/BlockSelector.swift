@@ -15,6 +15,7 @@ final class BlockSelector {
     /// Creates a selector over one terminal view.
     init(view: PaneTerminalView) {
         self.view = view
+        view.onNativeSelection = { [weak self] in self?.clear() }
     }
 
     deinit {
@@ -63,6 +64,7 @@ final class BlockSelector {
         anchor = nil
         heldRows = nil
         heldColumns = nil
+        view?.selectedBlockText = nil
     }
 
     /// Moves the held marquee to wherever its text is now, and puts
@@ -118,6 +120,8 @@ final class BlockSelector {
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
         clear()
+        view.window?.makeFirstResponder(view)
+        view.selectNone()
         anchor = point
         let marquee = NSView(frame: CGRect(origin: point, size: .zero))
         marquee.wantsLayer = true
@@ -227,8 +231,7 @@ final class BlockSelector {
             return
         }
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(joined, forType: .string)
+        view.selectedBlockText = joined
+        view.copy(self)
     }
 }

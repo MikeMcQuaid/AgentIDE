@@ -44,7 +44,12 @@ updates.
   Reattach in the pane when that does not draw either; a right-click
   on the pane or on the session strip above it offers it any time.
 - Keeps terminal text selected for copying while the agent's cursor
-  blinks or its screen repaints.
+  blinks or its screen repaints. Option-drag copies a rectangle;
+  Cmd-C and the Copy menu keep that same block while it is selected.
+  A new ordinary selection or Select All replaces the block completely.
+- Keeps running shells alive when switching worktrees or tabs, hiding
+  the utility pane or narrowing the window. Shells end when closed,
+  when their worktree is deleted or when the app quits.
 - Asks Copilot to review a pull request, or to review it again after
   a push, from the Copilot icon in the conversation's header; it dims
   while a request is still waiting on it.
