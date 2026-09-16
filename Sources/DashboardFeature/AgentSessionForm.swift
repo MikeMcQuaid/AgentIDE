@@ -100,6 +100,8 @@ struct AgentSessionForm: View {
     @State private var isStarting = false
     @State private var issues: [IssueSummary] = []
     @State private var pullRequests: [PullRequestSummary] = []
+    /// Until the fetch answers, an empty list is not yet proven empty.
+    @State private var isLoadingSources = false
     /// The one thing typed here, whichever source is chosen: the
     /// whole prompt when there is no issue or pull request, and what
     /// to say about one when there is. Two fields meant choosing an
@@ -173,23 +175,28 @@ struct AgentSessionForm: View {
         if repository == nil {
             Text("Pick a repository first.").font(.callout).foregroundStyle(.secondary)
         } else if source == .issue {
-            Picker("Issue", selection: $number) {
-                Text("Choose an open issue").tag(Int?.none)
-                ForEach(issues) { issue in
-                    Text("#" + String(issue.number) + " " + issue.title).tag(Int?.some(issue.number))
-                }
-            }
-            .labelsHidden()
+            NumberedItemPicker(
+                "Issue",
+                selection: $number,
+                items: issues,
+                placeholder: "Choose an open issue",
+                searchPrompt: "Find an issue by number or title",
+                loadingTitle: "Listing open issues…",
+                emptyTitle: "No open issues",
+                isLoading: isLoadingSources,
+            )
             .hoverHelp("The repository's open issues; the pick becomes the prompt")
         } else {
-            Picker("Pull request", selection: $number) {
-                Text("Choose an open pull request").tag(Int?.none)
-                ForEach(pullRequests) { pullRequest in
-                    Text("#" + String(pullRequest.number) + " " + pullRequest.title)
-                        .tag(Int?.some(pullRequest.number))
-                }
-            }
-            .labelsHidden()
+            NumberedItemPicker(
+                "Pull request",
+                selection: $number,
+                items: pullRequests,
+                placeholder: "Choose an open pull request",
+                searchPrompt: "Find a pull request by number or title",
+                loadingTitle: "Listing open pull requests…",
+                emptyTitle: "No open pull requests",
+                isLoading: isLoadingSources,
+            )
             .hoverHelp("The repository's open pull requests; its branch is checked out to work on directly")
         }
     }
@@ -199,16 +206,31 @@ struct AgentSessionForm: View {
         guard let repository else {
             issues = []
             pullRequests = []
+            isLoadingSources = false
             return
         }
 
         // The cache paints the pickers instantly; the fetch refreshes
         // them in place.
+        isLoadingSources = true
         let cached = model.cachedOpenSources(repository: repository)
         issues = cached.issues
         pullRequests = cached.pullRequests
-        issues = await model.openIssues(repository: repository)
-        pullRequests = await model.openPullRequests(repository: repository)
+        // A fetch for a repository no longer picked must not overwrite
+        // the current one's lists or end its loading state.
+        let freshIssues = await model.openIssues(repository: repository)
+        guard Task.isCancelled == false else {
+            return
+        }
+
+        issues = freshIssues
+        let freshPullRequests = await model.openPullRequests(repository: repository)
+        guard Task.isCancelled == false else {
+            return
+        }
+
+        pullRequests = freshPullRequests
+        isLoadingSources = false
     }
 
     private func submit() {

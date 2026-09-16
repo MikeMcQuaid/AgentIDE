@@ -35,7 +35,6 @@ public struct RepositoryFinderPane: View {
     private static let listHeight: CGFloat = 300
     private static let topPadding: CGFloat = 3
     private static let maximumWidth: CGFloat = 640
-    private static let highlightOpacity = 0.25
 
     @State private var query = ""
 
@@ -81,8 +80,7 @@ public struct RepositoryFinderPane: View {
                 .focused($fieldFocused)
                 .onChange(of: query) { highlighted = 0 }
                 .onSubmit { pickHighlighted() }
-                .onKeyPress(.downArrow) { moveHighlight(by: 1) }
-                .onKeyPress(.upArrow) { moveHighlight(by: -1) }
+                .highlightNavigation($highlighted, count: results.count)
             if let failure = model.screenError {
                 Text(failure)
                     .font(.callout)
@@ -141,29 +139,21 @@ public struct RepositoryFinderPane: View {
     }
 
     private var resultsList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(results.enumerated()), id: \.element) { index, result in
-                        row(result, isHighlighted: index == highlighted)
-                            .onTapGesture { pick(result) }
-                            .accessibilityAddTraits(.isButton)
-                            .id(index)
-                    }
-                }
-            }
-            // Arrowing past the visible rows scrolls the highlight
-            // into view rather than moving it off screen.
-            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
-        }
+        HighlightedResultsList(
+            results,
+            id: \.self,
+            highlighted: highlighted,
+            help: "Arrows move the highlight; return or a click picks",
+            onPick: { pick($0) },
+            row: { row($0) },
+        )
         .frame(minHeight: Self.listHeight, maxHeight: Self.listHeight)
-        .hoverHelp("Arrows move the highlight; return or a click picks")
     }
 
     @ViewBuilder
-    private func row(_ result: String, isHighlighted: Bool) -> some View {
+    private func row(_ result: String) -> some View {
         if owner == nil {
-            listRow(result, systemImage: "building.2", isHighlighted: isHighlighted)
+            listRow(result, systemImage: "building.2")
                 .hoverHelp("List this owner's repositories")
         } else {
             let name = result.split(separator: "/").last.map(String.init) ?? result
@@ -171,13 +161,12 @@ public struct RepositoryFinderPane: View {
             listRow(
                 result,
                 systemImage: isCloned ? "internaldrive" : "icloud.and.arrow.down",
-                isHighlighted: isHighlighted,
             )
             .hoverHelp(isCloned ? "In the workspace already; opens it" : "Clones into the workspace, then opens it")
         }
     }
 
-    private func listRow(_ title: String, systemImage: String, isHighlighted: Bool) -> some View {
+    private func listRow(_ title: String, systemImage: String) -> some View {
         HStack(spacing: Self.spacing) {
             Image(systemName: systemImage)
                 .foregroundStyle(.secondary)
@@ -187,17 +176,6 @@ public struct RepositoryFinderPane: View {
         }
         .padding(.horizontal, Self.spacing)
         .padding(.vertical, Self.rowPadding)
-        .background(isHighlighted ? Color.accentColor.opacity(Self.highlightOpacity) : .clear)
-        .contentShape(Rectangle())
-    }
-
-    private func moveHighlight(by offset: Int) -> KeyPress.Result {
-        guard results.isEmpty == false else {
-            return .ignored
-        }
-
-        highlighted = min(max(0, highlighted + offset), results.count - 1)
-        return .handled
     }
 
     /// Return picks the highlight; on the owner step a typed owner

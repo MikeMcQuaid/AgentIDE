@@ -338,8 +338,10 @@ flowchart TD
   `NSTextView`).
 - **TerminalUI**: shared components, not a feature: the SwiftTerm
   wrapper, markdown rendering, tooltips, `LinkOpener`, `BusyButton`,
-  `LaunchProgress`, `SelectableTextView` (read-only document-style
-  selection) and syntax highlighting (tree-sitter grammars, with
+  `LaunchProgress`, `HighlightedResultsList` (the arrow-key result
+  list every finder and searchable picker shows under its field),
+  `SelectableTextView` (read-only document-style selection) and
+  syntax highlighting (tree-sitter grammars, with
   the Domain's tokenizer as fallback for fragmentary text).
 - **AgentIDEApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
@@ -407,6 +409,11 @@ each waited on the other until the app was restarted.
    pick where the chosen agent still offers it, and otherwise the first
    model that agent lists and the effort its own CLI would run at, so
    changing agent leaves a working choice rather than two empty pickers.
+   The issue and pull request pickers open a search field over the
+   repository's open ones (`NumberedItemSearch` over any `NumberedItem`):
+   digits, with or without a `#`, match any part of a number, exact
+   matches first; anything else ranks titles through `FuzzyMatcher`.
+   Surrounding whitespace and line breaks are trimmed for pasted numbers.
    What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever

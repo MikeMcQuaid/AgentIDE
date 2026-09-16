@@ -78,6 +78,7 @@ public struct EditorPane: View {
     private static let contentQueryMinimum = 3
     private static let fieldCornerRadius: CGFloat = 6
     private static let fieldBackgroundOpacity = 0.5
+    private static let resultsHeight: CGFloat = 180
 
     @State private var files: [String] = []
     @State private var results: [FinderResult] = []
@@ -157,8 +158,7 @@ public struct EditorPane: View {
                 .focused($finderFocused)
                 .onChange(of: query) { highlighted = 0; search() }
                 .onSubmit { pickHighlighted() }
-                .onKeyPress(.downArrow) { moveHighlight(by: 1) }
-                .onKeyPress(.upArrow) { moveHighlight(by: -1) }
+                .highlightNavigation($highlighted, count: results.count)
                 // Escape clears the search, the way it cancels
                 // anywhere else.
                 .onExitCommand {
@@ -204,7 +204,15 @@ public struct EditorPane: View {
     }
 
     private var resultsList: some View {
-        FinderResultsList(results: results, highlighted: highlighted) { pick($0) }
+        HighlightedResultsList(
+            results,
+            id: \.id,
+            highlighted: highlighted,
+            help: "Arrows move the highlight; return or a click opens",
+            onPick: { pick($0) },
+            row: { FinderResultRow(file: $0.file, line: $0.line, preview: $0.preview) },
+        )
+        .frame(maxHeight: Self.resultsHeight)
     }
 
     private func editor(for result: FinderResult) -> some View {
@@ -266,15 +274,6 @@ public struct EditorPane: View {
 
         handledFocusRequest = finderFocusRequest
         finderFocused = true
-    }
-
-    private func moveHighlight(by offset: Int) -> KeyPress.Result {
-        guard results.isEmpty == false else {
-            return .ignored
-        }
-
-        highlighted = min(max(0, highlighted + offset), results.count - 1)
-        return .handled
     }
 
     private func pickHighlighted() {

@@ -4,7 +4,7 @@ import Foundation
 
 /// The dashboard-relevant state of an open pull request. Codable so
 /// the dashboard can cache it between runs.
-public struct PullRequestSummary: Identifiable, Hashable, Sendable, Codable {
+public struct PullRequestSummary: NumberedItem, Identifiable, Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a pull request summary.
