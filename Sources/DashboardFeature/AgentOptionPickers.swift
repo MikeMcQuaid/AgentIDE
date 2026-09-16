@@ -33,9 +33,10 @@ public struct AgentOptionPickers: View {
                     Label {
                         // The installed CLI's version beside the
                         // name, as probed once at launch.
-                        Text(kind.displayName)
-                            + Text(choices(kind).version.map { " " + $0 } ?? "")
-                            .foregroundStyle(.secondary)
+                        Text("""
+                        \(kind.displayName)\(Text(choices(kind).version.map { " " + $0 } ?? "")
+                            .foregroundStyle(.secondary))
+                        """)
                     } icon: {
                         Image(kind.iconAssetName)
                             .resizable()

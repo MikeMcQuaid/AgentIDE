@@ -221,10 +221,10 @@ struct SessionServiceIntegrationTests {
             sandboxHome: world.paths.sandboxHome,
         ))
         #expect(FileManager.default.fileExists(atPath: copied + "/oldsession.jsonl"))
-        try await TestSupport.poll(timeout: 10) {
+        #expect(await TestSupport.poll(timeout: 10) {
             let marker = resumed.worktree.path + "/agent-resumed.txt"
             return (try? String(contentsOfFile: marker, encoding: .utf8)) == "oldsession"
-        }
+        })
     }
 
     @Test

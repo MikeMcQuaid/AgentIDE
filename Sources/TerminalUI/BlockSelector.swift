@@ -111,7 +111,7 @@ final class BlockSelector {
     /// not its own, so a shell pane never started a selection while
     /// the covered pane quietly took it.
     private static func hitsTerminal(_ event: NSEvent, in view: PaneTerminalView) -> Bool {
-        guard view.window != nil, view.isOnScreen else {
+        guard unsafe view.window != nil, view.isOnScreen else {
             return false
         }
 
@@ -120,7 +120,7 @@ final class BlockSelector {
 
     private func begin(at point: CGPoint, in view: PaneTerminalView) {
         clear()
-        view.window?.makeFirstResponder(view)
+        unsafe view.window?.makeFirstResponder(view)
         view.selectNone()
         anchor = point
         let marquee = NSView(frame: CGRect(origin: point, size: .zero))

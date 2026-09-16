@@ -29,17 +29,17 @@ struct SandvaultLauncherTests {
     }
 
     @Test
-    func `injected PATH includes Homebrew, where herdr and agents live`() {
+    func `injected PATH includes Homebrew, where herdr and agents live`() throws {
         let command = launcher.command(
             payload: "exec herdr workspace list",
             initialDirectory: "/Users/Shared/sv-tester",
             sessionID: "6E1A0A66-16F5-4EF5-B346-8E561E4D3E71",
             sessionName: "agentide--agentide--app-skeleton--claude",
         )
-        let path = try? #require(command.first { $0.hasPrefix("PATH=") })
-        #expect(path?.contains("/opt/homebrew/bin") == true)
-        #expect(path?.contains("/usr/local/bin") == true)
-        #expect(path?.contains("/usr/bin") == true)
+        let path = try #require(command.first { $0.hasPrefix("PATH=") })
+        #expect(path.contains("/opt/homebrew/bin"))
+        #expect(path.contains("/usr/local/bin"))
+        #expect(path.contains("/usr/bin"))
     }
 
     // MARK: Private

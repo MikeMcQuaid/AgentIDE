@@ -90,7 +90,7 @@ extension TerminalRepresentable {
             blockMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .scrollWheel, .keyDown],
             ) { [weak view] event in
-                guard let view, event.window === view.window else {
+                guard let view, unsafe event.window === view.window else {
                     return event
                 }
                 guard event.type != .keyDown else {
@@ -188,7 +188,7 @@ extension TerminalRepresentable {
         /// swallowed keystrokes and pastes meant for the visible
         /// pane.
         func updateFocus(isActive: Bool, of view: PaneTerminalView) {
-            guard isActive == false, let window = view.window,
+            guard isActive == false, let window = unsafe view.window,
                   let responder = window.firstResponder as? NSView, responder.isDescendant(of: view)
             else {
                 return

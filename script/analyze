@@ -1,6 +1,6 @@
 #!/bin/bash
 # Static analysis: unused declarations and imports via SwiftLint's
-# analyzer, plus dead-code detection via periphery when available.
+# analyzer, plus dead-code detection via periphery.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -20,14 +20,8 @@ args=(
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
-  defaults write com.apple.dt.xcodebuild IDEPackageSupportDisablePluginExecutionSandbox -bool YES
-  # The literal $(inherited) is for xcodebuild, not the shell.
-  # shellcheck disable=SC2016
-  args+=(
-    -IDEPackageSupportDisableManifestSandbox=1
-    -IDEPackageSupportDisablePackageSandbox=1
-    'OTHER_SWIFT_FLAGS=$(inherited) -disable-sandbox'
-  )
+elif command -v xcodegen &>/dev/null; then
+  xcodegen generate --use-cache
 fi
 
 # Package plugins are trusted everywhere, as in script/build: only
@@ -46,8 +40,8 @@ periphery_build_args=(-- -skipPackagePluginValidation)
 build() {
   if [[ -n "${SV_SESSION_ID:-}" ]]; then
     # `xcodebuild` cannot run here at all: see script/build.
-    swift package clean
-    swift build --disable-sandbox -v >"$log" 2>&1
+    swift package clean || return
+    nice -n 10 swift build --disable-sandbox --disable-get-task-allow-entitlement --jobs 6 >"$log" 2>&1
   else
     xcodebuild "${args[@]}" clean build >"$log" 2>&1
   fi
@@ -90,7 +84,8 @@ swiftlint analyze --compiler-log-path "$log" --strict || failed=1
 # SwiftTerm's generated build information otherwise makes Periphery
 # report dependency output and required module imports as unused.
 if ! command -v periphery &>/dev/null; then
-  echo "skipping periphery: not installed (add it via the Brewfile)" >&2
+  echo "periphery is required: install it with script/bootstrap" >&2
+  failed=1
 else
   periphery scan \
     --project AgentIDE.xcodeproj \

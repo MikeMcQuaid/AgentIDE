@@ -38,10 +38,10 @@ enum Quarantine {
     private static let attribute = "com.apple.quarantine"
 
     private static func isQuarantined(_ path: String) -> Bool {
-        getxattr(path, attribute, nil, 0, 0, 0) >= 0
+        unsafe getxattr(path, attribute, nil, 0, 0, 0) >= 0
     }
 
     private static func clear(_ path: String) -> Bool {
-        removexattr(path, attribute, 0) == 0
+        unsafe removexattr(path, attribute, 0) == 0
     }
 }

@@ -18,7 +18,7 @@ struct QuarantineTests {
         let marker = "0083;00000000;test;"
         for name in ["codex", "codex-helper"] {
             let marked = marker.withCString { value in
-                setxattr(cask + "/" + name, "com.apple.quarantine", value, marker.utf8.count, 0, 0) == 0
+                unsafe setxattr(cask + "/" + name, "com.apple.quarantine", value, marker.utf8.count, 0, 0) == 0
             }
             try #require(marked)
         }
@@ -27,7 +27,7 @@ struct QuarantineTests {
 
         let real = URL(filePath: cask).resolvingSymlinksInPath().path
         #expect(cleared == [real + "/codex", real + "/codex-helper"])
-        #expect(getxattr(cask + "/codex-helper", "com.apple.quarantine", nil, 0, 0, 0) < 0)
+        #expect(unsafe getxattr(cask + "/codex-helper", "com.apple.quarantine", nil, 0, 0, 0) < 0)
         #expect(Quarantine.clear(for: .codexCLI, binaryDirectories: [binaries]).isEmpty)
         #expect(Quarantine.clear(for: .claudeCode, binaryDirectories: [binaries]).isEmpty)
     }

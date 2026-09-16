@@ -68,8 +68,8 @@ struct DiffHunkTextView: NSViewRepresentable {
         view.isSelectable = true
         view.drawsBackground = false
         view.textContainerInset = .zero
-        view.textContainer?.lineFragmentPadding = 0
-        view.textContainer?.widthTracksTextView = true
+        unsafe view.textContainer?.lineFragmentPadding = 0
+        unsafe view.textContainer?.widthTracksTextView = true
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
         view.autoresizingMask = []
@@ -85,8 +85,8 @@ struct DiffHunkTextView: NSViewRepresentable {
         view.gutterLength = gutterLength
         view.changedLines = changedLines
         view.onToggleLine = onToggleLine
-        if view.textStorage?.isEqual(to: text) == false {
-            view.textStorage?.setAttributedString(text)
+        if unsafe view.textStorage?.isEqual(to: text) == false {
+            unsafe view.textStorage?.setAttributedString(text)
         }
     }
 
@@ -195,12 +195,12 @@ final class HunkTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let inContainer = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
-        guard let layout = layoutManager, let container = textContainer else {
+        guard let layout = unsafe layoutManager, let container = unsafe textContainer else {
             super.mouseDown(with: event)
             return
         }
 
-        let index = layout.characterIndex(
+        let index = unsafe layout.characterIndex(
             for: inContainer,
             in: container,
             fractionOfDistanceBetweenInsertionPoints: nil,

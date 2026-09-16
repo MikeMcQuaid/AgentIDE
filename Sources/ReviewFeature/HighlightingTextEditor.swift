@@ -49,7 +49,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         var scrollKey: String?
 
         static func highlight(_ view: NSTextView, language: SyntaxLanguage?) {
-            guard let language, let storage = view.textStorage else {
+            guard let language, let storage = unsafe view.textStorage else {
                 return
             }
 
@@ -86,10 +86,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
                 forName: NSView.boundsDidChangeNotification,
                 object: scroll.contentView,
                 queue: .main,
-            ) { [weak self] notification in
-                let origin = (notification.object as? NSClipView)?.bounds.origin
-                Task { @MainActor in
-                    self?.lastOrigin = origin
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.lastOrigin = self?.scrollView?.contentView.bounds.origin
                 }
             })
             let names: [Notification.Name] = [
@@ -117,7 +116,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         /// the editor belongs; frames already agreeing make this a
         /// no-op, so a healthy layout is never disturbed.
         func realignAfterDisplayChange() {
-            guard let scroll = scrollView, let container = scroll.superview,
+            guard let scroll = scrollView, let container = unsafe scroll.superview,
                   scroll.frame != container.bounds
             else {
                 return
@@ -275,7 +274,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
         DispatchQueue.main.async {
             guard let view = scroll.documentView as? NSTextView,
-                  let layoutManager = view.layoutManager, let container = view.textContainer
+                  let layoutManager = unsafe view.layoutManager, let container = unsafe view.textContainer
             else {
                 return
             }
@@ -314,7 +313,7 @@ private final nonisolated class WhitespaceLayoutManager: NSLayoutManager {
 
     override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
-        guard let storage = textStorage else {
+        guard let storage = unsafe textStorage else {
             return
         }
 
@@ -323,7 +322,7 @@ private final nonisolated class WhitespaceLayoutManager: NSLayoutManager {
             .font: CodeStyle.nsFont,
             .foregroundColor: CodeStyle.whitespaceNSColour,
         ]
-        let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        let characters = unsafe characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         for index in characters.location ..< NSMaxRange(characters) {
             let symbol: String? =
                 switch text.character(at: index) {
@@ -341,7 +340,7 @@ private final nonisolated class WhitespaceLayoutManager: NSLayoutManager {
             }
 
             let glyphIndex = glyphIndexForCharacter(at: index)
-            let fragment = lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+            let fragment = unsafe lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
             let position = location(forGlyphAt: glyphIndex)
             let point = NSPoint(x: origin.x + fragment.minX + position.x, y: origin.y + fragment.minY)
             NSAttributedString(string: symbol, attributes: attributes).draw(at: point)

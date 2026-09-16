@@ -73,9 +73,7 @@ extension PullRequestFooterView {
             return Text(name)
         }
 
-        return Text(name + " ")
-            + Text(Image(systemName: copyIcon)).font(.system(size: copyIconSize))
-            + Text(String(count))
+        return Text("\(name) \(Text(Image(systemName: copyIcon)).font(.system(size: copyIconSize)))\(String(count))")
     }
 
     /// The symbol's size: the label's own is thirteen points, and

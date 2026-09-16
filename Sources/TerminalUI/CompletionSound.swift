@@ -114,7 +114,7 @@ public enum CompletionSound {
     // MARK: Private
 
     /// How often a playing sound is checked for the sleep flag.
-    private static let pollSeconds: TimeInterval = 0.05
+    private nonisolated static let pollSeconds: TimeInterval = 0.05
 
     /// One sound at a time, away from the main thread.
     private static let queue: DispatchQueue = .init(label: "agentide.chime", qos: .userInitiated)

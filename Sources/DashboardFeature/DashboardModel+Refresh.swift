@@ -140,13 +140,13 @@ public extension DashboardModel {
     /// Whether the caller is the reading in flight, which is what
     /// its own clean-up is when it asks for another reading.
     private var isInsideReading: Bool {
-        readingTaskID != nil && withUnsafeCurrentTask { $0?.hashValue } == readingTaskID
+        unsafe readingTaskID != nil && withUnsafeCurrentTask { unsafe $0?.hashValue } == readingTaskID
     }
 
     /// One reading, then another straight after when the first
     /// asked for one, unless a queued reading is about to run anyway.
     private func performReadings() async {
-        readingTaskID = withUnsafeCurrentTask { $0?.hashValue }
+        readingTaskID = unsafe withUnsafeCurrentTask { unsafe $0?.hashValue }
         defer { readingTaskID = nil }
         repeat {
             followUpDue = false

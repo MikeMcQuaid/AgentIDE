@@ -12,7 +12,7 @@ extension NSView {
                 return false
             }
 
-            current = view.superview
+            current = unsafe view.superview
         }
         return true
     }

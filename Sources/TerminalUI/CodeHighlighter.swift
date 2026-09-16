@@ -130,22 +130,22 @@ public enum CodeHighlighter {
     /// the fallback tokenizer.
     private static let configurations: [SyntaxLanguage: LanguageConfiguration] = {
         var loaded = [SyntaxLanguage: LanguageConfiguration]()
-        loaded[.swift] = configuration(tree_sitter_swift(), name: "Swift")
-        loaded[.ruby] = configuration(tree_sitter_ruby(), name: "Ruby")
-        loaded[.shell] = configuration(tree_sitter_bash(), name: "Bash")
-        loaded[.python] = configuration(tree_sitter_python(), name: "Python")
-        loaded[.json] = configuration(tree_sitter_json(), name: "JSON")
-        loaded[.typescript] = configuration(tree_sitter_typescript(), name: "TypeScript")
-        loaded[.cSource] = configuration(tree_sitter_c(), name: "C")
-        loaded[.cpp] = configuration(tree_sitter_cpp(), name: "CPP")
-        loaded[.golang] = configuration(tree_sitter_go(), name: "Go")
-        loaded[.rust] = configuration(tree_sitter_rust(), name: "Rust")
-        loaded[.java] = configuration(tree_sitter_java(), name: "Java")
-        loaded[.php] = configuration(tree_sitter_php(), name: "PHP")
-        loaded[.html] = configuration(tree_sitter_html(), name: "HTML")
-        loaded[.css] = configuration(tree_sitter_css(), name: "CSS")
-        loaded[.regex] = configuration(tree_sitter_regex(), name: "Regex")
-        loaded[.erb] = configuration(tree_sitter_embedded_template(), name: "EmbeddedTemplate")
+        loaded[.swift] = unsafe configuration(tree_sitter_swift(), name: "Swift")
+        loaded[.ruby] = unsafe configuration(tree_sitter_ruby(), name: "Ruby")
+        loaded[.shell] = unsafe configuration(tree_sitter_bash(), name: "Bash")
+        loaded[.python] = unsafe configuration(tree_sitter_python(), name: "Python")
+        loaded[.json] = unsafe configuration(tree_sitter_json(), name: "JSON")
+        loaded[.typescript] = unsafe configuration(tree_sitter_typescript(), name: "TypeScript")
+        loaded[.cSource] = unsafe configuration(tree_sitter_c(), name: "C")
+        loaded[.cpp] = unsafe configuration(tree_sitter_cpp(), name: "CPP")
+        loaded[.golang] = unsafe configuration(tree_sitter_go(), name: "Go")
+        loaded[.rust] = unsafe configuration(tree_sitter_rust(), name: "Rust")
+        loaded[.java] = unsafe configuration(tree_sitter_java(), name: "Java")
+        loaded[.php] = unsafe configuration(tree_sitter_php(), name: "PHP")
+        loaded[.html] = unsafe configuration(tree_sitter_html(), name: "HTML")
+        loaded[.css] = unsafe configuration(tree_sitter_css(), name: "CSS")
+        loaded[.regex] = unsafe configuration(tree_sitter_regex(), name: "Regex")
+        loaded[.erb] = unsafe configuration(tree_sitter_embedded_template(), name: "EmbeddedTemplate")
         return loaded
     }()
 
@@ -207,12 +207,12 @@ public enum CodeHighlighter {
                 bundle.appendingPathComponent("Contents/Resources/queries"),
             ]
             for queries in layouts where FileManager.default.fileExists(atPath: queries.path) {
-                if let configuration = try? LanguageConfiguration(grammar, name: name, queriesURL: queries) {
+                if let configuration = unsafe try? LanguageConfiguration(grammar, name: name, queriesURL: queries) {
                     return configuration
                 }
             }
         }
-        return try? LanguageConfiguration(grammar, name: name)
+        return unsafe try? LanguageConfiguration(grammar, name: name)
     }
 
     /// Maps tree-sitter capture names onto the app's colour classes.

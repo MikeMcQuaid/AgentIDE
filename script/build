@@ -62,7 +62,7 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # comment beside that cap warns about. Niced rather than put in the
   # background band: the band throttles file I/O too, which took a
   # full rebuild from about a minute to twelve.
-  exec nice -n 10 swift build --disable-sandbox --jobs "${JOBS}"
+  exec nice -n 10 swift build --disable-sandbox --disable-get-task-allow-entitlement --jobs "${JOBS}"
 fi
 
 # Package plugins are trusted everywhere: SwiftTerm 1.19 ships a

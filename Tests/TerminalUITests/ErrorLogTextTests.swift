@@ -42,7 +42,7 @@ struct ErrorLogTextTests {
         ]
         let text = ErrorLogText.attributed(entries)
         var found = false
-        text.enumerateAttribute(.link, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+        unsafe text.enumerateAttribute(.link, in: NSRange(location: 0, length: text.length)) { value, _, _ in
             if value != nil {
                 found = true
             }
@@ -68,7 +68,7 @@ struct ErrorLogTextTests {
         #expect(text.string.contains("brew: Pushed non-capturing-regexp-groups."))
 
         let branch = try #require(text.string.range(of: "non-capturing-regexp-groups"))
-        let monospaced = text.attribute(
+        let monospaced = unsafe text.attribute(
             .font,
             at: NSRange(branch, in: text.string).location,
             effectiveRange: nil,
@@ -76,7 +76,7 @@ struct ErrorLogTextTests {
         #expect(monospaced?.fontName.contains("Mono") == true)
 
         let name = try #require(text.string.range(of: "brew"))
-        let bold = text.attribute(
+        let bold = unsafe text.attribute(
             .font,
             at: NSRange(name, in: text.string).location,
             effectiveRange: nil,

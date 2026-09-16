@@ -50,7 +50,7 @@ extension GitClientIntegrationTests {
 
         try "first\n".write(toFile: repoPath + "/first.txt", atomically: true, encoding: .utf8)
         try await git.commitAll(worktreePath: repoPath, message: "The commit being added to")
-        let before = try await git.commitCount(worktreePath: repoPath, range: "HEAD")
+        let before = await git.commitCount(worktreePath: repoPath, range: "HEAD")
 
         // One file to fold in, one to leave behind.
         try "edited\n".write(toFile: repoPath + "/README.md", atomically: true, encoding: .utf8)
@@ -58,7 +58,7 @@ extension GitClientIntegrationTests {
         try await git.amend(worktreePath: repoPath, paths: ["README.md"], message: nil)
 
         // One commit, not two, and its message is the one it had.
-        #expect(try await git.commitCount(worktreePath: repoPath, range: "HEAD") == before)
+        #expect(await git.commitCount(worktreePath: repoPath, range: "HEAD") == before)
         #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "The commit being added to")
         let amended = try await git.lastCommitDiff(worktreePath: repoPath)
         #expect(amended.contains("+edited"))

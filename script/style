@@ -19,7 +19,7 @@ shell_style() {
 
 github_actions_style() {
   actionlint
-  zizmor --no-online-audits .github/workflows
+  zizmor --offline .github/workflows
 
   # Only first-party (actions/*) and Homebrew (Homebrew/actions/*)
   # actions are allowed; anything else needs a human decision, so add
@@ -101,12 +101,12 @@ run_family() {
 families=(shell github_actions docs swift)
 for family in "${families[@]}"; do
   (
-    status=0
+    set +e
     (
       set -e
       run_family "${family}"
-    ) >"${scratch}/${family}.log" 2>&1 || status=$?
-    echo "${status}" >"${scratch}/${family}.status"
+    ) >"${scratch}/${family}.log" 2>&1
+    echo "$?" >"${scratch}/${family}.status"
   ) &
 done
 wait

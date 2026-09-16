@@ -9,7 +9,7 @@ import Testing
 /// in, so any change answers it.
 struct HerdrWaitTests {
     @Test
-    func `waiting for a change names every other state`() async {
+    func `waiting for a change names every other state`() async throws {
         let runner = RecordingRunner()
         let herdr = HerdrClient(
             runner: runner,
@@ -18,9 +18,9 @@ struct HerdrWaitTests {
             configHome: "/tmp/herdr-wait-test",
         )
         #expect(await herdr.waitForAgentChange(paneID: "w1:p1", from: .working, timeoutMilliseconds: 10))
-        let command = try? #require(runner.commands.last)
-        #expect(command?.contains("w1:p1") == true)
-        let states = zip(command ?? [], (command ?? []).dropFirst())
+        let command = try #require(runner.commands.last)
+        #expect(command.contains("w1:p1"))
+        let states = zip(command, command.dropFirst())
             .filter { $0.0 == "--until" }
             .map(\.1)
         #expect(states == ["idle", "blocked", "done"])

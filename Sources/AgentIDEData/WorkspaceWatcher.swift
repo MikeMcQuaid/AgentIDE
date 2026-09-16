@@ -39,12 +39,12 @@ public final class WorkspaceWatcher: Sendable {
             return
         }
 
-        var context = FSEventStreamContext()
+        var context = unsafe FSEventStreamContext()
         // The stream holds the one strong reference the callback
         // reads; never released, since the stream is never stopped.
-        let info = Unmanaged.passRetained(box)
-        context.info = info.toOpaque()
-        guard let stream = FSEventStreamCreate(
+        let info = unsafe Unmanaged.passRetained(box)
+        unsafe context.info = info.toOpaque()
+        guard let stream = unsafe FSEventStreamCreate(
             nil,
             workspaceEventsCallback,
             &context,
@@ -54,16 +54,16 @@ public final class WorkspaceWatcher: Sendable {
             Self.latencySeconds,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagUseCFTypes),
         ) else {
-            info.release()
+            unsafe info.release()
             started.withLock { $0 = false }
             return
         }
 
-        FSEventStreamSetDispatchQueue(stream, Self.queue)
-        guard FSEventStreamStart(stream) else {
-            FSEventStreamInvalidate(stream)
-            FSEventStreamRelease(stream)
-            info.release()
+        unsafe FSEventStreamSetDispatchQueue(stream, Self.queue)
+        guard unsafe FSEventStreamStart(stream) else {
+            unsafe FSEventStreamInvalidate(stream)
+            unsafe FSEventStreamRelease(stream)
+            unsafe info.release()
             started.withLock { $0 = false }
             return
         }
@@ -147,12 +147,12 @@ public final class WorkspaceWatcher: Sendable {
 
 /// The C callback FSEvents delivers into; with `UseCFTypes` the
 /// paths arrive as a `CFArray` of strings.
-private let workspaceEventsCallback: FSEventStreamCallback = { _, info, _, eventPaths, _, _ in
-    guard let info else {
+private let workspaceEventsCallback: FSEventStreamCallback = { _, context, _, eventPaths, _, _ in
+    guard let info = unsafe context else {
         return
     }
 
-    let box = Unmanaged<WorkspaceWatcher.ChangeBox>.fromOpaque(info).takeUnretainedValue()
-    let paths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as? [String] ?? []
+    let box = unsafe Unmanaged<WorkspaceWatcher.ChangeBox>.fromOpaque(info).takeUnretainedValue()
+    let paths = unsafe Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as? [String] ?? []
     box.record(paths)
 }

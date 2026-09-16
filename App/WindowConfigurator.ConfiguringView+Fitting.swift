@@ -29,7 +29,7 @@ extension WindowConfigurator.ConfiguringView {
     /// window to the display it lost, any other back inside its
     /// screen's edges.
     func fit(displayGone: Bool) {
-        guard let window else {
+        guard let window = unsafe self.window else {
             return
         }
 
@@ -78,7 +78,7 @@ extension WindowConfigurator.ConfiguringView {
     /// Brings the frame back inside the screen it is on, keeping
     /// its size where it fits and its corner where it can.
     func fitToScreen() {
-        guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
+        guard let window = unsafe self.window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
             return
         }
 
