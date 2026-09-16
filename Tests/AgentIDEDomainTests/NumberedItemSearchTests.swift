@@ -19,6 +19,11 @@ struct NumberedItemSearchTests {
     }
 
     @Test
+    func `word starts in titles rank first`() {
+        #expect(rank("ap") == [123, 12])
+    }
+
+    @Test
     func `empty queries keep the given order`() {
         #expect(rank(" ") == [12, 123, 7])
         #expect(rank("#") == [12, 123, 7])
@@ -33,6 +38,6 @@ struct NumberedItemSearchTests {
     ]
 
     private func rank(_ query: String) -> [Int] {
-        NumberedItemSearch.rank(issues, query: query, number: \.number, title: \.title).map(\.number)
+        NumberedItemSearch.rank(issues, query: query).map(\.number)
     }
 }

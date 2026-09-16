@@ -2,25 +2,14 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
+// MARK: - NumberedItemPicker
+
 /// A pop-up for an open issue or pull request that searches as you
 /// type: opening it focuses a field over the list, digits jump to a
 /// number and anything else matches titles. Arrows move the
 /// highlight, return or a click picks and Escape closes it.
-struct NumberedItemPicker: View {
+struct NumberedItemPicker<Item: NumberedItem>: View {
     // MARK: Internal
-
-    struct Item: Identifiable {
-        let number: Int
-        let title: String
-
-        var id: Int {
-            number
-        }
-
-        var label: String {
-            "#" + String(number) + " " + title
-        }
-    }
 
     @Binding var selection: Int?
 
@@ -36,7 +25,7 @@ struct NumberedItemPicker: View {
             isPresented = true
         } label: {
             HStack {
-                Text(items.first { $0.number == selection }?.label ?? placeholder)
+                Text(selectedLabel ?? placeholder)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
@@ -52,30 +41,27 @@ struct NumberedItemPicker: View {
 
     // MARK: Private
 
-    private static let spacing: CGFloat = 8
-    private static let rowPadding: CGFloat = 4
-    private static let width: CGFloat = 420
-    private static let listHeight: CGFloat = 260
-    private static let highlightOpacity = 0.25
-
     @State private var isPresented = false
     @State private var query = ""
     @State private var highlighted = 0
     @FocusState private var fieldFocused: Bool
 
+    private var selectedLabel: String? {
+        items.first { $0.number == selection }.map { "#" + String($0.number) + " " + $0.title }
+    }
+
     private var results: [Item] {
-        NumberedItemSearch.rank(items, query: query, number: \.number, title: \.title)
+        NumberedItemSearch.rank(items, query: query)
     }
 
     private var search: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
+        VStack(alignment: .leading, spacing: Layout.spacing) {
             TextField(searchPrompt, text: $query)
                 .textFieldStyle(.roundedBorder)
                 .focused($fieldFocused)
                 .onChange(of: query) { highlighted = 0 }
                 .onSubmit { pickHighlighted() }
-                .onKeyPress(.downArrow) { moveHighlight(by: 1) }
-                .onKeyPress(.upArrow) { moveHighlight(by: -1) }
+                .highlightNavigation($highlighted, count: results.count)
             if results.isEmpty {
                 Group {
                     if items.isEmpty, isLoading {
@@ -85,13 +71,13 @@ struct NumberedItemPicker: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: Self.listHeight)
+                .frame(maxWidth: .infinity, minHeight: Layout.listHeight)
             } else {
                 resultsList
             }
         }
-        .padding(Self.spacing)
-        .frame(width: Self.width)
+        .padding(Layout.spacing)
+        .frame(width: Layout.width)
         .onExitCommand { isPresented = false }
         .onAppear {
             highlighted = results.firstIndex { $0.number == selection } ?? 0
@@ -103,26 +89,19 @@ struct NumberedItemPicker: View {
     }
 
     private var resultsList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                        row(item, isHighlighted: index == highlighted)
-                            .onTapGesture { pick(item) }
-                            .accessibilityAddTraits(.isButton)
-                            .id(index)
-                    }
-                }
-            }
-            .onAppear { proxy.scrollTo(highlighted) }
-            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
-        }
-        .frame(height: Self.listHeight)
-        .hoverHelp("Arrows move the highlight; return or a click picks")
+        HighlightedResultsList(
+            results,
+            id: \.number,
+            highlighted: highlighted,
+            help: "Arrows move the highlight; return or a click picks",
+            onPick: { pick($0) },
+            row: { row($0) },
+        )
+        .frame(height: Layout.listHeight)
     }
 
-    private func row(_ item: Item, isHighlighted: Bool) -> some View {
-        HStack(spacing: Self.spacing) {
+    private func row(_ item: Item) -> some View {
+        HStack(spacing: Layout.spacing) {
             Text("#" + String(item.number))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -134,19 +113,8 @@ struct NumberedItemPicker: View {
                     .accessibilityLabel("Chosen")
             }
         }
-        .padding(.horizontal, Self.spacing)
-        .padding(.vertical, Self.rowPadding)
-        .background(isHighlighted ? Color.accentColor.opacity(Self.highlightOpacity) : .clear)
-        .contentShape(Rectangle())
-    }
-
-    private func moveHighlight(by offset: Int) -> KeyPress.Result {
-        guard results.isEmpty == false else {
-            return .ignored
-        }
-
-        highlighted = min(max(0, highlighted + offset), results.count - 1)
-        return .handled
+        .padding(.horizontal, Layout.spacing)
+        .padding(.vertical, Layout.rowPadding)
     }
 
     private func pickHighlighted() {
@@ -159,4 +127,15 @@ struct NumberedItemPicker: View {
         selection = item.number
         isPresented = false
     }
+}
+
+// MARK: - Layout
+
+/// The picker's measurements, outside it because generic types
+/// cannot hold static stored properties.
+private enum Layout {
+    static let spacing: CGFloat = 8
+    static let rowPadding: CGFloat = 4
+    static let width: CGFloat = 420
+    static let listHeight: CGFloat = 260
 }

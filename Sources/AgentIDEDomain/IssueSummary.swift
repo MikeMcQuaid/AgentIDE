@@ -1,5 +1,5 @@
 /// An open issue, enough to pick one as a prompt source.
-public struct IssueSummary: Identifiable, Hashable, Sendable, Codable {
+public struct IssueSummary: NumberedItem, Identifiable, Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a summary.

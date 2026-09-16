@@ -40,8 +40,7 @@ public enum FuzzyMatcher {
             if index == previousMatch + 1 {
                 score += consecutiveBonus
             }
-            let separators: Set<Character> = ["/", "-", "_", "."]
-            if index == 0 || separators.contains(characters[index - 1]) {
+            if index == 0 || wordSeparators.contains(characters[index - 1]) {
                 score += wordStartBonus
             }
             if index >= basenameStart {
@@ -58,4 +57,6 @@ public enum FuzzyMatcher {
     private static let consecutiveBonus = 3
     private static let wordStartBonus = 2
     private static let basenameBonus = 1
+    /// Spaces too, so titles score word starts the way paths do.
+    private static let wordSeparators: Set<Character> = ["/", "-", "_", ".", " "]
 }

@@ -177,7 +177,7 @@ struct AgentSessionForm: View {
         } else if source == .issue {
             NumberedItemPicker(
                 selection: $number,
-                items: issues.map { NumberedItemPicker.Item(number: $0.number, title: $0.title) },
+                items: issues,
                 placeholder: "Choose an open issue",
                 searchPrompt: "Find an issue by number or title",
                 loadingTitle: "Listing open issues…",
@@ -188,7 +188,7 @@ struct AgentSessionForm: View {
         } else {
             NumberedItemPicker(
                 selection: $number,
-                items: pullRequests.map { NumberedItemPicker.Item(number: $0.number, title: $0.title) },
+                items: pullRequests,
                 placeholder: "Choose an open pull request",
                 searchPrompt: "Find a pull request by number or title",
                 loadingTitle: "Listing open pull requests…",

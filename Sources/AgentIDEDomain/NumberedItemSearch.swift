@@ -7,12 +7,7 @@ import Foundation
 public enum NumberedItemSearch {
     /// The items matching the query, best first. An empty query
     /// returns the items unchanged.
-    public static func rank<Item>(
-        _ items: [Item],
-        query: String,
-        number: (Item) -> Int,
-        title: (Item) -> String,
-    ) -> [Item] {
+    public static func rank<Item: NumberedItem>(_ items: [Item], query: String) -> [Item] {
         var trimmed = query.trimmingCharacters(in: .whitespaces)
         if trimmed.hasPrefix("#") {
             trimmed.removeFirst()
@@ -22,14 +17,14 @@ public enum NumberedItemSearch {
         }
 
         if trimmed.allSatisfy(\.isASCII), trimmed.allSatisfy(\.isNumber) {
-            let exact = items.filter { String(number($0)) == trimmed }
-            let prefixed = items.filter { String(number($0)) != trimmed && String(number($0)).hasPrefix(trimmed) }
+            let exact = items.filter { String($0.number) == trimmed }
+            let prefixed = items.filter { String($0.number) != trimmed && String($0.number).hasPrefix(trimmed) }
             return exact + prefixed
         }
 
         let lowered = trimmed.lowercased().filter { $0.isWhitespace == false }
         return items
-            .compactMap { item in FuzzyMatcher.score(title(item), query: lowered).map { (item, $0) } }
+            .compactMap { item in FuzzyMatcher.score(item.title, query: lowered).map { (item, $0) } }
             .sorted { $0.1 > $1.1 }
             .map(\.0)
     }
