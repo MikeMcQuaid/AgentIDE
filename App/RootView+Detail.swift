@@ -5,6 +5,16 @@ import SwiftUI
 /// The detail column's composition: the covering pages, the split
 /// and the utility pane. Split from the view body's file for length.
 extension RootView {
+    var sidebarDivider: some View {
+        PaneDivider(width: $sidebarWidth, range: PaneLayout.sidebarRange, controlsLeadingPane: true) {
+            sidebarWidth = min(PaneLayout.sidebarComfortable, max(
+                PaneLayout.sidebarRange.lowerBound,
+                currentWindowWidth - (showsUtility ? utilityPaneWidth : 0) - PaneLayout.primaryMinimum,
+            ))
+        }
+        .ignoresSafeArea(.container, edges: .top)
+    }
+
     /// The middle pages, never sheets, cover the primary pane
     /// rather than replacing it: unmounting takes the panes with it,
     /// and a pane can hold a running agent or shell, which only
@@ -54,8 +64,10 @@ extension RootView {
         HStack(spacing: 0) {
             primaryColumn(for: item)
             if showsUtility {
-                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false)
-                    .ignoresSafeArea(.container, edges: .top)
+                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false) {
+                    utilityPaneWidth = PaneLayout.defaultUtilityWidth(in: currentWindowWidth, sidebar: sidebarWidth)
+                }
+                .ignoresSafeArea(.container, edges: .top)
                 utilityPane(for: item)
                     .frame(width: utilityPaneWidth)
                     .frame(maxHeight: .infinity)

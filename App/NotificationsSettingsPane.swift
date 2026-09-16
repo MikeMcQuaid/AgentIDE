@@ -167,8 +167,7 @@ private struct SoundPicker: View {
 
 // MARK: - EditorSettingsPane
 
-/// The external editor command and the one monospace typography
-/// every code surface shares.
+/// The command used to open files in an external editor.
 struct EditorSettingsPane: View {
     // MARK: Internal
 
@@ -183,67 +182,12 @@ struct EditorSettingsPane: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Monospace font") {
-                Picker("Font", selection: familyBinding) {
-                    ForEach(families, id: \.self) { name in
-                        Text(name).tag(name)
-                    }
-                }
-                LabeledContent("Size") {
-                    Stepper(String(Int(fontSize)), value: $fontSize, in: Self.sizeRange)
-                }
-                Text("Shared by diffs, the editor, finder results and code blocks; "
-                    + "terminals already open keep the font they started with.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
     }
 
     // MARK: Private
 
-    private static let sizeRange: ClosedRange<Double> = 9 ... 24
-
-    /// Every installed fixed-pitch family by its shown name, the
-    /// default first: faces would list SFMono-Regular where the
-    /// font panel says SF Mono.
-    private static let monospaceFamilies: [String] = {
-        let fixed = NSFontManager.shared
-            .availableFontFamilies
-            .filter { NSFont(name: $0, size: CodeStyle.defaultPointSize)?.isFixedPitch == true }
-            .sorted()
-        let preferred = "SF Mono"
-        return fixed.contains(preferred)
-            ? [preferred] + fixed.filter { $0 != preferred }
-            : fixed
-    }()
-
     @AppStorage(AppSettings.externalEditorKey)
     private var externalEditor = ""
-    /// Literal defaults, matching `CodeStyle`'s own: the formatter
-    /// rewrites `Type.member` initialisers into broken annotations.
-    @AppStorage(AppSettings.codeFontNameKey)
-    private var fontName = "SFMono-Regular"
-    @AppStorage(AppSettings.codeFontSizeKey)
-    private var fontSize = 13.0
-
-    /// The list with the current pick appended when it is no longer
-    /// installed, so the picker never shows blank.
-    private var families: [String] {
-        let current = familyBinding.wrappedValue
-        return Self.monospaceFamilies.contains(current)
-            ? Self.monospaceFamilies
-            : Self.monospaceFamilies + [current]
-    }
-
-    /// Reads the stored name as its family, so a face name written
-    /// by earlier versions selects the family it belongs to; picks
-    /// store the family, which AppKit resolves to its regular face.
-    private var familyBinding: Binding<String> {
-        Binding(
-            get: { NSFont(name: fontName, size: CodeStyle.defaultPointSize)?.familyName ?? fontName },
-            set: { fontName = $0 },
-        )
-    }
 }

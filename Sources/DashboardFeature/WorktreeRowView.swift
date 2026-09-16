@@ -44,6 +44,8 @@ struct WorktreeRowView: View {
     /// The agent's monochrome mark, sized to the caption line.
     private static let agentIconSize: CGFloat = 11
 
+    private var nameStyle: NameStyle = .init()
+
     /// The branch against what was pushed, the repository's own
     /// checkout included (main against origin/main): level shows
     /// nothing, so an arrow is always a branch and its upstream
@@ -119,7 +121,7 @@ struct WorktreeRowView: View {
             // own: an identifier either way, drawn as every surface
             // draws one.
             Text(title)
-                .font(NameStyle.font)
+                .font(nameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: Self.spacing)
@@ -146,7 +148,7 @@ struct WorktreeRowView: View {
         if item.worktree.isHostDirectory {
             HStack(spacing: Self.spacing) {
                 Text(item.worktree.branch)
-                    .font(NameStyle.small)
+                    .font(nameStyle.small)
                     .lineLimit(1)
                 Text(counts)
                     .lineLimit(1)
@@ -154,7 +156,7 @@ struct WorktreeRowView: View {
                     .hoverHelp(countsExplanation)
                 Spacer(minLength: 0)
             }
-            .font(.caption)
+            .font(nameStyle.detail)
             .foregroundStyle(.secondary)
         } else {
             worktreeDetailLine
@@ -182,7 +184,7 @@ struct WorktreeRowView: View {
                 .hoverHelp(countsExplanation)
             Spacer(minLength: 0)
         }
-        .font(.caption)
+        .font(nameStyle.detail)
         .foregroundStyle(.secondary)
     }
 
@@ -216,42 +218,42 @@ struct WorktreeRowView: View {
             case .running where item.session?.activity == .blocked:
                 Image(systemName: "questionmark.circle.fill")
                     .foregroundStyle(.orange)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent asked a question or wants an approval")
 
             case .running where item.session?.activity == .working:
                 Image(systemName: "play.circle.fill")
                     .foregroundStyle(.green)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent is working on its turn")
 
             case .running where item.session?.activity == .done:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("The turn is done; the answer is waiting")
 
             case .running where item.session?.activity == .idle:
                 Image(systemName: "pause.circle")
                     .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("At rest: nothing asked, or the turn was interrupted")
 
             case .running:
                 Image(systemName: "circle.dotted")
                     .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("Running, but herdr cannot tell what the agent is doing")
 
             case .finished:
                 Image(systemName: "stop.circle")
                     .foregroundStyle(.secondary)
-                    .font(.caption)
+                    .font(nameStyle.detail)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent's process exited; the conversation stays resumable")
 

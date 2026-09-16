@@ -19,7 +19,7 @@ struct BranchSwitchPopover: View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack(spacing: Self.spacing) {
                 Text("Switch").font(.subheadline.weight(.semibold))
-                Text(item.worktree.branch).font(NameStyle.font)
+                Text(item.worktree.branch).font(nameStyle.font)
                 Text("to").font(.subheadline.weight(.semibold))
             }
             if let branches {
@@ -54,6 +54,8 @@ struct BranchSwitchPopover: View {
 
     @State private var isSwitching = false
 
+    private var nameStyle: NameStyle = .init()
+
     private func list(of branches: [String]) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -66,7 +68,7 @@ struct BranchSwitchPopover: View {
                         }
                     } label: {
                         Label(branch, image: "octicon-git-branch")
-                            .font(NameStyle.font)
+                            .font(nameStyle.font)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }

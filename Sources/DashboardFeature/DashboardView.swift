@@ -35,8 +35,10 @@ public struct DashboardView: View {
                     }
                 }
                 NewRepositoryRow { model.showsRepositoryFinder = true }
+                    .padding(.trailing, Self.scrollbarClearance)
             }
-            .padding(Self.listPadding)
+            .padding([.leading, .vertical], Self.listPadding)
+            .padding(.trailing, Self.listTrailingPadding)
         }
         // The traffic lights occupy the top-left band; the inset
         // keeps the first repository row beneath it. Opening a
@@ -51,9 +53,11 @@ public struct DashboardView: View {
 
     private static let statusPadding: CGFloat = 4
     private static let listPadding: CGFloat = 6
+    private static let listTrailingPadding: CGFloat = 2
+    private static let scrollbarClearance: CGFloat = 16
     private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
-    private static let headerVerticalPadding: CGFloat = 5
+    private static let headerVerticalPadding: CGFloat = 4
     private static let deletingOpacity = 0.35
     private static let rowHorizontalPadding: CGFloat = 6
     private static let rowIndent: CGFloat = 12
@@ -86,11 +90,12 @@ public struct DashboardView: View {
     @State private var pendingBranchSwitch: WorktreeItem?
 
     private let model: DashboardModel
+    private var repositoryStyle: RepositoryStyle = .init()
 
     /// Whether the window is fullscreen, with the lights hidden.
     private let isFullScreen: Bool
 
-    /// The disclosure button and a trailing new-session plus are
+    /// The disclosure button and the adjacent new-session plus are
     /// siblings: a button nested inside another button never
     /// receives its clicks.
     private func header(for group: RepositoryGroup) -> some View {
@@ -101,35 +106,38 @@ public struct DashboardView: View {
                 headerLabel(for: group)
             }
             .buttonStyle(.plain)
-            .hoverHelp("Click to show or hide this repository's worktrees")
+            .hoverHelp((isExpanded(group.repository.path) ? "Collapse " : "Expand ") + group.repository.name)
             Button {
                 model.openNewSession(for: group.repository)
             } label: {
-                Image(systemName: "plus")
-                    .font(.caption2.weight(.semibold))
+                SidebarIcon(systemName: "plus", verticalPadding: Self.headerVerticalPadding)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("New session in " + group.repository.name)
             }
             .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel("New session in " + group.repository.name)
             .hoverHelp("Start a new agent session in this repository")
+            Spacer(minLength: 0)
         }
+        .padding(.trailing, Self.scrollbarClearance)
         .modifier(RepositoryMenu(group: group, model: model))
     }
 
     private func headerLabel(for group: RepositoryGroup) -> some View {
         HStack(spacing: Self.statusPadding) {
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .rotationEffect(.degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0))
-                // The standard disclosure affordance turns, never
-                // jumps.
-                .animation(Motion.quick, value: isExpanded(group.repository.path))
-                .accessibilityHidden(true)
+            // The standard disclosure affordance turns, never jumps.
+            SidebarIcon(
+                systemName: "chevron.right",
+                verticalPadding: Self.headerVerticalPadding,
+                rotation: .degrees(isExpanded(group.repository.path) ? Self.expandedChevronDegrees : 0),
+            )
+            .padding(.horizontal, -Self.statusPadding)
+            .padding(.vertical, -Self.headerVerticalPadding)
             avatar(for: group.repository)
             // The avatar already names the owner, so the text keeps
             // to the repository name alone.
             Text(group.repository.name)
-                .font(.subheadline.weight(.semibold))
+                .font(repositoryStyle.font)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             // The main checkout is not a worktree, and neither is a
@@ -141,10 +149,11 @@ public struct DashboardView: View {
                     .foregroundStyle(.secondary)
                     .hoverHelp("Worktrees beyond the default branch")
             }
-            Spacer(minLength: 0)
         }
         .padding(.vertical, Self.headerVerticalPadding)
+        .padding(.leading, Self.listPadding)
         .contentShape(Rectangle())
+        .padding(.leading, -Self.listPadding)
     }
 
     /// Selected rows use the system selection colours, which follow
@@ -323,7 +332,7 @@ public struct DashboardView: View {
 
 /// The sidebar's last row: opening a repository not listed yet. A
 /// row of the list rather than a button floating above it, with the
-/// trailing plus saying it adds rather than selects; its own view
+/// adjacent plus saying it adds rather than selects; its own view
 /// for the sidebar's type length.
 private struct NewRepositoryRow: View {
     // MARK: Internal
@@ -334,14 +343,13 @@ private struct NewRepositoryRow: View {
         Button(action: onOpen) {
             HStack(spacing: Self.spacing) {
                 Text("New repository")
-                    .font(.subheadline.weight(.semibold))
+                    .font(repositoryStyle.font)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "plus")
-                    .font(.caption2.weight(.semibold))
+                SidebarIcon(systemName: "plus", verticalPadding: Self.verticalPadding)
                     .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
+                    .padding(.vertical, -Self.verticalPadding)
+                Spacer(minLength: 0)
             }
             .padding(.vertical, Self.verticalPadding)
             .contentShape(Rectangle())
@@ -355,4 +363,6 @@ private struct NewRepositoryRow: View {
 
     private static let spacing: CGFloat = 4
     private static let verticalPadding: CGFloat = 5
+
+    private var repositoryStyle: RepositoryStyle = .init()
 }

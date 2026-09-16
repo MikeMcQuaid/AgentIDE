@@ -67,6 +67,8 @@ struct DiffFileView: View {
     /// gutters with it.
     static let selectedOpacity = 0.35
 
+    var codeStyle: CodeStyle = .init()
+
     let file: DiffFile
     let model: ReviewModel
     let isCollapsed: Bool

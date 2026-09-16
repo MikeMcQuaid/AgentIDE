@@ -194,7 +194,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         view.minSize = NSSize(width: 0, height: 0)
         view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.delegate = context.coordinator
-        view.font = CodeStyle.nsFont
+        view.font = codeStyle.appKitFont
         view.isRichText = false
         view.allowsUndo = true
         // Code is not prose: smart quotes, dashes, replacements and
@@ -232,6 +232,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
             return
         }
 
+        if view.font != codeStyle.appKitFont {
+            view.font = codeStyle.appKitFont
+        }
         // The configuration lands after the file, since it is read
         // off the view while the text is already on screen.
         if let editing = view as? EditingTextView {
@@ -257,6 +260,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
     }
 
     // MARK: Private
+
+    private var codeStyle: CodeStyle = .init()
 
     /// Puts the file back where it was last scrolled to, a turn
     /// later so the text has been laid out to that height; a line

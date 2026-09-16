@@ -58,6 +58,8 @@ struct PullRequestRowView: View {
     /// Whether the ask is on its way to GitHub.
     @State private var isAskingCopilot = false
 
+    private var nameStyle: NameStyle = .init()
+
     private var stateHelp: String {
         if summary.state != "OPEN" {
             summary.state.capitalized + " pull request"
@@ -71,7 +73,7 @@ struct PullRequestRowView: View {
     private var caption: some View {
         HStack(spacing: Self.rowPadding) {
             Text(summary.headBranch)
-                .font(NameStyle.font)
+                .font(nameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.middle)
             let author = ChecksStyle.authorDisplayName(summary.author ?? "")

@@ -156,8 +156,7 @@ struct RootView: View {
                 .frame(maxHeight: .infinity)
                 .background(SidebarMaterial())
                 .ignoresSafeArea(.container, edges: .top)
-            PaneDivider(width: $sidebarWidth, range: PaneLayout.sidebarRange, controlsLeadingPane: true)
-                .ignoresSafeArea(.container, edges: .top)
+            sidebarDivider
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.container, edges: .top)

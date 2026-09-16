@@ -19,11 +19,11 @@ struct FinderResultRow: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(file + (line.map { ":" + String($0) } ?? ""))
-                .font(CodeStyle.font)
+                .font(codeStyle.font)
                 .lineLimit(1)
             if let preview {
                 Text(preview)
-                    .font(CodeStyle.font)
+                    .font(codeStyle.font)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -41,6 +41,8 @@ struct FinderResultRow: View {
     private static let padding: CGFloat = 6
     private static let highlightOpacity = 0.25
     private static let rowVerticalPadding: CGFloat = 2
+
+    private var codeStyle: CodeStyle = .init()
 }
 
 // MARK: - FinderResult

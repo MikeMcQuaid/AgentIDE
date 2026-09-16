@@ -83,7 +83,7 @@ extension DiffFileView {
             text.append(NSAttributedString(lineText(entry.line)))
         }
         let whole = NSRange(location: 0, length: text.length)
-        text.addAttribute(.font, value: CodeStyle.nsFont, range: whole)
+        text.addAttribute(.font, value: codeStyle.appKitFont, range: whole)
         let style = NSMutableParagraphStyle()
         style.headIndent = gutterWidth()
         text.addAttribute(.paragraphStyle, value: style, range: whole)
@@ -118,7 +118,7 @@ extension DiffFileView {
     /// the code, measured once from the monospaced font.
     private func gutterWidth() -> CGFloat {
         let sample = String(repeating: " ", count: Self.hunkGutterLength) as NSString
-        return sample.size(withAttributes: [.font: CodeStyle.nsFont]).width
+        return sample.size(withAttributes: [.font: codeStyle.appKitFont]).width
     }
 }
 

@@ -126,6 +126,8 @@ public struct SessionManagerSheet: View {
     @State private var killed: Set<String> = []
     @State private var browserUsage: [Int32: (cpuPercent: Double, memoryMegabytes: Int)] = [:]
 
+    private var codeStyle: CodeStyle = .init()
+
     private let browsers: BrowserPanes = .shared
     private let service: SessionService
     private let onCloseBrowser: @MainActor (String) -> Void
@@ -140,7 +142,7 @@ public struct SessionManagerSheet: View {
                 .accessibilityLabel(entry.label)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: Self.detailSpacing) {
-                    Text(entry.title).font(CodeStyle.font).lineLimit(1)
+                    Text(entry.title).font(codeStyle.font).lineLimit(1)
                     if let detail = entry.detail {
                         Text(detail)
                             .font(.caption)

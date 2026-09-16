@@ -119,6 +119,8 @@ public struct MarkdownText: View {
     private static let codeCornerRadius: CGFloat = 5
     private static let codeBackgroundOpacity = 0.5
 
+    private var codeStyle: CodeStyle = .init()
+
     private let text: String
 
     /// See `init(_:relativeTo:)`: where a relative image source
@@ -184,7 +186,7 @@ public struct MarkdownText: View {
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HighlightedLine.text(line: line.isEmpty ? " " : line, language: language)
-                    .font(CodeStyle.font)
+                    .font(codeStyle.font)
             }
         }
         .textSelection(.enabled)

@@ -26,7 +26,9 @@ updates.
 ## ✨ Features
 
 - Starts a worktree, a branch and an agent from a prompt, a GitHub issue
-  or a pull request, narrating each step until the agent is up.
+  or a pull request, narrating each step until the agent is up. New
+  branches start from origin's default branch, fetching first when
+  the last fetch was over an hour ago, including with `agentide new`.
 - Runs Claude Code or Codex CLI as a sandboxed, non-admin user, with
   no permission prompts necessary and no access to your admin user's
   files or credentials.
@@ -41,6 +43,8 @@ updates.
 - Reattaches a pane that shows nothing by itself, once, and offers
   Reattach in the pane when that does not draw either; a right-click
   on the pane or on the session strip above it offers it any time.
+- Keeps terminal text selected for copying while the agent's cursor
+  blinks or its screen repaints.
 - Asks Copilot to review a pull request, or to review it again after
   a push, from the Copilot icon in the conversation's header; it dims
   while a request is still waiting on it.
@@ -129,10 +133,19 @@ Settings (Cmd-,) controls:
   commits must be signed, and the browser Cmd-click opens.
 - **Notifications**: which events notify, badge the Dock and make a
   sound.
-- **Editor**: the external editor Cmd-click runs, and the monospace font
-  every code surface shares.
+- **Fonts**: fonts and sizes for code and terminals, repository names,
+  worktree and branch names and utility tabs. The first font entry names
+  the default family. Size steppers preview changes immediately in the
+  main window, including open terminals and editors; each group can
+  return to its original defaults.
+- **Editor**: the external editor Cmd-click runs.
 - **Advanced**: where repositories and worktrees live, how often the
   system is re-read, idle sleep and the performance log.
+
+Double-click either pane divider to restore that pane's default width.
+The right divider and **Resize Panes** give the review pane one-third of
+the space beside the sidebar and the middle pane two-thirds, subject to
+their minimum and maximum widths.
 
 A shell pane sets `AGENTIDE=1` and puts the bundled `agentide` command on
 `PATH`, so shell files can hand editing back to the app:

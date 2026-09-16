@@ -70,6 +70,8 @@ struct PullRequestCreateForm: View {
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = ""
 
+    private var nameStyle: NameStyle = .init()
+
     /// Whether a branch below this one is not on the remote yet, a
     /// pull request is opening, or a push or rebase is running:
     /// the fields grey out rather than racing a reload that could
@@ -217,7 +219,7 @@ struct PullRequestCreateForm: View {
     /// characters where it is not.
     @ViewBuilder private var waitingLine: some View {
         if editing == nil, let below = model.unpushedBelow {
-            (Text("Waiting on ") + Text(below).font(NameStyle.small)
+            (Text("Waiting on ") + Text(below).font(nameStyle.small)
                 + Text(" below it to be pushed and opened first"))
                 .font(.caption)
                 .foregroundStyle(.secondary)

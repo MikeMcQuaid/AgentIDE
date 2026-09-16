@@ -59,9 +59,6 @@ public struct PaneLayout: Hashable, Sendable {
     /// bare minimum is not.
     public static let sidebarComfortable = 300.0
 
-    /// How Resize Panes divides what is left: the work in front of
-    /// you gets three fifths, the utilities two.
-    public static let utilityShare = 0.4
     public static let utilityRange = 260.0 ... 1_200.0
 
     /// What the conversation pane needs to stay readable. Every
@@ -75,6 +72,17 @@ public struct PaneLayout: Hashable, Sendable {
 
     /// Whether the utility pane fits beside the others right now.
     public let showsUtility: Bool
+
+    /// Both reset actions give the utility one-third of the space
+    /// beside the sidebar, within the pane width limits.
+    public static func defaultUtilityWidth(in width: Double, sidebar: Double) -> Double {
+        let available = width - sidebar
+        return min(available / utilityShareDenominator, available - primaryMinimum).clamped(to: utilityRange)
+    }
+
+    // MARK: Private
+
+    private static let utilityShareDenominator = 3.0
 }
 
 private extension Double {

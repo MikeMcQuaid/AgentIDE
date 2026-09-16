@@ -132,9 +132,11 @@ public struct GitClient: Sendable {
         return (ahead: ahead, behind: behind)
     }
 
-    /// Creates a worktree with a new branch based on `HEAD`.
+    /// Creates an untracked branch from the default base, falling
+    /// back to `HEAD` when no default branch is known.
     public func createWorktree(repository: Repository, branch: String, at path: String) async throws {
-        try await git(["worktree", "add", "-b", branch, path, "HEAD"], in: repository.path)
+        let base = await defaultBaseRef(of: repository) ?? "HEAD"
+        try await git(["worktree", "add", "--no-track", "-b", branch, path, base], in: repository.path)
     }
 
     /// Adds a detached worktree, for flows that create the branch
