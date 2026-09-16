@@ -11,16 +11,15 @@ struct PullRequestDisclosureTests {
     // MARK: Internal
 
     @Test
-    func `the disclosure goes in the template's own section, once`() {
+    func `the disclosure goes in the template's own section, once`() throws {
         let sentence = "Claude Code with opus-5 at Extra High effort, with local review and testing."
-        let ticked = PullRequestsModel.disclosing(in: Self.homebrewTemplate, sentence: sentence)
-        let template = try? #require(ticked)
-        #expect(template?.contains("- [x] I did not use AI/LLM") == true)
-        #expect(template?.contains(sentence) == true)
+        let template = try #require(PullRequestsModel.disclosing(in: Self.homebrewTemplate, sentence: sentence))
+        #expect(template.contains("- [x] I did not use AI/LLM"))
+        #expect(template.contains(sentence))
 
         // Said once however often the button is pressed.
         let again = PullRequestsModel.disclosing(
-            in: template ?? "",
+            in: template,
             sentence: "Codex CLI with GPT 5.6 Sol at Minimal effort, with local review and testing.",
         )
         #expect(again?.contains("Claude Code") == false)

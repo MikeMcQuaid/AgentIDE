@@ -41,7 +41,7 @@ public struct SelectableTextView: NSViewRepresentable {
         view.isSelectable = true
         view.drawsBackground = false
         view.textContainerInset = NSSize(width: Self.inset, height: Self.inset)
-        view.textContainer?.widthTracksTextView = true
+        unsafe view.textContainer?.widthTracksTextView = true
         view.isVerticallyResizable = true
         view.autoresizingMask = .width
         view.usesFindBar = true
@@ -60,7 +60,7 @@ public struct SelectableTextView: NSViewRepresentable {
 
     public func updateNSView(_ scroll: NSScrollView, context _: Context) {
         guard let view = scroll.documentView as? NSTextView,
-              view.textStorage?.isEqual(to: text) == false
+              unsafe view.textStorage?.isEqual(to: text) == false
         else {
             return
         }
@@ -68,7 +68,7 @@ public struct SelectableTextView: NSViewRepresentable {
         // A selection survives new entries when it still fits, so a
         // message landing mid-drag does not take the copy away.
         let selected = view.selectedRange()
-        view.textStorage?.setAttributedString(text)
+        unsafe view.textStorage?.setAttributedString(text)
         if NSMaxRange(selected) <= text.length {
             view.setSelectedRange(selected)
         }

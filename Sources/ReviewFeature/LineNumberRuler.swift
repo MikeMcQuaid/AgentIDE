@@ -39,8 +39,8 @@ final class LineNumberRuler: NSRulerView {
 
     override func drawHashMarksAndLabels(in _: NSRect) {
         guard let view = clientView as? NSTextView,
-              let layoutManager = view.layoutManager,
-              let container = view.textContainer
+              let layoutManager = unsafe view.layoutManager,
+              let container = unsafe view.textContainer
         else {
             return
         }
@@ -57,7 +57,7 @@ final class LineNumberRuler: NSRulerView {
         var index = content.lineStart(at: visible.location)
         while index < NSMaxRange(visible) {
             let lineRange = content.lineRange(for: NSRange(location: index, length: 0))
-            let glyphRange = layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+            let glyphRange = unsafe layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: container)
             let labelY = rect.minY + view.textContainerInset.height - view.visibleRect.minY
             guard labelY >= 0, labelY <= bounds.height else {

@@ -56,7 +56,7 @@ final class EditingTextView: NSTextView {
             return
         }
 
-        let padding = textContainer?.lineFragmentPadding ?? 0
+        let padding = unsafe textContainer?.lineFragmentPadding ?? 0
         NSColor.separatorColor.setFill()
         for column in Self.pageGuideColumns {
             let position = textContainerOrigin.x + padding + advance * CGFloat(column)
@@ -131,7 +131,7 @@ final class EditingTextView: NSTextView {
     /// Renders tabs at the configured width, both for the text
     /// already shown and for whatever is typed next.
     func applyTabWidth(_ width: Int?) {
-        guard let width, width > 0, let storage = textStorage else {
+        guard let width, width > 0, let storage = unsafe textStorage else {
             return
         }
 
@@ -283,7 +283,7 @@ final class EditingTextView: NSTextView {
             return
         }
 
-        textStorage?.replaceCharacters(in: range, with: replacement)
+        unsafe textStorage?.replaceCharacters(in: range, with: replacement)
         didChangeText()
     }
 

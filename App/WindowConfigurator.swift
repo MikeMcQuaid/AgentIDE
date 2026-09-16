@@ -42,7 +42,7 @@ struct WindowConfigurator: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            guard window != nil else {
+            guard unsafe window != nil else {
                 // Block-based observers outlive their view: the
                 // centre holds the token, so one left behind keeps
                 // being delivered for the life of the process.
@@ -67,7 +67,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// re-walked the window's buttons and wrote two defaults
         /// keys per poll tick.
         func configureWindowIfNeeded() {
-            guard let window, window !== configuredWindow else {
+            guard let window = unsafe self.window, window !== configuredWindow else {
                 return
             }
 
@@ -135,7 +135,7 @@ struct WindowConfigurator: NSViewRepresentable {
         }
 
         private func configureWindow() {
-            guard let window else {
+            guard let window = unsafe self.window else {
                 return
             }
 
@@ -162,7 +162,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// its green button cannot fill a screen it does not fit.
         /// Both are handled here rather than left to the user.
         private func observeDisplays() {
-            guard observers.isEmpty, let window else {
+            guard observers.isEmpty, let window = unsafe self.window else {
                 return
             }
 
@@ -208,7 +208,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Minimised or fully covered, the window is not being
         /// read and the poll slows.
         private func reportWindowState() {
-            guard let window else {
+            guard let window = unsafe self.window else {
                 return
             }
 
@@ -220,7 +220,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// past a screen edge on purpose. Any other window records
         /// where it is now.
         private func frameChanged() {
-            guard window?.styleMask.contains(.fullScreen) == true else {
+            guard unsafe window?.styleMask.contains(.fullScreen) == true else {
                 recordFrame()
                 return
             }
@@ -231,7 +231,9 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Records the frame once a drag or resize has paused. A
         /// fullscreen frame is only its screen's and never recorded.
         private func recordFrame() {
-            guard isPlacing == false, let window, window.styleMask.contains(.fullScreen) == false else {
+            guard isPlacing == false, let window = unsafe self.window,
+                  window.styleMask.contains(.fullScreen) == false
+            else {
                 return
             }
 
@@ -239,14 +241,14 @@ struct WindowConfigurator: NSViewRepresentable {
             recordGeneration += 1
             let generation = recordGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.recordSeconds) { [weak self] in
-                guard let self, generation == recordGeneration, let window = self.window else {
+                guard let self, generation == recordGeneration, let currentWindow = unsafe self.window else {
                     return
                 }
-                guard window.styleMask.contains(.fullScreen) == false else {
+                guard currentWindow.styleMask.contains(.fullScreen) == false else {
                     return
                 }
 
-                UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
+                UserDefaults.standard.set(NSStringFromRect(currentWindow.frame), forKey: Self.frameKey)
             }
         }
 
@@ -266,7 +268,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// Notes where the window is, and says so only when that
         /// changed.
         private func rememberPlacement() {
-            guard isPlacing == false, let window, let current = window.screen?.displayID else {
+            guard isPlacing == false, let window = unsafe self.window, let current = window.screen?.displayID else {
                 return
             }
 
@@ -322,7 +324,7 @@ struct WindowConfigurator: NSViewRepresentable {
         /// A visible window with no screen is placed too: its frame
         /// is off every screen, and placing is what brings it back.
         private func runPendingPlacementIfVisible() {
-            guard window?.isVisible == true else {
+            guard unsafe window?.isVisible == true else {
                 return
             }
 

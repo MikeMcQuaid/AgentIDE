@@ -22,7 +22,7 @@ struct RefreshReentryTests {
         // other until the app was restarted.
         let returned = await withTaskGroup(of: Bool.self) { group in
             group.addTask {
-                let caller = withUnsafeCurrentTask { $0?.hashValue }
+                let caller = unsafe withUnsafeCurrentTask { unsafe $0?.hashValue }
                 await MainActor.run { model.readingTaskID = caller }
                 await model.refresh()
                 return true

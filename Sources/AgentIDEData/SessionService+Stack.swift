@@ -124,7 +124,7 @@ public extension SessionService {
         func rank(_ candidate: StackCandidate) -> String {
             let known = pushed.contains(candidate.branch) ? "0" : "1"
             let here = candidate.branch == checkedOut ? "0" : "1"
-            return known + here + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
+            return unsafe known + here + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
         }
         var seenTips = Set<String>()
         return related

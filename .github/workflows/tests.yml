@@ -88,6 +88,9 @@ jobs:
       - name: Test
         run: script/test
 
+      - name: Test with Address Sanitizer
+        run: script/test --sanitize address
+
   analyze:
     runs-on: xcode-27
     timeout-minutes: 30

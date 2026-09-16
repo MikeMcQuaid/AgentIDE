@@ -26,12 +26,12 @@ enum TestSupport {
 
     /// The fully resolved path, matching git and herdr output.
     static func canonical(_ path: String) -> String {
-        guard let resolved = realpath(path, nil) else {
+        guard let resolved = unsafe realpath(path, nil) else {
             return path
         }
 
-        defer { free(resolved) }
-        return String(cString: resolved)
+        defer { unsafe free(resolved) }
+        return unsafe String(cString: resolved)
     }
 
     /// Runs a command, throwing on failure.

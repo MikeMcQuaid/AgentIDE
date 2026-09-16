@@ -131,7 +131,7 @@ public extension SessionService {
     /// source lives as long as the wake does.
     private static func directoryChanges(in directory: String) -> DirectoryWake? {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let descriptor = open(directory, O_EVTONLY)
+        let descriptor = unsafe open(directory, O_EVTONLY)
         guard descriptor >= 0 else {
             return nil
         }

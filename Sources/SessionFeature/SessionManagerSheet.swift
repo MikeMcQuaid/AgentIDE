@@ -223,6 +223,6 @@ public struct SessionManagerSheet: View {
     }
 
     private func usage(cpuPercent: Double, memoryMegabytes: Int) -> String {
-        String(format: "%.0f%% · %d MB", cpuPercent, memoryMegabytes)
+        unsafe String(format: "%.0f%% · %d MB", cpuPercent, memoryMegabytes)
     }
 }

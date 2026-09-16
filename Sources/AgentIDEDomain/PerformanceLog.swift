@@ -135,7 +135,7 @@ public enum PerformanceLog {
             return
         }
 
-        let line = Date().formatted(Self.stampStyle) + "\t" + kind.label + "\t"
+        let line = unsafe Date().formatted(Self.stampStyle) + "\t" + kind.label + "\t"
             + String(format: "%8.3f", seconds) + "\t" + context + "\t" + what + "\n"
         queue.async {
             sweepIfDue()

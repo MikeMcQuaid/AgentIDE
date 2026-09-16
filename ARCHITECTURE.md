@@ -1266,7 +1266,7 @@ organisation.
 | SwiftTerm | terminal emulator views | ships a build plugin; scripts pass `-skipPackagePluginValidation` |
 | swift-markdown | markdown parsing | swiftlang exception |
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
-| tree-sitter-* grammars | highlighting | pinned to the latest ABI 14 release the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python's manifest needs the root `src/scanner.c` sentinel |
+| tree-sitter-* grammars | highlighting | pinned to ABI 14 releases the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python stays on 0.23.6 and CSS on 0.23.2, whose manifests include their scanners without a root sentinel that breaks Go and embedded-template |
 
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
@@ -1279,7 +1279,21 @@ every rule enabled (per-line disables with a reason). Scripts:
 `bootstrap`, `build`, `install`, `zip`, `package`, `test`, `analyze`,
 `style [--fix]`, `performance-log` and `attach [workspace]`; see
 AGENTS.md. Sandboxed builds gate on `SV_SESSION_ID` and disable
-SwiftPM's sandbox.
+SwiftPM's sandbox. Scripted SwiftPM builds also omit the
+debugger-attach entitlement:
+Swift 6.4 otherwise tries to sign SwiftTerm's resource-only bundle as
+an executable and warns about a missing build-graph node. Interactive
+Xcode builds retain their debugging entitlements.
+
+Every first-party Swift target, including tests, treats warnings as
+errors and enables strict memory safety alongside Swift 6's complete
+concurrency checking. Unsafe interoperation is acknowledged at its
+smallest boundary: AppKit's unowned references stay on the main actor,
+C pointers stay within their owners' lifetimes and format arguments
+match their fixed format strings. Xcode enables compiler, linker and
+supported Clang analyser diagnostics, runs the analyser during builds
+and fails on its findings. Dependencies keep their own compiler settings.
+Style checks fail when any step fails, including a missing tool.
 
 Tests are two tiers. Unit tests cover Domain's pure functions, Data
 decoders over fixtures and the feature models, whose fetch and
@@ -1292,6 +1306,15 @@ from the environment so a teardown can never reach the production
 server. CI (`.github/workflows/tests.yml`) runs style on
 every push and pull request, and build-and-test and analyze in parallel
 on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
+The test job also runs `script/test --sanitize address`, failing on
+memory errors. `script/test --sanitize thread` checks for data races
+locally. Both instrument package tests and, when signing is configured,
+the App Intents tests. Thread Sanitizer currently catches SwiftTerm 1.19's
+PTY reader racing process termination in `ShellLifetimeTests`. Its
+[upstream lifecycle fix](https://github.com/migueldeicaza/SwiftTerm/commit/a7260892a5cfcd510f635e30ed0993d9397e3d16)
+uses byte-loading APIs incompatible with the current Xcode 27 beta, so
+the thread CI gate awaits a compatible dependency release. The race is
+not suppressed or excluded from local runs.
 
 ### Releases
 

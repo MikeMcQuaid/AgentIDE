@@ -203,7 +203,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// the coordinator's event monitor, since `keyDown` is not
     /// overridable either; nil means the pane consumed it.
     func routeKey(_ event: NSEvent) -> NSEvent? {
-        guard window?.firstResponder === self,
+        guard unsafe window?.firstResponder === self,
               getTerminal().keyboardEnhancementFlags.isEmpty,
               event.modifierFlags.isDisjoint(with: [.command, .control]),
               event.modifierFlags.contains(.option),
@@ -249,8 +249,8 @@ final class PaneTerminalView: LocalProcessTerminalView {
         // window would actually hit takes the event, and only once,
         // however many monitors see it: scrolling twice asked herdr
         // for two repaints, which arrived as the same lines twice.
-        guard let onScroll, event.window === window,
-              let hit = window?.contentView?.hitTest(event.locationInWindow),
+        guard let onScroll, unsafe event.window === window,
+              let hit = unsafe window?.contentView?.hitTest(event.locationInWindow),
               hit === self || hit.isDescendant(of: self),
               Self.claim(event)
         else {

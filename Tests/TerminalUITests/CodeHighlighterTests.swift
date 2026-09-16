@@ -9,7 +9,7 @@ import Testing
 struct CodeHighlighterTests {
     @Test
     func `every tree-sitter grammar loads and classifies`() {
-        for language in [SyntaxLanguage.swift, .ruby, .shell, .python, .json, .typescript] {
+        for language in [SyntaxLanguage.swift, .ruby, .shell, .python, .json, .typescript, .css, .golang, .erb] {
             let classified = CodeHighlighter.classifiedRanges(in: "# x\n// y\n1", language: language)
             #expect(classified != nil, "grammar for \(language) did not load")
         }

@@ -217,11 +217,20 @@ same session the Mac shows.
 - `script/version`: print the version and build number git says, which
   scripted and Xcode builds both use
 - `script/install`: build, then copy the app to /Applications
-- `script/test`: unit, integration and App Intents tests
+- `script/test [--sanitize address|thread]`: unit, integration and App
+  Intents tests, optionally checking memory accesses or data races
 - `script/style [--fix]`: SwiftLint and SwiftFormat, every rule on
 - `script/analyze`: static analysis and dead code
 - `script/zip` and `script/package`: zip, sign and notarise a release
 - `script/attach`: attach this terminal to the sandboxed `herdr` session
+
+Project code treats compiler and linker warnings as errors, with Swift's
+strict concurrency and memory safety checks enabled. Xcode also runs
+Apple's static analyser during builds. `script/analyze` adds SwiftLint's
+analysis and dead-code detection on the host and CI. CI also runs the
+tests under Address Sanitizer. Thread Sanitizer is available locally;
+its CI gate awaits a compatible SwiftTerm release fixing a shell-exit
+race.
 
 Releases run the **Release** workflow from the Actions tab on `main` with
 a bare `MAJOR.MINOR.PATCH` version.

@@ -219,8 +219,7 @@ struct PullRequestCreateForm: View {
     /// characters where it is not.
     @ViewBuilder private var waitingLine: some View {
         if editing == nil, let below = model.unpushedBelow {
-            (Text("Waiting on ") + Text(below).font(nameStyle.small)
-                + Text(" below it to be pushed and opened first"))
+            Text("Waiting on \(Text(below).font(nameStyle.small)) below it to be pushed and opened first")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

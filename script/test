@@ -4,6 +4,23 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# SwiftPM otherwise signs resource-only bundles as executables and
+# warns about a missing build-graph node in Debug builds.
+swift_args=(--disable-get-task-allow-entitlement)
+xcode_args=(-enableAddressSanitizer NO -enableThreadSanitizer NO)
+if [[ $# -gt 0 ]]; then
+  if [[ $# -ne 2 || "$1" != --sanitize || ("$2" != address && "$2" != thread) ]]; then
+    echo "usage: script/test [--sanitize address|thread]" >&2
+    exit 1
+  fi
+  swift_args+=(--sanitize "$2")
+  if [[ "$2" == address ]]; then
+    xcode_args[1]=YES
+  else
+    xcode_args[3]=YES
+  fi
+fi
+
 # The tests run every process the app does, and with the performance
 # log switched on they wrote thousands of scratch-repository lines
 # into the real one; they log into their own scratch instead.
@@ -48,11 +65,11 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # CPU and made a run take minutes rather than seconds, so the cap
   # and the niceness do the work instead. Not exec'd: the sweep above
   # runs on the way out.
-  nice -n 10 swift test --disable-sandbox --jobs 6
+  nice -n 10 swift test --disable-sandbox --jobs 6 "${swift_args[@]}"
   exit
 fi
 
-swift test
+swift test "${swift_args[@]}"
 
 # The App Intents run through the system's own runtime from a UI
 # testing bundle, which only xcodebuild can build and run: host and
@@ -71,6 +88,7 @@ elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/nu
   results="${PWD}/.test-scratch/intent-tests.xcresult"
   rm -rf "${results}"
   if ! xcodebuild test \
+    "${xcode_args[@]}" \
     -project AgentIDE.xcodeproj \
     -scheme AgentIDEApp \
     -only-testing:AgentIDEIntentTests \

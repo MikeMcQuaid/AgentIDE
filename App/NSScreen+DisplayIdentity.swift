@@ -6,7 +6,7 @@ extension NSScreen {
     /// The display's own identity, which outlives its number across
     /// reboots and rearrangements.
     static func uuid(of display: CGDirectDisplayID) -> String? {
-        guard let identity = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else {
+        guard let identity = unsafe CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue() else {
             return nil
         }
 
