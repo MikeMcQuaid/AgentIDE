@@ -21,7 +21,7 @@ struct StackPopover: View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack(spacing: Self.rowSpacing) {
                 Text("Stack in").font(.headline)
-                Text(stack?.checkedOut ?? item.worktree.branch).font(NameStyle.font)
+                Text(stack?.checkedOut ?? item.worktree.branch).font(nameStyle.font)
             }
             if let stack {
                 stacked(stack)
@@ -56,6 +56,8 @@ struct StackPopover: View {
     /// Locks the field while the branch is being cut, so a second
     /// name cannot be typed into the one being acted on.
     @State private var isCreating = false
+
+    private var nameStyle: NameStyle = .init()
 
     /// Growing the stack: the branch is cut here and checked out, so
     /// whatever is running carries on where it is.
@@ -121,7 +123,7 @@ struct StackPopover: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             Text(branch)
-                .font(NameStyle.font)
+                .font(nameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .fontWeight(branch == stack?.checkedOut ? .semibold : .regular)
@@ -144,7 +146,7 @@ struct StackPopover: View {
     private func excludedRow(_ branch: String) -> some View {
         HStack(spacing: Self.rowSpacing) {
             Text(branch)
-                .font(NameStyle.font)
+                .font(nameStyle.font)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(.secondary)

@@ -34,7 +34,7 @@ struct DirectoryWakeTests {
         await wake.wait(timeout: long)
         // Early means before the timeout, not fast: a loaded runner
         // can hold a task for seconds, and only the timeout would
-        // have made it five.
+        // have made it last the full timeout.
         #expect(ContinuousClock.now - kept < long)
         let spent = ContinuousClock.now
         await wake.wait(timeout: .milliseconds(30))
@@ -52,25 +52,21 @@ struct DirectoryWakeTests {
     }
 
     @Test
-    func `a ring landing as the waiter installs is never lost`() async {
+    func `a ring landing as the waiter installs is never lost`() async throws {
         // The check for a pending ring and the installing of the
         // waiter were once two lock takes, and a ring between them
-        // waited out the whole timeout. Raced two hundred times with
-        // a two-second timeout, that version overran on some. Each
-        // round is bounded on its own: a lost ring costs one round
-        // the whole timeout, where a loaded runner only spreads a
-        // few seconds thinly over all of them.
+        // waited out the whole timeout. Allow the same delay as the
+        // other ring test: a loaded runner can hold one continuation
+        // for more than two seconds even when its ring arrived.
         let wake = DirectoryWake()
-        let timeout = Duration.seconds(2)
+        let timeout = Duration.seconds(30)
         let rounds = 200
-        var slowest = Duration.zero
         for _ in 0 ..< rounds {
             let ringing = Task { wake.ring() }
             let started = ContinuousClock.now
             await wake.wait(timeout: timeout)
-            slowest = max(slowest, ContinuousClock.now - started)
             await ringing.value
+            try #require(ContinuousClock.now - started < timeout)
         }
-        #expect(slowest < timeout)
     }
 }

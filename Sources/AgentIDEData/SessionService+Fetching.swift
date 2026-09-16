@@ -8,16 +8,19 @@ public extension SessionService {
     /// the minute of one reuses it rather than waiting again.
     static let fetchInterval: TimeInterval = 60
 
-    /// Fetches a repository's remotes unless that has just happened,
-    /// and remembers when it did. Rebasing onto a stale remote is
-    /// the whole reason the button exists, so every path that
-    /// rebases comes through here first.
-    func fetchIfStale(repositoryPath: String, workingDirectory: String? = nil) async throws {
+    /// Fetches a repository's remotes unless they are fresh enough:
+    /// rebases allow a minute, new worktrees an hour.
+    func fetchIfStale(
+        repositoryPath: String,
+        workingDirectory: String? = nil,
+        maxAge: TimeInterval = fetchInterval,
+    ) async throws {
         let last = store.load().gitFetchedAt[repositoryPath] ?? .distantPast
-        guard Date().timeIntervalSince(last) >= Self.fetchInterval else {
+        guard Date().timeIntervalSince(last) >= maxAge else {
             return
         }
 
+        await progress("Fetching repository remotes")
         try await git.fetch(repositoryPath: workingDirectory ?? repositoryPath)
         rememberFetch(repositoryPath: repositoryPath)
     }

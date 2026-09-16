@@ -95,6 +95,7 @@ public extension SessionService {
     /// Adds the worktree a new session works in, under the
     /// repository's own directory.
     func createWorktreePath(repository: Repository, branch: String) async throws -> String {
+        try await fetchIfStale(repositoryPath: repository.path, maxAge: Self.worktreeFetchInterval)
         let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
         await progress("Running `git worktree add " + path + "`")
         try await git.createWorktree(repository: repository, branch: branch, at: path)
@@ -268,6 +269,8 @@ public extension SessionService {
         }
         return containers
     }
+
+    private static let worktreeFetchInterval: TimeInterval = 3_600
 
     /// Worktree paths reconstructed from transcript directory names
     /// under the containers, so conversations survive worktrees that

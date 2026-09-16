@@ -57,7 +57,13 @@ extension TerminalRepresentable.Coordinator {
             // The first frame is recovery succeeding: whatever the
             // attempt before it did wrong is not news.
             heldFailure = nil
-            view?.feed(byteArray: bytes[...])
+            if let view {
+                // SwiftTerm otherwise clears selection even for a cursor blink.
+                let mouseReporting = view.allowMouseReporting
+                view.allowMouseReporting = false
+                view.feed(byteArray: bytes[...])
+                view.allowMouseReporting = mouseReporting
+            }
             blockSelector?.follow()
             if isStalled, let view, Self.isScreenBlank(view.getTerminal()) == false {
                 setStalled(false)

@@ -234,7 +234,10 @@ Rules that follow from that shape:
 - Copies from an agent pane reflow block by block for prose
   (`PasteableText`): paragraphs lose hard wraps, command-shaped runs
   keep every line. Option-drag copies a rectangle on the character
-  grid.
+  grid. Processing a herdr frame preserves the selection, including
+  cursor-only updates: mouse reporting is suspended for the synchronous
+  feed and restored before handling input. SwiftTerm still moves or
+  clears the selection when the selected text scrolls.
 
 The **host terminal** is a plain login shell on the pane's own PTY as
 the host user: no sudo, no sandbox, full `gh` credentials, editor
@@ -409,7 +412,11 @@ each waited on the other until the app was restarted.
 2. The branch name summarises the prompt through `FoundationModelClient`
    (underscore-separated, no prefix), or the prompt's first words when
    the model is unavailable.
-3. `GitClient` fetches and runs `git worktree add` under
+3. The app fetches through `GitClient` unless the repository was fetched
+   within the last hour, reusing the timestamp explicit fetches and
+   rebases record. New branches start from origin's default branch,
+   falling back to the local default or `HEAD` without one, and never
+   track it as their upstream. `git worktree add` runs under
    `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`. Older
    `worktrees/<uuid>/<branch>` checkouts keep working because everything
    derives from `git worktree list`. Each poll also adopts checkouts the
@@ -432,7 +439,10 @@ each waited on the other until the app was restarted.
 The same funnel serves three more entrances. `agentide new` (in
 `bin/`, aliased from the bundle for SSH logins) asks its way to a
 session in Homebrew's idiom, computes branch, label and paths by the
-rules above rather than reading anything the app owns, runs itself as
+rules above rather than reading anything the app owns. It uses the
+same default branch and hourly fetch limit, reading the modification
+time of a non-empty Git `FETCH_HEAD` so fetches made by the app or a
+terminal count too. A failed fetch stops creation. It runs itself as
 the sandbox user when started as the host user, and focuses the new
 workspace instead of attaching when already inside herdr
 (`HERDR_PANE_ID`), which refuses a nested client. App Intents
@@ -555,6 +565,39 @@ page resumes any past conversation into a fresh worktree.
 - **Sidebar arrows show drift from upstream** (ahead or behind, none
   when level, the main checkout included) and a conflict icon where
   the pull request is unmergeable.
+  Repository disclosure and new-session buttons use the surrounding
+  padding as clickable space without enlarging rows. The plus sits
+  beside the repository name and count, with a gap before it. Only
+  rows with add buttons reserve extra scrollbar clearance; worktree
+  text and selection backgrounds leave only two points at the edge
+  and can extend beneath the scrollbar. Sidebar carets and plus icons
+  gain a subtle rounded background on hover or
+  keyboard focus, using the system label colour so it adapts to the
+  appearance without changing their size. Repository headers keep the
+  same spacing when expanded or collapsed, so rotating the caret never
+  moves the label. Clicking the caret or repository header toggles
+  expansion; hovering shows an Expand or Collapse tooltip naming the
+  repository.
+- Both pane dividers keep a one-point visible line and an eleven-point
+  grab area over the adjacent panes. Hovering anywhere in that area
+  shows the horizontal resize cursor before dragging begins. A
+  double-click restores the controlled pane's default width, fitted to
+  the current window, without changing the other pane's saved width.
+  The right divider and Resize Panes allocate one-third of the width
+  beside the sidebar to the utility pane, leaving two-thirds for the
+  middle pane, within the pane width limits.
+- **Fonts settings** groups code and terminal typography, repository
+  names, worktree and branch names and utility tabs. Each has a font
+  picker, a size stepper and a reset to the existing default. The first
+  picker entry names the resolved default family; system choices still
+  follow macOS's defaults. `CodeStyle`, `RepositoryStyle`, `NameStyle`
+  and `TabStyle` observe their preferences through `AppStorage`, so
+  changing a font or size redraws the affected views while Settings
+  stays open.
+  Mounted editors and terminals update their font in place, preserving
+  documents and sessions; unchanged fonts do not trigger terminal
+  layout or clear selections. Sidebar detail text follows the name
+  size while keeping its original system font until a face is chosen.
 
 ### Review
 
@@ -606,10 +649,9 @@ page resumes any past conversation into a fresh worktree.
    way (`MessageMarkup`). Both names come from the caller
    (`note(_:about:branch:)`), never from the message's own words, so
    no line has to name what the sidebar already names. Every surface
-   draws such a name the same way (`NameStyle`, the system
-   monospaced design a size down from the prose beside it, since a
-   monospaced face reads larger at the same size): the sidebar's
-   rows, a pull request's header, the stack and branch popovers.
+   draws such a name the same way (`NameStyle`, defaulting to the system
+   monospaced design a size down from the prose beside it): the
+   sidebar's rows, a pull request's header, the stack and branch popovers.
    That is chrome naming a thing; code's own typography is
    `CodeStyle`, whose face and size Settings owns.
 7. Read-only text is never `.disabled`, which takes selection with

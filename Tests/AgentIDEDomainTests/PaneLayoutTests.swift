@@ -6,6 +6,24 @@ import Testing
 /// monitor does.
 struct PaneLayoutTests {
     @Test
+    func `resizing gives the utility one third and the middle two thirds`() {
+        let layout = PaneLayout(
+            width: 1_500,
+            sidebar: 300,
+            utility: PaneLayout.defaultUtilityWidth(in: 1_500, sidebar: 300),
+            showsUtility: true,
+        )
+        #expect(layout.sidebar == 300)
+        #expect(layout.utility == 400)
+        #expect(1_500 - layout.sidebar - layout.utility == 800)
+    }
+
+    @Test(arguments: [(900.0, 260.0), (2_100.0, 600.0), (5_000.0, 1_200.0)])
+    func `reset width follows the window within its limits`(width: Double, expected: Double) {
+        #expect(PaneLayout.defaultUtilityWidth(in: width, sidebar: 300) == expected)
+    }
+
+    @Test
     func `widths dragged on a large display are left alone where they fit`() {
         let layout = PaneLayout(width: 2_000, sidebar: 300, utility: 700, showsUtility: true)
         #expect(layout.sidebar == 300)

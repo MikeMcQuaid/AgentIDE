@@ -208,6 +208,36 @@ branch_from_prompt() {
   printf '%s' "$(slug "$(printf '%s' "$1" | cut -c1-40)")" | tr '-' '_'
 }
 
+# A new branch starts from the same default as the app. Git's own
+# fetch timestamp includes fetches made from either surface.
+create_worktree() {
+  repository_path="$1"
+  branch="$2"
+  worktree="$3"
+  fetch_head="$(git -C "${repository_path}" rev-parse --path-format=absolute --git-path FETCH_HEAD)"
+  fetched_at=0
+  # A failed fetch can leave a fresh but empty FETCH_HEAD.
+  if [ -s "${fetch_head}" ]; then
+    fetched_at="$(stat -f %m "${fetch_head}")"
+  fi
+  if [ "$(($(date +%s) - fetched_at))" -ge 3600 ]; then
+    headline "Fetching repository remotes"
+    git -C "${repository_path}" fetch --all --prune >&2
+  fi
+  base="$(git -C "${repository_path}" symbolic-ref --quiet --short refs/remotes/origin/HEAD)" || {
+    base=HEAD
+    for candidate in main master; do
+      if git -C "${repository_path}" show-ref --verify --quiet "refs/heads/${candidate}"; then
+        base="${candidate}"
+        break
+      fi
+    done
+  }
+  headline "Creating ${worktree}"
+  mkdir -p "$(dirname "${worktree}")"
+  git -C "${repository_path}" worktree add --no-track -b "${branch}" "${worktree}" "${base}" >&2
+}
+
 # The sessions live in a herdr server the sandbox user owns, and
 # only that user can reach its socket. Run as the host user, the
 # command therefore runs itself as the sandbox user, through the
@@ -329,9 +359,8 @@ agentide_new() {
   # then a labelled herdr workspace whose shell runs the agent under
   # a temporary directory of its own, which Codex's execution host
   # needs to survive its handshake.
-  headline "Creating ${worktree}"
-  mkdir -p "$(dirname "${worktree}")" "$(dirname "${prompt_file}")"
-  git -C "${repository_path}" worktree add -b "${branch}" "${worktree}" HEAD >&2
+  create_worktree "${repository_path}" "${branch}" "${worktree}"
+  mkdir -p "$(dirname "${prompt_file}")"
   printf '%s\n' "${prompt}" >"${prompt_file}"
 
   headline "Starting ${agent} in ${label}"

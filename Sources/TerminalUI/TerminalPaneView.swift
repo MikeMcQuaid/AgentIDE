@@ -188,7 +188,7 @@ struct TerminalRepresentable: NSViewRepresentable {
         // scrolling and pagers, get it, and Shift bypasses to local
         // selection and scrolling. Programs that leave the mouse
         // alone scroll and select natively without any modifier.
-        view.font = CodeStyle.nsFont
+        view.font = codeStyle.appKitFont
         view.reflowsCopies = reflowsCopies
         view.onPasteFiles = onPasteFiles
         view.onCopyAllOutput = onCopyAllOutput
@@ -202,6 +202,9 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// also retries here as a fallback and reattaches when SwiftUI
     /// reused the view for a different command.
     func updateNSView(_ view: PaneTerminalView, context: Context) {
+        if view.font != codeStyle.appKitFont {
+            view.font = codeStyle.appKitFont
+        }
         applyTheme(to: view, context: context)
         context.coordinator.startWhenSized(transport, in: view)
         // Hidden in AppKit's sense, not merely transparent: a pane
@@ -225,6 +228,8 @@ struct TerminalRepresentable: NSViewRepresentable {
     }
 
     // MARK: Private
+
+    private var codeStyle: CodeStyle = .init()
 
     /// Black on white in light mode, white on black in dark mode; the
     /// app's one terminal look.

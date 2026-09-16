@@ -39,6 +39,21 @@ public enum AppSettings {
     /// The monospace point size's storage key.
     public static let codeFontSizeKey = "codeFontSize"
 
+    /// Repository-name typography in the sidebar.
+    public static let repositoryFontNameKey = "repositoryFontName"
+    /// The repository-name point size.
+    public static let repositoryFontSizeKey = "repositoryFontSize"
+
+    /// Worktree and branch-name typography.
+    public static let nameFontNameKey = "nameFontName"
+    /// The point size for worktree and branch names.
+    public static let nameFontSizeKey = "nameFontSize"
+
+    /// The utility pane's tab typography.
+    public static let tabFontNameKey = "tabFontName"
+    /// The utility tab point size.
+    public static let tabFontSizeKey = "tabFontSize"
+
     /// How often the system is re-read while the window shows.
     public static var pollInterval: Int {
         let stored = UserDefaults.standard.integer(forKey: pollIntervalKey)

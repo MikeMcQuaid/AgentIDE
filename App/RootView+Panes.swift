@@ -207,18 +207,15 @@ extension RootView {
         }
     }
 
-    /// Narrows the sidebar to the least its rows need and splits
-    /// what is left evenly between the panes that do the work, which
-    /// is the layout worth going back to when dragging has left them
-    /// lopsided.
+    /// Restores the sidebar and gives the utility one-third of the
+    /// remaining width, leaving two-thirds for the middle pane.
     func evenPanes(in windowWidth: CGFloat) {
         sidebarWidth = PaneLayout.sidebarComfortable
         guard showsUtility, windowWidth > 0 else {
             return
         }
 
-        let share = (windowWidth - sidebarWidth) * PaneLayout.utilityShare
-        utilityPaneWidth = min(max(share, PaneLayout.utilityRange.lowerBound), PaneLayout.utilityRange.upperBound)
+        utilityPaneWidth = PaneLayout.defaultUtilityWidth(in: windowWidth, sidebar: sidebarWidth)
         fitPanes(to: windowWidth)
     }
 

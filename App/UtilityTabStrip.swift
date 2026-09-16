@@ -28,16 +28,18 @@ struct UtilityTabStrip: View {
 
     private var errorLog: ErrorLog = .shared
 
+    private var tabStyle: TabStyle = .init()
+
     private func button(_ tab: UtilityTab) -> some View {
         Button {
             utilityTab = tab.rawValue
         } label: {
             HStack(spacing: Self.badgeSpacing) {
                 Text(tab.title)
-                    .font(.callout)
+                    .font(tabStyle.font)
                 if tab == .errors, errorLog.errorCount > 0 {
                     Text(String(errorLog.errorCount))
-                        .font(.caption.bold())
+                        .font(tabStyle.badge)
                         .foregroundStyle(.white)
                         .padding(.horizontal, Self.badgeSpacing)
                         .background(Capsule().fill(.red))
