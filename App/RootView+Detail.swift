@@ -1,6 +1,7 @@
 import AgentIDEDomain
 import DashboardFeature
 import SwiftUI
+import TerminalUI
 
 /// The detail column's composition: the covering pages, the split
 /// and the utility pane. Split from the view body's file for length.
@@ -22,13 +23,24 @@ extension RootView {
     /// alone, so the utility pane stays where it was: the window
     /// keeps one shape whatever it is showing.
     var detail: some View {
-        ZStack {
+        HStack(spacing: 0) {
             if let item = dependencies.dashboard.selection {
-                split(for: item)
+                primaryColumn(for: item)
             } else {
-                unselectedSplit
+                unselectedColumn
             }
+            if showsUtility {
+                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false) {
+                    utilityPaneWidth = PaneLayout.defaultUtilityWidth(in: currentWindowWidth, sidebar: sidebarWidth)
+                }
+                .ignoresSafeArea(.container, edges: .top)
+            }
+            RetainedPane(isExpanded: showsUtility, width: utilityPaneWidth) {
+                utilityPane(for: dependencies.dashboard.selection)
+            }
+            .ignoresSafeArea(.container, edges: .top)
         }
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     @ViewBuilder var coveringPage: some View {
@@ -60,41 +72,30 @@ extension RootView {
 
     // MARK: Private
 
-    private func split(for item: WorktreeItem) -> some View {
-        HStack(spacing: 0) {
-            primaryColumn(for: item)
-            if showsUtility {
-                PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false) {
-                    utilityPaneWidth = PaneLayout.defaultUtilityWidth(in: currentWindowWidth, sidebar: sidebarWidth)
-                }
-                .ignoresSafeArea(.container, edges: .top)
-                utilityPane(for: item)
-                    .frame(width: utilityPaneWidth)
-                    .frame(maxHeight: .infinity)
-                    .ignoresSafeArea(.container, edges: .top)
-            }
-        }
-        .ignoresSafeArea(.container, edges: .top)
-    }
-
     /// The utility pane: the shared tab header over the content, so
     /// the current tab is always visible whichever tab shows.
     /// Restores the worktree's remembered tab whenever the selection
     /// changes, so each worktree keeps its own pane.
-    private func utilityPane(for item: WorktreeItem) -> some View {
+    private func utilityPane(for item: WorktreeItem?) -> some View {
         VStack(spacing: 0) {
-            utilityHeader(for: item)
-            Divider()
+            if let item {
+                utilityHeader(for: item)
+                Divider()
+            }
             utilityContent(for: item)
         }
-        .task(id: item.worktree.path) {
+        .task(id: item?.worktree.path) {
             // A stale conversation focus must not survive switching
             // to another sidebar item.
             conversationWorktree = nil
-            utilityTabName = tabMemory[item.worktree.path] ?? utilityTabName
+            if let item {
+                utilityTabName = tabMemory[item.worktree.path] ?? utilityTabName
+            }
         }
         .onChange(of: utilityTabName) {
-            tabMemory[item.worktree.path] = utilityTabName
+            if let item {
+                tabMemory[item.worktree.path] = utilityTabName
+            }
         }
     }
 }

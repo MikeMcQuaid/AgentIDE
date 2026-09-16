@@ -20,6 +20,15 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
 
+    /// Destination for selection copies, isolated from the clipboard in tests.
+    var copyPasteboard: NSPasteboard = .general
+
+    /// The held Option-drag block, until a new selection replaces it.
+    var selectedBlockText: String?
+
+    /// Clears the rectangular selection when native selection takes over.
+    var onNativeSelection: (() -> Void)?
+
     /// Routes the wheel to herdr for agent panes: scrollback lives
     /// in the server, which repaints the viewport scrolled, so the
     /// local buffer (only ever the rendered screen) never scrolls.
@@ -93,6 +102,13 @@ final class PaneTerminalView: LocalProcessTerminalView {
         roundSelectionEnd(at: event)
     }
 
+    override func selectionChanged(source: Terminal) {
+        if selection?.active == true {
+            onNativeSelection?()
+        }
+        super.selectionChanged(source: source)
+    }
+
     /// The right-click menu: Copy and Paste, which terminals
     /// otherwise lack entirely.
     override func menu(for _: NSEvent) -> NSMenu? {
@@ -139,19 +155,21 @@ final class PaneTerminalView: LocalProcessTerminalView {
         super.paste(sender as Any)
     }
 
-    /// Native selection copy, reflowed for prose panes.
-    override func copy(_ sender: Any) {
-        super.copy(sender)
-        guard reflowsCopies,
-              let text = NSPasteboard.general.string(forType: .string),
-              text.contains("\n")
-        else {
-            return
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(copy(_:)), selectedBlockText != nil {
+            return true
         }
+        return super.validateUserInterfaceItem(item)
+    }
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(PasteableText.reflow(text), forType: .string)
+    /// A block stays rectangular; native selection reflows in prose panes.
+    override func copy(_: Any) {
+        let text = getSelection() ?? selectedBlockText ?? ""
+        copyPasteboard.clearContents()
+        copyPasteboard.setString(
+            selectionActive && reflowsCopies && text.contains("\n") ? PasteableText.reflow(text) : text,
+            forType: .string,
+        )
     }
 
     /// One character cell, the size the terminal itself draws it.

@@ -189,22 +189,17 @@ extension RootView {
     /// repository picker or a new session form sits in the column it
     /// would occupy with a worktree open rather than spreading
     /// across the window.
-    var unselectedSplit: some View {
-        HStack(spacing: 0) {
-            Group {
-                if isCovered {
-                    coveringPage
-                } else {
-                    unselectedDetail
-                }
-            }
-            .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
-            // The same fade the covered split gets.
-            .animation(Motion.quick, value: isCovered)
-            if showsUtility {
-                Color.clear.frame(width: utilityPaneWidth)
+    var unselectedColumn: some View {
+        Group {
+            if isCovered {
+                coveringPage
+            } else {
+                unselectedDetail
             }
         }
+        .frame(minWidth: PaneLayout.primaryMinimum, maxWidth: .infinity, maxHeight: .infinity)
+        // The same fade the covered split gets.
+        .animation(Motion.quick, value: isCovered)
     }
 
     /// Restores the sidebar and gives the utility one-third of the
@@ -257,22 +252,22 @@ extension RootView {
     /// the shell reprint its prompt, which reads as stray newlines.
     /// Shells start only from their button, and a quit shell (Ctrl-D)
     /// returns to it.
-    func utilityContent(for item: WorktreeItem) -> some View {
+    func utilityContent(for item: WorktreeItem?) -> some View {
         let showsShell = utilityTab == .shell
         let showsBrowser = utilityTab == .browser
-        let path = item.worktree.path
+        let path = item?.worktree.path
         return ZStack {
             shellLayers(for: item)
                 .opacity(showsShell ? 1 : 0)
                 .allowsHitTesting(showsShell)
-            if showsShell == false, showsBrowser == false {
+            if let item, showsUtility, showsShell == false, showsBrowser == false {
                 // Identity keyed by worktree, so switching in the
                 // sidebar always rebuilds the pane's state. The
                 // backgrounds must not expand into the ignored
                 // titlebar safe area, where they would paint over
                 // the tab header above.
                 switchedUtility(for: item, conversationPath: conversationWorktree)
-                    .id("utility-" + path)
+                    .id("utility-" + item.worktree.path)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .background(.background, ignoresSafeAreaEdges: [])
             }
@@ -283,8 +278,8 @@ extension RootView {
                 .opacity(showsBrowser ? 1 : 0)
                 .allowsHitTesting(showsBrowser)
         }
-        .task(id: item.id + utilityTabName) {
-            if utilityTab == .browser {
+        .task(id: showsUtility && showsBrowser ? path : nil) {
+            if let path, showsUtility, showsBrowser {
                 visitBrowser(at: path)
             }
         }
@@ -294,11 +289,11 @@ extension RootView {
     /// worktree is being worked in: the session manager lists what
     /// they cost and closes the ones that are not worth it.
     @ViewBuilder
-    func browserLayers(for item: WorktreeItem) -> some View {
-        let path = item.worktree.path
+    func browserLayers(for item: WorktreeItem?) -> some View {
+        let path = item?.worktree.path
         ForEach(visitedBrowserPaths, id: \.self) { browserPath in
             let isShown = browserPath == path
-            BrowserView(worktreePath: browserPath, isActive: isShown && utilityTab == .browser)
+            BrowserView(worktreePath: browserPath, isActive: isShown && showsUtility && utilityTab == .browser)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.background, ignoresSafeAreaEdges: [])
                 .opacity(isShown ? 1 : 0)
@@ -312,8 +307,8 @@ extension RootView {
     /// shell shows and takes keys. The close button hard-terminates
     /// shells that cannot Ctrl-D out.
     @ViewBuilder
-    func shellLayers(for item: WorktreeItem) -> some View {
-        let path = item.worktree.path
+    func shellLayers(for item: WorktreeItem?) -> some View {
+        let path = item?.worktree.path
         ForEach(runningShellPaths, id: \.self) { shellPath in
             let isShown = shellPath == path
             // The closure stays a non-final argument: the formatter
@@ -321,13 +316,13 @@ extension RootView {
             shellTerminal(
                 at: shellPath,
                 onExit: { closeShell(at: shellPath) },
-                isActive: isShown && utilityTab == .shell && isCovered == false,
+                isActive: isShown && showsUtility && utilityTab == .shell && isCovered == false,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .opacity(isShown ? 1 : 0)
             .allowsHitTesting(isShown)
         }
-        if hasRunningShell(at: path) == false {
+        if let path, hasRunningShell(at: path) == false {
             StartShellButton { startShell(at: path) }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

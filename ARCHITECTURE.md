@@ -234,19 +234,23 @@ Rules that follow from that shape:
 - Copies from an agent pane reflow block by block for prose
   (`PasteableText`): paragraphs lose hard wraps, command-shaped runs
   keep every line. Option-drag copies a rectangle on the character
-  grid. Processing a herdr frame preserves the selection, including
-  cursor-only updates: mouse reporting is suspended for the synchronous
-  feed and restored before handling input. SwiftTerm still moves or
-  clears the selection when the selected text scrolls.
+  grid; the held block also supplies Cmd-C and the Copy menu, without
+  prose reflow. Starting a native selection clears both the held block
+  and its marquee, so scrolling cannot restore an older copy.
+  Processing a herdr frame preserves the selection, including cursor-only
+  updates: mouse reporting is suspended for the synchronous feed and
+  restored before handling input. SwiftTerm still moves or clears the
+  selection when the selected text scrolls.
 
 The **host terminal** is a plain login shell on the pane's own PTY as
 the host user: no sudo, no sandbox, full `gh` credentials, editor
 variables pointing at the app's shim, no server. Shells die with the
 app, a deliberate trade after server-backed shells kept wedging their
 control clients. Every running shell and browser page stays mounted
-whichever tab or worktree shows, since it dies with its view, but
-hidden in AppKit's sense while it is not the one shown, so it draws
-nothing and a page's animation frames stop; the session manager lists
+whichever tab or worktree shows, even while the selection is empty.
+`RetainedPane` collapses the utility pane without removing its views or
+changing their width. Inactive native views are hidden, so they draw
+nothing and a page's animation frames stop. The session manager lists
 them with a Close, each agent session beside the CLI version it started
 with, which after an upgrade is not the installed one until it restarts.
 
