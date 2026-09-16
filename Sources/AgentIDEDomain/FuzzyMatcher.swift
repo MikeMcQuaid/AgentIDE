@@ -7,13 +7,13 @@ public enum FuzzyMatcher {
     /// The candidates matching the query, best first. An empty query
     /// returns the candidates unchanged.
     public static func rank(_ candidates: [String], query: String) -> [String] {
-        let trimmed = query.lowercased().filter { $0.isWhitespace == false }
-        guard trimmed.isEmpty == false else {
+        let normalised = normalise(query)
+        guard normalised.isEmpty == false else {
             return candidates
         }
 
         return candidates
-            .compactMap { candidate in score(candidate, query: trimmed).map { (candidate, $0) } }
+            .compactMap { candidate in score(candidate, query: normalised).map { (candidate, $0) } }
             .sorted { first, second in
                 // Equal scores prefer the shorter, more direct path.
                 first.1 == second.1 ? first.0.count < second.0.count : first.1 > second.1
@@ -21,8 +21,14 @@ public enum FuzzyMatcher {
             .map(\.0)
     }
 
+    /// A typed query as `score` expects it: lowercased, with the
+    /// whitespace a human types between words dropped.
+    public static func normalise(_ query: String) -> String {
+        query.lowercased().filter { $0.isWhitespace == false }
+    }
+
     /// The match score, nil when the query's characters do not all
-    /// appear in order.
+    /// appear in order; `query` is expected normalised.
     public static func score(_ candidate: String, query: String) -> Int? {
         let characters = Array(candidate.lowercased())
         let queryCharacters = Array(query)

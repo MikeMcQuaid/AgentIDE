@@ -176,6 +176,7 @@ struct AgentSessionForm: View {
             Text("Pick a repository first.").font(.callout).foregroundStyle(.secondary)
         } else if source == .issue {
             NumberedItemPicker(
+                "Issue",
                 selection: $number,
                 items: issues,
                 placeholder: "Choose an open issue",
@@ -187,6 +188,7 @@ struct AgentSessionForm: View {
             .hoverHelp("The repository's open issues; the pick becomes the prompt")
         } else {
             NumberedItemPicker(
+                "Pull request",
                 selection: $number,
                 items: pullRequests,
                 placeholder: "Choose an open pull request",
@@ -210,10 +212,10 @@ struct AgentSessionForm: View {
 
         // The cache paints the pickers instantly; the fetch refreshes
         // them in place.
+        isLoadingSources = true
         let cached = model.cachedOpenSources(repository: repository)
         issues = cached.issues
         pullRequests = cached.pullRequests
-        isLoadingSources = true
         // A fetch for a repository no longer picked must not overwrite
         // the current one's lists or end its loading state.
         let freshIssues = await model.openIssues(repository: repository)

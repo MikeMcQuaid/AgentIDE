@@ -9,10 +9,36 @@ import TerminalUI
 /// number and anything else matches titles. Arrows move the
 /// highlight, return or a click picks and Escape closes it.
 struct NumberedItemPicker<Item: NumberedItem>: View {
+    // MARK: Lifecycle
+
+    /// Creates the picker; `label` names it for assistive technology
+    /// the way a picker's own label would, since the button shows
+    /// only the pick.
+    init(
+        _ label: String,
+        selection: Binding<Int?>,
+        items: [Item],
+        placeholder: String,
+        searchPrompt: String,
+        loadingTitle: String,
+        emptyTitle: String,
+        isLoading: Bool,
+    ) {
+        self.label = label
+        _selection = selection
+        self.items = items
+        self.placeholder = placeholder
+        self.searchPrompt = searchPrompt
+        self.loadingTitle = loadingTitle
+        self.emptyTitle = emptyTitle
+        self.isLoading = isLoading
+    }
+
     // MARK: Internal
 
     @Binding var selection: Int?
 
+    let label: String
     let items: [Item]
     let placeholder: String
     let searchPrompt: String
@@ -36,6 +62,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .accessibilityLabel(label)
         .popover(isPresented: $isPresented, arrowEdge: .bottom) { search }
     }
 
@@ -50,19 +77,21 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
         items.first { $0.number == selection }.map { "#" + String($0.number) + " " + $0.title }
     }
 
+    /// Ranked once per render, since the body reads it several times.
     private var results: [Item] {
         NumberedItemSearch.rank(items, query: query)
     }
 
     private var search: some View {
-        VStack(alignment: .leading, spacing: Layout.spacing) {
+        let ranked = results
+        return VStack(alignment: .leading, spacing: Layout.spacing) {
             TextField(searchPrompt, text: $query)
                 .textFieldStyle(.roundedBorder)
                 .focused($fieldFocused)
                 .onChange(of: query) { highlighted = 0 }
-                .onSubmit { pickHighlighted() }
-                .highlightNavigation($highlighted, count: results.count)
-            if results.isEmpty {
+                .onSubmit { pick(ranked, at: highlighted) }
+                .highlightNavigation($highlighted, count: ranked.count)
+            if ranked.isEmpty {
                 Group {
                     if items.isEmpty, isLoading {
                         ProgressView(loadingTitle)
@@ -73,14 +102,14 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: Layout.listHeight)
             } else {
-                resultsList
+                resultsList(ranked)
             }
         }
         .padding(Layout.spacing)
         .frame(width: Layout.width)
         .onExitCommand { isPresented = false }
         .onAppear {
-            highlighted = results.firstIndex { $0.number == selection } ?? 0
+            highlighted = ranked.firstIndex { $0.number == selection } ?? 0
             fieldFocused = true
         }
         // Clearing on close rather than open: the query's onChange
@@ -88,7 +117,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
         .onDisappear { query = "" }
     }
 
-    private var resultsList: some View {
+    private func resultsList(_ results: [Item]) -> some View {
         HighlightedResultsList(
             results,
             id: \.number,
@@ -117,9 +146,9 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
         .padding(.vertical, Layout.rowPadding)
     }
 
-    private func pickHighlighted() {
-        if results.indices.contains(highlighted) {
-            pick(results[highlighted])
+    private func pick(_ results: [Item], at index: Int) {
+        if results.indices.contains(index) {
+            pick(results[index])
         }
     }
 

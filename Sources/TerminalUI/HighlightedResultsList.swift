@@ -34,8 +34,9 @@ public struct HighlightedResultsList<Item, ID: Hashable, Row: View>: View {
                     ForEach(rows) { indexed in
                         let index = indexed.index
                         let item = indexed.item
+                        let highlight = index == highlighted ? Style.highlightOpacity : 0
                         row(item)
-                            .background(index == highlighted ? Color.accentColor.opacity(highlightOpacity) : .clear)
+                            .background(Color.accentColor.opacity(highlight))
                             .contentShape(Rectangle())
                             .onTapGesture { onPick(item) }
                             .accessibilityAddTraits(.isButton)
@@ -75,8 +76,13 @@ private struct IndexedResult<Item, ID: Hashable>: Identifiable {
     let id: ID
 }
 
-/// Generic types cannot hold static stored properties.
-private let highlightOpacity = 0.25
+// MARK: - Style
+
+/// The list's measurements, outside it because generic types cannot
+/// hold static stored properties.
+private enum Style {
+    static let highlightOpacity = 0.25
+}
 
 // MARK: - HighlightNavigation
 

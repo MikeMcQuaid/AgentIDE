@@ -22,9 +22,10 @@ public enum NumberedItemSearch {
             return exact + prefixed
         }
 
-        let lowered = trimmed.lowercased().filter { $0.isWhitespace == false }
+        let normalised = FuzzyMatcher.normalise(trimmed)
         return items
-            .compactMap { item in FuzzyMatcher.score(item.title, query: lowered).map { (item, $0) } }
+            .compactMap { item in FuzzyMatcher.score(item.title, query: normalised).map { (item, $0) } }
+            // Stable, so equal scores keep GitHub's order, newest first.
             .sorted { $0.1 > $1.1 }
             .map(\.0)
     }

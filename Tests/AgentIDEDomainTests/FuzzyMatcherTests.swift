@@ -25,6 +25,12 @@ struct FuzzyMatcherTests {
     }
 
     @Test
+    func `a space starts a word`() {
+        let ranked = FuzzyMatcher.rank(["Fix reopen", "Fix an open"], query: "op")
+        #expect(ranked == ["Fix an open", "Fix reopen"])
+    }
+
+    @Test
     func `empty queries keep the given order`() {
         #expect(FuzzyMatcher.rank(["b", "a"], query: " ") == ["b", "a"])
     }
