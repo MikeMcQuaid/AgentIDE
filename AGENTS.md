@@ -414,9 +414,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   throttles file I/O as well as CPU, which took a full rebuild from
   about a minute to twelve. `script/test` also sweeps the herdr
   servers a killed run orphaned, matching them by a socket under
-  this checkout's `.test-scratch` and never by name: a run the
-  system kills never reaches its own teardown, and seven orphaned
-  servers were found holding memory after one such kill.
+  this checkout's `.test-scratch`, or its fallback under the user's
+  temporary directory, and never by name: a run the system kills
+  never reaches its own teardown, and seven orphaned servers were
+  found holding memory after one such kill.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
   the running `agentide` or `agentide-dev` herdr session stopped
@@ -473,6 +474,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    the shared workspace or the owning user's home, per-user scratch
    in that user's macOS temporary directory, and test scratch in the
    gitignored `.test-scratch` of the checkout, which each run sweeps.
+   A checkout too deep for a herdr socket's 104 bytes (a worktree
+   named for its branch) puts that directory under the user's macOS
+   temporary directory instead, `DARWIN_USER_TEMP_DIR` and never
+   `TMPDIR`, which a tool running the tests may have pointed deep.
 10. Keep diffs minimal and follow existing structure.
 11. One branch per session: every change made in a session goes on
     that session's one branch, cut from `origin/main` and named for

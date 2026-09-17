@@ -16,12 +16,15 @@ enum TestSupport {
         try make(label)
     }
 
-    /// A resolved herdr config home, named as briefly as it can be:
-    /// a Unix socket path cannot exceed 104 bytes, and this root,
-    /// the name and the `herdr/herdr-client.sock` herdr appends stay
-    /// inside that.
+    /// A herdr config home, named as briefly as it can be: a Unix
+    /// socket path cannot exceed 104 bytes, and this root, the name
+    /// and the `herdr/herdr-client.sock` herdr appends stay inside
+    /// that. Handed over as named rather than resolved: nothing
+    /// compares it, and `realpath` puts `/private` in front of a
+    /// temporary-directory root, eight bytes a fitting root cannot
+    /// spare.
     static func configHome() throws -> String {
-        try make("h")
+        try make("h", resolved: false)
     }
 
     /// The fully resolved path, matching git and herdr output.
@@ -133,9 +136,12 @@ enum TestSupport {
     /// test that crashes cannot tidy up after itself, and strays were
     /// piling up in `/tmp` a run at a time. A checkout far enough
     /// down the filesystem to overrun a herdr socket's 104-byte path
-    /// falls back to this user's own temporary directory.
+    /// (a worktree named for its branch is) falls back to this user's
+    /// own temporary directory as macOS names it, never `TMPDIR`: a
+    /// tool running the tests had pointed that at a per-session
+    /// directory deep enough to overrun the socket just the same.
     private static let root: String = {
-        let candidates = [checkoutRoot + "/" + scratchName, NSTemporaryDirectory() + scratchName]
+        let candidates = [checkoutRoot + "/" + scratchName, userTemporaryDirectory + scratchName]
         let path = candidates.first { $0.count + socketBudget <= socketLimit } ?? candidates[1]
         try? FileManager.default.createDirectory(
             atPath: path,
@@ -173,13 +179,28 @@ enum TestSupport {
     /// keep socket paths inside their limit.
     private static let idLength = 8
 
+    /// This user's temporary directory as macOS names it
+    /// (`DARWIN_USER_TEMP_DIR`), which `NSTemporaryDirectory()` is
+    /// not once something has set `TMPDIR`.
+    private static var userTemporaryDirectory: String {
+        var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+        let length = unsafe confstr(_CS_DARWIN_USER_TEMP_DIR, &buffer, buffer.count)
+        guard length > 0, length <= buffer.count else {
+            return NSTemporaryDirectory()
+        }
+
+        let bytes = buffer.prefix(length - 1).map { UInt8(bitPattern: $0) }
+        return String(bytes: bytes, encoding: .utf8) ?? NSTemporaryDirectory()
+    }
+
     /// Creates a scratch directory under the swept root, named for
     /// what it holds. The name is short so socket paths stay inside
-    /// their length limit.
-    private static func make(_ label: String) throws -> String {
+    /// their length limit; `resolved` runs the result through
+    /// `realpath`, which git and herdr report paths as.
+    private static func make(_ label: String, resolved: Bool = true) throws -> String {
         let path = root + "/" + label + "-" + String(UUID().uuidString.prefix(Self.idLength))
         try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
-        return canonical(path)
+        return resolved ? canonical(path) : path
     }
 
     /// Removes what earlier runs left behind.

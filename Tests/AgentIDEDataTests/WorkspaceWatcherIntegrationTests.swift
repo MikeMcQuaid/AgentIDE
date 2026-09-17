@@ -8,11 +8,12 @@ struct WorkspaceWatcherIntegrationTests {
 
     @Test
     func `a write inside a root is remembered as its top directories`() async throws {
-        // FSEvents reports physical paths, so the scratch root is
-        // resolved before it becomes a watch root.
+        // FSEvents reports physical paths, which the scratch root
+        // already is; Foundation's own resolving would take the
+        // `/private` off a temporary-directory root and match none.
         let scratch = try TestSupport.temporaryDirectory("watcher")
         defer { try? FileManager.default.removeItem(atPath: scratch) }
-        let root = URL(fileURLWithPath: scratch).resolvingSymlinksInPath().path + "/repositories"
+        let root = scratch + "/repositories"
         try FileManager.default.createDirectory(
             atPath: root + "/brew/Library",
             withIntermediateDirectories: true,
