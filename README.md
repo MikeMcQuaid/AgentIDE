@@ -45,7 +45,8 @@ updates.
 - Says what a pull request is doing in GitHub's own icons, one glyph per
   fact, watching checks and queued merges until they settle.
 - Fetch and Fetch and Reset on a repository follow its default branch
-  when it has moved on GitHub, switching the checkout to the new one.
+  when it has moved on GitHub, switching the checkout to the new one;
+  a new worktree whose base branch has gone follows it too.
 - Reattaches a pane that shows nothing by itself, once, and offers
   Reattach in the pane when that does not draw either; a right-click
   on the pane or on the session strip above it offers it any time.

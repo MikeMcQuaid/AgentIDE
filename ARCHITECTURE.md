@@ -444,7 +444,14 @@ each waited on the other until the app was restarted.
    within the last hour, reusing the timestamp explicit fetches and
    rebases record. New branches start from origin's default branch,
    falling back to the local default or `HEAD` without one, and never
-   track it as their upstream. `git worktree add` runs under
+   track it as their upstream. A default branch GitHub has renamed
+   leaves `origin/HEAD` naming a branch the pruning fetch has just
+   removed, so a base that does not resolve is followed to where
+   origin's HEAD points now, exactly as an explicit fetch follows it
+   (`followDefaultBranch`, the main checkout moving with it), and
+   `agentide new` re-points `origin/HEAD` the same way; an old clone
+   once needed `git remote set-head origin --auto` by hand before it
+   could start anything. `git worktree add` runs under
    `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`. Older
    `worktrees/<uuid>/<branch>` checkouts keep working because everything
    derives from `git worktree list`. Each poll also adopts checkouts the
@@ -508,7 +515,8 @@ page resumes any past conversation into a fresh worktree.
   set-head origin --auto`), and a main checkout sitting on the old
   default is checked out on the new, made from origin's if there is
   no local one, before any reset; the note says so. The poll's own
-  fetches never pay that round trip.
+  fetches never pay that round trip, and a new worktree's pays it
+  only when the base it read has gone.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
   and a context menu marks it unread again. The selected worktree is
