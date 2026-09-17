@@ -145,7 +145,7 @@ public struct DashboardView: View {
             let worktrees = group.items.count { $0.worktree.isHostDirectory == false } - 1
             if worktrees > 0 {
                 Text("(" + String(worktrees) + ")")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
                     .hoverHelp("Worktrees beyond the default branch")
             }

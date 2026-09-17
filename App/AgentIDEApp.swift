@@ -64,6 +64,7 @@ struct AgentIDEApp: App {
         WindowGroup {
             RootView(dependencies: dependencies)
                 .environment(\.openURL, LinkOpener.action)
+                .interfaceFont(.body)
         }
 
         // Content over chrome: no title bar, compact toolbar.
@@ -73,6 +74,7 @@ struct AgentIDEApp: App {
 
         Settings {
             SettingsView(dependencies: dependencies)
+                .interfaceFont(.body)
         }
     }
 

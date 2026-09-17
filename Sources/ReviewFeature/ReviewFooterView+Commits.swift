@@ -42,7 +42,10 @@ extension ReviewFooterView {
             if index > 0 {
                 whole += AttributedString("\n")
             }
-            whole += Self.styledCommitLine(line)
+            whole += Self.styledCommitLine(
+                line,
+                subjectFont: interfaceStyle.font(.caption, weight: .semibold, monospaced: true),
+            )
         }
         return whole
     }
@@ -55,11 +58,11 @@ extension ReviewFooterView {
                 .buttonStyle(.plain)
                 .hoverHelp("Back to every commit under review")
             Text("Commit " + (model.commitTarget ?? ""))
-                .font(.headline.monospaced())
+                .interfaceFont(.headline, monospaced: true)
                 .textSelection(.enabled)
             Spacer()
             Text("read-only")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
                 .hoverHelp("Only the last commit can be amended or have its lines rejected")
         }
@@ -85,7 +88,7 @@ extension ReviewFooterView {
     /// One commit line: its hash, subject and ref decorations, the
     /// whole line linking to that commit so clicking anywhere on it
     /// reviews it alone.
-    private static func styledCommitLine(_ line: String) -> AttributedString {
+    private static func styledCommitLine(_ line: String, subjectFont: Font) -> AttributedString {
         let hashEnd = line.firstIndex(of: " ") ?? line.endIndex
         var hash = AttributedString(String(line[..<hashEnd]))
         hash.foregroundColor = .orange
@@ -97,7 +100,7 @@ extension ReviewFooterView {
             rest = String(rest[..<open.lowerBound])
         }
         var subject = AttributedString(rest)
-        subject.font = .caption.monospaced().weight(.semibold)
+        subject.font = subjectFont
         // Named explicitly so the link the whole line carries cannot
         // paint the listing in accent colour.
         subject.foregroundColor = .primary

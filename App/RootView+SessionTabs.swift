@@ -222,7 +222,7 @@ extension RootView {
         if item.worktree.isHostDirectory {
             HStack(spacing: Self.stripSpacing) {
                 Label(item.worktree.path, systemImage: "laptopcomputer")
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .padding(.horizontal, Self.tabHorizontalPadding)
                     .padding(.vertical, Self.tabVerticalPadding)
                 Spacer(minLength: 0)
@@ -249,7 +249,7 @@ extension RootView {
                 Text(session.name)
                     // Monospaced: it is the workspace label herdr
                     // shows, matched by eye against terminal output.
-                    .font(.callout.monospaced())
+                    .interfaceFont(.callout, monospaced: true)
                     .padding(.vertical, Self.tabVerticalPadding)
                     .hoverHelp("The herdr workspace name; `script/attach " + session.name
                         + "` joins this session from a terminal")

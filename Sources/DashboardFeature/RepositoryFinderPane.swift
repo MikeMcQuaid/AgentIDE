@@ -83,7 +83,7 @@ public struct RepositoryFinderPane: View {
                 .highlightNavigation($highlighted, count: results.count)
             if let failure = model.screenError {
                 Text(failure)
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             }
@@ -129,11 +129,11 @@ public struct RepositoryFinderPane: View {
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
                     .hoverHelp("Back to the organisation step")
-                Text("Open repository in \(owner)").font(.subheadline.weight(.semibold))
+                Text("Open repository in \(owner)").interfaceFont(.subheadline, weight: .semibold)
             } else {
                 // No cancel button: any other middle-pane action,
                 // like selecting a worktree, replaces this page.
-                Text("Open repository").font(.subheadline.weight(.semibold))
+                Text("Open repository").interfaceFont(.subheadline, weight: .semibold)
             }
         }
     }

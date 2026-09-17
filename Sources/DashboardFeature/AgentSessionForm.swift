@@ -173,7 +173,7 @@ struct AgentSessionForm: View {
         switch source {
         case .prompt:
             TextEditor(text: $prompt)
-                .font(.body)
+                .interfaceFont(.body)
                 .frame(minHeight: Self.promptHeight)
                 .border(.separator)
 
@@ -182,7 +182,7 @@ struct AgentSessionForm: View {
              .pullRequest:
             numberPicker
             TextEditor(text: $prompt)
-                .font(.body)
+                .interfaceFont(.body)
                 .frame(minHeight: Self.contextHeight)
                 .border(.separator)
                 .hoverHelp("Context appended to the fetched title and body; anything typed first is kept")
@@ -191,7 +191,7 @@ struct AgentSessionForm: View {
 
     @ViewBuilder private var numberPicker: some View {
         if repository == nil {
-            Text("Pick a repository first.").font(.callout).foregroundStyle(.secondary)
+            Text("Pick a repository first.").interfaceFont(.callout).foregroundStyle(.secondary)
         } else if source == .issue {
             ReferencedItemPicker(
                 "Issue",

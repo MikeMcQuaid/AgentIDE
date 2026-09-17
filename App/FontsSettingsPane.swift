@@ -6,21 +6,13 @@ import TerminalUI
 
 // MARK: - FontsSettingsPane
 
-/// All typography preferences, applied to the main window as they change.
+/// All typography preferences, applied to both windows as they change.
 struct FontsSettingsPane: View {
     // MARK: Internal
 
     var body: some View {
         Form {
-            FontSettingsSection(
-                title: "Code and terminals",
-                detail: "Terminals, editors, diffs, finder results and code blocks.",
-                nameKey: AppSettings.codeFontNameKey,
-                sizeKey: AppSettings.codeFontSizeKey,
-                defaultName: CodeStyle.defaultFontName,
-                defaultSize: CodeStyle.defaultPointSize,
-                monospaced: true,
-            )
+            textSections
             sidebarSections
             FontSettingsSection(
                 title: "Utility tabs",
@@ -31,14 +23,35 @@ struct FontsSettingsPane: View {
                 defaultSize: TabStyle.defaultPointSize,
                 monospaced: false,
             )
-            Text("Changes appear immediately in the main window. Reset restores each group's original font and size.")
-                .font(.caption)
+            Text("Changes appear immediately in every window. Reset restores each group's original font and size.")
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
     }
 
     // MARK: Private
+
+    @ViewBuilder private var textSections: some View {
+        FontSettingsSection(
+            title: "Interface text",
+            detail: "Labels, headings, captions, messages and conversations; every text style follows this size.",
+            nameKey: AppSettings.interfaceFontNameKey,
+            sizeKey: AppSettings.interfaceFontSizeKey,
+            defaultName: "",
+            defaultSize: InterfaceStyle.defaultPointSize,
+            monospaced: false,
+        )
+        FontSettingsSection(
+            title: "Code and terminals",
+            detail: "Terminals, editors, diffs, finder results and code blocks.",
+            nameKey: AppSettings.codeFontNameKey,
+            sizeKey: AppSettings.codeFontSizeKey,
+            defaultName: CodeStyle.defaultFontName,
+            defaultSize: CodeStyle.defaultPointSize,
+            monospaced: true,
+        )
+    }
 
     @ViewBuilder private var sidebarSections: some View {
         FontSettingsSection(
@@ -52,7 +65,7 @@ struct FontsSettingsPane: View {
         )
         FontSettingsSection(
             title: "Worktrees and branch names",
-            detail: "Names throughout the app, with sidebar details sized to match.",
+            detail: "Names throughout the app; the status line under each follows interface text.",
             nameKey: AppSettings.nameFontNameKey,
             sizeKey: AppSettings.nameFontSizeKey,
             defaultName: "",
@@ -108,7 +121,7 @@ private struct FontSettingsSection: View {
                 }
             }
             Text(detail)
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }

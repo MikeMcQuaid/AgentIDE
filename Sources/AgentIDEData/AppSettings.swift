@@ -33,6 +33,11 @@ public enum AppSettings {
     /// The worktrees directory override's storage key.
     public static let worktreesDirectoryKey = "worktreesDirectory"
 
+    /// Interface typography: labels, headings, captions and prose.
+    public static let interfaceFontNameKey = "interfaceFontName"
+    /// The interface body point size, which every text style follows.
+    public static let interfaceFontSizeKey = "interfaceFontSize"
+
     /// The monospace face's storage key.
     public static let codeFontNameKey = "codeFontName"
 

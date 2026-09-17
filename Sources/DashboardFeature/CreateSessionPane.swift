@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import SwiftUI
+import TerminalUI
 
 /// Starts an agent in a worktree that has none, using the same form
 /// as the New Session sheet with the repository fixed. Issue and
@@ -81,7 +82,7 @@ public struct CreateSessionPane: View {
     private var header: some View {
         HStack {
             Text("Start an agent in \(target)")
-                .font(.subheadline.weight(.semibold))
+                .interfaceFont(.subheadline, weight: .semibold)
             if isResuming {
                 ProgressView().controlSize(.small)
             }

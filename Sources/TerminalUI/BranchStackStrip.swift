@@ -49,7 +49,7 @@ public struct BranchStackStrip: View {
                     }
                 }
             }
-            .font(.caption)
+            .interfaceFont(.caption)
             .padding(.horizontal, Self.spacing)
             .padding(.vertical, Self.verticalPadding)
         }
@@ -73,7 +73,7 @@ public struct BranchStackStrip: View {
     private var arrow: some View {
         Text(verbatim: "←")
             .foregroundStyle(.tertiary)
-            .font(.caption)
+            .interfaceFont(.caption)
     }
 
     private func copyItem(_ name: String) -> some View {

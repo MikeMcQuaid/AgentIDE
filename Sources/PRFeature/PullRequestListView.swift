@@ -74,7 +74,7 @@ struct PullRequestListView: View {
                 .disabled(page == 0)
                 .hoverHelp("The previous \(Self.pageSize) pull requests")
             Text(String(page * Self.pageSize + 1) + "–" + String(last) + " of " + String(summaries.count))
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             Button("Next page", systemImage: "chevron.forward") { page += 1 }
                 .labelStyle(.iconOnly)
@@ -133,6 +133,9 @@ struct PullRequestFooterView: View {
     @AppStorage(UtilityTabTarget.key)
     var utilityTab = ""
 
+    /// Internal so the copy buttons' own file shares it.
+    var interfaceStyle: InterfaceStyle = .init()
+
     /// How far the branch sits behind its base, bare: an arrow
     /// belongs to whichever button draws one, and the stack's own
     /// pair already carry theirs as icons.
@@ -163,7 +166,7 @@ struct PullRequestFooterView: View {
             if let status = model.status {
                 // Selectable so failures can be copied and reported.
                 Text(status)
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .textSelection(.enabled)

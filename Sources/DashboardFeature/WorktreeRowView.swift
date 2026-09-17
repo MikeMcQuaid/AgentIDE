@@ -156,7 +156,7 @@ struct WorktreeRowView: View {
                     .hoverHelp(countsExplanation)
                 Spacer(minLength: 0)
             }
-            .font(nameStyle.detail)
+            .interfaceFont(.caption)
             .foregroundStyle(.secondary)
         } else {
             worktreeDetailLine
@@ -184,7 +184,7 @@ struct WorktreeRowView: View {
                 .hoverHelp(countsExplanation)
             Spacer(minLength: 0)
         }
-        .font(nameStyle.detail)
+        .interfaceFont(.caption)
         .foregroundStyle(.secondary)
     }
 
@@ -218,42 +218,42 @@ struct WorktreeRowView: View {
             case .running where item.session?.activity == .blocked:
                 Image(systemName: "questionmark.circle.fill")
                     .foregroundStyle(.orange)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent asked a question or wants an approval")
 
             case .running where item.session?.activity == .working:
                 Image(systemName: "play.circle.fill")
                     .foregroundStyle(.green)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent is working on its turn")
 
             case .running where item.session?.activity == .done:
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("The turn is done; the answer is waiting")
 
             case .running where item.session?.activity == .idle:
                 Image(systemName: "pause.circle")
                     .foregroundStyle(.secondary)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("At rest: nothing asked, or the turn was interrupted")
 
             case .running:
                 Image(systemName: "circle.dotted")
                     .foregroundStyle(.secondary)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("Running, but herdr cannot tell what the agent is doing")
 
             case .finished:
                 Image(systemName: "stop.circle")
                     .foregroundStyle(.secondary)
-                    .font(nameStyle.detail)
+                    .font(nameStyle.small)
                     .accessibilityHidden(true)
                     .hoverHelp("The agent's process exited; the conversation stays resumable")
 

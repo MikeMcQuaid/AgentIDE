@@ -21,6 +21,9 @@ struct ReviewFooterView: View {
     /// Whether Commit applies: the uncommitted scope with changes.
     let canCommit: Bool
 
+    /// Internal so the commit listing's own file shares it.
+    var interfaceStyle: InterfaceStyle = .init()
+
     /// The drag handle over the footer itself.
     var body: some View {
         VStack(spacing: 0) {
@@ -139,7 +142,7 @@ struct ReviewFooterView: View {
             if let status = model.status {
                 // Selectable so failures can be copied out.
                 Text(status)
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .textSelection(.enabled)
@@ -210,7 +213,7 @@ struct ReviewFooterView: View {
             .padding(Self.footerPadding)
         } else if model.scope == .branch || model.scope == .upstream {
             VStack(alignment: .leading, spacing: Self.commitListSpacing) {
-                Text("Commits under review").font(.headline)
+                Text("Commits under review").interfaceFont(.headline)
                 ScrollView(.vertical) {
                     // One text block, not a row per commit: dragging
                     // then selects across lines, so hashes and whole
@@ -223,15 +226,15 @@ struct ReviewFooterView: View {
                     // the branch's own.
                     if model.hasLoaded == false {
                         Text("Listing the branch's commits…")
-                            .font(.caption)
+                            .interfaceFont(.caption)
                             .foregroundStyle(.secondary)
                     } else if model.branchCommits.count <= 1 {
                         Text("No commits beyond the base branch.")
-                            .font(.caption)
+                            .interfaceFont(.caption)
                             .foregroundStyle(.secondary)
                     } else {
                         Text(styledCommits)
-                            .font(.caption.monospaced())
+                            .interfaceFont(.caption, monospaced: true)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -258,7 +261,7 @@ struct ReviewFooterView: View {
                 TextField("Subject", text: subjectBinding.readOnly(model.isReadOnly))
                     .readOnly(model.isReadOnly)
                     .textFieldStyle(.plain)
-                    .font(.body.monospaced())
+                    .interfaceFont(.body, monospaced: true)
                     .padding(Self.fieldInset)
                     .overlay(alignment: .topLeading) { columnRule(at: Self.subjectLimit, inset: Self.fieldInset) }
                     .hoverHelp("The commit subject; git convention keeps it at most 50 characters")
@@ -268,7 +271,7 @@ struct ReviewFooterView: View {
             Divider()
             TextEditor(text: bodyBinding.readOnly(model.isReadOnly))
                 .readOnly(model.isReadOnly)
-                .font(.body.monospaced())
+                .interfaceFont(.body, monospaced: true)
                 .frame(height: messageHeight)
                 .overlay(alignment: .topLeading) { columnRule(at: Self.bodyLimit, inset: Self.fieldInset) }
                 .hoverHelp("The commit body; git convention wraps lines at 72 characters")
@@ -288,14 +291,14 @@ struct ReviewFooterView: View {
             Text("body \(widestBody)/\(Self.bodyLimit)")
                 .foregroundStyle(widestBody > Self.bodyLimit ? .red : .secondary)
         }
-        .font(.callout.monospaced())
+        .interfaceFont(.callout, monospaced: true)
         .hoverHelp("git convention: subjects at most 50 characters, body lines wrapped at 72")
     }
 
     /// A vertical rule at a conventional column, positioned by the
     /// monospaced character width.
     private func columnRule(at limit: Int, inset: CGFloat) -> some View {
-        let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        let font = interfaceStyle.appKitFont(.body, monospaced: true)
         // Text measurement is an AppKit API; NSString is its input.
         // swiftlint:disable:next legacy_objc_type
         let sample = "M" as NSString

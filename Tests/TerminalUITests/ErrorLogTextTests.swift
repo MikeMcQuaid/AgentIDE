@@ -85,6 +85,38 @@ struct ErrorLogTextTests {
     }
 
     @Test
+    func `the pane draws in the fonts Settings chose`() throws {
+        let entries = [
+            ErrorLog.Entry(
+                id: 1,
+                date: .now,
+                message: "brew: Pushed `main`.",
+                isError: false,
+                repository: "brew",
+            ),
+        ]
+        let prose = try #require(NSFont(name: "Helvetica", size: 18))
+        let bold = try #require(NSFont(name: "Helvetica-Bold", size: 18))
+        let time = try #require(NSFont(name: "Helvetica", size: 15))
+        let name = try #require(NSFont(name: "Menlo-Regular", size: 19))
+        let text = ErrorLogText.attributed(entries, fonts: .init(prose: prose, bold: bold, time: time, name: name))
+
+        func font(of part: String) -> NSFont? {
+            guard let range = text.string.range(of: part) else {
+                return nil
+            }
+
+            let location = NSRange(range, in: text.string).location
+            return unsafe text.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+        }
+
+        #expect(font(of: "Pushed") == prose)
+        #expect(font(of: "main") == name)
+        #expect(font(of: "brew") == bold)
+        #expect(unsafe text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont == time)
+    }
+
+    @Test
     func `a line names its repository and its branch in front`() {
         ErrorLog.shared.clear()
         ErrorLog.shared.note("pushed", about: "brew", branch: "more_deprecations")

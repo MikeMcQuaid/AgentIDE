@@ -19,17 +19,19 @@ public struct NameStyle: DynamicProperty {
 
     /// A name in a row of its own: a sidebar row or a popover's list.
     public var font: Font {
-        resolved(style: .callout, pointSize: Self.defaultPointSize, monospaced: true)
+        resolved(style: .callout, pointSize: Self.defaultPointSize)
     }
 
     /// A name in a detail line, beside counts and badges.
     public var small: Font {
-        resolved(style: .caption, pointSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize, monospaced: true)
+        resolved(style: .caption, pointSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize)
     }
 
-    /// Sidebar counts and status text scale with the names they describe.
-    public var detail: Font {
-        resolved(style: .caption, pointSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize, monospaced: false)
+    /// A name in AppKit text, at the size of `font`.
+    public var appKitFont: NSFont {
+        let size = max(Self.defaultPointSize + delta, 1)
+        return (fontName.isEmpty ? nil : NSFont(name: fontName, size: size))
+            ?? .monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
     // MARK: Private
@@ -39,16 +41,22 @@ public struct NameStyle: DynamicProperty {
     @AppStorage(AppSettings.nameFontSizeKey)
     private var fontSize = 0.0
 
-    private func resolved(style: Font.TextStyle, pointSize: CGFloat, monospaced: Bool) -> Font {
-        let delta = fontSize > 0 ? fontSize - Self.defaultPointSize : 0
+    private var delta: CGFloat {
+        if fontSize > 0 {
+            fontSize - Self.defaultPointSize
+        } else {
+            0
+        }
+    }
+
+    private func resolved(style: Font.TextStyle, pointSize: CGFloat) -> Font {
         let size = max(pointSize + delta, 1)
         if fontName.isEmpty == false, let face = NSFont(name: fontName, size: size) {
             return Font(face)
         }
-        let design: Font.Design = monospaced ? .monospaced : .default
         if delta == 0 {
-            return monospaced ? .system(style, design: .monospaced) : .system(style)
+            return .system(style, design: .monospaced)
         }
-        return .system(size: size, design: design)
+        return .system(size: size, design: .monospaced)
     }
 }

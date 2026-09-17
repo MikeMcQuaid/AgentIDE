@@ -19,16 +19,16 @@ struct PullRequestCreateForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             Text(editing.map { "Editing #" + String($0.number) } ?? "No open pull request for this branch")
-                .font(.subheadline.weight(.semibold))
+                .interfaceFont(.subheadline, weight: .semibold)
                 .frame(maxWidth: .infinity, alignment: .leading)
             waitingLine
             titleField
             if editing == nil {
                 labelsSection
             }
-            Text("Body").font(.caption).foregroundStyle(.secondary)
+            Text("Body").interfaceFont(.caption).foregroundStyle(.secondary)
             TextEditor(text: $model.prBody.readOnly(isGenerating || isBlocked))
-                .font(.body)
+                .interfaceFont(.body)
                 .frame(minHeight: Self.bodyMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
@@ -147,7 +147,7 @@ struct PullRequestCreateForm: View {
     @ViewBuilder private var templateSection: some View {
         if model.hasTemplate {
             HStack {
-                Text("Template").font(.caption).foregroundStyle(.secondary)
+                Text("Template").interfaceFont(.caption).foregroundStyle(.secondary)
                 Spacer()
                 // One button, since ticking the AI box and saying
                 // what wrote the branch are the same act: the box
@@ -162,7 +162,7 @@ struct PullRequestCreateForm: View {
                     )
             }
             TextEditor(text: $model.prTemplate.readOnly(isGenerating || isBlocked))
-                .font(.body.monospaced())
+                .interfaceFont(.body, monospaced: true)
                 .frame(minHeight: Self.templateMinimumHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
@@ -220,7 +220,7 @@ struct PullRequestCreateForm: View {
     @ViewBuilder private var waitingLine: some View {
         if editing == nil, let below = model.unpushedBelow {
             Text("Waiting on \(Text(below).font(nameStyle.small)) below it to be pushed and opened first")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }

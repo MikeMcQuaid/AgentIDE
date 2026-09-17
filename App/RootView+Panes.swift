@@ -93,7 +93,7 @@ extension RootView {
         VStack(spacing: 0) {
             HStack {
                 Text("Editor")
-                    .font(.subheadline.weight(.semibold))
+                    .interfaceFont(.subheadline, weight: .semibold)
                 Spacer()
                 Button("Conversations") { setCentreEditor(false, at: item.worktree.path) }
                     .controlSize(.small)

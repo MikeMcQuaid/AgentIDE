@@ -149,11 +149,14 @@ Settings (Cmd-,) controls:
   commits must be signed, and the browser Cmd-click opens.
 - **Notifications**: which events notify, badge the Dock and make a
   sound.
-- **Fonts**: fonts and sizes for code and terminals, repository names,
-  worktree and branch names and utility tabs. The first font entry names
-  the default family. Size steppers preview changes immediately in the
-  main window, including open terminals and editors; each group can
-  return to its original defaults.
+- **Fonts**: fonts and sizes for every piece of text in the app, so it
+  can be made as large or as legible as you need: interface text
+  (labels, headings, captions, messages and conversations), code and
+  terminals, repository names, worktree and branch names and utility
+  tabs. The first font entry names the default family. Changes preview
+  immediately in the main window and in Settings itself, including open
+  terminals and editors. Headings keep their emphasis as fonts change;
+  each group can return to its original defaults.
 - **Editor**: the external editor Cmd-click runs.
 - **Advanced**: where repositories and worktrees live, how often the
   system is re-read, idle sleep and the performance log.

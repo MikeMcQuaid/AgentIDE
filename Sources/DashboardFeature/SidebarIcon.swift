@@ -12,7 +12,7 @@ struct SidebarIcon: View {
     var body: some View {
         Image(systemName: systemName)
             .accessibilityHidden(true)
-            .font(.caption.weight(.semibold))
+            .interfaceFont(.caption, weight: .semibold)
             .rotationEffect(rotation)
             .animation(Motion.quick, value: rotation)
             .padding(.horizontal, Self.horizontalPadding)

@@ -18,14 +18,14 @@ struct BranchSwitchPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack(spacing: Self.spacing) {
-                Text("Switch").font(.subheadline.weight(.semibold))
+                Text("Switch").interfaceFont(.subheadline, weight: .semibold)
                 Text(item.worktree.branch).font(nameStyle.font)
-                Text("to").font(.subheadline.weight(.semibold))
+                Text("to").interfaceFont(.subheadline, weight: .semibold)
             }
             if let branches {
                 if branches.isEmpty {
                     Text("Every other local branch is checked out elsewhere.")
-                        .font(.callout)
+                        .interfaceFont(.callout)
                         .foregroundStyle(.secondary)
                 } else {
                     list(of: branches)

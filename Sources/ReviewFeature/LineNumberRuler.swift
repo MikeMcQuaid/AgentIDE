@@ -1,4 +1,5 @@
 import AppKit
+import TerminalUI
 
 // NSTextView ranges are UTF-16 offsets, so NSString is the correct
 // arithmetic here, not String.
@@ -13,7 +14,7 @@ final class LineNumberRuler: NSRulerView {
     init(textView: NSTextView) {
         super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
         clientView = textView
-        ruleThickness = Self.thickness
+        matchCodeSize()
         // The ruler must never paint outside its strip; unclipped it
         // bled its separator over neighbouring views.
         wantsLayer = true
@@ -87,15 +88,33 @@ final class LineNumberRuler: NSRulerView {
         }
     }
 
+    /// Widens the gutter with the code beside it.
+    func matchCodeSize() {
+        let scaled = Self.thickness * Self.scale
+        if ruleThickness != scaled {
+            ruleThickness = scaled
+        }
+    }
+
     // MARK: Private
 
     private static let thickness: CGFloat = 38
-    private static let fontSize: CGFloat = 9
     private static let padding: CGFloat = 4
+    private static let baseFontSize: CGFloat = 9
 
     /// The change bar's width, on the gutter's inner edge where it
     /// sits against the code it belongs to.
     private static let barWidth: CGFloat = 2
+
+    /// The numbers keep the proportion their original size had to
+    /// the original code size.
+    private static var scale: CGFloat {
+        CodeStyle.pointSize / CodeStyle.defaultPointSize
+    }
+
+    private static var fontSize: CGFloat {
+        baseFontSize * scale
+    }
 }
 
 // MARK: - Line arithmetic

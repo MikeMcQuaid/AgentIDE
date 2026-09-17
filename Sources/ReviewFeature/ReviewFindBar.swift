@@ -25,7 +25,8 @@ struct ReviewFindBar: View {
                 .onKeyPress(.downArrow) { model.moveFind(by: 1); return .handled }
                 .onKeyPress(.upArrow) { model.moveFind(by: -1); return .handled }
             Text(model.findSummary)
-                .font(.caption.monospacedDigit())
+                .interfaceFont(.caption)
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
             Button("Previous match", systemImage: "chevron.up") { model.moveFind(by: -1) }
                 .labelStyle(.iconOnly)

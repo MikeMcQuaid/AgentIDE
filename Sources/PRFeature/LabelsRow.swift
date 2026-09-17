@@ -14,10 +14,10 @@ struct LabelsRow: View {
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            Text("Labels").font(.caption).foregroundStyle(.secondary)
+            Text("Labels").interfaceFont(.caption).foregroundStyle(.secondary)
             ForEach(picked, id: \.self) { label in
                 Text(label)
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .padding(.horizontal, Self.chipPadding)
                     .padding(.vertical, Self.chipVerticalPadding)
                     .background(.quaternary, in: Capsule())
