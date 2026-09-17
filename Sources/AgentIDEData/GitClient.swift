@@ -346,10 +346,12 @@ public struct GitClient: Sendable {
 
     /// Config a compromised repository could abuse, forced off, plus
     /// user diff prefix preferences that would break the a/b paths
-    /// the diff parser and patch builder expect.
+    /// the diff parser and patch builder expect. `core.sshCommand`
+    /// names ssh rather than being blanked: an empty value is the
+    /// empty command, which git forks, failing every SSH remote.
     private static let hardening = [
         "-c", "core.fsmonitor=",
-        "-c", "core.sshCommand=",
+        "-c", "core.sshCommand=/usr/bin/ssh",
         "-c", "core.hooksPath=/dev/null",
         "-c", "core.pager=cat",
         "-c", "protocol.ext.allow=never",
