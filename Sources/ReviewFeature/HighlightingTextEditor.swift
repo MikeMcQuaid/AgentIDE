@@ -250,6 +250,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         }
         if let ruler = scroll.verticalRulerView as? LineNumberRuler {
             ruler.changedLines = changedLines
+            ruler.matchCodeSize()
         }
         scroll.verticalRulerView?.needsDisplay = true
     }

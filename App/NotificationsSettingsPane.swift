@@ -41,7 +41,7 @@ struct NotificationsSettingsPane: View {
             }
             Toggle("Count in the Dock badge", isOn: toggleBinding(key: event.badgeKey))
             Text(detail)
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             if event.soundKey != nil {
                 SoundPicker(event: event)
@@ -179,7 +179,7 @@ struct EditorSettingsPane: View {
                     + "with the file path appended; arguments split on spaces. Empty hands "
                     + "Cmd-clicked files to the system's default app. A plain click always "
                     + "opens the built-in editor.")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }

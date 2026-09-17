@@ -20,19 +20,19 @@ struct StackPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack(spacing: Self.rowSpacing) {
-                Text("Stack in").font(.headline)
+                Text("Stack in").interfaceFont(.headline)
                 Text(stack?.checkedOut ?? item.worktree.branch).font(nameStyle.font)
             }
             if let stack {
                 stacked(stack)
             } else {
                 Text("Working out which branches are stacked here…")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
             }
             Divider()
             if let blocker = stack?.stackingBlocker {
-                Text(blocker).font(.caption).foregroundStyle(.secondary)
+                Text(blocker).interfaceFont(.caption).foregroundStyle(.secondary)
             }
             newBranchField
         }
@@ -88,7 +88,7 @@ struct StackPopover: View {
             Text(stack.checkedOut == stack.base
                 ? "This worktree is on " + stack.checkedOut + " itself; cut a branch to start a stack."
                 : "Only " + stack.checkedOut + " is here; nothing is stacked on it yet.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
         VStack(alignment: .leading, spacing: Self.rowSpacing) {
@@ -102,7 +102,7 @@ struct StackPopover: View {
             }
         }
         if excluded.isEmpty == false {
-            Text("Left out").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text("Left out").interfaceFont(.caption, weight: .semibold).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Self.rowSpacing) {
                 ForEach(excluded, id: \.self) { branch in
                     excludedRow(branch)
@@ -117,7 +117,7 @@ struct StackPopover: View {
     private func row(branch: String, position: Int?, isBase: Bool) -> some View {
         HStack(spacing: Self.rowSpacing) {
             Text(position.map(String.init) ?? "–")
-                .font(.caption.monospaced())
+                .interfaceFont(.caption, monospaced: true)
                 .foregroundStyle(.secondary)
             Image(systemName: isBase ? "arrow.triangle.branch" : "square.stack.3d.up")
                 .foregroundStyle(.secondary)
@@ -129,7 +129,7 @@ struct StackPopover: View {
                 .fontWeight(branch == stack?.checkedOut ? .semibold : .regular)
             Spacer(minLength: 0)
             if branch == stack?.checkedOut {
-                Text("checked out").font(.caption).foregroundStyle(.secondary)
+                Text("checked out").interfaceFont(.caption).foregroundStyle(.secondary)
             } else if isBase == false {
                 Button {
                     Task { await exclude(branch) }

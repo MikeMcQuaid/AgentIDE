@@ -24,7 +24,7 @@ struct ErrorsPane: View {
             Divider()
             if log.entries.isEmpty {
                 Text("No messages since the last clear.")
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.secondary)
                     .padding(Self.padding)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -32,7 +32,15 @@ struct ErrorsPane: View {
                 // One document, newest first: selection crosses
                 // entries, Cmd-F finds within it and links open
                 // where every other link does.
-                SelectableTextView(text: ErrorLogText.attributed(log.entries))
+                SelectableTextView(text: ErrorLogText.attributed(
+                    log.entries,
+                    fonts: .init(
+                        prose: interfaceStyle.appKitFont(.callout),
+                        bold: interfaceStyle.appKitFont(.callout, bold: true),
+                        time: interfaceStyle.appKitFont(.caption1),
+                        name: nameStyle.appKitFont,
+                    ),
+                ))
             }
         }
     }
@@ -42,6 +50,8 @@ struct ErrorsPane: View {
     private static let padding: CGFloat = 8
 
     private var log: ErrorLog = .shared
+    private var interfaceStyle: InterfaceStyle = .init()
+    private var nameStyle: NameStyle = .init()
 
     private func copyAll() {
         let text = log.entries

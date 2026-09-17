@@ -199,13 +199,13 @@ struct FileEditorView: View {
     /// only time closing the editor decides anything.
     private var header: some View {
         HStack {
-            Text(title).font(.headline.monospaced())
+            Text(title).interfaceFont(.headline, monospaced: true)
             if onFinish != nil {
-                Text("A command is waiting").font(.callout).foregroundStyle(.secondary)
+                Text("A command is waiting").interfaceFont(.callout).foregroundStyle(.secondary)
             }
             Spacer()
             if let status {
-                Text(status).font(.callout).foregroundStyle(.secondary)
+                Text(status).interfaceFont(.callout).foregroundStyle(.secondary)
             }
             if isMarkdown {
                 markdownToggle

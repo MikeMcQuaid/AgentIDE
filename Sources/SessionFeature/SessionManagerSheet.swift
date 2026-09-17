@@ -30,7 +30,7 @@ public struct SessionManagerSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             HStack {
-                Text("Sessions").font(.title2)
+                Text("Sessions").interfaceFont(.title2)
                 Spacer()
                 Button("Refresh") { Task { await reload() } }
                     .hoverHelp("List the sessions again")
@@ -145,20 +145,21 @@ public struct SessionManagerSheet: View {
                     Text(entry.title).font(codeStyle.font).lineLimit(1)
                     if let detail = entry.detail {
                         Text(detail)
-                            .font(.caption)
+                            .interfaceFont(.caption)
                             .foregroundStyle(.secondary)
                             .hoverHelp("The agent CLI's version this session runs; an upgrade takes effect on restart")
                     }
                 }
                 Text(location(of: entry.directory))
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .hoverHelp(entry.directory)
             }
             Spacer()
             Text(entry.usage)
-                .font(.caption.monospacedDigit())
+                .interfaceFont(.caption)
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .hoverHelp("CPU and memory summed over its process tree")
             action()

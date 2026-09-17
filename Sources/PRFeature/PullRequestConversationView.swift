@@ -260,7 +260,7 @@ struct PullRequestConversationView: View {
         if threads.isEmpty == false || isLoading {
             Divider()
             HStack {
-                Text("Conversations").font(.headline)
+                Text("Conversations").interfaceFont(.headline)
                 Spacer()
                 if threads.contains(where: { $0.isResolved == false }) {
                     Button {
@@ -290,7 +290,7 @@ struct PullRequestConversationView: View {
         }
         if events.isEmpty, description.isEmpty {
             Text("No description or feedback yet.")
-                .font(.callout)
+                .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
         }
     }
@@ -300,11 +300,11 @@ struct PullRequestConversationView: View {
     private func eventRow(_ event: ReviewComment) -> some View {
         VStack(alignment: .leading, spacing: Self.headerSpacing) {
             HStack(spacing: Self.headerSpacing) {
-                Text(ChecksStyle.authorDisplayName(event.author)).font(.callout.bold())
+                Text(ChecksStyle.authorDisplayName(event.author)).interfaceFont(.callout, weight: .bold)
                 if let icon = ChecksStyle.reviewOcticonName(for: event.kind) {
                     Octicon(icon, colour: ChecksStyle.reviewColour(for: event.kind))
                     Text(event.kind.replacing("_", with: " ").lowercased())
-                        .font(.callout)
+                        .interfaceFont(.callout)
                         .foregroundStyle(.secondary)
                 }
             }

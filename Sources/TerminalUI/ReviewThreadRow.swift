@@ -115,10 +115,10 @@ public struct ReviewThreadRow: View {
         HStack(spacing: Self.spacing) {
             collapseToggle
             Text(thread.comments.first?.author ?? "")
-                .font(.callout.weight(.semibold))
+                .interfaceFont(.callout, weight: .semibold)
                 .textSelection(.enabled)
             Text(anchor)
-                .font(.callout.monospaced())
+                .interfaceFont(.callout, monospaced: true)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .textSelection(.enabled)

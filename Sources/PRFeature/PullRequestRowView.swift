@@ -78,7 +78,7 @@ struct PullRequestRowView: View {
                 .truncationMode(.middle)
             let author = ChecksStyle.authorDisplayName(summary.author ?? "")
             if author.isEmpty == false {
-                Text("· " + author).font(.callout).lineLimit(1)
+                Text("· " + author).interfaceFont(.callout).lineLimit(1)
             }
         }
         .foregroundStyle(.secondary)
@@ -94,7 +94,7 @@ struct PullRequestRowView: View {
             Button {
                 LinkOpener.open(summary.url)
             } label: {
-                Text("#" + String(summary.number)).font(.headline)
+                Text("#" + String(summary.number)).interfaceFont(.headline)
             }
             .buttonStyle(.plain)
             .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
@@ -104,7 +104,7 @@ struct PullRequestRowView: View {
                 checksButton
             }
             statusBadges
-            Text(summary.title).font(.headline).lineLimit(1)
+            Text(summary.title).interfaceFont(.headline).lineLimit(1)
         }
     }
 
@@ -124,7 +124,7 @@ struct PullRequestRowView: View {
         if stackDepth > 1 {
             Octicon("octicon-stack", colour: .secondary)
                 .hoverHelp("Stacked: \(stackDepth) pull requests based on each other")
-            Text(String(stackDepth)).font(.caption).foregroundStyle(.secondary)
+            Text(String(stackDepth)).interfaceFont(.caption).foregroundStyle(.secondary)
         }
     }
 

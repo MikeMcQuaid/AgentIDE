@@ -110,7 +110,7 @@ public struct LaunchProgressView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text(title)
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -157,7 +157,7 @@ public struct LaunchProgressView: View {
                 }
                 ForEach(steps) { step in
                     Text(Self.styled(step.text + waitingDots(on: step, at: context.date)))
-                        .font(.callout)
+                        .interfaceFont(.callout)
                         .lineLimit(Self.stepLines)
                 }
             }

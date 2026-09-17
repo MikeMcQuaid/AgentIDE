@@ -32,7 +32,7 @@ struct TranscriptLogView: View {
         }
         // Conversations read newest-last, so open at the end.
         .defaultScrollAnchor(.bottom)
-        .font(.callout)
+        .interfaceFont(.callout)
         // The semantic text colours: they track appearance and the
         // Increase Contrast setting, where literal black and white
         // tracked nothing.
@@ -51,7 +51,7 @@ struct TranscriptLogView: View {
         switch entry.role {
         case .user:
             Text("\(Text("❯ ").bold().foregroundStyle(.blue))\(Text(entry.text).bold())")
-                .font(.callout.monospaced())
+                .interfaceFont(.callout, monospaced: true)
                 .textSelection(.enabled)
 
         case .assistant:
@@ -61,7 +61,7 @@ struct TranscriptLogView: View {
 
         case .tool:
             Text("⚙ " + entry.text)
-                .font(.caption.monospaced())
+                .interfaceFont(.caption, monospaced: true)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .textSelection(.enabled)

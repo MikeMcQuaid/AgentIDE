@@ -174,7 +174,7 @@ public struct ReviewView: View {
             displayToggles
             Spacer()
             Text(model.files.count == 1 ? "1 file" : String(model.files.count) + " files")
-                .font(.callout)
+                .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
                 .hoverHelp("How many files the diff touches")
             DiffStatText(

@@ -23,7 +23,7 @@ public struct NewSessionPane: View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             // No cancel button: any other middle-pane action, like
             // selecting a worktree, replaces this page.
-            Text("New agent session").font(.subheadline.weight(.semibold))
+            Text("New agent session").interfaceFont(.subheadline, weight: .semibold)
             Picker("Repository", selection: $repository) {
                 Text("Choose repository").tag(Repository?.none)
                 ForEach(model.repositories) { repository in
@@ -47,7 +47,7 @@ public struct NewSessionPane: View {
             ) { submission in await start(submission) }
             if let failure = model.screenError {
                 Text(failure)
-                    .font(.callout)
+                    .interfaceFont(.callout)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             }

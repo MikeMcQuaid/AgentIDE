@@ -7,10 +7,44 @@ import AppKit
 public enum ErrorLogText {
     // MARK: Public
 
+    /// The faces the pane draws in, as Fonts settings left them.
+    public struct Fonts {
+        // MARK: Lifecycle
+
+        /// Prose, its bold for the repository, the time before it
+        /// and the identifiers within it.
+        public init(prose: NSFont, bold: NSFont, time: NSFont, name: NSFont) {
+            self.prose = prose
+            self.bold = bold
+            self.time = time
+            self.name = name
+        }
+
+        // MARK: Public
+
+        /// The system's own, before anything is changed.
+        public static let system: Self = .init(
+            prose: .preferredFont(forTextStyle: .callout),
+            bold: .boldSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize),
+            time: .preferredFont(forTextStyle: .caption1),
+            name: .monospacedSystemFont(
+                ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize,
+                weight: .regular,
+            ),
+        )
+
+        // MARK: Internal
+
+        let prose: NSFont
+        let bold: NSFont
+        let time: NSFont
+        let name: NSFont
+    }
+
     /// The entries newest first: a failure glyph where one is due,
     /// the time in front, the message wrapping after it, and web
     /// links live.
-    public static func attributed(_ entries: [ErrorLog.Entry]) -> NSAttributedString {
+    public static func attributed(_ entries: [ErrorLog.Entry], fonts: Fonts = .system) -> NSAttributedString {
         let text = NSMutableAttributedString()
         for (index, entry) in entries.reversed().enumerated() {
             if index > 0 {
@@ -20,40 +54,33 @@ public enum ErrorLogText {
                 text.append(Self.failureMark())
             }
             text.append(NSAttributedString(string: Self.time(entry.date) + " ", attributes: [
-                .font: NSFont.preferredFont(forTextStyle: .caption1),
+                .font: fonts.time,
                 .foregroundColor: NSColor.secondaryLabelColor,
             ]))
-            text.append(Self.message(of: entry))
+            text.append(Self.message(of: entry, fonts: fonts))
         }
         return text
     }
 
     // MARK: Private
 
-    /// What an identifier is drawn in: the pane's own size, so a
-    /// monospaced run sits on the same line as the prose beside it.
-    private static let code: NSFont = .monospacedSystemFont(
-        ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize,
-        weight: .regular,
-    )
-
     /// Every message reads as prose, whether it failed or not, with
     /// the identifiers it names monospaced and the repository it
     /// belonged to in bold: one treatment across the pane, so a
     /// branch looks like a branch wherever it is said.
-    private static func message(of entry: ErrorLog.Entry) -> NSAttributedString {
+    private static func message(of entry: ErrorLog.Entry, fonts: Fonts) -> NSAttributedString {
         let rendered = MessageMarkup.rendered(entry.message)
         let body = NSMutableAttributedString(string: rendered.text, attributes: [
-            .font: NSFont.preferredFont(forTextStyle: .callout),
+            .font: fonts.prose,
             .foregroundColor: NSColor.textColor,
         ])
         for span in rendered.code {
-            body.addAttribute(.font, value: Self.code, range: NSRange(span, in: rendered.text))
+            body.addAttribute(.font, value: fonts.name, range: NSRange(span, in: rendered.text))
         }
         if let repository = entry.repository, rendered.text.hasPrefix(repository + ": ") {
             body.addAttribute(
                 .font,
-                value: NSFont.boldSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .callout).pointSize),
+                value: fonts.bold,
                 range: NSRange(location: 0, length: repository.count),
             )
         }

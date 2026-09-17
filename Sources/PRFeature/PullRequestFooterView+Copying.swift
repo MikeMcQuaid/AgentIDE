@@ -17,7 +17,7 @@ extension PullRequestFooterView {
         // to the word alone, which is the same fact the count
         // would have reported.
         BusyButton(
-            label: Self.copyLabel("Reviews", count: selected.unresolvedComments),
+            label: copyLabel("Reviews", count: selected.unresolvedComments),
             accessibilityLabel: Self.copyTitle("Reviews", count: selected.unresolvedComments),
             busy: "Copying",
             disabled: selected.unresolvedComments == 0,
@@ -41,7 +41,7 @@ extension PullRequestFooterView {
         // and green have no failed log, and a red rollup whose
         // failures are not Actions runs has none either.
         BusyButton(
-            label: Self.copyLabel("Checks", count: selected.failingCheckLinks.count),
+            label: copyLabel("Checks", count: selected.failingCheckLinks.count),
             accessibilityLabel: Self.copyTitle("Checks", count: selected.failingCheckLinks.count),
             busy: "Copying",
             disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
@@ -68,12 +68,13 @@ extension PullRequestFooterView {
     /// A copy button's label: what it copies and, when there is
     /// any, the symbol and the count. Nothing to copy is the word
     /// alone, greyed out.
-    static func copyLabel(_ name: String, count: Int) -> Text {
+    func copyLabel(_ name: String, count: Int) -> Text {
         guard count > 0 else {
             return Text(name)
         }
 
-        return Text("\(name) \(Text(Image(systemName: copyIcon)).font(.system(size: copyIconSize)))\(String(count))")
+        let icon = Text(Image(systemName: Self.copyIcon)).font(interfaceStyle.systemFont(ofSize: Self.copyIconSize))
+        return Text("\(name) \(icon)\(String(count))")
     }
 
     /// The symbol's size: the label's own is thirteen points, and

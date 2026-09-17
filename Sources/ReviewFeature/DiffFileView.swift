@@ -15,7 +15,7 @@ struct FileCollapseCaret: View {
     var body: some View {
         Button(action: onToggle) {
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
+                .interfaceFont(.caption, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(isCollapsed ? 0 : Self.expandedDegrees))
         }
@@ -42,7 +42,7 @@ struct DiffStatText: View {
             Text("+" + String(additions)).foregroundStyle(.green)
             Text("\u{2212}" + String(deletions)).foregroundStyle(.red)
         }
-        .font(.callout.monospaced())
+        .interfaceFont(.callout, monospaced: true)
     }
 }
 
@@ -190,13 +190,13 @@ struct DiffFileView: View {
             commitTick
             FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
             Text(file.path)
-                .font(.headline.monospaced())
+                .interfaceFont(.headline, monospaced: true)
                 .lineLimit(1)
                 .truncationMode(.middle)
             copyPathButton
             if file.isNew {
                 Text("new file")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
                     .hoverHelp("Added or untracked: the whole file is the diff")
             }
@@ -278,7 +278,7 @@ struct DiffFileView: View {
     private func hunkView(hunkIndex: Int, hunk: DiffHunk) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("@@ -\(hunk.oldStart) +\(hunk.newStart) @@")
-                .font(.caption.monospaced())
+                .interfaceFont(.caption, monospaced: true)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             selectableHunk(hunkIndex: hunkIndex, hunk: hunk)

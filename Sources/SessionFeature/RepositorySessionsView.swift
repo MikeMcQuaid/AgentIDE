@@ -121,7 +121,7 @@ public struct RepositorySessionsView: View {
                     ? "Conversations in \(model.repository.name)"
                     : "Conversations in this worktree",
             )
-            .font(.subheadline.weight(.semibold))
+            .interfaceFont(.subheadline, weight: .semibold)
             Spacer()
             headerButtons
         }
@@ -193,7 +193,7 @@ public struct RepositorySessionsView: View {
                         )
                         Text(model.location(of: entry.worktreePath))
                     }
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
                 }
             }

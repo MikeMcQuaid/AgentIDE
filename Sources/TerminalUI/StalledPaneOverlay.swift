@@ -11,7 +11,7 @@ struct StalledPaneOverlay: View {
     var body: some View {
         VStack(spacing: Self.spacing) {
             Text("This pane has drawn nothing from herdr")
-                .font(.callout)
+                .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
             Button("Reattach", action: reattach)
                 .buttonStyle(.glass)

@@ -161,7 +161,7 @@ public struct OwnerAvatar: View {
             if let image = owner.flatMap({ store.image(for: $0) }) {
                 Image(nsImage: image).resizable()
             } else {
-                Image(systemName: "folder.fill").font(.caption)
+                Image(systemName: "folder.fill").interfaceFont(.caption)
             }
         }
         .frame(width: size, height: size)

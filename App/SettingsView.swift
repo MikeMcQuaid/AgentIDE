@@ -3,6 +3,7 @@ import AgentIDEDomain
 import AppKit
 import DashboardFeature
 import SwiftUI
+import TerminalUI
 
 // MARK: - SettingsView
 
@@ -53,7 +54,7 @@ private struct GeneralSettingsPane: View {
                     choices: dashboard.launchChoices,
                 )
                 Text("What the new session form starts on; each form remembers later changes.")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
             }
             signingSection
@@ -64,7 +65,7 @@ private struct GeneralSettingsPane: View {
                     dashboard.showsSessionManager = true
                 }
                 Text("Every agent, shell and browser pane with what it costs, in the main window.")
-                    .font(.caption)
+                    .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -110,7 +111,7 @@ private struct GeneralSettingsPane: View {
             Toggle("Require signed commits", isOn: $requireSignedCommits)
             Text("Off, nothing signs or checks signatures: rebases stop passing "
                 + "--gpg-sign and pushes skip the tip check.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -125,7 +126,7 @@ private struct GeneralSettingsPane: View {
             }
             Text("Where a Cmd-clicked web link goes; a plain click stays in the "
                 + "embedded browser.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -196,7 +197,7 @@ private struct AdvancedSettingsPane: View {
             Text("Where checkouts and worktrees live; the defaults are the shared "
                 + "workspace's own directories. Takes effect on the next refresh; the "
                 + "bundled agentide command keeps the defaults.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -208,7 +209,7 @@ private struct AdvancedSettingsPane: View {
             }
             Text("How often herdr, git and transcripts are re-read while the window is "
                 + "visible; hidden windows drop to a minute regardless.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             LabeledContent("Re-derive stacks every") {
                 Stepper(
@@ -220,7 +221,7 @@ private struct AdvancedSettingsPane: View {
             }
             Text("How long a derived branch stack is trusted; lone branches wait five "
                 + "times as long.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -229,12 +230,12 @@ private struct AdvancedSettingsPane: View {
         Section("Machine") {
             Toggle("Keep the Mac awake while agents or shells run", isOn: $inhibitsSleep)
             Text("Blocks idle sleep only; closing the lid still sleeps.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             Toggle("Performance log", isOn: performanceLogBinding)
             Text("Records every process, network call and cache decision to the shared "
                 + "log, the switch script/performance-log flips.")
-                .font(.caption)
+                .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }

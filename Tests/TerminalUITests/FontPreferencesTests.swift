@@ -26,7 +26,6 @@ struct FontPreferencesTests {
         #expect(original.repository == .subheadline.weight(.semibold))
         #expect(original.name == .system(.callout, design: .monospaced))
         #expect(original.smallName == .system(.caption, design: .monospaced))
-        #expect(original.detail == .caption)
         #expect(original.tab == .callout)
         #expect(original.badge == .caption.bold())
 
@@ -44,7 +43,6 @@ struct FontPreferencesTests {
 
         defaults.set(NameStyle.defaultPointSize + 3, forKey: AppSettings.nameFontSizeKey)
         await wait { recording.snapshot?.name != original.name }
-        #expect(recording.snapshot?.detail != original.detail)
         #expect(recording.snapshot?.smallName != original.smallName)
         defaults.set("Menlo-Regular", forKey: AppSettings.nameFontNameKey)
         let nameFont = try #require(NSFont(name: "Menlo-Regular", size: NameStyle.defaultPointSize + 3))
@@ -69,6 +67,46 @@ struct FontPreferencesTests {
         #expect(host.subviews.isEmpty == false)
     }
 
+    @Test
+    func `interface text moves every style and leaves names alone`() async throws {
+        let suite = "FontPreferencesTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recording = Recording()
+        let host = NSHostingView(rootView: Probe(recording: recording).defaultAppStorage(defaults))
+        host.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+        host.layoutSubtreeIfNeeded()
+        await wait { recording.snapshot != nil }
+
+        let original = try #require(recording.snapshot)
+        #expect(original.interface == .caption)
+        #expect(original.interfaceHeading == .headline)
+        #expect(original.interfaceCode == .callout.monospaced())
+        #expect(original.appKitHeading.fontDescriptor.symbolicTraits.contains(.bold))
+
+        let caption = NSFont.preferredFont(forTextStyle: .caption1).pointSize
+        let callout = NSFont.preferredFont(forTextStyle: .callout).pointSize
+        let headline = NSFont.preferredFont(forTextStyle: .headline).pointSize
+        defaults.set(InterfaceStyle.defaultPointSize + 4, forKey: AppSettings.interfaceFontSizeKey)
+        await wait { recording.snapshot?.interface == .system(size: caption + 4) }
+        #expect(recording.snapshot?.interfaceHeading == .system(size: headline + 4, weight: .bold))
+        #expect(recording.snapshot?.interfaceCode == .system(size: callout + 4).monospaced())
+        #expect(recording.snapshot?.appKitHeading.pointSize == headline + 4)
+        #expect(recording.snapshot?.appKitHeading.fontDescriptor.symbolicTraits.contains(.bold) == true)
+        #expect(recording.snapshot?.name == original.name)
+        defaults.set("Helvetica", forKey: AppSettings.interfaceFontNameKey)
+        let interfaceFont = try #require(NSFont(name: "Helvetica", size: caption + 4))
+        await wait { recording.snapshot?.interface == Font(interfaceFont) }
+        #expect(recording.snapshot?.appKitHeading.familyName == "Helvetica")
+        #expect(recording.snapshot?.appKitHeading.fontDescriptor.symbolicTraits.contains(.bold) == true)
+        // Monospaced text keeps its columns whatever face was chosen.
+        #expect(recording.snapshot?.interfaceCode == .system(size: callout + 4).monospaced())
+
+        defaults.set("", forKey: AppSettings.interfaceFontNameKey)
+        defaults.set(InterfaceStyle.defaultPointSize, forKey: AppSettings.interfaceFontSizeKey)
+        await wait { recording.snapshot == original }
+    }
+
     // MARK: Private
 
     private struct Snapshot: Equatable {
@@ -76,9 +114,12 @@ struct FontPreferencesTests {
         let repository: Font
         let name: Font
         let smallName: Font
-        let detail: Font
         let tab: Font
         let badge: Font
+        let interface: Font
+        let interfaceHeading: Font
+        let interfaceCode: Font
+        let appKitHeading: NSFont
     }
 
     private final class Recording {
@@ -110,9 +151,12 @@ struct FontPreferencesTests {
                 repository: repositoryStyle.font,
                 name: nameStyle.font,
                 smallName: nameStyle.small,
-                detail: nameStyle.detail,
                 tab: tabStyle.font,
                 badge: tabStyle.badge,
+                interface: interfaceStyle.font(.caption),
+                interfaceHeading: interfaceStyle.font(.headline),
+                interfaceCode: interfaceStyle.font(.callout, monospaced: true),
+                appKitHeading: interfaceStyle.appKitFont(.headline),
             )
         }
 
@@ -122,6 +166,7 @@ struct FontPreferencesTests {
         private var repositoryStyle: RepositoryStyle = .init()
         private var nameStyle: NameStyle = .init()
         private var tabStyle: TabStyle = .init()
+        private var interfaceStyle: InterfaceStyle = .init()
     }
 
     private func wait(until ready: () -> Bool) async {

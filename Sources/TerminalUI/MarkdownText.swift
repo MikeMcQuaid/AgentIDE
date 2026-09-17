@@ -42,7 +42,7 @@ public struct MarkdownText: View {
                 }
             }
         }
-        .font(.callout)
+        .interfaceFont(.callout)
     }
 
     // MARK: Internal

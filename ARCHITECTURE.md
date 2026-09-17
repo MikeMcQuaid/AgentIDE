@@ -632,18 +632,33 @@ page resumes any past conversation into a fresh worktree.
   The right divider and Resize Panes allocate one-third of the width
   beside the sidebar to the utility pane, leaving two-thirds for the
   middle pane, within the pane width limits.
-- **Fonts settings** groups code and terminal typography, repository
-  names, worktree and branch names and utility tabs. Each has a font
-  picker, a size stepper and a reset to the existing default. The first
-  picker entry names the resolved default family; system choices still
-  follow macOS's defaults. `CodeStyle`, `RepositoryStyle`, `NameStyle`
-  and `TabStyle` observe their preferences through `AppStorage`, so
-  changing a font or size redraws the affected views while Settings
-  stays open.
+- **Fonts settings** makes every font in the app changeable, for
+  accessibility: interface text, code and terminal typography,
+  repository names, worktree and branch names and utility tabs. Each
+  has a font picker, a size stepper and a reset to the existing
+  default. The first picker entry names the resolved default family;
+  system choices still follow macOS's defaults. `InterfaceStyle`,
+  `CodeStyle`, `RepositoryStyle`, `NameStyle` and `TabStyle` observe
+  their preferences through `AppStorage`, so changing a font or size
+  redraws the affected views while Settings stays open.
+  `InterfaceStyle` covers all text that is neither code nor a name:
+  views ask for a text style through `.interfaceFont(_:)`, which moves
+  every style by the points body text moved, keeping the hierarchy
+  between them, and draws a monospaced request in the system monospaced
+  face whatever face was chosen. Both windows apply it to body text at
+  their root, so plain labels and controls follow too. SwiftUI and
+  AppKit fonts retain each text style's natural bold weight when the
+  face or size changes. SwiftUI's dynamic type sizes change nothing on
+  macOS, which is why each call site reads the preference itself.
+  The messages pane's attributed text takes its fonts from
+  `InterfaceStyle` and `NameStyle`, and the editor's line-number gutter
+  scales with the code size.
   Mounted editors and terminals update their font in place, preserving
   documents and sessions; unchanged fonts do not trigger terminal
-  layout or clear selections. Sidebar detail text follows the name
-  size while keeping its original system font until a face is chosen.
+  layout or clear selections. The status line under each sidebar row
+  (its counts, pull request badge and state) is interface text, so it
+  follows `InterfaceStyle` in both face and size; only a branch name
+  within it, and the state icon beside the name, follow `NameStyle`.
 
 ### Review
 
@@ -697,7 +712,8 @@ page resumes any past conversation into a fresh worktree.
    no line has to name what the sidebar already names. Every surface
    draws such a name the same way (`NameStyle`, defaulting to the system
    monospaced design a size down from the prose beside it): the
-   sidebar's rows, a pull request's header, the stack and branch popovers.
+   sidebar's rows, a pull request's header, the stack and branch
+   popovers and the messages pane.
    That is chrome naming a thing; code's own typography is
    `CodeStyle`, whose face and size Settings owns.
 7. Read-only text is never `.disabled`, which takes selection with
