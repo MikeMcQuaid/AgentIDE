@@ -1242,8 +1242,10 @@ resizes).
    in any launch environment.
 4. **Host to guest-written data** (P7): every host git invocation goes
    through `GitClient`, which prepends `-c core.fsmonitor=
-   -c core.sshCommand= -c core.hooksPath=/dev/null -c core.pager=cat
-   -c protocol.ext.allow=never`. Raw `git` outside it is banned.
+   -c core.sshCommand=/usr/bin/ssh -c core.hooksPath=/dev/null
+   -c core.pager=cat -c protocol.ext.allow=never`. Raw `git` outside it
+   is banned. `core.sshCommand` names ssh rather than being blanked:
+   an empty value is the empty command, which git forks.
 5. **Transcripts**: sandvault applies inheriting group-read ACLs; the
    app relies on read and never widens it.
 
