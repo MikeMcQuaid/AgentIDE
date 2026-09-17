@@ -2,8 +2,9 @@ import AgentIDEDomain
 import SwiftUI
 
 /// Starts an agent in a worktree that has none, using the same form
-/// as the New Session sheet with the repository fixed. Issue picks
-/// run in this worktree; pull request picks check out their own.
+/// as the New Session sheet with the repository fixed. Issue and
+/// advisory picks run in this worktree; pull request picks check out
+/// their own.
 public struct CreateSessionPane: View {
     // MARK: Lifecycle
 
@@ -143,6 +144,19 @@ public struct CreateSessionPane: View {
             await model.createSession(
                 fromPullRequest: number,
                 repository: repository,
+                context: submission.context,
+                agent: submission.agent,
+                options: submission.options,
+            )
+
+        case .advisory:
+            guard let ghsaID = submission.ghsaID else {
+                return
+            }
+
+            await model.launchAgent(
+                fromAdvisory: ghsaID,
+                in: worktree,
                 context: submission.context,
                 agent: submission.agent,
                 options: submission.options,

@@ -128,6 +128,20 @@ public extension GitHubClient {
             closing: "The branch is checked out here. Commit your work. Do not push.",
         )
     }
+
+    /// The prompt every GitHub source composes: what to work on, its
+    /// body, the user's context and how to finish.
+    internal static func prompt(heading: String, body: String, context: String, closing: String) -> String {
+        var parts = [heading]
+        if body.isEmpty == false {
+            parts.append(body)
+        }
+        if context.isEmpty == false {
+            parts.append("Additional context from the user:\n" + context)
+        }
+        parts.append(closing)
+        return parts.joined(separator: "\n\n")
+    }
 }
 
 // MARK: - Private
@@ -168,17 +182,5 @@ private extension GitHubClient {
 
     struct Author: Decodable {
         let login: String?
-    }
-
-    static func prompt(heading: String, body: String, context: String, closing: String) -> String {
-        var parts = [heading]
-        if body.isEmpty == false {
-            parts.append(body)
-        }
-        if context.isEmpty == false {
-            parts.append("Additional context from the user:\n" + context)
-        }
-        parts.append(closing)
-        return parts.joined(separator: "\n\n")
     }
 }

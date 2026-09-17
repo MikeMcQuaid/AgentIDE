@@ -1,8 +1,8 @@
 import AgentIDEDomain
 import Testing
 
-/// Exercises the issue and pull request picker search.
-struct NumberedItemSearchTests {
+/// Exercises the issue, pull request and advisory picker search.
+struct ReferencedItemSearchTests {
     // MARK: Internal
 
     @Test
@@ -34,7 +34,7 @@ struct NumberedItemSearchTests {
                 checks: "",
             )
         }
-        #expect(NumberedItemSearch.rank(pullRequests, query: query).map(\.number) == expected)
+        #expect(ReferencedItemSearch.rank(pullRequests, query: query).map(\.number) == expected)
     }
 
     @Test
@@ -46,6 +46,20 @@ struct NumberedItemSearchTests {
     @Test
     func `word starts in titles rank first`() {
         #expect(rank("ap") == [123, 12])
+    }
+
+    @Test
+    func `advisories match their GHSA id in any case, then titles`() {
+        let advisories = [
+            SecurityAdvisorySummary(ghsaID: "GHSA-49rh-8x2m-7q3p", title: "Command injection in tap names"),
+            SecurityAdvisorySummary(ghsaID: "GHSA-2j4v-9k8c-1xyz", title: "Path traversal in cask names"),
+        ]
+        let ids = { (query: String) in ReferencedItemSearch.rank(advisories, query: query).map(\.ghsaID) }
+        #expect(ids("49rh") == ["GHSA-49rh-8x2m-7q3p"])
+        #expect(ids("ghsa-2j4v") == ["GHSA-2j4v-9k8c-1xyz"])
+        #expect(ids("49") == ["GHSA-49rh-8x2m-7q3p"])
+        #expect(ids("cask") == ["GHSA-2j4v-9k8c-1xyz"])
+        #expect(ids("names") == advisories.map(\.ghsaID))
     }
 
     @Test
@@ -63,6 +77,6 @@ struct NumberedItemSearchTests {
     ]
 
     private func rank(_ query: String) -> [Int] {
-        NumberedItemSearch.rank(issues, query: query).map(\.number)
+        ReferencedItemSearch.rank(issues, query: query).map(\.number)
     }
 }

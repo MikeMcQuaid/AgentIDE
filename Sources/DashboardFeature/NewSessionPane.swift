@@ -4,8 +4,8 @@ import TerminalUI
 
 /// The session entry point, shown in the middle pane rather than a
 /// sheet: pick a repository, then the shared form starts from a
-/// typed prompt, an open issue or an open pull request. Drafts
-/// survive quitting the app.
+/// typed prompt, an open issue, an open pull request or a security
+/// advisory in triage or draft. Drafts survive quitting the app.
 public struct NewSessionPane: View {
     // MARK: Lifecycle
 
@@ -36,7 +36,7 @@ public struct NewSessionPane: View {
             .disabled(model.newSessionRepository != nil)
             .hoverHelp(
                 model.newSessionRepository == nil
-                    ? "The repository the worktree is created in; issues and pull requests load from it"
+                    ? "The repository the worktree is created in; issues, pull requests and advisories load from it"
                     : "Fixed by where you opened this from",
             )
             AgentSessionForm(
@@ -128,6 +128,19 @@ public struct NewSessionPane: View {
 
             await model.createSession(
                 fromPullRequest: number,
+                repository: repository,
+                context: submission.context,
+                agent: submission.agent,
+                options: submission.options,
+            )
+
+        case .advisory:
+            guard let ghsaID = submission.ghsaID else {
+                return
+            }
+
+            await model.createSession(
+                fromAdvisory: ghsaID,
                 repository: repository,
                 context: submission.context,
                 agent: submission.agent,

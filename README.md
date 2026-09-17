@@ -25,9 +25,14 @@ updates.
 
 ## ✨ Features
 
-- Starts a worktree, a branch and an agent from a prompt, a GitHub issue
-  or a pull request, narrating each step until the agent is up; the
-  issue and pull request pickers search by title or number.
+- Starts a worktree, a branch and an agent from a prompt, a GitHub
+  issue, a pull request or a repository security advisory still in
+  triage or draft, narrating each step until the agent is up; the
+  issue and pull request pickers search by title or number, the
+  advisory picker by title or GHSA id. An advisory session gets a
+  bland branch name and is told to keep its commit messages and pull
+  request as bland, naming neither the advisory nor the vulnerability,
+  so nothing public discloses the fix before the advisory is published.
   New branches start from origin's default branch, fetching first when
   the last fetch was over an hour ago, including with `agentide new`.
 - Runs Claude Code or Codex CLI as a sandboxed, non-admin user, with

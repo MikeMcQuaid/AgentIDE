@@ -78,6 +78,26 @@ public extension DashboardModel {
         }
     }
 
+    /// Creates a session fixing a security advisory, on a branch that
+    /// names nothing.
+    func createSession(
+        fromAdvisory ghsaID: String,
+        repository: Repository,
+        context: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run(in: repository, placeholder: SessionService.advisoryBranch) {
+            try await service.createSession(
+                fromAdvisory: ghsaID,
+                repository: repository,
+                context: context,
+                agent: agent,
+                options: options,
+            )
+        }
+    }
+
     /// Starts an agent in an existing worktree.
     func launchAgent(
         in worktree: Worktree,
@@ -101,6 +121,25 @@ public extension DashboardModel {
         await run {
             try await service.launchAgent(
                 fromIssue: number,
+                in: worktree,
+                context: context,
+                agent: agent,
+                options: options,
+            )
+        }
+    }
+
+    /// Starts an agent on a security advisory in an existing worktree.
+    func launchAgent(
+        fromAdvisory ghsaID: String,
+        in worktree: Worktree,
+        context: String,
+        agent: AgentKind,
+        options: AgentLaunchOptions = AgentLaunchOptions(),
+    ) async {
+        await run {
+            try await service.launchAgent(
+                fromAdvisory: ghsaID,
                 in: worktree,
                 context: context,
                 agent: agent,

@@ -4,8 +4,9 @@ import SwiftUI
 import TerminalUI
 
 /// The one session-creation form, shared by the New Session sheet and
-/// the per-worktree pane: source (typed prompt, or an open issue or
-/// pull request picked from the repository), agent, model and effort.
+/// the per-worktree pane: source (typed prompt, or an open issue, pull
+/// request or security advisory picked from the repository), agent,
+/// model and effort.
 struct AgentSessionForm: View {
     // MARK: Internal
 
@@ -13,6 +14,7 @@ struct AgentSessionForm: View {
     struct Submission {
         let source: PromptSource
         let number: Int?
+        let ghsaID: String?
         let prompt: String
         let context: String
         let agent: AgentKind
@@ -23,6 +25,7 @@ struct AgentSessionForm: View {
         case prompt
         case issue
         case pullRequest
+        case advisory
 
         // MARK: Internal
 
@@ -36,6 +39,9 @@ struct AgentSessionForm: View {
 
             case .pullRequest:
                 "PR"
+
+            case .advisory:
+                "Advisory"
             }
         }
     }
@@ -58,7 +64,10 @@ struct AgentSessionForm: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .hoverHelp("Where the prompt comes from: typed text, or an open issue or pull request")
+            .hoverHelp(
+                "Where the prompt comes from: typed text, an open issue or pull request,"
+                    + " or a security advisory in triage or draft",
+            )
             AgentOptionPickers(
                 agent: agent,
                 model: $agentModel,
@@ -93,6 +102,7 @@ struct AgentSessionForm: View {
     private var agentKindName = AgentKind.claudeCode.rawValue
 
     @State private var number: Int?
+    @State private var ghsaID: String?
 
     /// Guards against double submission: creating a worktree takes
     /// seconds, and a second click during it started a second
@@ -102,6 +112,10 @@ struct AgentSessionForm: View {
     @State private var pullRequests: [PullRequestSummary] = []
     /// Until the fetch answers, an empty list is not yet proven empty.
     @State private var isLoadingSources = false
+    /// Read only while the Advisory source shows, and never cached:
+    /// the titles describe unpublished vulnerabilities.
+    @State private var advisories: [SecurityAdvisorySummary] = []
+    @State private var isLoadingAdvisories = false
     /// The one thing typed here, whichever source is chosen: the
     /// whole prompt when there is no issue or pull request, and what
     /// to say about one when there is. Two fields meant choosing an
@@ -133,6 +147,9 @@ struct AgentSessionForm: View {
         case .issue,
              .pullRequest:
             return number == nil
+
+        case .advisory:
+            return ghsaID == nil
         }
     }
 
@@ -160,7 +177,8 @@ struct AgentSessionForm: View {
                 .frame(minHeight: Self.promptHeight)
                 .border(.separator)
 
-        case .issue,
+        case .advisory,
+             .issue,
              .pullRequest:
             numberPicker
             TextEditor(text: $prompt)
@@ -175,7 +193,7 @@ struct AgentSessionForm: View {
         if repository == nil {
             Text("Pick a repository first.").font(.callout).foregroundStyle(.secondary)
         } else if source == .issue {
-            NumberedItemPicker(
+            ReferencedItemPicker(
                 "Issue",
                 selection: $number,
                 items: issues,
@@ -186,8 +204,24 @@ struct AgentSessionForm: View {
                 isLoading: isLoadingSources,
             )
             .hoverHelp("The repository's open issues; the pick becomes the prompt")
+        } else if source == .advisory {
+            ReferencedItemPicker(
+                "Security advisory",
+                selection: $ghsaID,
+                items: advisories,
+                placeholder: "Choose an advisory in triage or draft",
+                searchPrompt: "Find an advisory by GHSA id or title",
+                loadingTitle: "Listing advisories in triage or draft…",
+                emptyTitle: "No advisories in triage or draft",
+                isLoading: isLoadingAdvisories,
+            )
+            .hoverHelp(
+                "The repository's security advisories still in triage or draft; the pick becomes the prompt,"
+                    + " and the agent is told to keep its commits and pull request quiet about it",
+            )
+            .task(id: repository?.id ?? "") { await reloadAdvisories() }
         } else {
-            NumberedItemPicker(
+            ReferencedItemPicker(
                 "Pull request",
                 selection: $number,
                 items: pullRequests,
@@ -203,6 +237,8 @@ struct AgentSessionForm: View {
 
     private func reloadSources() async {
         number = nil
+        ghsaID = nil
+        advisories = []
         guard let repository else {
             issues = []
             pullRequests = []
@@ -233,6 +269,21 @@ struct AgentSessionForm: View {
         isLoadingSources = false
     }
 
+    private func reloadAdvisories() async {
+        guard let repository else {
+            return
+        }
+
+        isLoadingAdvisories = true
+        let fresh = await model.securityAdvisories(repository: repository)
+        guard Task.isCancelled == false else {
+            return
+        }
+
+        advisories = fresh
+        isLoadingAdvisories = false
+    }
+
     private func submit() {
         guard isStarting == false else {
             return
@@ -242,6 +293,7 @@ struct AgentSessionForm: View {
         let submission = Submission(
             source: source,
             number: number,
+            ghsaID: ghsaID,
             prompt: source == .prompt ? prompt : "",
             context: source == .prompt ? "" : prompt,
             agent: agent.wrappedValue,

@@ -265,6 +265,13 @@ public final class DashboardModel {
         await (try? service.openPullRequests(repository: repository)) ?? []
     }
 
+    /// The repository's security advisories in triage or draft, read
+    /// afresh each time: never cached, since their titles describe
+    /// unpublished vulnerabilities.
+    public func securityAdvisories(repository: Repository) async -> [SecurityAdvisorySummary] {
+        await service.securityAdvisories(repository: repository)
+    }
+
     // MARK: Internal
 
     static let selectedWorktreeKey = "selectedWorktreePath"

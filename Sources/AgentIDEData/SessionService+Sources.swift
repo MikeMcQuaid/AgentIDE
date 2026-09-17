@@ -165,15 +165,7 @@ public extension SessionService {
         let fallback = SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
             .replacing("-", with: "_")
         let base = await summariser.branchName(for: prompt) ?? fallback
-        guard await git.branchExists(repository: repository, branch: base) else {
-            return base
-        }
-
-        var attempt = 2
-        while await git.branchExists(repository: repository, branch: "\(base)-\(attempt)") {
-            attempt += 1
-        }
-        return "\(base)-\(attempt)"
+        return await availableBranch(repository: repository, base: base)
     }
 
     /// Fetches origin and hard-resets the main checkout to its

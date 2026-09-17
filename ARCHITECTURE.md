@@ -404,16 +404,27 @@ each waited on the other until the app was restarted.
 
 ### Start work
 
-1. Input: a prompt, or an issue or pull request number, plus repository,
-   agent, model and effort. Every picker opens on something: the last
+1. Input: a prompt, an issue or pull request number or a security
+   advisory's GHSA id, plus repository, agent, model and effort. Every
+   picker opens on something: the last
    pick where the chosen agent still offers it, and otherwise the first
    model that agent lists and the effort its own CLI would run at, so
    changing agent leaves a working choice rather than two empty pickers.
-   The issue and pull request pickers open a search field over the
-   repository's open ones (`NumberedItemSearch` over any `NumberedItem`):
-   digits, with or without a `#`, match any part of a number, exact
-   matches first; anything else ranks titles through `FuzzyMatcher`.
+   The issue, pull request and advisory pickers open a search field over
+   the repository's open ones (`ReferencedItemSearch` over any
+   `ReferencedItem`): digits, with or without a `#`, match any part of
+   a number, exact matches first; anything else matches a reference
+   containing it (a GHSA id, case aside) and then ranks titles through
+   `FuzzyMatcher`.
    Surrounding whitespace and line breaks are trimmed for pasted numbers.
+   Advisories are the repository's own, read through REST
+   (`repos/{owner}/{repo}/security-advisories`, one call per state,
+   which is the only filter the endpoint takes) and only in the triage
+   and draft states: a published one is public work an issue could
+   carry and a closed one is over. They are listed only while the
+   Advisory source is chosen and never cached in the metadata, since
+   their titles describe unpublished vulnerabilities; issues and pull
+   requests paint from their caches first.
    What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
@@ -422,7 +433,13 @@ each waited on the other until the app was restarted.
    detects the agent's interface (`awaitReady`, bounded at a minute).
 2. The branch name summarises the prompt through `FoundationModelClient`
    (underscore-separated, no prefix), or the prompt's first words when
-   the model is unavailable.
+   the model is unavailable. An advisory session is the exception: its
+   branch is `improvements` (numbered on collision), never a summary,
+   and its prompt tells the agent to write the commit message and any
+   pull request title or body as an ordinary improvement, naming
+   neither the advisory, its identifier, the vulnerability nor a fix.
+   Branch, commits and pull request are all public before the advisory
+   is, and a name summarising the prompt would have disclosed it.
 3. The app fetches through `GitClient` unless the repository was fetched
    within the last hour, reusing the timestamp explicit fetches and
    rebases record. New branches start from origin's default branch,
