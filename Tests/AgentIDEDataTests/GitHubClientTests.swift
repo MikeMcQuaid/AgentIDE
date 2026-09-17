@@ -1,5 +1,6 @@
 @testable import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import Testing
 
 // MARK: - GitHubClientTests
@@ -133,6 +134,60 @@ struct GitHubClientTests {
         let pullRequest = GitHubClient.pullRequestPrompt(number: 4, title: "Fix", body: "", context: "")
         #expect(pullRequest.contains("pull request #4: Fix"))
         #expect(pullRequest.contains("checked out here"))
+    }
+
+    @Test
+    func `advisory rows decode into picker items and prompt facts`() throws {
+        let json = """
+        [{"ghsa_id": "GHSA-49rh-8x2m-7q3p", "summary": "Command injection in tap names", "state": "triage",
+          "description": "A tap name reaches a shell.", "severity": "high",
+          "vulnerabilities": [{"package": {"ecosystem": "rubygems", "name": "brew"},
+            "vulnerable_version_range": "< 4.6.0", "patched_versions": "4.6.0",
+            "vulnerable_functions": ["Tap#install"]}],
+          "cwes": [{"cwe_id": "CWE-78", "name": "OS Command Injection"}]},
+         {"ghsa_id": "GHSA-2j4v-9k8c-1xyz", "summary": "Bare", "state": "draft", "description": null,
+          "severity": null, "vulnerabilities": [{"package": null}], "cwes": []}]
+        """
+        let advisories = GitHubClient.advisories(fromJSON: json)
+        #expect(advisories.map(\.ghsaID) == ["GHSA-49rh-8x2m-7q3p", "GHSA-2j4v-9k8c-1xyz"])
+        #expect(advisories.first?.title == "Command injection in tap names")
+        #expect(GitHubClient.advisories(fromJSON: "nonsense").isEmpty)
+
+        let details = try JSONDecoder().decode([SecurityAdvisoryDetail].self, from: Data(json.utf8))
+        #expect(details[0].facts == [
+            "Severity: high",
+            "Affects: rubygems brew, < 4.6.0, patched in 4.6.0, in Tap#install",
+            "Weaknesses: CWE-78 OS Command Injection",
+        ])
+        #expect(details[1].facts.isEmpty)
+    }
+
+    @Test
+    func `advisory prompts keep the fix out of what is public`() throws {
+        let json = """
+        {"ghsa_id": "GHSA-49rh-8x2m-7q3p", "summary": "Command injection", "state": "triage",
+         "description": "A tap name reaches a shell.", "severity": "high"}
+        """
+        let advisory = try JSONDecoder().decode(SecurityAdvisoryDetail.self, from: Data(json.utf8))
+        let prompt = GitHubClient.advisoryPrompt(advisory, context: "Keep the change small")
+        #expect(prompt.hasPrefix(
+            "Fix security advisory GHSA-49rh-8x2m-7q3p: Command injection\n\n"
+                + "A tap name reaches a shell.\n\nSeverity: high",
+        ))
+        #expect(prompt.contains("Additional context from the user:\nKeep the change small"))
+        #expect(prompt.contains("may mention the advisory"))
+        #expect(prompt.hasSuffix("Do not push."))
+    }
+
+    @Test
+    func `advisories are listed per state still owed a fix`() async {
+        let runner = RecordingRunner()
+        let listed = await GitHubClient(runner: runner) { true }.securityAdvisories(repositoryPath: "/repo")
+        #expect(listed.isEmpty)
+        #expect(runner.commands.map(\.last) == [
+            "repos/{owner}/{repo}/security-advisories?state=triage&per_page=50",
+            "repos/{owner}/{repo}/security-advisories?state=draft&per_page=50",
+        ])
     }
 
     @Test

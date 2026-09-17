@@ -33,8 +33,13 @@ export AGENTIDE_PERFORMANCE_LOG_DIRECTORY="${PWD}/.test-scratch/performance"
 # system kills (resource pressure culls the sandbox user under load)
 # never reaches its own teardown, and every orphan then holds its
 # memory until the machine reboots, making the next kill likelier.
+# The tests fall back to the same directory under the user's own
+# temporary directory when this checkout's path would overrun a
+# socket (see `TestSupport.root`), so both roots are swept.
 sweep_test_servers() {
   local scratch="${PWD}/.test-scratch/"
+  local fallback
+  fallback="$(getconf DARWIN_USER_TEMP_DIR).test-scratch/"
   local pid socket
   # Listed with ps rather than pgrep: pgrep does not see every
   # herdr in this sandbox, and a sweep that cannot see a server
@@ -43,7 +48,7 @@ sweep_test_servers() {
     socket="$(lsof -a -p "${pid}" -U -Fn 2>/dev/null |
       sed -n 's/^n//p' | grep 'herdr\.sock$' | head -1)"
     case "${socket}" in
-      "${scratch}"*) kill "${pid}" 2>/dev/null || true ;;
+      "${scratch}"* | "${fallback}"*) kill "${pid}" 2>/dev/null || true ;;
       *) ;;
     esac
   done

@@ -1,4 +1,5 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Foundation
 import Testing
 
@@ -55,6 +56,30 @@ struct CommandLineWorktreeTests {
             #expect(result.standardError.contains("Fetching"))
             #expect(FileManager.default.fileExists(atPath: root + "/worktree") == false)
         }
+    }
+
+    @Test
+    func `the command follows a default branch that origin renamed`() async throws {
+        let root = try TestSupport.temporaryDirectory("command-renamed")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let origin = root + "/origin"
+        let repository = root + "/repo"
+        try await TestSupport.makeRepository(at: origin)
+        try await TestSupport.runGit(["branch", "--move", "main", "trunk"], in: origin)
+        try await TestSupport.runGit(["clone", "-q", origin, repository], in: root)
+        // Renamed on origin after the clone: origin/HEAD here still
+        // says trunk, which the pruning fetch (a clone leaves no
+        // FETCH_HEAD, so the command fetches) then removes.
+        try await TestSupport.runGit(["branch", "--move", "trunk", "main"], in: origin)
+        let git = GitClient(runner: FoundationProcessRunner())
+        let tip = await git.commitHash(of: "main", worktreePath: origin)
+
+        let result = try await Self.createWorktree(in: repository, at: root + "/worktree")
+
+        #expect(result.succeeded)
+        #expect(result.standardError.contains("Following origin's default branch"))
+        #expect(await git.commitHash(of: "HEAD", worktreePath: root + "/worktree") == tip)
+        #expect(await git.defaultBaseRef(of: Repository(name: "repo", path: repository)) == "origin/main")
     }
 
     @Test(arguments: ["main", "master", "local-work"])

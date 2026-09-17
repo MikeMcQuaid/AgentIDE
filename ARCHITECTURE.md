@@ -404,16 +404,27 @@ each waited on the other until the app was restarted.
 
 ### Start work
 
-1. Input: a prompt, or an issue or pull request number, plus repository,
-   agent, model and effort. Every picker opens on something: the last
+1. Input: a prompt, an issue or pull request number or a security
+   advisory's GHSA id, plus repository, agent, model and effort. Every
+   picker opens on something: the last
    pick where the chosen agent still offers it, and otherwise the first
    model that agent lists and the effort its own CLI would run at, so
    changing agent leaves a working choice rather than two empty pickers.
-   The issue and pull request pickers open a search field over the
-   repository's open ones (`NumberedItemSearch` over any `NumberedItem`):
-   digits, with or without a `#`, match any part of a number, exact
-   matches first; anything else ranks titles through `FuzzyMatcher`.
+   The issue, pull request and advisory pickers open a search field over
+   the repository's open ones (`ReferencedItemSearch` over any
+   `ReferencedItem`): digits, with or without a `#`, match any part of
+   a number, exact matches first; anything else matches a reference
+   containing it (a GHSA id, case aside) and then ranks titles through
+   `FuzzyMatcher`.
    Surrounding whitespace and line breaks are trimmed for pasted numbers.
+   Advisories are the repository's own, read through REST
+   (`repos/{owner}/{repo}/security-advisories`, one call per state,
+   which is the only filter the endpoint takes) and only in the triage
+   and draft states: a published one is public work an issue could
+   carry and a closed one is over. They are listed only while the
+   Advisory source is chosen and never cached in the metadata, since
+   their titles describe unpublished vulnerabilities; issues and pull
+   requests paint from their caches first.
    What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
@@ -422,12 +433,25 @@ each waited on the other until the app was restarted.
    detects the agent's interface (`awaitReady`, bounded at a minute).
 2. The branch name summarises the prompt through `FoundationModelClient`
    (underscore-separated, no prefix), or the prompt's first words when
-   the model is unavailable.
+   the model is unavailable. An advisory session is the exception: its
+   branch is `improvements` (numbered on collision), never a summary,
+   and its prompt tells the agent to write the commit message and any
+   pull request title or body as an ordinary improvement, naming
+   neither the advisory, its identifier, the vulnerability nor a fix.
+   Branch, commits and pull request are all public before the advisory
+   is, and a name summarising the prompt would have disclosed it.
 3. The app fetches through `GitClient` unless the repository was fetched
    within the last hour, reusing the timestamp explicit fetches and
    rebases record. New branches start from origin's default branch,
    falling back to the local default or `HEAD` without one, and never
-   track it as their upstream. `git worktree add` runs under
+   track it as their upstream. A default branch GitHub has renamed
+   leaves `origin/HEAD` naming a branch the pruning fetch has just
+   removed, so a base that does not resolve is followed to where
+   origin's HEAD points now, exactly as an explicit fetch follows it
+   (`followDefaultBranch`, the main checkout moving with it), and
+   `agentide new` re-points `origin/HEAD` the same way; an old clone
+   once needed `git remote set-head origin --auto` by hand before it
+   could start anything. `git worktree add` runs under
    `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`. Older
    `worktrees/<uuid>/<branch>` checkouts keep working because everything
    derives from `git worktree list`. Each poll also adopts checkouts the
@@ -445,7 +469,17 @@ each waited on the other until the app was restarted.
 6. The session is recorded in the metadata with its resume id once the
    transcript appears. Each start first clears `com.apple.quarantine`
    from the agent's Homebrew install (`Quarantine`) and records the
-   CLI's version under the session name.
+   CLI's version under the session name. The first start of a run also
+   asks the sandbox, the way sandvault's `configure` does, whether the
+   legacy login keychain still opens with the empty password sandvault
+   gave it (`KeychainHealth`): since macOS 26.6 a reboot replaces that
+   with the account's password (webcoyote/sandvault#206), after which
+   `configure`'s credential lookup in it raises a keychain password
+   dialog at every launch and Claude Code's credentials cannot move to
+   sandvault's keychain. The probe only ever unlocks with a password
+   given, which never prompts, and the manual steps (rebuild, remove
+   that one file, sign in again) go once to the Messages pane; nothing
+   deletes a keychain on anyone's behalf.
 
 The same funnel serves three more entrances. `agentide new` (in
 `bin/`, aliased from the bundle for SSH logins) asks its way to a
@@ -481,7 +515,8 @@ page resumes any past conversation into a fresh worktree.
   set-head origin --auto`), and a main checkout sitting on the old
   default is checked out on the new, made from origin's if there is
   no local one, before any reset; the note says so. The poll's own
-  fetches never pay that round trip.
+  fetches never pay that round trip, and a new worktree's pays it
+  only when the base it read has gone.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
   and a context menu marks it unread again. The selected worktree is

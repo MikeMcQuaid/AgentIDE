@@ -2,13 +2,14 @@ import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
-// MARK: - NumberedItemPicker
+// MARK: - ReferencedItemPicker
 
-/// A pop-up for an open issue or pull request that searches as you
-/// type: opening it focuses a field over the list, digits jump to a
-/// number and anything else matches titles. Arrows move the
-/// highlight, return or a click picks and Escape closes it.
-struct NumberedItemPicker<Item: NumberedItem>: View {
+/// A pop-up for an open issue, pull request or security advisory
+/// that searches as you type: opening it focuses a field over the
+/// list, digits jump to a number and anything else matches a GHSA
+/// id or a title. Arrows move the highlight, return or a click picks
+/// and Escape closes it.
+struct ReferencedItemPicker<Item: ReferencedItem>: View {
     // MARK: Lifecycle
 
     /// Creates the picker; `label` names it for assistive technology
@@ -16,7 +17,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
     /// only the pick.
     init(
         _ label: String,
-        selection: Binding<Int?>,
+        selection: Binding<Item.ID?>,
         items: [Item],
         placeholder: String,
         searchPrompt: String,
@@ -36,7 +37,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
 
     // MARK: Internal
 
-    @Binding var selection: Int?
+    @Binding var selection: Item.ID?
 
     let label: String
     let items: [Item]
@@ -74,12 +75,12 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
     @FocusState private var fieldFocused: Bool
 
     private var selectedLabel: String? {
-        items.first { $0.number == selection }.map { "#" + String($0.number) + " " + $0.title }
+        items.first { $0.id == selection }.map { $0.reference + " " + $0.title }
     }
 
     /// Ranked once per render, since the body reads it several times.
     private var results: [Item] {
-        NumberedItemSearch.rank(items, query: query)
+        ReferencedItemSearch.rank(items, query: query)
     }
 
     private var search: some View {
@@ -109,7 +110,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
         .frame(width: Layout.width)
         .onExitCommand { isPresented = false }
         .onAppear {
-            highlighted = ranked.firstIndex { $0.number == selection } ?? 0
+            highlighted = ranked.firstIndex { $0.id == selection } ?? 0
             fieldFocused = true
         }
         // Clearing on close rather than open: the query's onChange
@@ -120,7 +121,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
     private func resultsList(_ results: [Item]) -> some View {
         HighlightedResultsList(
             results,
-            id: \.number,
+            id: \.id,
             highlighted: highlighted,
             help: "Arrows move the highlight; return or a click picks",
             onPick: { pick($0) },
@@ -131,12 +132,12 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
 
     private func row(_ item: Item) -> some View {
         HStack(spacing: Layout.spacing) {
-            Text("#" + String(item.number))
+            Text(item.reference)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
             Text(item.title).lineLimit(1)
             Spacer(minLength: 0)
-            if item.number == selection {
+            if item.id == selection {
                 Image(systemName: "checkmark")
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("Chosen")
@@ -153,7 +154,7 @@ struct NumberedItemPicker<Item: NumberedItem>: View {
     }
 
     private func pick(_ item: Item) {
-        selection = item.number
+        selection = item.id
         isPresented = false
     }
 }

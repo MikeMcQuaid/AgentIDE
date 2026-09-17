@@ -25,9 +25,14 @@ updates.
 
 ## ✨ Features
 
-- Starts a worktree, a branch and an agent from a prompt, a GitHub issue
-  or a pull request, narrating each step until the agent is up; the
-  issue and pull request pickers search by title or number.
+- Starts a worktree, a branch and an agent from a prompt, a GitHub
+  issue, a pull request or a repository security advisory still in
+  triage or draft, narrating each step until the agent is up; the
+  issue and pull request pickers search by title or number, the
+  advisory picker by title or GHSA id. An advisory session gets a
+  bland branch name and is told to keep its commit messages and pull
+  request as bland, naming neither the advisory nor the vulnerability,
+  so nothing public discloses the fix before the advisory is published.
   New branches start from origin's default branch, fetching first when
   the last fetch was over an hour ago, including with `agentide new`.
 - Runs Claude Code or Codex CLI as a sandboxed, non-admin user, with
@@ -40,7 +45,8 @@ updates.
 - Says what a pull request is doing in GitHub's own icons, one glyph per
   fact, watching checks and queued merges until they settle.
 - Fetch and Fetch and Reset on a repository follow its default branch
-  when it has moved on GitHub, switching the checkout to the new one.
+  when it has moved on GitHub, switching the checkout to the new one;
+  a new worktree whose base branch has gone follows it too.
 - Reattaches a pane that shows nothing by itself, once, and offers
   Reattach in the pane when that does not draw either; a right-click
   on the pane or on the session strip above it offers it any time.
@@ -79,6 +85,10 @@ updates.
   resolves conversations and merges or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent
   and file changes still landing at once.
+- Says when the sandbox user's login keychain has stopped opening after
+  a macOS update, with the commands that put it right, rather than
+  letting every agent start behind a password dialog; no keychain is
+  ever deleted for you.
 - Notifies when an agent finishes or needs input, badges the Dock, and
   marks a pane that has held several cores for ten minutes with what is
   running in it.

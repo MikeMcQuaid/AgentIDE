@@ -224,7 +224,16 @@ create_worktree() {
     headline "Fetching repository remotes"
     git -C "${repository_path}" fetch --all --prune >&2
   fi
-  base="$(git -C "${repository_path}" symbolic-ref --quiet --short refs/remotes/origin/HEAD)" || {
+  base="$(git -C "${repository_path}" symbolic-ref --quiet --short refs/remotes/origin/HEAD)" || base=""
+  # A default branch GitHub renamed leaves origin/HEAD naming a branch
+  # the pruning fetch just removed: ask origin where its HEAD points
+  # now, as the app does, rather than fail on a base that is gone.
+  if [ -n "${base}" ] && ! git -C "${repository_path}" rev-parse --verify --quiet "${base}^{commit}" >/dev/null; then
+    headline "Following origin's default branch, which has moved"
+    git -C "${repository_path}" remote set-head origin --auto >&2 || true
+    base="$(git -C "${repository_path}" symbolic-ref --quiet --short refs/remotes/origin/HEAD)" || base=""
+  fi
+  if [ -z "${base}" ]; then
     base=HEAD
     for candidate in main master; do
       if git -C "${repository_path}" show-ref --verify --quiet "refs/heads/${candidate}"; then
@@ -232,7 +241,7 @@ create_worktree() {
         break
       fi
     done
-  }
+  fi
   headline "Creating ${worktree}"
   mkdir -p "$(dirname "${worktree}")"
   git -C "${repository_path}" worktree add --no-track -b "${branch}" "${worktree}" "${base}" >&2

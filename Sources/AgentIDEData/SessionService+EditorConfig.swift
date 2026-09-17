@@ -15,8 +15,13 @@ public extension SessionService {
     /// blocking work that must not sit on the main actor.
     @concurrent
     func editorConfigSettings(worktreePath: String, filePath: String) async -> EditorConfigSettings {
-        let root = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
-        var directory = URL(fileURLWithPath: filePath).standardizedFileURL.deletingLastPathComponent().path
+        // Compared as given: Foundation's standardising drops
+        // `/private` from only the part of a path that exists, so a
+        // worktree under a temporary directory standardised to one
+        // spelling and a file yet to be written in it to another,
+        // and every such file read as outside its worktree.
+        let root = worktreePath
+        var directory = URL(fileURLWithPath: filePath).deletingLastPathComponent().path
         guard directory == root || directory.hasPrefix(root + "/") else {
             return EditorConfigSettings()
         }

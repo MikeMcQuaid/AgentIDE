@@ -1,5 +1,5 @@
 /// An open issue, enough to pick one as a prompt source.
-public struct IssueSummary: NumberedItem, Identifiable, Hashable, Sendable, Codable {
+public struct IssueSummary: ReferencedItem, Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a summary.
@@ -19,5 +19,10 @@ public struct IssueSummary: NumberedItem, Identifiable, Hashable, Sendable, Coda
     /// The stable identity, the issue number.
     public var id: Int {
         number
+    }
+
+    /// The label GitHub refers to it by.
+    public var reference: String {
+        "#" + String(number)
     }
 }

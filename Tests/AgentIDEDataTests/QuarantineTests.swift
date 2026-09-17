@@ -25,8 +25,11 @@ struct QuarantineTests {
 
         let cleared = Quarantine.clear(for: .codexCLI, binaryDirectories: [binaries])
 
-        let real = URL(filePath: cask).resolvingSymlinksInPath().path
-        #expect(cleared == [real + "/codex", real + "/codex-helper"])
+        // Both sides through realpath: Foundation's own resolving
+        // drops `/private` from a temporary root and a directory
+        // listing puts it back, so the spellings differ there.
+        let real = TestSupport.canonical(cask)
+        #expect(cleared.map(TestSupport.canonical) == [real + "/codex", real + "/codex-helper"])
         #expect(unsafe getxattr(cask + "/codex-helper", "com.apple.quarantine", nil, 0, 0, 0) < 0)
         #expect(Quarantine.clear(for: .codexCLI, binaryDirectories: [binaries]).isEmpty)
         #expect(Quarantine.clear(for: .claudeCode, binaryDirectories: [binaries]).isEmpty)
