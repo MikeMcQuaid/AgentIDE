@@ -462,7 +462,17 @@ each waited on the other until the app was restarted.
 6. The session is recorded in the metadata with its resume id once the
    transcript appears. Each start first clears `com.apple.quarantine`
    from the agent's Homebrew install (`Quarantine`) and records the
-   CLI's version under the session name.
+   CLI's version under the session name. The first start of a run also
+   asks the sandbox, the way sandvault's `configure` does, whether the
+   legacy login keychain still opens with the empty password sandvault
+   gave it (`KeychainHealth`): since macOS 26.6 a reboot replaces that
+   with the account's password (webcoyote/sandvault#206), after which
+   `configure`'s credential lookup in it raises a keychain password
+   dialog at every launch and Claude Code's credentials cannot move to
+   sandvault's keychain. The probe only ever unlocks with a password
+   given, which never prompts, and the manual steps (rebuild, remove
+   that one file, sign in again) go once to the Messages pane; nothing
+   deletes a keychain on anyone's behalf.
 
 The same funnel serves three more entrances. `agentide new` (in
 `bin/`, aliased from the bundle for SSH logins) asks its way to a

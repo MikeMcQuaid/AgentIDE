@@ -177,6 +177,11 @@ public extension DashboardModel {
         }
         do {
             screenError = nil
+            // Told once per run, and never acted on: the steps are
+            // the user's to take.
+            if let advice = await service.sandboxKeychainAdvice() {
+                ErrorLog.shared.report(advice)
+            }
             let sessionName = try await work()
             rememberLaunch(sessionName: sessionName)
             // herdr says when the agent settles, so the listing loop

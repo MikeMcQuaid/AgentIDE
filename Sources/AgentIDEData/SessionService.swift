@@ -176,6 +176,7 @@ public struct SessionService: Sendable {
     /// untouched, and a class so every copy of the service shares
     /// one set of in-flight listings.
     let fileListings: FileListings = .init()
+    let keychainCheck: KeychainCheck = .init()
 
     func runner(for agent: AgentKind) -> any AgentRunner {
         runners.first { $0.kind == agent } ?? ClaudeCodeRunner()

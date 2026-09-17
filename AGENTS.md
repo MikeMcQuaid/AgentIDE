@@ -424,6 +424,13 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   (`herdr session stop <name>` as the sandbox user, or `herdr server
   reload-config` for config alone) to take effect: when finishing
   such a change, tell the user exactly what to restart or stop.
+- `security find-generic-password` against a keychain that will not
+  open raises the "security wants to use the login keychain" dialog,
+  and since macOS 26.6 the sandbox user's own login keychain is one
+  after any reboot (webcoyote/sandvault#206). `security
+  unlock-keychain -p ''` fails quietly instead, which is all
+  `KeychainHealth` asks of it. Never delete a keychain for the user;
+  name the steps.
 
 ### Required Before Each Commit
 

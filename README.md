@@ -84,6 +84,10 @@ updates.
   resolves conversations and merges or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent
   and file changes still landing at once.
+- Says when the sandbox user's login keychain has stopped opening after
+  a macOS update, with the commands that put it right, rather than
+  letting every agent start behind a password dialog; no keychain is
+  ever deleted for you.
 - Notifies when an agent finishes or needs input, badges the Dock, and
   marks a pane that has held several cores for ten minutes with what is
   running in it.
