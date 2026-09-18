@@ -1401,7 +1401,8 @@ so that only the last needs credentials:
   them as `.build/version.xcconfig`, which the generated project takes
   as its base configuration, so a build started in Xcode is versioned
   exactly as a scripted one; `script/bootstrap` writes it before
-  generating the project, and the file is rewritten only when its
+  generating the project, and `script/build` and `script/analyze`
+  refresh it before building. The file is rewritten only when its
   contents change, so Xcode does not rebuild the world for it.
 - `script/build` takes the most recent tag behind the current commit
   (`git describe --tags --abbrev=0`), validates it as three
