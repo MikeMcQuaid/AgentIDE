@@ -15,12 +15,6 @@ struct UtilityTabStrip: View {
 
     // MARK: Private
 
-    private static let horizontalPadding: CGFloat = 8
-    private static let badgeSpacing: CGFloat = 4
-    private static let verticalPadding: CGFloat = 3
-    private static let selectedOpacity = 0.25
-    private static let hoverOpacity = 0.08
-
     @AppStorage(UtilityTabTarget.key)
     private var utilityTab = UtilityTab.review.rawValue
 
@@ -34,28 +28,20 @@ struct UtilityTabStrip: View {
         Button {
             utilityTab = tab.rawValue
         } label: {
-            HStack(spacing: Self.badgeSpacing) {
+            HStack(spacing: TabCapsule.contentSpacing) {
                 Text(tab.title)
                     .font(tabStyle.font)
                 if tab == .errors, errorLog.errorCount > 0 {
                     Text(String(errorLog.errorCount))
                         .font(tabStyle.badge)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, Self.badgeSpacing)
+                        .padding(.horizontal, TabCapsule.contentSpacing)
                         .background(Capsule().fill(.red))
                 }
             }
-            .padding(.horizontal, Self.horizontalPadding)
-            .padding(.vertical, Self.verticalPadding)
-            .background(
-                Capsule().fill(
-                    tab.rawValue == utilityTab
-                        ? Color.accentColor.opacity(Self.selectedOpacity)
-                        : hovered == tab.rawValue
-                        ? Color.primary.opacity(Self.hoverOpacity)
-                        : Color.clear,
-                ),
-            )
+            .padding(.horizontal, TabCapsule.horizontalPadding)
+            .padding(.vertical, TabCapsule.verticalPadding)
+            .tabCapsule(isSelected: tab.rawValue == utilityTab, isHovered: hovered == tab.rawValue)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

@@ -35,9 +35,10 @@ extension RootView {
         )
     }
 
-    /// The tab bubbles and the pane toggle, with the shell's close
-    /// button beside them while the shell tab shows a running shell.
-    func utilityHeader(for item: WorktreeItem) -> some View {
+    /// The tab bubbles and the pane toggle. Closing a shell belongs
+    /// to its own tab in the strip below, so this row says nothing
+    /// about them.
+    var utilityHeader: some View {
         HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
             // beside them can never be squeezed out.
@@ -47,18 +48,6 @@ extension RootView {
                 }
             }
             Spacer(minLength: 0)
-            if utilityTab == .shell, hasRunningShell(at: item.worktree.path) {
-                Button {
-                    closeShell(at: item.worktree.path)
-                } label: {
-                    Image(systemName: "xmark")
-                        .accessibilityLabel("Close shell")
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .fixedSize()
-                .hoverHelp("End this shell and its process immediately")
-            }
             utilityToggleButton
                 .fixedSize()
         }

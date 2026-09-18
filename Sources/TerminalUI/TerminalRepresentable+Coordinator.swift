@@ -167,9 +167,13 @@ extension TerminalRepresentable {
         /// redraw its prompt, which is what a terminal app's clear
         /// does. Each raise of the counter clears once; the first
         /// observed value only records the baseline, so a stale count
-        /// from a previous launch never clears on appearance.
-        func clearIfRequested(_ request: Int, in view: PaneTerminalView) {
-            guard let seen = seenClearRequest else {
+        /// from a previous launch never clears on appearance. A pane
+        /// that was not the visible one records the count without
+        /// acting on it: the shells behind this one are mounted too,
+        /// and a clear aimed at the pane on screen must not wipe the
+        /// next shell or worktree the moment it is shown.
+        func clearIfRequested(_ request: Int, in view: PaneTerminalView, acting: Bool) {
+            guard let seen = seenClearRequest, acting else {
                 seenClearRequest = request
                 return
             }
