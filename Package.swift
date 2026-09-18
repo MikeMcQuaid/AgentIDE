@@ -31,7 +31,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.25.1"),
         // 0.25.0 checks for its scanner relative to the consuming package.
-        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", exact: "0.24.8"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-c", exact: "0.24.2"),
@@ -42,7 +42,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-php", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-html", exact: "0.23.2"),
         // Like Python, 0.25.0 checks the consuming package for its scanner.
-        .package(url: "https://github.com/tree-sitter/tree-sitter-css", exact: "0.23.2"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-css", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-regex", exact: "0.24.3"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-embedded-template", exact: "0.25.0"),
         // The latest 0.7.3 grammar with the generated parser sources SwiftPM needs.
