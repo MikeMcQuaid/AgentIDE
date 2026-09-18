@@ -30,8 +30,17 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.25.1"),
-        // 0.25.0 checks for its scanner relative to the consuming package.
-        .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
+        // Pin 0.23.6 by revision so Dependabot cannot repeat the broken update.
+        // Python and CSS 0.25.0 probe src/scanner.c relative to this package,
+        // omit their scanners and fail to link. A root sentinel also makes
+        // Go and embedded-template include scanner files they do not have.
+        // https://github.com/tree-sitter/tree-sitter-python/pull/342 was
+        // closed in favour of regenerating bindings after tree-sitter 0.27.
+        // Revisit when a release explicitly includes the scanner.
+        .package(
+            url: "https://github.com/tree-sitter/tree-sitter-python",
+            revision: "bffb65a8cfe4e46290331dfef0dbf0ef3679de11",
+        ),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", exact: "0.24.8"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-typescript", exact: "0.23.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-c", exact: "0.24.2"),
@@ -41,8 +50,14 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-java", exact: "0.23.5"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-php", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-html", exact: "0.23.2"),
-        // Like Python, 0.25.0 checks the consuming package for its scanner.
-        .package(url: "https://github.com/tree-sitter/tree-sitter-css", exact: "0.23.2"),
+        // Pin 0.23.2 by revision for the same scanner lookup bug as Python.
+        // https://github.com/tree-sitter/tree-sitter-css/pull/99 explicitly
+        // lists the scanner but remains unmerged. Return to a release pin
+        // once a version ships with the corrected manifest.
+        .package(
+            url: "https://github.com/tree-sitter/tree-sitter-css",
+            revision: "c0d581e32d183a536731ed6c3a72758b27e20411",
+        ),
         .package(url: "https://github.com/tree-sitter/tree-sitter-regex", exact: "0.24.3"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-embedded-template", exact: "0.25.0"),
         // The latest 0.7.3 grammar with the generated parser sources SwiftPM needs.
