@@ -104,20 +104,23 @@ struct EditorShimIntegrationTests {
         var edits = service.pendingEdits().makeAsyncIterator()
         #expect(await edits.next()?.isEmpty == true)
 
-        // The watcher idles between slow safety ticks; a request
-        // must reach it through the directory event, inside the
-        // eight-second tick it would otherwise wait out. The bound
-        // is generous because a loaded CI runner can take seconds
-        // just spawning the shim.
-        let shim = shim(root: root)
-        let process = try run(shim, arguments: ["--wait", root + "/file.txt"], in: root)
+        // Time the watcher from the request landing, not from
+        // launching the shim: a loaded runner can delay that launch
+        // without delaying the directory event. Other tests exercise
+        // the shim; this one checks the event against its eight-second
+        // safety tick.
+        let request = workspace.editsDirectory + "/watch.request"
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "path": root + "/file.txt",
+            "workingDirectory": root,
+            "processIdentifier": Int(getpid()),
+        ])
+        try payload.write(to: URL(fileURLWithPath: request), options: .atomic)
         let started = ContinuousClock.now
         let published = await edits.next()
         #expect(published?.count == 1)
+        #expect(published?.first?.path == root + "/file.txt")
         #expect(ContinuousClock.now - started < .seconds(Self.eventDeadlineSeconds))
-
-        process.terminate()
-        try await exit(of: process)
     }
 
     @Test
@@ -259,7 +262,7 @@ struct EditorShimIntegrationTests {
     private static let settleMilliseconds = 600
 
     /// How long a directory event may take to surface a request:
-    /// well under the idle sweep it must beat, well over what a
-    /// slow CI runner needs to spawn the shim.
+    /// well under the idle sweep it must beat, with enough time for
+    /// the watcher to run on a loaded CI runner.
     private static let eventDeadlineSeconds = 6.0
 }
