@@ -217,8 +217,8 @@ struct TerminalRepresentable: NSViewRepresentable {
             context.coordinator.seenReattachRequest = reattachRequest
             context.coordinator.reattach(in: view)
         }
-        if case .shell = transport, isActive {
-            context.coordinator.clearIfRequested(clearRequest, in: view)
+        if case .shell = transport {
+            context.coordinator.clearIfRequested(clearRequest, in: view, acting: isActive)
         }
     }
 

@@ -56,10 +56,15 @@ updates.
   blinks or its screen repaints. Option-drag copies a rectangle;
   Cmd-C and the Copy menu keep that same block while it is selected.
   A new ordinary selection or Select All replaces the block completely.
-- Keeps running shells alive when switching worktrees or tabs, hiding
-  the utility pane or narrowing the window. Shells end when closed,
-  when their worktree is deleted or when the app quits. Option-arrow
-  keys reach agents as shortcuts and retain shell word navigation.
+- Runs as many host shells in a worktree as the work needs, each a tab
+  of its own: a dev server holding one while git commands and API calls
+  use the next. The plus in the strip or Shift-Cmd-T opens another, and
+  each tab closes its own.
+- Keeps running shells alive when switching shells, worktrees or tabs,
+  hiding the utility pane or narrowing the window. Shells end when
+  closed, when their worktree is deleted or when the app quits.
+  Option-arrow keys reach agents as shortcuts and retain shell word
+  navigation.
 - Asks Copilot to review a pull request, or to review it again after
   a push, from the Copilot icon in the conversation's header; it dims
   while a request is still waiting on it.
@@ -155,11 +160,12 @@ Settings (Cmd-,) controls:
 - **Fonts**: fonts and sizes for every piece of text in the app, so it
   can be made as large or as legible as you need: interface text
   (labels, headings, captions, messages and conversations), code and
-  terminals, repository names, worktree and branch names and utility
-  tabs. The first font entry names the default family. Changes preview
-  immediately in the main window and in Settings itself, including open
-  terminals and editors. Headings keep their emphasis as fonts change;
-  each group can return to its original defaults.
+  terminals, repository names, worktree and branch names, and the
+  utility and shell tabs. The first font entry names the default
+  family. Changes preview immediately in the main window and in
+  Settings itself, including open terminals and editors. Headings
+  keep their emphasis as fonts change; each group can return to its
+  original defaults.
 - **Editor**: the external editor Cmd-click runs.
 - **Advanced**: where repositories and worktrees live, how often the
   system is re-read, idle sleep and the performance log.
