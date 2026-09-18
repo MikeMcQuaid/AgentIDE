@@ -15,6 +15,7 @@ struct CommandLineWorktreeTests {
         try await TestSupport.makeRepository(at: origin)
         try await TestSupport.runGit(["branch", "--move", "main", "trunk"], in: origin)
         try await TestSupport.runGit(["clone", origin, repository], in: root)
+        try await TestSupport.runGit(["remote", "add", "unused-fork", root + "/missing"], in: repository)
         try await TestSupport.runGit(["fetch", "origin"], in: repository)
         let git = GitClient(runner: FoundationProcessRunner())
         let cached = await git.commitHash(of: "origin/HEAD", worktreePath: repository)

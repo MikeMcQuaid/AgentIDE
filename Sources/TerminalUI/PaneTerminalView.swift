@@ -38,13 +38,9 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// drop is; nil leaves every paste to the terminal.
     var onPasteFiles: (([URL]) -> Bool)?
 
-    /// Whether a paste is wrapped in bracketed-paste markers here
-    /// regardless of what the local terminal believes: a herdr pane's
-    /// frames carry the rendered screen and never the modes the agent
-    /// set, so the terminal never learns bracketed paste is on and a
-    /// paste went as keystrokes, every newline submitting what came
-    /// before it. Agents and shells alike accept the markers.
-    var bracketsPastes = false
+    /// herdr frames omit the agent's input modes, so pastes need
+    /// brackets and modified keys must bypass the shell mapping.
+    var isHerdrBacked = false
 
     /// Reads the pane's whole recent output, for agent panes whose
     /// local buffer holds only the rendered screen: a selection can
@@ -142,7 +138,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return
         }
 
-        if bracketsPastes, getTerminal().bracketedPasteMode == false,
+        if isHerdrBacked, getTerminal().bracketedPasteMode == false,
            let text = NSPasteboard.general.string(forType: .string)
         {
             // Three sends, gathered into one write by the coordinator,
@@ -196,14 +192,15 @@ final class PaneTerminalView: LocalProcessTerminalView {
     }
 
     /// Sends Option and an arrow as terminals always have, for a
-    /// program that never asked for the kitty keyboard protocol:
+    /// local shell that never asked for the kitty keyboard protocol:
     /// SwiftTerm now encodes them the way that protocol does whether
     /// or not anything turned it on, and a shell typed the tail of
     /// the sequence into the line rather than moving a word. Fed by
     /// the coordinator's event monitor, since `keyDown` is not
     /// overridable either; nil means the pane consumed it.
     func routeKey(_ event: NSEvent) -> NSEvent? {
-        guard unsafe window?.firstResponder === self,
+        guard isHerdrBacked == false,
+              unsafe window?.firstResponder === self,
               getTerminal().keyboardEnhancementFlags.isEmpty,
               event.modifierFlags.isDisjoint(with: [.command, .control]),
               event.modifierFlags.contains(.option),
