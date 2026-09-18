@@ -6,6 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 [[ -d AgentIDE.xcodeproj ]] || script/bootstrap
+script/version --xcconfig .build/version.xcconfig
 
 log=".build/analyze-build.log"
 mkdir -p .build
