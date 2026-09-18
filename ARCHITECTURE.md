@@ -1319,7 +1319,7 @@ organisation.
 | SwiftTerm | terminal emulator views | ships a build plugin; scripts pass `-skipPackagePluginValidation` |
 | swift-markdown | markdown parsing | swiftlang exception |
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
-| tree-sitter-* grammars | highlighting | pinned to ABI 14 releases the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python stays on 0.23.6 and CSS on 0.23.2, whose manifests include their scanners without a root sentinel that breaks Go and embedded-template |
+| tree-sitter-* grammars | highlighting | pinned to ABI 14 releases the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python 0.23.6 and CSS 0.23.2 are pinned by revision so Dependabot cannot reintroduce 0.25.0's broken scanner lookup; their manifests include their scanners without a root sentinel that breaks Go and embedded-template |
 
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
