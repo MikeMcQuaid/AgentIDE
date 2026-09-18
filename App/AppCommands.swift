@@ -24,6 +24,11 @@ struct AppCommands: Commands {
             Button("Manage Sessions…") { dashboard.showsSessionManager = true }
         }
         CommandMenu("Worktree") {
+            Button("New Shell") { newShell() }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+                // A shell runs in a worktree; with none selected
+                // there is nowhere to put one.
+                .disabled(dashboard.selection == nil)
             Button("Clear Shell") { clearShellRequest += 1 }
                 .keyboardShortcut("k", modifiers: .command)
             Button("Push") { bump("pushRequest") }
@@ -87,6 +92,11 @@ struct AppCommands: Commands {
     @AppStorage("clearShellRequest")
     private var clearShellRequest = 0
 
+    /// Shift-Cmd-T's counter: the window opens the shell, since only
+    /// it knows which worktree is selected.
+    @AppStorage("newShellRequest")
+    private var newShellRequest = 0
+
     /// Increments a storage-bus counter; the pane owning the
     /// action observes it and runs.
     private func bump(_ key: String) {
@@ -118,6 +128,14 @@ struct AppCommands: Commands {
         default:
             bump("reviewFindRequest")
         }
+    }
+
+    /// Opens another shell in the selected worktree, showing the
+    /// tab it lands in: a shell asked for behind a hidden pane would
+    /// run where nobody could see it.
+    private func newShell() {
+        show(.shell)
+        newShellRequest += 1
     }
 
     private func show(_ tab: UtilityTab) {
