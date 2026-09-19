@@ -58,8 +58,11 @@ updates.
   A new ordinary selection or Select All replaces the block completely.
 - Runs as many host shells in a worktree as the work needs, each a tab
   of its own: a dev server holding one while git commands and API calls
-  use the next. The plus in the strip or Shift-Cmd-T opens another, and
-  each tab closes its own.
+  use the next. The plus in the Shell bubble or Shift-Cmd-T opens
+  another; the following close button ends all shells in that worktree.
+  A single shell uses no extra tab row. Multiple shells share a
+  full-width tab bar underneath, each tab closing its own shell process
+  immediately.
 - Keeps running shells alive when switching shells, worktrees or tabs,
   hiding the utility pane or narrowing the window. Shells end when
   closed, when their worktree is deleted or when the app quits.

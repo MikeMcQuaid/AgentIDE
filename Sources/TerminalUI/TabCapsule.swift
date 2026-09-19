@@ -2,11 +2,7 @@ import SwiftUI
 
 // MARK: - TabCapsule
 
-/// The one tab capsule in the window: the utility pane's tabs and
-/// the shell tabs beneath them are the same control, so they pad and
-/// fill the same. Each strip lays its own contents out inside these
-/// measurements, since a tab carrying a close button splits its
-/// padding between two hit areas.
+/// Shared spacing and colours for utility bubbles and shell tabs.
 public enum TabCapsule {
     // MARK: Public
 

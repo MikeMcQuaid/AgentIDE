@@ -78,8 +78,8 @@ extension RootView {
     /// changes, so each worktree keeps its own pane.
     private func utilityPane(for item: WorktreeItem?) -> some View {
         VStack(spacing: 0) {
-            if item != nil {
-                utilityHeader
+            if let item {
+                utilityHeader(for: item)
                 Divider()
             }
             utilityContent(for: item)

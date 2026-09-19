@@ -257,9 +257,12 @@ control clients. A worktree runs as many as the work needs, since a
 dev server holds a shell for as long as it runs and the git commands
 and API calls beside it need a prompt of their own. `ShellTabs`
 (Domain) owns which are open where and which one each worktree is
-showing, and the strip under the utility tabs lists that worktree's,
-each capsule closing its own shell and the plus, or Shift-Cmd-T,
-opening another. Rules the strip follows:
+showing. The plus in the Shell utility bubble, or Shift-Cmd-T, opens
+another. Its following close button ends all shells in the selected
+worktree. With one shell there is no extra row. With multiple shells,
+a full-width bar below the utility tabs divides the width between
+them, each tab closing its own shell, and scrolls when their labels
+no longer fit. Rules the bar follows:
 
 - **A shell keeps its number for life**, the lowest its worktree was
   not already using, so closing one never renumbers the tab under the
@@ -267,10 +270,16 @@ opening another. Rules the strip follows:
 - **Closing the shown shell falls to the tab after it**, the one
   before only when it was the last, so closing along a strip never
   jumps back to its start.
-- **The row is there whether or not the worktree has a shell.** A row
-  that came and went would resize every other worktree's mounted
-  shells, and a resized shell reprints its prompt, which reads as
-  stray newlines.
+- **Closing a tab explicitly terminates its local process** when
+  SwiftUI dismantles the pane, even if the terminal view is still
+  retained. It sends SIGHUP before releasing the PTY: interactive zsh
+  ignores SwiftTerm's SIGTERM, and releasing the view alone only
+  closes its I/O.
+- **Only multiple shells reserve room for the tab bar.** Each
+  worktree's terminals keep their own top inset, so switching to a
+  worktree with a different shell count never resizes hidden shells.
+  Adding the second shell or closing back to one resizes only that
+  worktree's terminals.
 
 Every running shell and browser page stays mounted whichever tab,
 shell or worktree shows, even while the selection is empty.
@@ -667,7 +676,7 @@ page resumes any past conversation into a fresh worktree.
 - **Fonts settings** makes every font in the app changeable, for
   accessibility: interface text, code and terminal typography,
   repository names, worktree and branch names and the tabs, utility
-  and shell alike, which wear one capsule (`TabCapsule`). Each
+  and shell alike, with shared spacing and colours (`TabCapsule`). Each
   has a font picker, a size stepper and a reset to the existing
   default. The first picker entry names the resolved default family;
   system choices still follow macOS's defaults. `InterfaceStyle`,
@@ -1389,7 +1398,9 @@ Integration tests run the real adapters against real git repositories
 and a real herdr server on a private config home, because the bugs that
 reach manual testing live in the seams; test runners strip `HERDR_*`
 from the environment so a teardown can never reach the production
-server. CI (`.github/workflows/tests.yml`) runs style on
+server. The editor-spool event test delays safety sweeps beyond its
+deadline, so scheduling delays do not count as missed directory events.
+CI (`.github/workflows/tests.yml`) runs style on
 every push and pull request, and build-and-test and analyze in parallel
 on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
 The test job also runs `script/test --sanitize address`, failing on

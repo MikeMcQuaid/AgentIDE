@@ -5,7 +5,7 @@
 /// One worktree needs more than one: a dev server holds its shell
 /// for as long as it runs, and the git and API calls that go with it
 /// need a prompt of their own. Each shell is a pane the window
-/// mounts and a capsule in the shell tab's strip, and each lives
+/// mounts and a tab when there are several, and each lives
 /// until it is closed, its worktree is destroyed or the app quits.
 public struct ShellTabs: Sendable {
     // MARK: Lifecycle
@@ -31,7 +31,7 @@ public struct ShellTabs: Sendable {
         /// tab under the pointer between one click and the next.
         public let number: Int
 
-        /// What its capsule says.
+        /// What its tab says.
         public var title: String {
             "Shell " + String(number)
         }

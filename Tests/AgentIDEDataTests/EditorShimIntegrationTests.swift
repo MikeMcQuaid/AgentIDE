@@ -80,7 +80,7 @@ struct EditorShimIntegrationTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: edits).isEmpty)
     }
 
-    @Test
+    @Test(.timeLimit(.minutes(1)))
     func `a new request wakes the watcher through the directory event`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-watch")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -101,14 +101,10 @@ struct EditorShimIntegrationTests {
             runners: [],
         )
 
-        var edits = service.pendingEdits().makeAsyncIterator()
+        // No safety sweep can satisfy this test before its deadline.
+        var edits = service.pendingEdits(sweepInterval: .seconds(120)).makeAsyncIterator()
         #expect(await edits.next()?.isEmpty == true)
 
-        // Time the watcher from the request landing, not from
-        // launching the shim: a loaded runner can delay that launch
-        // without delaying the directory event. Other tests exercise
-        // the shim; this one checks the event against its eight-second
-        // safety tick.
         let request = workspace.editsDirectory + "/watch.request"
         let payload = try JSONSerialization.data(withJSONObject: [
             "path": root + "/file.txt",
@@ -116,11 +112,9 @@ struct EditorShimIntegrationTests {
             "processIdentifier": Int(getpid()),
         ])
         try payload.write(to: URL(fileURLWithPath: request), options: .atomic)
-        let started = ContinuousClock.now
         let published = await edits.next()
         #expect(published?.count == 1)
         #expect(published?.first?.path == root + "/file.txt")
-        #expect(ContinuousClock.now - started < .seconds(Self.eventDeadlineSeconds))
     }
 
     @Test
@@ -260,9 +254,4 @@ struct EditorShimIntegrationTests {
     // MARK: Private
 
     private static let settleMilliseconds = 600
-
-    /// How long a directory event may take to surface a request:
-    /// well under the idle sweep it must beat, with enough time for
-    /// the watcher to run on a loaded CI runner.
-    private static let eventDeadlineSeconds = 6.0
 }

@@ -49,6 +49,11 @@ public extension SessionService {
     /// faster one only while requests wait, whose commands can die
     /// without writing anything.
     func pendingEdits() -> AsyncStream<[ExternalEdit]> {
+        pendingEdits(sweepInterval: nil)
+    }
+
+    /// Lets tests keep safety sweeps beyond their deadline.
+    internal func pendingEdits(sweepInterval: Duration?) -> AsyncStream<[ExternalEdit]> {
         let spool = ExternalEditSpool(directory: paths.editsDirectory)
         let directory = paths.editsDirectory
         return AsyncStream { continuation in
@@ -73,7 +78,7 @@ public extension SessionService {
                         } else {
                             Self.activeSweepSeconds
                         }
-                    let timeout = Duration.seconds(timeoutSeconds)
+                    let timeout = sweepInterval ?? .seconds(timeoutSeconds)
                     if let wake {
                         await wake.wait(timeout: timeout)
                     } else {

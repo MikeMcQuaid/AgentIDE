@@ -8,8 +8,7 @@ import TerminalUI
 /// worktree is showing, and the layers that keep every one of them
 /// running behind whatever is on screen.
 extension RootView {
-    /// Whether a worktree has a shell running at all, which is what
-    /// decides between its strip and the button that starts one.
+    /// Whether a worktree has a shell, or needs the start button.
     func hasRunningShell(at path: String) -> Bool {
         shellTabs.shells(in: path).isEmpty == false
     }
@@ -42,55 +41,42 @@ extension RootView {
     func shellLayers(for item: WorktreeItem?) -> some View {
         let path = item?.worktree.path
         let shown = path.flatMap { shellTabs.selected(in: $0) }
-        return VStack(spacing: 0) {
-            shellStrip(for: path)
-            ZStack {
-                ForEach(shellTabs.all) { shell in
-                    let isShown = shell.id == shown
-                    // The closure stays a non-final argument: the
-                    // formatter rewrites a trailing one after a
-                    // multiline call.
-                    shellTerminal(
-                        at: shell.worktreePath,
-                        onExit: { closeShell(shell.id) },
-                        isActive: isShown && showsUtility && utilityTab == .shell && isCovered == false,
-                    )
+        return ZStack {
+            ForEach(shellTabs.all) { shell in
+                let isShown = shell.id == shown
+                shellTerminal(
+                    at: shell.worktreePath,
+                    onExit: { closeShell(shell.id) },
+                    isActive: isShown && showsUtility && utilityTab == .shell && isCovered == false,
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Each worktree reserves its own row, so switching
+                // worktrees never resizes the hidden terminals.
+                .padding(.top, shellTabs.shells(in: shell.worktreePath).count > 1 ? Self.toggleRowHeight : 0)
+                .opacity(isShown ? 1 : 0)
+                .allowsHitTesting(isShown)
+            }
+            if let path, hasRunningShell(at: path) == false {
+                StartShellButton { startShell(at: path) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(isShown ? 1 : 0)
-                    .allowsHitTesting(isShown)
-                }
-                if let path, hasRunningShell(at: path) == false {
-                    StartShellButton { startShell(at: path) }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
             }
         }
+        .overlay(alignment: .top) { shellStrip(for: path) }
     }
 
-    /// The row the shell tabs sit in, which is there whether or not
-    /// this worktree has any: a row that came and went would resize
-    /// every other worktree's shells, and a shell resized reprints
-    /// its prompt, which reads as stray newlines.
+    /// A full-width tab bar only when there is a choice of shells.
     @ViewBuilder
     func shellStrip(for path: String?) -> some View {
         let shells = path.map { shellTabs.shells(in: $0) } ?? []
-        HStack(spacing: 0) {
-            if let path, shells.isEmpty == false {
-                ShellTabStrip(
-                    shells: shells,
-                    selected: shellTabs.selected(in: path),
-                    onSelect: { selectShell($0) },
-                    onClose: { closeShell($0) },
-                    // The closure stays a non-final argument: the
-                    // formatter rewrites a trailing one after a
-                    // multiline call.
-                    onOpen: { startShell(at: path) },
-                )
-            }
-            Spacer(minLength: 0)
+        if let path, shells.count > 1 {
+            ShellTabStrip(
+                shells: shells,
+                selected: shellTabs.selected(in: path),
+                onSelect: { selectShell($0) },
+                onClose: { closeShell($0) },
+            )
+            .frame(height: Self.toggleRowHeight)
         }
-        .padding(.horizontal, Self.stripSpacing)
-        .frame(height: Self.toggleRowHeight)
     }
 }
 

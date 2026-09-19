@@ -35,16 +35,22 @@ extension RootView {
         )
     }
 
-    /// The tab bubbles and the pane toggle. Closing a shell belongs
-    /// to its own tab in the strip below, so this row says nothing
-    /// about them.
-    var utilityHeader: some View {
-        HStack(spacing: Self.stripSpacing) {
+    /// The utility tabs, shell controls and pane toggle.
+    func utilityHeader(for item: WorktreeItem) -> some View {
+        let shells = shellTabs.shells(in: item.worktree.path)
+        return HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
             // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip()
+                    UtilityTabStrip(
+                        onOpenShell: { startShell(at: item.worktree.path) },
+                        onCloseShells: shells.isEmpty ? nil : {
+                            for shell in shells {
+                                closeShell(shell.id)
+                            }
+                        },
+                    )
                 }
             }
             Spacer(minLength: 0)
