@@ -170,7 +170,7 @@ struct TerminalRepresentable: NSViewRepresentable {
             view.terminalDelegate = context.coordinator
             view.hideScroller()
             view.dropLocalScrollback()
-            view.bracketsPastes = true
+            view.isHerdrBacked = true
             view.onReattach = { [weak coordinator = context.coordinator, weak view] in
                 if let view {
                     coordinator?.reattach(in: view)

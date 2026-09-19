@@ -220,9 +220,9 @@ create_worktree() {
   if [ -s "${fetch_head}" ]; then
     fetched_at="$(stat -f %m "${fetch_head}")"
   fi
-  if [ "$(($(date +%s) - fetched_at))" -ge 3600 ]; then
-    headline "Fetching repository remotes"
-    git -C "${repository_path}" fetch --all --prune >&2
+  if [ "$(($(date +%s) - fetched_at))" -ge 3600 ] && git -C "${repository_path}" remote | grep -qx origin; then
+    headline "Fetching origin"
+    git -C "${repository_path}" fetch --prune origin >&2
   fi
   base="$(git -C "${repository_path}" symbolic-ref --quiet --short refs/remotes/origin/HEAD)" || base=""
   # A default branch GitHub renamed leaves origin/HEAD naming a branch

@@ -379,7 +379,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   bracketed paste is on and sent a paste as keystrokes, every
   newline submitting the lines before it. `PaneTerminalView`
   wraps a paste in the bracketed-paste markers itself on those
-  panes (`bracketsPastes`); a local shell pane sees the modes and
+  panes (`isHerdrBacked`); a local shell pane sees the modes and
   needs nothing. herdr 0.8.2 also takes a short PTY write as a whole
   one, so a reader stalled while a paste larger than the input queue
   (1,022 bytes) is in flight loses about a kibibyte from the middle;
@@ -400,9 +400,11 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   protocol on, so a shell read as far as `ESC [ 1`, found nothing
   bound and typed `;3D` into the line instead of moving a word. Its
   `keyDown` is not overridable, so `PaneTerminalView.routeKey` takes
-  those four keys off the coordinator's event monitor and sends what
-  terminals have always sent (`TerminalKeys.optionArrow`), leaving a
-  pane whose program did turn the protocol on alone.
+  those four keys off the coordinator's event monitor in local shell
+  panes and sends the traditional keys (`TerminalKeys.optionArrow`).
+  herdr-backed panes keep SwiftTerm's encoding: the frames omit the
+  agent's keyboard modes, so an empty local mode cannot identify a
+  shell. Applying the shell mapping there broke Option-Up in Codex.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with

@@ -202,7 +202,7 @@ Rules that follow from that shape:
   (bracketed paste, kitty keyboard) never do. So the local terminal
   never learns bracketed paste is on, and a paste sent as keystrokes
   submits at every newline. A herdr-backed pane wraps a paste in the
-  bracketed-paste markers itself (`PaneTerminalView.bracketsPastes`)
+  bracketed-paste markers itself (`PaneTerminalView.isHerdrBacked`)
   and sends it as one write; a local shell pane owns its PTY, sees the
   modes and needs nothing. A paste goes to herdr whole
   (`HerdrLargeInputIntegrationTests` pushes 180 KiB through one
@@ -215,6 +215,11 @@ Rules that follow from that shape:
   waits or retries). Agents drain fast enough that this has not been
   seen in use; pacing the body inside one pair of markers would be the
   in-app mitigation if it is.
+- **Option-arrows keep their modifiers in agent panes.** herdr's
+  frames omit the keyboard modes too, so an empty local mode does
+  not mean the agent wants shell key bindings. Agent panes leave
+  those keys to SwiftTerm's modified-arrow encoding; only local
+  shells use `TerminalKeys` for traditional word navigation.
 - **Scrollback lives in herdr.** The pane keeps none
   (`changeScrollback(nil)`), since a scroll answers with a repaint and a
   local history filled with replaced screens showed output three times
@@ -487,9 +492,10 @@ session in Homebrew's idiom, computes branch, label and paths by the
 rules above rather than reading anything the app owns. It uses the
 same default branch and hourly fetch limit, reading the modification
 time of a non-empty Git `FETCH_HEAD` so fetches made by the app or a
-terminal count too. A failed fetch stops creation. It runs itself as
-the sandbox user when started as the host user, and focuses the new
-workspace instead of attaching when already inside herdr
+terminal count too. It fetches only origin, when configured; a failed
+fetch stops creation. It runs itself as the sandbox user when started
+as the host user, and focuses the new workspace instead of attaching
+when already inside herdr
 (`HERDR_PANE_ID`), which refuses a nested client. App Intents
 (`App/AgentIDEShortcuts.swift`) resolve entities from the dashboard's
 in-memory groups and reach the app through `AppDependencies.shared`,
@@ -517,6 +523,11 @@ page resumes any past conversation into a fresh worktree.
   no local one, before any reset; the note says so. The poll's own
   fetches never pay that round trip, and a new worktree's pays it
   only when the base it read has gone.
+- **Fetches cover the remotes in use.** `GitClient` fetches origin
+  and the upstream and push remotes of checked-out branches, read
+  together through `for-each-ref`. Unused fork remotes are left
+  configured but skipped: a deleted fork must not block unrelated
+  work. A failure from a remote still in use remains an error.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
   and a context menu marks it unread again. The selected worktree is

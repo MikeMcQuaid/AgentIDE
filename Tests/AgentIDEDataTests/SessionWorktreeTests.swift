@@ -29,6 +29,7 @@ struct SessionWorktreeTests {
         try await TestSupport.makeRepository(at: origin)
         try await TestSupport.runGit(["branch", "--move", "main", "trunk"], in: origin)
         try await TestSupport.runGit(["remote", "add", "origin", origin], in: repository.path)
+        try await TestSupport.runGit(["remote", "add", "unused-fork", world.root + "/missing"], in: repository.path)
         try await TestSupport.runGit(["fetch", "origin"], in: repository.path)
         try await TestSupport.runGit(["remote", "set-head", "origin", "--auto"], in: repository.path)
         let cached = await world.service.git.commitHash(of: "origin/HEAD", worktreePath: repository.path)

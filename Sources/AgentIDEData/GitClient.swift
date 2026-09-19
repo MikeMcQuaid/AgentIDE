@@ -211,10 +211,33 @@ public struct GitClient: Sendable {
         return Int(result?.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
     }
 
-    /// Fetches and prunes every remote.
+    /// Fetches and prunes origin and the remotes of checked-out branches.
     public func fetch(repositoryPath: String) async throws {
+        guard isOnline() else {
+            throw OfflineError(doing: "git fetch")
+        }
+
         await RepositoryFacts.shared.forget(repositoryPath)
-        try await git(["fetch", "--all", "--prune"], in: repositoryPath)
+        let active = try await git(
+            [
+                "for-each-ref",
+                "--format=%(if)%(worktreepath)%(then)%(upstream:remotename)%0a%(push:remotename)%(end)",
+                "refs/heads",
+            ],
+            in: repositoryPath,
+        )
+        .standardOutput
+        .split(separator: "\n")
+        let remotes = try await git(["remote"], in: repositoryPath)
+            .standardOutput
+            .split(separator: "\n")
+            .filter { $0 == "origin" || active.contains($0) }
+            .map(String.init)
+        guard remotes.isEmpty == false else {
+            return
+        }
+
+        try await git(["fetch", "--prune", "--multiple"] + remotes, in: repositoryPath)
     }
 
     /// Hard-resets the checkout to a ref, for main checkouts that
