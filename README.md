@@ -78,10 +78,13 @@ updates.
   with Cmd-/, moves and duplicates lines, guides columns 80 and 118 and
   bars every uncommitted line; an uncommitted file can also be put back
   to what HEAD has, or deleted if it was never committed, after a
-  prompt.
+  prompt. Cmd-F jumps to the first match after a brief pause in typing,
+  keeping focus in the find field.
 - Commits the files you tick rather than the worktree, or adds them to
   the previous commit, with the message drafted by the on-device Apple
-  model.
+  model. Last Commit also starts with every file ticked; untick files
+  and Amend to leave them uncommitted, keeping at least one file in
+  the commit.
 - Pushes, rebases and opens pull requests as drafts or ready for review,
   templates filled in, labels attached, forks used where the repository
   is not yours, pushes following a contributor's fork back to it, and
@@ -103,6 +106,8 @@ updates.
 - Notifies when an agent finishes or needs input, badges the Dock, and
   marks a pane that has held several cores for ten minutes with what is
   running in it.
+- Counts unread errors in the Messages tab's red badge. Viewing Messages
+  marks them as read, keeping the log available without needing Clear.
 - Deletes a worktree and its branch once its pull request merges, and
   keeps every conversation browsable and resumable after the worktree is
   gone.

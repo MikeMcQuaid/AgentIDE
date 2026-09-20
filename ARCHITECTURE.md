@@ -739,14 +739,23 @@ page resumes any past conversation into a fresh worktree.
    em dashes are wrong in code and commit messages.
 6. Cmd-F goes to whatever holds focus; `NSTextView` and terminals get
    the system find bar, and the diff opens its own bar through the
-   storage bus. History's hunks each draw as one selectable text
+   storage bus. The editor's native find bar selects and reveals the
+   first match after typing settles for 150 ms, keeping the query
+   focused. A changed or cleared query cancels the pending jump, as
+   does closing the bar or navigating to another match.
+   History's hunks each draw as one selectable text
    (`DiffHunkTextView`): a drag crosses lines, a copy strips the
    embedded gutter so it pastes as code, gutter clicks still toggle
    rejection, and the view declines the find action so Cmd-F falls
    through to the review bar, in every scope, uncommitted included.
    The messages pane is one selectable
    document the same way (`SelectableTextView` over the whole log),
-   and every line in it reads the same: `repository: branch: what
+   with the tab's red badge counting only unread errors. `ErrorLog`
+   remembers the last read entry's id; showing Messages marks the log
+   read, including new entries while the pane is visible. A collapsed
+   utility pane or a hidden window leaves errors unread, and reading
+   never clears the log.
+   Every line reads the same: `repository: branch: what
    happened`, the repository bold and the branch monospaced, with
    any other identifier the line names in backticks drawn the same
    way (`MessageMarkup`). Both names come from the caller
@@ -914,9 +923,16 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **Amend adds to the commit before rather than making a new one.**
   On the uncommitted scope it folds the ticked files into the last
   commit and keeps its message, since the editor above the button is
-  drafting the *next* commit's message, not rewriting this one's; on
-  the scopes that show a commit it goes on doing what it always did
-  and rewrites that message. The fold names its paths on the amend
+  drafting the *next* commit's message, not rewriting this one's.
+  Last Commit starts with every file ticked; unticking files enables
+  Amend while at least one stays ticked. It removes those files'
+  changes from the commit, leaving them uncommitted, and can rewrite
+  the message at the same time. A private index starts from the
+  reviewed commit and restores unticked paths from its parent, both
+  sides of a rename together; the working tree and real index stay
+  intact, including unrelated staged work. A changed HEAD refuses
+  the amend so the user can review again. A new commit or scope
+  resets the ticks. The fold names its paths on the amend
   itself, so the last commit's tree plus those paths is what lands
   and anything else staged or uncommitted stays where it was. A
   commit already pushed needs pushing again, which the lease covers.
@@ -1056,7 +1072,9 @@ selects the worktree holding it, and `agentide new` starts a session.
   on-device model and asks before replacing typed text. Fill template
   ticks every box and writes the AI disclosure from the session's model
   and effort, and only into a template. The template is read from the
-  working copy or, for sparse checkouts, from git.
+  working copy or, for sparse checkouts, from git. Committed files use
+  `cat-file blob` so a missing literal path cannot become a pattern
+  that returns unrelated content.
 - **A stack moves as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
   then pushes it, bottom first, since GitHub reads a pull request

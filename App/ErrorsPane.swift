@@ -7,6 +7,8 @@ import TerminalUI
 struct ErrorsPane: View {
     // MARK: Internal
 
+    let isVisible: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -41,6 +43,11 @@ struct ErrorsPane: View {
                         name: nameStyle.appKitFont,
                     ),
                 ))
+            }
+        }
+        .onChange(of: isVisible ? log.entries.last?.id : nil, initial: true) {
+            if isVisible {
+                log.markRead()
             }
         }
     }

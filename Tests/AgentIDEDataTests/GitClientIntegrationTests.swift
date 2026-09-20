@@ -27,8 +27,8 @@ struct GitClientIntegrationTests {
 
         try await git.commitAll(worktreePath: worktreePath, message: "Add new file")
         #expect(await git.isDirty(worktreePath: worktreePath) == false)
-        #expect(try await git.lastCommitMessage(worktreePath: worktreePath) == "Add new file")
-        #expect(try await git.lastCommitDiff(worktreePath: worktreePath).contains("+new"))
+        #expect(try await git.commitMessage(worktreePath: worktreePath, commit: "HEAD") == "Add new file")
+        #expect(try await git.commitDiff(worktreePath: worktreePath, commit: "HEAD").contains("+new"))
         #expect(try await git.uncommittedDiff(worktreePath: worktreePath).isEmpty)
 
         // An older commit reads on its own, which is what clicking a
@@ -78,7 +78,7 @@ struct GitClientIntegrationTests {
         try await TestSupport.runGit(["add", "-A"], in: repoPath)
         try await TestSupport.runGit(["commit", "-q", "-m", "Change"], in: repoPath)
 
-        let diff = try await git.lastCommitDiff(worktreePath: repoPath)
+        let diff = try await git.commitDiff(worktreePath: repoPath, commit: "HEAD")
         let file = try #require(DiffParser.parse(diff).first)
         let deletionIndex = try #require(
             file.hunks[0].lines.firstIndex { $0.kind == .deletion && $0.content == "two" },
@@ -91,7 +91,7 @@ struct GitClientIntegrationTests {
 
         let content = try String(contentsOfFile: repoPath + "/f.txt", encoding: .utf8)
         #expect(content == "one\ntwo\nTHREE\nfour\n")
-        #expect(try await git.lastCommitDiff(worktreePath: repoPath).contains("-two") == false)
+        #expect(try await git.commitDiff(worktreePath: repoPath, commit: "HEAD").contains("-two") == false)
         #expect(await git.isDirty(worktreePath: repoPath) == false)
     }
 
@@ -112,7 +112,7 @@ struct GitClientIntegrationTests {
         try await TestSupport.runGit(["add", "-A"], in: repoPath)
         try await TestSupport.runGit(["commit", "-q", "-m", "Change"], in: repoPath)
 
-        let diff = try await git.lastCommitDiff(worktreePath: repoPath)
+        let diff = try await git.commitDiff(worktreePath: repoPath, commit: "HEAD")
         let file = try #require(DiffParser.parse(diff).first)
         #expect((file.hunks.first?.newStart ?? 0) > 1)
         // Reject the whole substitution, so line25 is restored.
@@ -148,7 +148,7 @@ struct GitClientIntegrationTests {
         try await TestSupport.runGit(["add", "-A"], in: repoPath)
         try await TestSupport.runGit(["commit", "-q", "-m", "Change"], in: repoPath)
 
-        let diff = try await git.lastCommitDiff(worktreePath: repoPath)
+        let diff = try await git.commitDiff(worktreePath: repoPath, commit: "HEAD")
         let file = try #require(DiffParser.parse(diff).first)
         let lower = try #require(file.hunks.last)
         #expect(lower.oldStart != lower.newStart)
@@ -316,7 +316,7 @@ struct GitClientIntegrationTests {
         #expect(await git.rewritesRemoteHistory(worktreePath: repoPath, branch: "main", remote: "origin"))
         try await git.push(worktreePath: repoPath, branch: "main")
         #expect(await git.aheadOfUpstream(worktreePath: repoPath) == 0)
-        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "More, amended")
+        #expect(try await git.commitMessage(worktreePath: repoPath, commit: "HEAD") == "More, amended")
     }
 
     // MARK: Private

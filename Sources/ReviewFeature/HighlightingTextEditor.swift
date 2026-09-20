@@ -26,6 +26,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         // Isolated: the observer tokens are main-actor state, and
         // AppKit releases coordinators on the main thread anyway.
         isolated deinit {
+            findTask?.cancel()
             for observer in observers {
                 NotificationCenter.default.removeObserver(observer)
             }
@@ -43,6 +44,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
         var text: Binding<String>
         let language: SyntaxLanguage?
         var didJump = false
+        var findTask: Task<Void, Never>?
+        var observers: [NSObjectProtocol] = []
 
         /// The file whose scroll position this editor keeps, nil for
         /// an editor over nothing on disk.
@@ -137,7 +140,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
         // MARK: Private
 
         private weak var scrollView: NSScrollView?
-        private var observers: [NSObjectProtocol] = []
 
         /// Where the clip view last was, as the notifications said.
         private var lastOrigin: CGPoint?
@@ -222,6 +224,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         Coordinator.highlight(view, language: language)
         context.coordinator.scrollKey = scrollKey
         context.coordinator.watchDisplayChanges(of: scroll)
+        context.coordinator.watchFindChanges(of: scroll)
         restoreScrollPosition(in: scroll)
         return scroll
     }

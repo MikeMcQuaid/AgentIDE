@@ -128,7 +128,7 @@ extension RootView {
             )
             .hidden(shown != .pullRequests)
             if shown == .errors {
-                ErrorsPane()
+                ErrorsPane(isVisible: dependencies.dashboard.isWindowVisible)
             }
         }
     }

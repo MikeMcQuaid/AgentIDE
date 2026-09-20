@@ -27,8 +27,6 @@ struct CommitMessageFieldTests {
 /// Exercises the review model's scopes against a real repository, so
 /// each scope button reliably changes what the pane shows.
 struct ReviewModelTests {
-    // MARK: Internal
-
     @Test
     func `unticking every file is not the same as ticking them all`() async throws {
         let path = FileManager.default
@@ -227,9 +225,9 @@ struct ReviewModelTests {
         #expect(model.findRanges(in: "needle").isEmpty)
     }
 
-    // MARK: Private
-
-    private func makeRepository(at path: String) async throws {
+    // Shared with the committing tests in another file.
+    // swiftformat:disable:next testSuiteAccessControl
+    func makeRepository(at path: String) async throws {
         try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
         try await runGit(["init", "-q", "-b", "main"], in: path)
         try await runGit(["config", "user.email", "test@example.com"], in: path)
@@ -239,7 +237,9 @@ struct ReviewModelTests {
         try await runGit(["commit", "-q", "-m", "Initial commit"], in: path)
     }
 
-    private func runGit(_ arguments: [String], in directory: String) async throws {
+    // Shared with the committing tests in another file.
+    // swiftformat:disable:next testSuiteAccessControl
+    func runGit(_ arguments: [String], in directory: String) async throws {
         _ = try await FoundationProcessRunner().run(
             ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"] + arguments,
             workingDirectory: directory,

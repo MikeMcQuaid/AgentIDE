@@ -89,6 +89,7 @@ public struct ReviewView: View {
                 canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
             )
         }
+        .disabled(model.isAmending)
         // The find bar fades in rather than popping; nothing else
         // in the stack changes with it.
         .animation(Motion.quick, value: showsFind)

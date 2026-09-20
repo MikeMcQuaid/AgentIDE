@@ -61,8 +61,8 @@ struct UtilityTabStrip: View {
                 HStack(spacing: TabCapsule.contentSpacing) {
                     Text(tab.title)
                         .font(tabStyle.font)
-                    if tab == .errors, errorLog.errorCount > 0 {
-                        Text(String(errorLog.errorCount))
+                    if tab == .errors, errorLog.unreadErrorCount > 0 {
+                        Text(String(errorLog.unreadErrorCount))
                             .font(tabStyle.badge)
                             .foregroundStyle(.white)
                             .padding(.horizontal, TabCapsule.contentSpacing)

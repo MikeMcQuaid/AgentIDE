@@ -1,4 +1,4 @@
-/// Which uncommitted files the next commit carries; split from the
+/// Which files the next or amended commit carries; split from the
 /// model for length.
 ///
 /// `excludedFromCommit` holds what is left out rather than what is
@@ -7,6 +7,40 @@
 extension ReviewModel {
     var isReadOnly: Bool {
         stackTarget != nil || commitTarget != nil
+    }
+
+    var showsCommitTicks: Bool {
+        isReadOnly == false && (showsUncommitted || scope == .lastCommit)
+    }
+
+    var canAmendLastCommit: Bool {
+        scope == .lastCommit && isReadOnly == false && isAmending == false && lastCommitHash != nil
+            && (messageEdited || committingCount < files.count)
+            && (files.isEmpty || committingCount > 0)
+    }
+
+    /// Keeps ticked files in the reviewed commit; excluded changes
+    /// remain uncommitted without taking any staged work with them.
+    func amendLastCommit() async {
+        guard canAmendLastCommit, let lastCommitHash else {
+            return
+        }
+
+        isAmending = true
+        defer { isAmending = false }
+        do {
+            try await git.amend(
+                worktreePath: worktreePath,
+                excluding: files.map(\.path).filter { isCommitting($0) == false },
+                message: commitMessage,
+                expectedHead: lastCommitHash,
+            )
+            excludedFromCommit = []
+            await reload()
+            setStatus("Amended the last commit.")
+        } catch {
+            report(error.localizedDescription)
+        }
     }
 
     /// The uncommitted files the next commit will carry, in the
