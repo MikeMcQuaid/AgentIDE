@@ -48,15 +48,6 @@ public extension GitClient {
         ).standardOutput
     }
 
-    /// The last commit's diff.
-    func lastCommitDiff(worktreePath: String, ignoringWhitespace: Bool = false) async throws -> String {
-        try await commitDiff(
-            worktreePath: worktreePath,
-            commit: "HEAD",
-            ignoringWhitespace: ignoringWhitespace,
-        )
-    }
-
     /// One branch's own changes against another, which is what a
     /// stack's entry shows: three dots, so what the parent already
     /// carries never appears in the child's diff.

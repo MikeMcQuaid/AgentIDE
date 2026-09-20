@@ -5,6 +5,13 @@ import TerminalUI
 /// in the messages pane, always naming the repository it is about.
 /// Split from the model for length.
 extension ReviewModel {
+    /// Shows a status in the footer and keeps it in the messages
+    /// pane, where a line that scrolls past can still be read.
+    func setStatus(_ message: String) {
+        status = message
+        ErrorLog.shared.note(message, about: repositoryName)
+    }
+
     /// Reports a failure into the app-wide error log; the local
     /// status line keeps success reports only.
     func report(_ message: String) {

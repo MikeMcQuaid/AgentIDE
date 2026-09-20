@@ -26,8 +26,8 @@ extension GitClientIntegrationTests {
             message: "Take two of the three",
         )
 
-        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "Take two of the three")
-        let committed = try await git.lastCommitDiff(worktreePath: repoPath)
+        #expect(try await git.commitMessage(worktreePath: repoPath, commit: "HEAD") == "Take two of the three")
+        let committed = try await git.commitDiff(worktreePath: repoPath, commit: "HEAD")
         #expect(committed.contains("+edited"))
         #expect(committed.contains("+added"))
         #expect(committed.contains("+later") == false)
@@ -35,9 +35,9 @@ extension GitClientIntegrationTests {
         #expect(await git.isDirty(worktreePath: repoPath))
 
         // And committing nothing is not a commit at all.
-        let before = try await git.lastCommitMessage(worktreePath: repoPath)
+        let before = try await git.commitMessage(worktreePath: repoPath, commit: "HEAD")
         try await git.commit(worktreePath: repoPath, paths: [], message: "Nothing to see")
-        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == before)
+        #expect(try await git.commitMessage(worktreePath: repoPath, commit: "HEAD") == before)
     }
 
     @Test
@@ -59,8 +59,8 @@ extension GitClientIntegrationTests {
 
         // One commit, not two, and its message is the one it had.
         #expect(await git.commitCount(worktreePath: repoPath, range: "HEAD") == before)
-        #expect(try await git.lastCommitMessage(worktreePath: repoPath) == "The commit being added to")
-        let amended = try await git.lastCommitDiff(worktreePath: repoPath)
+        #expect(try await git.commitMessage(worktreePath: repoPath, commit: "HEAD") == "The commit being added to")
+        let amended = try await git.commitDiff(worktreePath: repoPath, commit: "HEAD")
         #expect(amended.contains("+edited"))
         #expect(amended.contains("+first"))
         #expect(amended.contains("+later") == false)

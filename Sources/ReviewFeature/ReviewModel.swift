@@ -2,7 +2,6 @@ import AgentIDEData
 import AgentIDEDomain
 import Foundation
 import Observation
-import TerminalUI
 
 /// Loads a worktree's diff, tracks per-line selections and applies
 /// rejections and amendments.
@@ -57,6 +56,9 @@ final class ReviewModel {
     /// See `ReviewModel+Committing`.
     var excludedFromCommit: Set<String> = []
 
+    private(set) var lastCommitHash: String?
+    var isAmending = false
+
     /// Set only by the find extension, which recounts them.
     var findTargets: [FindTarget] = []
     var currentFind = 0
@@ -109,7 +111,12 @@ final class ReviewModel {
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
     var scope: Scope = .lastCommit {
-        didSet { remember(scope) }
+        didSet {
+            if oldValue != scope {
+                excludedFromCommit = []
+            }
+            remember(scope)
+        }
     }
 
     // Whether what is shown can only be read: a branch this
@@ -169,11 +176,7 @@ final class ReviewModel {
                 files = uncommitted
 
             case .lastCommit:
-                showsUncommitted = false
-                files = try await DiffParser.parse(git.lastCommitDiff(
-                    worktreePath: worktreePath,
-                    ignoringWhitespace: hidesWhitespace,
-                ))
+                try await loadLastCommit()
 
             case .upstream:
                 showsUncommitted = false
@@ -196,7 +199,10 @@ final class ReviewModel {
                 }
                 originalMessage = ""
             } else {
-                commitMessage = try await git.lastCommitMessage(worktreePath: worktreePath)
+                commitMessage = try await git.commitMessage(
+                    worktreePath: worktreePath,
+                    commit: scope == .lastCommit ? lastCommitHash ?? "HEAD" : "HEAD",
+                )
                 originalMessage = commitMessage
             }
             threads = await fetchThreads()
@@ -220,13 +226,6 @@ final class ReviewModel {
 
         commitMessage = drafted
         return true
-    }
-
-    /// Shows a status in the footer and keeps it in the messages
-    /// pane, where a line that scrolls past can still be read.
-    func setStatus(_ message: String) {
-        status = message
-        ErrorLog.shared.note(message, about: repositoryName)
     }
 
     /// Toggles one line's selection.
@@ -261,17 +260,6 @@ final class ReviewModel {
         }
     }
 
-    /// Amends the last commit's message.
-    func saveCommitMessage() async {
-        do {
-            try await git.amend(worktreePath: worktreePath, message: commitMessage)
-            originalMessage = commitMessage
-            setStatus("Commit message updated.")
-        } catch {
-            report(error.localizedDescription)
-        }
-    }
-
     // MARK: Private
 
     private let baseRefProvider: () async -> String?
@@ -283,6 +271,21 @@ final class ReviewModel {
     private let draftMessage: () async -> String?
     private let fetchThreads: () async -> [ReviewThread]
     private let setThreadResolved: (String, Bool) async throws -> Void
+
+    private func loadLastCommit() async throws {
+        let head = await git.commitHash(of: "HEAD", worktreePath: worktreePath)
+        let committed = try await DiffParser.parse(git.commitDiff(
+            worktreePath: worktreePath,
+            commit: head ?? "HEAD",
+            ignoringWhitespace: hidesWhitespace,
+        ))
+        showsUncommitted = false
+        if lastCommitHash != head {
+            excludedFromCommit = []
+        }
+        lastCommitHash = head
+        files = committed
+    }
 
     /// The upstream scope's commits and their own diff, empty with
     /// a message until the branch has been pushed.

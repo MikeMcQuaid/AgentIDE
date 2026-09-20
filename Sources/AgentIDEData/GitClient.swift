@@ -160,7 +160,7 @@ public struct GitClient: Sendable {
     /// carrying only their formulae, so what git knows is the only
     /// way to read their pull request template.
     public func trackedFile(worktreePath: String, path: String) async -> String? {
-        let result = try? await git(["show", "HEAD:" + path], in: worktreePath, allowFailure: true)
+        let result = try? await git(["cat-file", "blob", "HEAD:" + path], in: worktreePath, allowFailure: true)
         guard let result, result.succeeded else {
             return nil
         }
@@ -284,11 +284,6 @@ public struct GitClient: Sendable {
         try await git(["checkout", "HEAD", "--", path], in: worktreePath)
     }
 
-    /// The last commit's subject and body.
-    public func lastCommitMessage(worktreePath: String) async throws -> String {
-        try await commitMessage(worktreePath: worktreePath, commit: "HEAD")
-    }
-
     /// One commit's full message, named by anything git resolves.
     public func commitMessage(worktreePath: String, commit: String) async throws -> String {
         try await git(["log", "-1", "--format=%B", commit], in: worktreePath)
@@ -344,6 +339,7 @@ public struct GitClient: Sendable {
         _ arguments: [String],
         in directory: String?,
         allowFailure: Bool = false,
+        environment: [String: String] = [:],
     ) async throws -> ProcessResult {
         // Only the commands that reach a remote need the network;
         // reading the worktree must go on working without one,
@@ -357,7 +353,7 @@ public struct GitClient: Sendable {
         // lock an agent's own git may be holding in the same
         // worktree, and never writes a refreshed index of its own.
         let argv = ["git", "--no-optional-locks"] + Self.hardening + arguments
-        let result = try await runner.run(argv, workingDirectory: directory, environment: [:])
+        let result = try await runner.run(argv, workingDirectory: directory, environment: environment)
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "git " + arguments.joined(separator: " "), result: result)
         }

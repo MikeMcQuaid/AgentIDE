@@ -48,10 +48,15 @@ public final class ErrorLog {
     /// The messages reported this session, oldest first.
     public private(set) var entries: [Entry] = []
 
-    /// How many failures the log holds, for the tab's badge; plain
+    /// How many unread failures the log holds, for the tab's badge; plain
     /// status notes deliberately carry no number.
-    public var errorCount: Int {
-        entries.count { $0.isError }
+    public var unreadErrorCount: Int {
+        entries.count { $0.isError && $0.id > lastReadID }
+    }
+
+    /// Marks the current messages as read without removing them.
+    public func markRead() {
+        lastReadID = nextID
     }
 
     /// Appends a failure to the log, dropping the oldest entries
@@ -122,6 +127,8 @@ public final class ErrorLog {
 
     /// Monotonic, so identities survive the cap dropping entries.
     private var nextID = 0
+
+    private var lastReadID = 0
 
     /// The message with the repository, and the branch it is about,
     /// in front of it: `brew: `main`: pushed`. Neither is repeated

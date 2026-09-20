@@ -75,11 +75,11 @@ struct ReviewFooterView: View {
     @State private var messageDragBase: Double?
 
     /// Amend folds the ticked files into the last commit on the
-    /// uncommitted scope, and rewrites a commit's message on the
-    /// scopes that show one.
+    /// uncommitted scope, and keeps the ticked files and edited
+    /// message when reviewing the last commit.
     private var canAmend: Bool {
         guard model.showsUncommitted else {
-            return model.messageEdited
+            return model.canAmendLastCommit
         }
 
         return canCommit && model.committingCount > 0
@@ -87,7 +87,8 @@ struct ReviewFooterView: View {
 
     private var amendHelp: String {
         guard model.showsUncommitted else {
-            return "Rewrite the last commit's message; dimmed until the text differs from it"
+            return "Keep the ticked files and update the message; unticked changes stay uncommitted. "
+                + "Keep at least one file ticked"
         }
         guard model.committingCount > 0 else {
             return "Tick the files to add to the last commit"
@@ -96,17 +97,6 @@ struct ReviewFooterView: View {
         let count = model.pathsToCommit.isEmpty ? "everything uncommitted" : String(model.committingCount) + " files"
         return "Add " + count + " to the last commit, keeping its message. "
             + "A commit already pushed needs Push again, which leases the overwrite"
-    }
-
-    /// The button's own words: everything, or the count that is
-    /// ticked, so what a click is about to commit is on the button.
-    private var commitTitle: String {
-        let committing = model.committingCount
-        guard committing < model.files.count else {
-            return "Commit"
-        }
-
-        return "Commit " + String(committing) + " of " + String(model.files.count)
     }
 
     private var commitHelp: String {
@@ -155,14 +145,14 @@ struct ReviewFooterView: View {
     /// Committing and amending, in click order.
     @ViewBuilder private var messageButtons: some View {
         BusyButton(
-            "Amend",
+            commitTitle("Amend"),
             busy: "Amending",
             disabled: canAmend == false,
             action: amend,
         )
         .hoverHelp(amendHelp)
         BusyButton(
-            commitTitle,
+            commitTitle("Commit"),
             busy: "Committing",
             prominent: true,
             disabled: canCommit == false || model.committingCount == 0,
@@ -310,13 +300,24 @@ struct ReviewFooterView: View {
             .allowsHitTesting(false)
     }
 
+    /// The button's own words: everything, or the count that is
+    /// ticked, so what a click is about to commit is on the button.
+    private func commitTitle(_ action: String) -> String {
+        let committing = model.committingCount
+        guard committing < model.files.count else {
+            return action
+        }
+
+        return action + " " + String(committing) + " of " + String(model.files.count)
+    }
+
     /// The uncommitted scope folds files in; the scopes that show a
-    /// commit rewrite its message.
+    /// commit keep the ticked files and update its message.
     private func amend() async {
         if model.showsUncommitted {
             await onAmend()
         } else {
-            await model.saveCommitMessage()
+            await model.amendLastCommit()
         }
     }
 }
