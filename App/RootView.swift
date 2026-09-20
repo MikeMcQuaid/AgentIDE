@@ -77,11 +77,13 @@ struct RootView: View {
         dependencies.dashboard.showsNewSession || dependencies.dashboard.showsRepositoryFinder
     }
 
-    /// The shells running now, in a stable order so mounting one
-    /// more never remounts the rest; internal accessors because the
-    /// extension files cannot see the view's own state.
-    var runningShellPaths: [String] {
-        runningShells.sorted()
+    /// The shells open in each worktree, in the order they were
+    /// opened so that opening one more never remounts the rest;
+    /// internal and settable because the extension files that mount
+    /// and close them cannot see the view's own state.
+    var shellTabs: ShellTabs {
+        get { shells }
+        nonmutating set { shells = newValue }
     }
 
     /// The worktree whose conversation the review surfaces follow,
@@ -234,9 +236,16 @@ struct RootView: View {
         // it; a worktree the sidebar merely stopped listing keeps its
         // row, so nothing else closes a pane behind the user's back.
         .onChange(of: dependencies.dashboard.worktreePaths) { _, paths in
-            runningShells.formIntersection(paths)
+            shells.keep(worktreePaths: paths)
             visitedBrowsers.formIntersection(paths)
             centreEditorPaths.formIntersection(paths)
+        }
+        // The menu's New Shell, which knows the shell tab but not
+        // the worktree the window has selected.
+        .onChange(of: newShellRequest) {
+            if let path = dependencies.dashboard.selection?.worktree.path {
+                startShell(at: path)
+            }
         }
         // Open-file and finder-focus requests land on shared keys;
         // the window is what knows which editor slot should take
@@ -305,22 +314,6 @@ struct RootView: View {
         conversationWorktreePath = path
     }
 
-    /// Whether a worktree's shell runs.
-    func hasRunningShell(at path: String) -> Bool {
-        runningShells.contains(path)
-    }
-
-    /// Starts a worktree's shell by mounting its pane.
-    func startShell(at path: String) {
-        runningShells.insert(path)
-    }
-
-    /// Ends a worktree's shell instantly: unmounting the pane kills
-    /// its PTY, even when the shell has wedged beyond Ctrl-D.
-    func closeShell(at path: String) {
-        runningShells.remove(path)
-    }
-
     // MARK: Private
 
     /// The selected conversation's worktree on the repository page,
@@ -353,6 +346,13 @@ struct RootView: View {
     @AppStorage("resizePanesRequest")
     private var resizePanesRequest = 0
 
+    /// The New Shell menu item's counter: the window is what knows
+    /// which worktree is selected, so the menu asks and this opens
+    /// the shell. A count left by the previous run cannot fire,
+    /// since only a change is watched.
+    @AppStorage("newShellRequest")
+    private var newShellRequest = 0
+
     /// The push and rebase actions' immediate-refresh signal.
     @AppStorage("dashboardRefreshRequest")
     private var dashboardRefreshRequest = 0
@@ -368,11 +368,12 @@ struct RootView: View {
     /// pane over until they are dealt with.
     @State private var waiting: WaitingEdits = .init()
 
-    /// Worktrees whose shell is running; started explicitly, removed
-    /// when the shell process exits, is closed or its worktree is
-    /// destroyed, so the start button returns. Shells are plain
-    /// local processes, so nothing persists across launches.
-    @State private var runningShells: Set<String> = []
+    /// The shells open in each worktree; started explicitly,
+    /// removed when the shell process exits, is closed or its
+    /// worktree is destroyed, so the start button returns once a
+    /// worktree has none. Shells are plain local processes, so
+    /// nothing persists across launches.
+    @State private var shells: ShellTabs = .init()
 
     /// Each worktree's last utility tab, persisted as
     /// path-tab-name lines so panes stay per-worktree.
@@ -392,6 +393,6 @@ struct RootView: View {
 
     /// Whether anything is running that idle sleep would interrupt.
     private var hasLiveWork: Bool {
-        runningShells.isEmpty == false || runningWorktreePaths.isEmpty == false
+        shells.isEmpty == false || runningWorktreePaths.isEmpty == false
     }
 }

@@ -16,7 +16,7 @@ struct FontsSettingsPane: View {
             sidebarSections
             FontSettingsSection(
                 title: "Utility tabs",
-                detail: "The tabs at the top of the right-hand pane.",
+                detail: "The tabs at the top of the right-hand pane, and its shell tabs.",
                 nameKey: AppSettings.tabFontNameKey,
                 sizeKey: AppSettings.tabFontSizeKey,
                 defaultName: "",

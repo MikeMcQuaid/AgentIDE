@@ -35,30 +35,25 @@ extension RootView {
         )
     }
 
-    /// The tab bubbles and the pane toggle, with the shell's close
-    /// button beside them while the shell tab shows a running shell.
+    /// The utility tabs, shell controls and pane toggle.
     func utilityHeader(for item: WorktreeItem) -> some View {
-        HStack(spacing: Self.stripSpacing) {
+        let shells = shellTabs.shells(in: item.worktree.path)
+        return HStack(spacing: Self.stripSpacing) {
             // The tabs scroll when the pane narrows, so the toggle
             // beside them can never be squeezed out.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Self.stripSpacing) {
-                    UtilityTabStrip()
+                    UtilityTabStrip(
+                        onOpenShell: { startShell(at: item.worktree.path) },
+                        onCloseShells: shells.isEmpty ? nil : {
+                            for shell in shells {
+                                closeShell(shell.id)
+                            }
+                        },
+                    )
                 }
             }
             Spacer(minLength: 0)
-            if utilityTab == .shell, hasRunningShell(at: item.worktree.path) {
-                Button {
-                    closeShell(at: item.worktree.path)
-                } label: {
-                    Image(systemName: "xmark")
-                        .accessibilityLabel("Close shell")
-                }
-                .buttonStyle(.glass)
-                .controlSize(.small)
-                .fixedSize()
-                .hoverHelp("End this shell and its process immediately")
-            }
             utilityToggleButton
                 .fixedSize()
         }

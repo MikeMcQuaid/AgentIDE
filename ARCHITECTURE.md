@@ -235,7 +235,9 @@ Rules that follow from that shape:
   (`terminalSchemes` in the metadata). Agent TUIs read the colours
   once (OSC 10/11) and style their chrome for them forever; re-theming
   on an appearance switch left the composer white on white. Only shell
-  panes re-theme live, and only shell panes answer Cmd-K.
+  panes re-theme live, and only the shell pane on screen answers
+  Cmd-K: the shells behind it record the count without acting on it,
+  so a clear can never wipe the next shell or worktree shown.
 - Copies from an agent pane reflow block by block for prose
   (`PasteableText`): paragraphs lose hard wraps, command-shaped runs
   keep every line. Option-drag copies a rectangle on the character
@@ -251,8 +253,36 @@ The **host terminal** is a plain login shell on the pane's own PTY as
 the host user: no sudo, no sandbox, full `gh` credentials, editor
 variables pointing at the app's shim, no server. Shells die with the
 app, a deliberate trade after server-backed shells kept wedging their
-control clients. Every running shell and browser page stays mounted
-whichever tab or worktree shows, even while the selection is empty.
+control clients. A worktree runs as many as the work needs, since a
+dev server holds a shell for as long as it runs and the git commands
+and API calls beside it need a prompt of their own. `ShellTabs`
+(Domain) owns which are open where and which one each worktree is
+showing. The plus in the Shell utility bubble, or Shift-Cmd-T, opens
+another. Its following close button ends all shells in the selected
+worktree. With one shell there is no extra row. With multiple shells,
+a full-width bar below the utility tabs divides the width between
+them, each tab closing its own shell, and scrolls when their labels
+no longer fit. Rules the bar follows:
+
+- **A shell keeps its number for life**, the lowest its worktree was
+  not already using, so closing one never renumbers the tab under the
+  pointer and a later shell fills the gap instead.
+- **Closing the shown shell falls to the tab after it**, the one
+  before only when it was the last, so closing along a strip never
+  jumps back to its start.
+- **Closing a tab explicitly terminates its local process** when
+  SwiftUI dismantles the pane, even if the terminal view is still
+  retained. It sends SIGHUP before releasing the PTY: interactive zsh
+  ignores SwiftTerm's SIGTERM, and releasing the view alone only
+  closes its I/O.
+- **Only multiple shells reserve room for the tab bar.** Each
+  worktree's terminals keep their own top inset, so switching to a
+  worktree with a different shell count never resizes hidden shells.
+  Adding the second shell or closing back to one resizes only that
+  worktree's terminals.
+
+Every running shell and browser page stays mounted whichever tab,
+shell or worktree shows, even while the selection is empty.
 `RetainedPane` collapses the utility pane without removing its views or
 changing their width. Inactive native views are hidden, so they draw
 nothing and a page's animation frames stop. The session manager lists
@@ -325,8 +355,8 @@ flowchart TD
   `ReviewThread`, `BranchStack`, `TranscriptSession`, `DiffFile`) and
   pure logic (`DiffParser`, `PatchBuilder`, `SessionName`,
   `HerdrTerminal` frame decoding, the keyword tokenizer, `FuzzyMatcher`,
-  `Wrapping`). Foundation value types are allowed; process, file,
-  network and database APIs are banned.
+  `Wrapping`, `ShellTabs`). Foundation value types are allowed;
+  process, file, network and database APIs are banned.
 - **AgentIDEData**: the adapters, composed by `SessionService`:
   `GitClient`, `GitHubClient` (every question through the host's `gh`),
   `SandvaultLauncher`, `HerdrClient`, `HerdrTerminalChannel`,
@@ -645,7 +675,8 @@ page resumes any past conversation into a fresh worktree.
   middle pane, within the pane width limits.
 - **Fonts settings** makes every font in the app changeable, for
   accessibility: interface text, code and terminal typography,
-  repository names, worktree and branch names and utility tabs. Each
+  repository names, worktree and branch names and the tabs, utility
+  and shell alike, with shared spacing and colours (`TabCapsule`). Each
   has a font picker, a size stepper and a reset to the existing
   default. The first picker entry names the resolved default family;
   system choices still follow macOS's defaults. `InterfaceStyle`,
@@ -1367,7 +1398,9 @@ Integration tests run the real adapters against real git repositories
 and a real herdr server on a private config home, because the bugs that
 reach manual testing live in the seams; test runners strip `HERDR_*`
 from the environment so a teardown can never reach the production
-server. CI (`.github/workflows/tests.yml`) runs style on
+server. The editor-spool event test delays safety sweeps beyond its
+deadline, so scheduling delays do not count as missed directory events.
+CI (`.github/workflows/tests.yml`) runs style on
 every push and pull request, and build-and-test and analyze in parallel
 on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
 The test job also runs `script/test --sanitize address`, failing on
@@ -1390,7 +1423,8 @@ so that only the last needs credentials:
   them as `.build/version.xcconfig`, which the generated project takes
   as its base configuration, so a build started in Xcode is versioned
   exactly as a scripted one; `script/bootstrap` writes it before
-  generating the project, and the file is rewritten only when its
+  generating the project, and `script/build` and `script/analyze`
+  refresh it before building. The file is rewritten only when its
   contents change, so Xcode does not rebuild the world for it.
 - `script/build` takes the most recent tag behind the current commit
   (`git describe --tags --abbrev=0`), validates it as three

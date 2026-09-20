@@ -155,9 +155,14 @@ struct TerminalRepresentable: NSViewRepresentable {
     let onStalled: (Bool) -> Void
     let reattachRequest: Int
 
-    /// Detaches the coordinator's client with the view.
-    static func dismantleNSView(_: PaneTerminalView, coordinator: Coordinator) {
+    /// Detaches the client and stops any local shell when its pane closes.
+    static func dismantleNSView(_ view: PaneTerminalView, coordinator: Coordinator) {
         coordinator.tearDown()
+        if view.process.running {
+            // Interactive zsh ignores the SIGTERM SwiftTerm sends.
+            kill(view.process.shellPid, SIGHUP)
+            view.terminate()
+        }
     }
 
     /// Builds the SwiftTerm view and themes it; the client attaches
@@ -217,8 +222,8 @@ struct TerminalRepresentable: NSViewRepresentable {
             context.coordinator.seenReattachRequest = reattachRequest
             context.coordinator.reattach(in: view)
         }
-        if case .shell = transport, isActive {
-            context.coordinator.clearIfRequested(clearRequest, in: view)
+        if case .shell = transport {
+            context.coordinator.clearIfRequested(clearRequest, in: view, acting: isActive)
         }
     }
 

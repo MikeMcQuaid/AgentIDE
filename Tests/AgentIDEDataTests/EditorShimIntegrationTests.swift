@@ -80,7 +80,7 @@ struct EditorShimIntegrationTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: edits).isEmpty)
     }
 
-    @Test
+    @Test(.timeLimit(.minutes(1)))
     func `a new request wakes the watcher through the directory event`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-watch")
         defer { try? FileManager.default.removeItem(atPath: root) }
@@ -101,23 +101,20 @@ struct EditorShimIntegrationTests {
             runners: [],
         )
 
-        var edits = service.pendingEdits().makeAsyncIterator()
+        // No safety sweep can satisfy this test before its deadline.
+        var edits = service.pendingEdits(sweepInterval: .seconds(120)).makeAsyncIterator()
         #expect(await edits.next()?.isEmpty == true)
 
-        // The watcher idles between slow safety ticks; a request
-        // must reach it through the directory event, inside the
-        // eight-second tick it would otherwise wait out. The bound
-        // is generous because a loaded CI runner can take seconds
-        // just spawning the shim.
-        let shim = shim(root: root)
-        let process = try run(shim, arguments: ["--wait", root + "/file.txt"], in: root)
-        let started = ContinuousClock.now
+        let request = workspace.editsDirectory + "/watch.request"
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "path": root + "/file.txt",
+            "workingDirectory": root,
+            "processIdentifier": Int(getpid()),
+        ])
+        try payload.write(to: URL(fileURLWithPath: request), options: .atomic)
         let published = await edits.next()
         #expect(published?.count == 1)
-        #expect(ContinuousClock.now - started < .seconds(Self.eventDeadlineSeconds))
-
-        process.terminate()
-        try await exit(of: process)
+        #expect(published?.first?.path == root + "/file.txt")
     }
 
     @Test
@@ -257,9 +254,4 @@ struct EditorShimIntegrationTests {
     // MARK: Private
 
     private static let settleMilliseconds = 600
-
-    /// How long a directory event may take to surface a request:
-    /// well under the idle sweep it must beat, well over what a
-    /// slow CI runner needs to spawn the shim.
-    private static let eventDeadlineSeconds = 6.0
 }
