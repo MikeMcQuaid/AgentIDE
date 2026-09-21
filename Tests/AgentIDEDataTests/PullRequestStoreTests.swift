@@ -34,6 +34,7 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
         _ arguments: [String],
         workingDirectory _: String?,
         environment _: [String: String],
+        outputLimit _: Int?,
     ) -> ProcessResult {
         if arguments.first == "git" || arguments.contains("remote") {
             return ProcessResult(status: 0, standardOutput: "git@github.com:mike/repo.git\n", standardError: "")

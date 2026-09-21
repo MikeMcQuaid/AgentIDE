@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 /// The user preferences the Settings window edits, read where each
@@ -6,6 +7,9 @@ import Foundation
 /// app works without, per the metadata rules.
 public enum AppSettings {
     // MARK: Public
+
+    /// The default reviewer; empty selects the other agent.
+    public static let reviewAgentKey = "reviewAgent"
 
     /// The poll cadence's storage key, in seconds.
     public static let pollIntervalKey = "pollIntervalSeconds"
@@ -81,6 +85,27 @@ public enum AppSettings {
     /// by hooks, but a repository without that hook may not care.
     public static var requiresSignedCommits: Bool {
         boolDefaultingTrue(requireSignedCommitsKey)
+    }
+
+    /// The review model preference, kept separately for each agent.
+    public static func reviewModelKey(for agent: AgentKind) -> String {
+        "reviewModel." + agent.rawValue
+    }
+
+    /// The review effort preference, independent of session defaults.
+    public static func reviewEffortKey(for agent: AgentKind) -> String {
+        "reviewEffort." + agent.rawValue
+    }
+
+    /// Reads preferences when a review starts; empty values keep CLI defaults.
+    public static func reviewOptions(
+        for agent: AgentKind,
+        defaults: UserDefaults = .standard,
+    ) -> AgentLaunchOptions {
+        AgentLaunchOptions(
+            model: defaults.string(forKey: reviewModelKey(for: agent)).flatMap { $0.isEmpty ? nil : $0 },
+            effort: defaults.string(forKey: reviewEffortKey(for: agent)).flatMap { $0.isEmpty ? nil : $0 },
+        )
     }
 
     // MARK: Internal

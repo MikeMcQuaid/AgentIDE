@@ -14,6 +14,11 @@ struct UtilityTabStrip: View {
         ForEach(UtilityTab.allCases, id: \.self) { tab in
             button(tab)
         }
+        .onChange(of: utilityTab, initial: true) {
+            if UtilityTab(rawValue: utilityTab) == nil {
+                utilityTab = UtilityTab.review.rawValue
+            }
+        }
     }
 
     // MARK: Private

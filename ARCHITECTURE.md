@@ -704,6 +704,74 @@ page resumes any past conversation into a fresh worktree.
 
 ### Review
 
+The Review pane shows local findings beneath their files alongside
+GitHub conversations. The reviewer's icon in the toolbar opens a
+popover with an editable review prompt and the same findings. While a
+review runs, the icon becomes a spinner and still opens the popover.
+Its accessible value also reports that the review is in progress. Both
+surfaces use `LocalReviewThreadRow` over the shared `ReviewThreadRow`,
+which distinguishes local reviews with the recorded reviewer's icon,
+an explicit source label and an accent border. `AppDependencies` owns
+one `LocalReviewStore`, which retains a model per worktree path for the
+app's lifetime. Closing the popover or switching worktrees or panes
+loses neither draft instructions nor resolution state and does not
+interrupt a running review. Returning reuses the same model, including
+its progress, result or error, and cannot start a duplicate run. The
+button's task outlives its view and saves to the original worktree.
+
+The review prompt is prefilled with the existing instructions, or the
+instructions used for the latest review, and can be edited before
+running. The selected diff is attached separately. Fixed instructions
+keep source text untrusted and require findings anchored to the diff;
+the tool restrictions and output schema remain enforced by the app.
+The default prompt requests actionable bugs and major readability,
+documentation and security improvements, excluding cosmetic preferences.
+`AgentRunner` and `SandvaultLauncher` run the chosen agent outside the
+worktree in a temporary review directory, with command tools and
+external integrations disabled. Only its completed, validated response
+becomes findings; raw output is not displayed. `ProcessRunner` captures
+reviewer stdout and stderr through pipes with a 256 KiB limit per stream,
+stopping an over-limit process before either stream can grow a temporary
+file or an unbounded in-memory buffer. Other commands retain file-backed
+capture. Exceeding the limit is a failed review even if the process exits
+successfully. Diff actions and display toggles stay locked while reviewing
+or preparing a fix prompt.
+
+Each local finding offers Resolve comment or Make fix. Resolution is
+stored on the thread locally and can be reopened, without a GitHub
+request. The popover's Make fixes prepares one editable prompt for all
+unresolved findings; Make fix on a comment includes only that finding.
+Both check freshness and exclude resolved comments, without requiring
+decisions on other findings or marking anything fixed. No code is
+changed or prompt sent automatically. Fix prompts use the same
+`ReviewThread.digest` as copied GitHub reviews: each file appears once,
+followed by line numbers, authors and full comment text. Empty or
+whitespace-only notes and commentary are omitted, along with JSON
+metadata; the short instruction block still treats reviewer text as
+untrusted data.
+
+Settings' Review pane defaults to the other agent, with an optional
+named reviewer and independent model and effort choices per agent in
+`AppSettings`. Other agent first uses the worktree's recorded session,
+falling back to the general session default when that is unavailable.
+It reuses `AgentOptionPickers` and the discovered launch
+choices. Each review reads the current preferences and passes only
+model and effort through the runner's quoted option arguments; the
+restricted review invocation remains fixed. Session defaults are
+independent, and the review pane can override the reviewer for one run.
+
+The latest review, edited instructions and resolved threads belong to
+the host metadata. The captured input and bounded output and diagnostics
+remain available there for troubleshooting; failures stay distinct
+from successful reviews with no findings. Older saved reviews still
+load, and any earlier human notes remain in their fix prompts.
+Reviewer evidence is untrusted data in the generated fix prompt. The
+displayed diff and the worktree's HEAD and uncommitted changes are
+checked before preparing it; changed code requires another review.
+An empty result says no findings, not that the code is correct. This
+first pass reviews diff context only and neither executes tests nor
+reads additional source files.
+
 1. `GitClient` produces diffs with rename detection; `DiffParser` turns
    them into files, hunks and lines. Scope is the last commit (or
    uncommitted changes when there are any), the unpushed commits, or

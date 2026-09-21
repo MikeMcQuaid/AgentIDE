@@ -18,6 +18,8 @@ struct SettingsView: View {
         TabView {
             GeneralSettingsPane(dashboard: dependencies.dashboard)
                 .tabItem { Label("General", systemImage: "gearshape") }
+            ReviewSettingsPane(dashboard: dependencies.dashboard)
+                .tabItem { Label("Review", systemImage: "text.bubble") }
             FontsSettingsPane()
                 .tabItem { Label("Fonts", systemImage: "textformat.size") }
             NotificationsSettingsPane()

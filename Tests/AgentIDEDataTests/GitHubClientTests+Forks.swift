@@ -41,12 +41,14 @@ private struct ForkListingRunner: ProcessRunner {
         _ arguments: [String],
         workingDirectory: String?,
         environment: [String: String],
+        outputLimit: Int?,
     ) async throws -> ProcessResult {
         guard arguments.first == "gh" else {
             return try await FoundationProcessRunner().run(
                 arguments,
                 workingDirectory: workingDirectory,
                 environment: environment,
+                outputLimit: outputLimit,
             )
         }
 
