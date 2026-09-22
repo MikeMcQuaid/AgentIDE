@@ -25,6 +25,13 @@ public enum GitHubOutage {
         isLikely(error.localizedDescription)
     }
 
+    /// Whether the failure is the app's own refusal to ask while the
+    /// machine has no route: never news to a poll, since the path
+    /// monitor is what says when the route is back.
+    public static func isOffline(_ error: any Error) -> Bool {
+        error.localizedDescription.lowercased().contains(offlineMarker)
+    }
+
     // MARK: Private
 
     /// Deliberately narrow: anything not listed counts as a real
@@ -48,6 +55,8 @@ public enum GitHubOutage {
         "check your internet connection",
         // The app's own refusal when the path monitor says the
         // machine has nowhere to send the request.
-        "no route to the network",
+        offlineMarker,
     ]
+
+    private static let offlineMarker = "no route to the network"
 }

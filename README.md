@@ -43,7 +43,11 @@ updates.
   was pushed, adopting worktrees made outside the app in the same
   locations.
 - Says what a pull request is doing in GitHub's own icons, one glyph per
-  fact, watching checks and queued merges until they settle.
+  fact, watching checks and queued merges until they settle. The checks
+  dot follows the checks the base branch requires: an optional job
+  failing leaves it green, its hover help saying so, and a required one
+  still to report keeps it orange. The sidebar's row and the pull
+  request pane change together, whichever of them heard first.
 - Fetch and Fetch and Reset on a repository follow its default branch
   when it has moved on GitHub, switching the checkout to the new one;
   a new worktree whose base branch has gone follows it too. Fetches
@@ -106,19 +110,23 @@ updates.
   the previous commit, with the message drafted by the on-device Apple
   model. Last Commit also starts with every file ticked; untick files
   and Amend to leave them uncommitted, keeping at least one file in
-  the commit.
+  the commit. The sidebar's counts and Push follow a commit or amend
+  at once.
 - Pushes, rebases and opens pull requests as drafts or ready for review,
   templates filled in, labels attached, forks used where the repository
   is not yours, pushes following a contributor's fork back to it, and
   branches stacked in one worktree; an open pull request's title and
-  body are edited in the same form, to say what was actually pushed.
+  body are edited in the same form, the template as a field of its
+  own when the body was opened with one, to say what was actually
+  pushed.
 - Connects fork worktrees to their upstream pull requests for comments
   and checks, signing and pushing back to the contributor's branch;
   a push refused by the fork reports the error in the pane. Fork
   branches cannot create or publish PR stacks, which GitHub does not
   support across forks.
-- Copies unresolved review comments and failing CI logs into a prompt,
-  resolves conversations and merges or queues, each with a click.
+- Copies unresolved review comments and the failing logs of the checks
+  the branch requires into a prompt, resolves conversations and merges
+  or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent
   and file changes still landing at once.
 - Says when the sandbox user's login keychain has stopped opening after
@@ -130,6 +138,8 @@ updates.
   running in it.
 - Counts unread errors in the Messages tab's red badge. Viewing Messages
   marks them as read, keeping the log available without needing Clear.
+  A network connection dropping and coming back is not a message; only
+  something you asked for that needed the network reports its absence.
 - Deletes a worktree and its branch once its pull request merges, and
   keeps every conversation browsable and resumable after the worktree is
   gone.

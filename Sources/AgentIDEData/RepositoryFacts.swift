@@ -26,11 +26,7 @@ actor RepositoryFacts {
     /// The remembered name, unless the file it was read against has
     /// been written since.
     func name(of repositoryPath: String, at modified: Date?) -> Answer? {
-        guard let modified, let stamped = names[repositoryPath], stamped.modified == modified else {
-            return nil
-        }
-
-        return Answer(value: stamped.value)
+        remembered(names[repositoryPath], at: modified)
     }
 
     func remember(name: String?, of repositoryPath: String, at modified: Date?) {
@@ -39,6 +35,21 @@ actor RepositoryFacts {
         }
 
         names[repositoryPath] = Stamped(value: name, modified: modified)
+    }
+
+    /// The owner a branch's push remote belongs to, keyed
+    /// `repositoryPath#branch`, against the same file: that is where
+    /// a branch's remote is written.
+    func headOwner(of key: String, at modified: Date?) -> Answer? {
+        remembered(headOwners[key], at: modified)
+    }
+
+    func remember(headOwner: String?, of key: String, at modified: Date?) {
+        guard let modified else {
+            return
+        }
+
+        headOwners[key] = Stamped(value: headOwner, modified: modified)
     }
 
     func baseRef(of repositoryPath: String) -> Answer? {
@@ -64,5 +75,14 @@ actor RepositoryFacts {
     }
 
     private var names: [String: Stamped] = [:]
+    private var headOwners: [String: Stamped] = [:]
     private var baseRefs: [String: Answer] = [:]
+
+    private func remembered(_ stamped: Stamped?, at modified: Date?) -> Answer? {
+        guard let modified, let stamped, stamped.modified == modified else {
+            return nil
+        }
+
+        return Answer(value: stamped.value)
+    }
 }

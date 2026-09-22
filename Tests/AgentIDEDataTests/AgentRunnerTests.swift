@@ -32,8 +32,10 @@ struct AgentRunnerTests {
             promptFile: "/tmp/it's a prompt.md",
         )
         // The single quotes close, escape the apostrophe and reopen,
-        // so a quote in the path cannot break out of the quoting.
-        #expect(command == "claude --model fable \"$(cat '/tmp/it'\\''s a prompt.md')\"")
+        // so a quote in the path cannot break out of the quoting;
+        // `--` keeps a prompt that opens with a dash from being read
+        // as an option.
+        #expect(command == "claude --model fable -- \"$(cat '/tmp/it'\\''s a prompt.md')\"")
     }
 
     @Test

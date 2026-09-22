@@ -63,6 +63,6 @@ extension PullRequestsModel {
         // others, so the sidebar's rows are stale the moment it
         // finishes; waiting for the next poll showed a branch that
         // no longer exists.
-        Self.requestSidebarRefresh()
+        UtilityTabTarget.requestSidebarRefresh()
     }
 }

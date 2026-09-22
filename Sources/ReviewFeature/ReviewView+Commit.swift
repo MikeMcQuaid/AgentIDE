@@ -1,4 +1,5 @@
 import AgentIDEData
+import TerminalUI
 
 /// Committing from the review pane: the ticked files, or the whole
 /// worktree when every file is ticked. Split from the view for
@@ -18,6 +19,7 @@ extension ReviewView {
             )
             model.excludedFromCommit = []
             await model.reload()
+            UtilityTabTarget.requestSidebarRefresh()
         } catch {
             model.report(error.localizedDescription)
         }
@@ -35,6 +37,9 @@ extension ReviewView {
             try await service.amendOutstanding(worktreePath: worktreePath, paths: model.pathsToCommit)
             model.excludedFromCommit = []
             await model.reload()
+            // The tip moved: Push reads it on this reading rather
+            // than on the next poll.
+            UtilityTabTarget.requestSidebarRefresh()
         } catch {
             model.report(error.localizedDescription)
         }

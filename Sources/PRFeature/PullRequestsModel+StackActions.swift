@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import TerminalUI
 
 /// The two things a stack is asked to do as a whole: rebase every
 /// branch onto the one below it and push them bottom first. Split
@@ -37,7 +38,7 @@ extension PullRequestsModel {
                 // Nothing moved, so nothing was done: the button
                 // must not claim otherwise.
                 setStatus("Already in order.", detail: "The stack was already in order.")
-                Self.requestSidebarRefresh()
+                UtilityTabTarget.requestSidebarRefresh()
                 return true
             }
 
@@ -48,7 +49,7 @@ extension PullRequestsModel {
             }
             recordFinished(outcomes, branch: acted)
             note(verb + " " + Self.named(moved) + (pushed.isEmpty ? "." : "; pushed " + Self.named(pushed) + "."))
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             return true
         } catch {
             report(error.localizedDescription)
@@ -111,7 +112,7 @@ extension PullRequestsModel {
             markChecksPending(for: pushed)
             recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
             note("Pushed " + Self.named(pushed) + ".")
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()
             return true

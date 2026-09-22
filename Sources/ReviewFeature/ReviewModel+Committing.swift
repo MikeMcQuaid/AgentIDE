@@ -1,3 +1,5 @@
+import TerminalUI
+
 /// Which files the next or amended commit carries; split from the
 /// model for length.
 ///
@@ -37,6 +39,10 @@ extension ReviewModel {
             )
             excludedFromCommit = []
             await reload()
+            // The tip moved: the sidebar's counts and the pull
+            // request pane's Push read it on this reading rather
+            // than on the next poll.
+            UtilityTabTarget.requestSidebarRefresh()
             setStatus("Amended the last commit.")
         } catch {
             report(error.localizedDescription)

@@ -18,6 +18,7 @@ extension PullRequestsModel {
         cacheEnriched(full)
         if selected?.number == number {
             selected = withCachedUnresolved(full)
+            selectedLabels = full.labels
         }
         if let index = summaries.firstIndex(where: { $0.number == number }) {
             summaries[index] = full
@@ -55,7 +56,7 @@ extension PullRequestsModel {
             if let number = selected?.number {
                 pullRequests.invalidate(repositoryPath: repository.path, number: number)
             }
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
         }
     }
@@ -102,13 +103,17 @@ extension PullRequestsModel {
     func select(_ summary: PullRequestSummary) {
         let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
         selected = withCachedUnresolved(cached ?? summary)
-        Task { await loadSelectedLabels(summary.number) }
+        // The pull request's labels arrive with its summary; only the
+        // repository's own are a question of their own.
+        selectedLabels = (cached ?? summary).labels
+        Task { await loadAvailableLabels() }
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {
                 cacheEnriched(full)
                 if selected?.number == full.number {
                     selected = withCachedUnresolved(full)
+                    selectedLabels = full.labels
                 }
             }
         }
@@ -129,7 +134,7 @@ extension PullRequestsModel {
     /// threads cache: no listing or summary query carries the count,
     /// so what the conversation pane last cached stands in, the way
     /// the sidebar rows count theirs.
-    private func withCachedUnresolved(_ summary: PullRequestSummary) -> PullRequestSummary {
+    func withCachedUnresolved(_ summary: PullRequestSummary) -> PullRequestSummary {
         let key = AppMetadata.threadsKey(repositoryPath: repository.path, number: summary.number)
         let threads = store.load().threadsCache[key]?.threads ?? []
         var stamped = summary
@@ -142,18 +147,13 @@ extension PullRequestsModel {
     func cacheEnriched(_ summary: PullRequestSummary) {
         let before = pullRequests.cachedSummary(repositoryPath: repository.path, number: summary.number)
         pullRequests.rememberSummary(repositoryPath: repository.path, summary: summary)
-        // The sidebar's row reads this same cache; a changed state
-        // tells it to look again now, not on its next poll.
-        if before.map({ Self.state(of: $0) }) != Self.state(of: summary) {
-            let key = UtilityTabTarget.pullRequestCacheKey
-            UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+        // The sidebar's row reads this same cache; anything that
+        // changed in it tells the row to look again now, not on its
+        // next poll. Comparing a few fields left the row behind on
+        // the ones it did not name, automerge among them.
+        if before != summary {
+            UtilityTabTarget.pullRequestCacheChanged()
         }
-    }
-
-    /// What the sidebar's row colours from, so only a change in it
-    /// asks the sidebar to repaint.
-    static func state(of summary: PullRequestSummary) -> [String] {
-        [summary.checks, summary.state, summary.mergeable, summary.reviewDecision, String(summary.isDraft)]
     }
 
     /// Takes the open pull request back to a draft, which is what
@@ -340,7 +340,12 @@ extension PullRequestsModel {
     /// dashboard, so without this the buttons kept whatever the
     /// last poll knew however often the button was pressed.
     func refresh() async {
-        Self.requestSidebarRefresh()
+        // Asked for by hand, so a machine with no route says so here,
+        // once, where a poll refused for the same reason stays quiet.
+        if NetworkMonitor.shared.isOnline == false {
+            report("Refreshing needs the network, and there is no route to the network right now.")
+        }
+        UtilityTabTarget.requestSidebarRefresh()
         // What a refresh is asked for is exactly what changes with
         // nothing happening in the app: checks finishing, a branch
         // going unmergeable, a review or a comment arriving. The
@@ -348,7 +353,7 @@ extension PullRequestsModel {
         // click, so the listing, the pull request in view and its
         // conversation are all forgotten before the reading.
         pullRequests.invalidateListings(repositoryPath: repository.path)
-        pullRequests.forgetDefaultPushPolicy(repositoryPath: repository.path)
+        pullRequests.forgetRepositorySettings(repositoryPath: repository.path)
         if let number = selected?.number {
             pullRequests.invalidate(repositoryPath: repository.path, number: number)
         }
@@ -356,10 +361,5 @@ extension PullRequestsModel {
         await reload(keepingSelection: true)
         await loadMergeQueue()
         await loadDefaultBranchPolicy()
-    }
-
-    static func requestSidebarRefresh() {
-        let key = "dashboardRefreshRequest"
-        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
     }
 }

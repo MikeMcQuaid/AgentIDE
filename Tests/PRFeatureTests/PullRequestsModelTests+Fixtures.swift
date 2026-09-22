@@ -106,6 +106,8 @@ extension PullRequestsModelTests {
         mergeable: String = "",
         checks: String = "",
         failingCheckLinks: [String] = [],
+        labels: [String] = [],
+        body: String? = nil,
     ) -> PullRequestSummary {
         PullRequestSummary(
             number: number,
@@ -118,6 +120,8 @@ extension PullRequestsModelTests {
             failingCheckLinks: failingCheckLinks,
             baseBranch: base,
             state: state,
+            body: body,
+            labels: labels,
         )
     }
 

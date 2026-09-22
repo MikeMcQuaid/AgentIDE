@@ -9,6 +9,8 @@ import SwiftUI
 /// survive tab reordering, which silently repointed the integer
 /// indices this bus used to carry.
 public enum UtilityTabTarget {
+    // MARK: Public
+
     /// The cross-module storage key that switches the utility tab.
     public static let key = "utilityTab"
 
@@ -36,10 +38,34 @@ public enum UtilityTabTarget {
     /// The errors tab.
     public static let errors = "errors"
 
-    /// Bumped whenever a pull request summary is cached by the pane
-    /// that fetched it, so the sidebar's rows, which read the same
-    /// cache, repaint at once rather than on their next poll.
+    /// Bumped whenever a pull request summary is cached by whichever
+    /// surface fetched it, so the sidebar's rows and the pull
+    /// request pane, which read the same caches, repaint at once
+    /// rather than on their next poll.
     public static let pullRequestCacheKey = "pullRequestCacheGeneration"
+
+    /// Bumped by the menu bar's Refresh and by every action of the
+    /// app's own that moves a branch (a push, a rebase, a commit, an
+    /// amend), so the sidebar reads git now rather than on its next
+    /// poll.
+    public static let dashboardRefreshKey = "dashboardRefreshRequest"
+
+    /// Asks the sidebar for a reading now.
+    public static func requestSidebarRefresh() {
+        bump(dashboardRefreshKey)
+    }
+
+    /// Tells every surface reading the pull request caches that one
+    /// of them changed.
+    public static func pullRequestCacheChanged() {
+        bump(pullRequestCacheKey)
+    }
+
+    // MARK: Private
+
+    private static func bump(_ key: String) {
+        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+    }
 }
 
 // MARK: - LinkOpener

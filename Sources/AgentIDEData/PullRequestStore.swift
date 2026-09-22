@@ -126,7 +126,12 @@ public struct PullRequestStore: Sendable {
             }
         }
 
-        var fetched = try await github.pullRequests(repositoryPath: repositoryPath, scope: scope, limit: limit)
+        var fetched = try await github.pullRequests(
+            repositoryPath: repositoryPath,
+            scope: scope,
+            limit: limit,
+            requiredChecks: requiredChecksReader(repositoryPath: repositoryPath),
+        )
         store.update { metadata in
             fetched = Self.painted(fetched, repositoryPath: repositoryPath, in: &metadata)
             metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
@@ -175,7 +180,11 @@ public struct PullRequestStore: Sendable {
             return store.load().enrichedSummaryCache[key]?.summary
         }
 
-        var fetched = try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number)
+        var fetched = try await github.pullRequestSummary(
+            repositoryPath: repositoryPath,
+            number: number,
+            requiredChecks: requiredChecksReader(repositoryPath: repositoryPath),
+        )
         guard fetched != nil else {
             return store.load().enrichedSummaryCache[key]?.summary
         }
@@ -228,42 +237,6 @@ public struct PullRequestStore: Sendable {
         return answer
     }
 
-    /// Whether the repository's default branch takes a push. Asked
-    /// once per repository and kept until `forgetDefaultPushPolicy`,
-    /// which the tab's refresh button is for: protection changes
-    /// about as often as a repository's settings do. A GitHub that
-    /// cannot be asked stores nothing, so the next visit asks again,
-    /// and nothing known is a no.
-    public func acceptsDefaultPushes(repositoryPath: String, branch: String) async -> Bool {
-        let key = "push-capability#" + repositoryPath
-        if let known = store.load().directPushCapability[repositoryPath] {
-            PerformanceLog.record(cacheHit: true, key)
-            return known
-        }
-
-        PerformanceLog.record(cacheHit: false, key)
-
-        let answer: Bool
-        switch await github.pushPolicy(repositoryPath: repositoryPath, branch: branch) {
-        case .unknown:
-            return false
-
-        case .takesPushes:
-            answer = true
-
-        case .guarded:
-            answer = false
-        }
-        store.update { $0.directPushCapability[repositoryPath] = answer }
-        return answer
-    }
-
-    /// Forgets whether the default branch takes a push, so the next
-    /// reading asks GitHub again.
-    public func forgetDefaultPushPolicy(repositoryPath: String) {
-        store.update { $0.directPushCapability[repositoryPath] = nil }
-    }
-
     /// Every repository's merge queue, those due asked for in one
     /// query and the rest answered from what they last said.
     public func queuedNumbers(
@@ -282,7 +255,11 @@ public struct PullRequestStore: Sendable {
             return answers
         }
 
-        let fetched = await github.queuedNumbers(repositoryPaths: due)
+        // Every repository at once, since the query is one process
+        // however many it names: asked repository by repository as
+        // each fell due, the same question ran three times in five
+        // minutes for answers that arrive together.
+        let fetched = await github.queuedNumbers(repositoryPaths: repositoryPaths)
         store.update { metadata in
             for (path, numbers) in fetched {
                 metadata.queuedCache[path] = numbers.sorted()

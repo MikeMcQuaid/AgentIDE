@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import TerminalUI
 
 /// Which branch the tab acts on and whether it can: an entry of a
 /// stack is read without being checked out, so what a button reads
@@ -129,7 +130,7 @@ extension PullRequestsModel {
             }
             recordFinished(onlySigns ? .signed : .rebased, branch: listedBranch ?? worktree.branch)
             note("Rebased `" + worktree.branch + "` on `" + target + "` and signed it.")
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             return true
         } catch {
             report(error.localizedDescription)

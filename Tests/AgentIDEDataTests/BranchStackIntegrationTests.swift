@@ -126,7 +126,7 @@ struct BranchStackIntegrationTests {
             path: repository.path,
         )
 
-        #expect(await world.service.branchesOutOfPlace(worktree: worktree) == ["lower"])
+        #expect(await world.service.stackFacts(for: worktree).outOfPlace == ["lower"])
 
         // The bottom entry forks from the base, whose tip was never
         // recorded: it was skipped in silence, so pressing the
@@ -134,7 +134,7 @@ struct BranchStackIntegrationTests {
         let moved = try await world.service.restack(worktree: worktree)
 
         #expect(moved == ["lower"])
-        #expect(await world.service.branchesOutOfPlace(worktree: worktree).isEmpty)
+        #expect(await world.service.stackFacts(for: worktree).outOfPlace.isEmpty)
     }
 
     @Test

@@ -135,6 +135,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
             text.wrappedValue = view.string
             Self.highlight(view, language: language)
+            (view.enclosingScrollView?.verticalRulerView as? LineNumberRuler)?.textChanged()
         }
 
         // MARK: Private
@@ -234,6 +235,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
             return
         }
 
+        let ruler = scroll.verticalRulerView as? LineNumberRuler
         if view.font != codeStyle.appKitFont {
             view.font = codeStyle.appKitFont
         }
@@ -243,19 +245,22 @@ struct HighlightingTextEditor: NSViewRepresentable {
             editing.configuredIndentUnit = settings.indentUnit
             editing.applyTabWidth(settings.tabWidth ?? settings.indentSize)
         }
-        if view.string != text {
+        // Compared on the storage's own string: `view.string` copies
+        // the document, and this runs on every keystroke and poll.
+        if let storage = unsafe view.textStorage, storage.mutableString.isEqual(to: text) == false {
             view.string = text
             Coordinator.highlight(view, language: language)
+            ruler?.textChanged()
         }
         if let jumpToLine, context.coordinator.didJump == false {
             context.coordinator.didJump = true
             jump(to: jumpToLine, in: view)
         }
-        if let ruler = scroll.verticalRulerView as? LineNumberRuler {
-            ruler.changedLines = changedLines
-            ruler.matchCodeSize()
-        }
-        scroll.verticalRulerView?.needsDisplay = true
+        // The ruler redraws itself for an edit, a size change or a
+        // change bar moving; redrawing it here on every update had
+        // it walking the document on each poll tick.
+        ruler?.changedLines = changedLines
+        ruler?.matchCodeSize()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -299,62 +304,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
         view.scrollRangeToVisible(range)
         view.setSelectedRange(range)
     }
-}
-
-// MARK: - WhitespaceLayoutManager
-
-/// Draws spaces and tabs as visible glyphs in the shared light
-/// whitespace tone, matching the review diff. Nonisolated to match
-/// `NSLayoutManager`, which AppKit drives itself on the main thread.
-private final nonisolated class WhitespaceLayoutManager: NSLayoutManager {
-    // MARK: Lifecycle
-
-    deinit {
-        // Nothing to clean up.
-    }
-
-    // MARK: Internal
-
-    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
-        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
-        guard let storage = unsafe textStorage else {
-            return
-        }
-
-        let text = storage.string as NSString
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: CodeStyle.nsFont,
-            .foregroundColor: CodeStyle.whitespaceNSColour,
-        ]
-        let characters = unsafe characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-        for index in characters.location ..< NSMaxRange(characters) {
-            let symbol: String? =
-                switch text.character(at: index) {
-                case Self.space:
-                    "·"
-
-                case Self.tab:
-                    "⇥"
-
-                default:
-                    nil
-                }
-            guard let symbol else {
-                continue
-            }
-
-            let glyphIndex = glyphIndexForCharacter(at: index)
-            let fragment = unsafe lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-            let position = location(forGlyphAt: glyphIndex)
-            let point = NSPoint(x: origin.x + fragment.minX + position.x, y: origin.y + fragment.minY)
-            NSAttributedString(string: symbol, attributes: attributes).draw(at: point)
-        }
-    }
-
-    // MARK: Private
-
-    private static let space: unichar = 0x20
-    private static let tab: unichar = 0x09
 }
 
 // swiftlint:enable legacy_objc_type

@@ -36,6 +36,12 @@ extension GitHubClient {
         let reviewRequests: [ReviewRequestRow]?
         // swiftlint:disable:next discouraged_optional_collection
         let latestReviews: [ReviewRow]?
+        // swiftlint:disable:next discouraged_optional_collection
+        let labels: [LabelRow]?
+    }
+
+    struct LabelRow: Decodable {
+        let name: String
     }
 
     struct ReviewRequestRow: Decodable {
@@ -48,6 +54,10 @@ extension GitHubClient {
     }
 
     struct CheckRow: Decodable {
+        /// A check run's name or a status context's context: the
+        /// one a branch's rules name when they require it.
+        let name: String?
+        let context: String?
         let state: String?
         let conclusion: String?
         // The property must match gh's JSON key exactly.

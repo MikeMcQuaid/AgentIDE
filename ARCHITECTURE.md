@@ -496,8 +496,15 @@ each waited on the other until the app was restarted.
    transcripts are keyed by cwd.
 4. The prompt is written to `agentide/prompts/<session>.md` in the
    shared workspace and travels inside the launch command as
-   `"$(cat …)"`, the path shell-quoted: pasting it after launch raced
-   the agent's terminal setup, which flushed pending input. Trade-offs
+   `-- "$(cat …)"`, the path shell-quoted: pasting it after launch
+   raced the agent's terminal setup, which flushed pending input, and
+   without the `--` a prompt opening with a dash (a list, say) was
+   read as an option and refused. The prompt's own characters are
+   never the shell's business: a command substitution's result is not
+   expanded again, so backticks, dollars, quotes, backslashes and
+   globs reach the agent as written, which the session integration
+   test sends all of; only trailing newlines go, which a command
+   substitution strips and which say nothing. Trade-offs
    accepted: the prompt appears in the process's argv, and is bounded by
    the kernel's argument size.
 5. No deploy keys; the agent works offline against the local clone.
@@ -571,16 +578,23 @@ page resumes any past conversation into a fresh worktree.
   the safety net. Whether the machine has a route out at all comes
   from the system's own path monitor (`NetworkMonitor.shared`,
   `NWPathMonitor`): without one every network call fails identically,
-  so the app says so once, holds that work rather than spawning
-  processes per branch per poll, and refreshes the moment the route is
-  back. One reading serves them all: `gh` refuses at its own funnel,
+  so the app holds that work rather than spawning processes per
+  branch per poll, and refreshes the moment the route is back. Neither
+  the loss nor the return is reported: a route gone for a moment is
+  back before anyone would have acted on it, and one that stays gone
+  is reported by the first action of the user's own that needed it (a
+  push, a fetch, a Refresh pressed), from where it was asked. Both go
+  to the messages log. One reading serves them all: `gh` refuses at
+  its own funnel,
   git refuses only the subcommands that reach a remote (`fetch`,
   `push`, `pull`, `clone`, `ls-remote`) so reading a worktree still
   works offline, and avatars keep what they have. Each refusal is one
   `OfflineError`, which `GitHubOutage` reads as an outage, so it is
-  pooled rather than repeated. `ServiceStatus`
-  keeps that apart from GitHub itself being down, and reports nothing
-  at all while the machine is off the network. Any other read failure
+  pooled rather than repeated, and as the app's own refusal, which a
+  poll never reports, since it can arrive before the monitor's word.
+  `ServiceStatus` keeps that apart from GitHub itself being down, and
+  reports nothing at all while the machine is off the network. Any
+  other read failure
   (a branch's pull requests, a conversation, the review pane's diff)
   is held until the same read fails again on its next poll or reload,
   then reported once naming both; a success in between makes the
@@ -796,7 +810,12 @@ reads additional source files.
    are memoised by content.
 4. Rejecting lines builds a reverse patch with `PatchBuilder`, validates
    with `git apply --check -R`, applies with `git apply -R --index` and
-   amends. Uncommitted changes skip the amend. Every file's header
+   amends. Uncommitted changes skip the amend. Untracked files join
+   the uncommitted diff as new files through a private index built
+   from `HEAD` with them marked intent-to-add: three processes
+   however many there are, where one `diff --no-index` per file ran
+   thirteen thousand times in a minute on a worktree an agent had
+   filled, and the real index is never touched. Every file's header
    opens it in the editor; an uncommitted tracked file can be put back
    to what HEAD has (`git checkout HEAD -- <path>`, staged changes
    included) and a never-committed one deleted, each after a prompt.
@@ -899,6 +918,16 @@ spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
 selects the worktree holding it, and `agentide new` starts a session.
 
+The editor's work per frame is bounded by what is on screen, since
+every scroll redraws the ruler and the visible text: line starts are
+indexed once per edit (`LineIndex`) and searched, never walked from
+the top; invisibles draw as two Core Text lines laid out once per
+font rather than an attributed string built per space; and a SwiftUI
+update re-applies nothing the document already carries, neither the
+tab width (which invalidated every line's layout) nor a ruler redraw.
+Walking the document per frame is what made a long file scroll in
+steps.
+
 ### Ship
 
 - **Every GitHub question goes through `gh` and one gate,
@@ -911,10 +940,15 @@ selects the worktree holding it, and `agentide new` starts a session.
   304 answering for a listing no longer held reported no pull request
   at all. The head filter takes its owner from the branch's push
   remote, whether a URL or a named remote, while the request itself
-  targets origin's repository. Fork comments and checks therefore
-  belong to the upstream pull request. Merge queue membership is one
-  aliased GraphQL query per repository (no pull request field reports
-  it). A pull request merged or closed over thirty days ago is a name
+  targets origin's repository; the owner is remembered against the
+  config file the remote lives in (`RepositoryFacts`), since reading
+  it was three processes per branch per poll. Fork comments and
+  checks therefore belong to the upstream pull request. Merge queue
+  membership is one aliased GraphQL query per repository (no pull
+  request field reports it), asked for every repository at once
+  every five minutes while nothing is queued and every half minute
+  while something is. A pull request
+  merged or closed over thirty days ago is a name
   collision, not the branch's work. No cached answer is final, however
   green: skipping approved passing pull requests froze rows as open
   forever.
@@ -1004,6 +1038,10 @@ selects the worktree holding it, and `agentide new` starts a session.
   itself, so the last commit's tree plus those paths is what lands
   and anything else staged or uncommitted stays where it was. A
   commit already pushed needs pushing again, which the lease covers.
+  A commit or amend made here rings the sidebar's refresh bus
+  (`UtilityTabTarget.requestSidebarRefresh`, the one a push and a
+  rebase ring), so the counts and Push follow the moved tip on that
+  reading rather than on the next poll.
 - **A commit can take some of the files, not all of them.** Every
   uncommitted file's row carries a tick, all ticked to begin with, and
   the button says what a click will carry ("Commit 3 of 7"). The model
@@ -1041,8 +1079,19 @@ selects the worktree holding it, and `agentide new` starts a session.
   than reshaping it; changes requested is GitHub's own diff glyph, since
   a person has written on the code; a conflict is a warning triangle,
   since it is nobody's verdict and the one state a pull request cannot
-  leave on its own. Each badge's hover help names what it is, because colour cannot
-  tell three red badges apart.
+  leave on its own. Each badge's hover help names what it is, because
+  colour cannot tell three red badges apart. The dot is coloured by
+  the checks the base branch requires (`BranchRules`: classic
+  protection's contexts and every ruleset's required checks, read
+  with read access alone and kept a day per base branch in the
+  metadata, forgotten by Refresh): a failing check nobody requires
+  leaves it green, the help naming the optional failure, and a
+  required check GitHub has yet to hear from keeps it orange, which
+  is what GitHub's own merge box says. A branch requiring nothing
+  counts every check, as does a branch whose rules could not be read.
+  The dot's click and the Checks copy button take only the failures
+  that count: a failing check the branch does not require is counted
+  for the help and never opened or copied.
 - **Row and pane never disagree**: both read the same two caches
   through `PullRequestStore`, the per-branch summary (which pull
   request a branch has) and the enriched summary (what state it is
@@ -1123,8 +1172,12 @@ selects the worktree holding it, and `agentide new` starts a session.
   title and body into
   the creation form in the conversation's place, with the generate
   and reset buttons working as they do before opening and the labels
-  and template sections left out, since those belong to the pull
-  request itself; Save sends `gh pr edit --title --body` and repaints
+  left out, since those belong to the pull request itself. A body
+  opened with the repository's template is taken apart again at the
+  template's first line, so its boxes and sections are edited where
+  they were filled in, and Save joins the two as opening did; a body
+  without that line is edited whole. Save sends
+  `gh pr edit --title --body` and repaints
   the row and the pane from the caches, Cancel is the one discard.
   The form's draft is keyed by the pull request while it is edited,
   so a half-done edit survives a tab switch and never touches the
@@ -1134,7 +1187,11 @@ selects the worktree holding it, and `agentide new` starts a session.
 - **The creation form** shows when the branch has no open pull request:
   title, body and template as fields, drafts saved as typed and only
   ever filling an empty field, so reloads cannot take back typing.
-  Labels come from `gh label list` once per form; an open conversation
+  Labels come from `gh label list` once a day per repository through
+  the store, forgotten by Refresh, since the form asked on every visit
+  and a label-less repository on every reading; a pull request's own
+  labels arrive with its summary rather than by a read of their own,
+  which was a `gh pr view` per selection. An open conversation
   edits them with `gh pr edit --add-label`/`--remove-label`. The
   generate button drafts from the branch's commits through the
   on-device model and asks before replacing typed text. Fill template
@@ -1176,7 +1233,18 @@ selects the worktree holding it, and `agentide new` starts a session.
   Reading one needs no checkout (`git diff parent...branch`). The
   derivation is cached against one `for-each-ref` line (`StackCache`),
   remotes included, since a fetch that moves the default branch changes
-  what a stack is. The Stack popover drops branches by name (remembered
+  what a stack is. The lists beside it, what a restack would move,
+  what a push would send and what is unsigned, are read with it
+  (`StackFacts`) and kept under the same line, in the metadata too,
+  so the tab's questions cost one process while nothing has moved
+  where they cost four readings and a process per branch each, and a
+  relaunch derives nothing that has not moved where an empty cache
+  re-derived every stack at every start; the sidebar's rota derives
+  a worktree when the watcher saw something written under its
+  repository's `.git` (where every ref lives, a linked worktree's
+  included; an agent editing sources moves nothing), or the app moved
+  it, and otherwise only at a long backstop, an hour for a lone
+  branch. The Stack popover drops branches by name (remembered
   per worktree) and cuts new ones. Restacking records every tip, then
   rebases bottom up with `--onto <parent> <recorded tip>`, signed,
   skipping a branch already in place and signed, from whichever entry
@@ -1213,8 +1281,13 @@ selects the worktree holding it, and `agentide new` starts a session.
   until the rollup is red, that copies the head and tail of every
   failing run's `gh run view --log-failed` (forty lines of what was
   run and in what environment, a hundred and sixty of the failure,
-  the progress between cut and counted, each end bounded in bytes
-  too, 4 KiB and 16 KiB, since one dumped blob can outweigh the rest)
+  the progress between cut and counted, except every cut line naming
+  an error or a failure, each with the three lines either side a
+  diff shows, whatever the budget, and lines naming a warning while
+  the tail's budget allows, since a periphery warning or a failed
+  test's own line sits in the middle of a long run and both ends
+  said only that something failed; each end bounded in bytes too,
+  4 KiB and 16 KiB, since one dumped blob can outweigh the rest)
   condensed (job and step named
   once in a heading, timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. A run still in progress has

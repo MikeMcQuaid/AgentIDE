@@ -1,12 +1,13 @@
-import AgentIDEData
+@testable import AgentIDEData
 import AgentIDEDomain
 import Foundation
 import Testing
 
 // MARK: - PromptCaptureRunner
 
-/// A fake agent that records its arguments and captures the pasted
-/// prompt, standing in for a real CLI in integration tests.
+/// A fake agent that records its arguments and captures the prompt
+/// exactly as a real CLI would receive it, standing in for one in
+/// integration tests.
 struct PromptCaptureRunner: AgentRunner {
     var kind: AgentKind {
         .claudeCode
@@ -32,12 +33,20 @@ struct PromptCaptureRunner: AgentRunner {
         nil
     }
 
-    /// `command cat` sidesteps whatever the interactive shell the
-    /// pane runs has aliased `cat` to.
+    /// The prompt travels exactly as it does for a real agent, after
+    /// `--` and through the pane's shell, into a command standing in
+    /// for the agent, so whatever the shell would do to it on the
+    /// way is done here too. That stand-in is `sh` rather than a
+    /// function: zsh's spelling correction, on in the sandbox user's
+    /// shell, offered to run `wget` in place of a function defined
+    /// on the same line and waited for an answer before running any
+    /// of it. `command cat` sidesteps whatever the interactive shell
+    /// the pane runs has aliased `cat` to.
     func launchCommand(extraArguments: String, promptFile: String?) -> String {
         let quoted = "'" + extraArguments.replacing("'", with: "'\\''") + "'"
-        let prompt = promptFile.map { "command cat '" + $0 + "' > agent-prompt.txt; " } ?? ""
-        return "printf '%s' " + quoted + " > agent-arguments.txt; " + prompt + "command cat > /dev/null"
+        return "printf '%s' " + quoted + " > agent-arguments.txt; "
+            + command("sh -c 'printf \"%s\" \"$2\" > agent-prompt.txt' agent", "", promptFile: promptFile)
+            + "; command cat > /dev/null"
     }
 
     func resumeCommand(resumeID: String, extraArguments _: String) -> String {
@@ -71,9 +80,15 @@ struct SessionServiceIntegrationTests {
         let world = try await World.make()
         defer { world.tearDown() }
 
+        // Every character the shell could have mangled on the way:
+        // the prompt is read into the command from its file, after
+        // which the shell expands nothing in it, so all of this must
+        // reach the agent as written.
+        let prompt = "Do the thing with `backticks`, $(subshells), $HOME, \"quotes\", 'apostrophes', "
+            + "\\backslashes, !bangs, *globs*, #hashes, %formats and ~tildes\n- then a line opening with a dash"
         let name = try await world.service.createSession(
             repository: world.repository,
-            prompt: "Do the thing",
+            prompt: prompt,
             agent: .claudeCode,
             options: AgentLaunchOptions(model: "fable", effort: "max"),
         )
@@ -96,8 +111,8 @@ struct SessionServiceIntegrationTests {
         let worktreePath = found.worktree.path
 
         let delivered = await TestSupport.poll {
-            let prompt = try? String(contentsOfFile: worktreePath + "/agent-prompt.txt", encoding: .utf8)
-            return prompt?.contains("Do the thing") ?? false
+            let received = try? String(contentsOfFile: worktreePath + "/agent-prompt.txt", encoding: .utf8)
+            return received == prompt
         }
         #expect(delivered)
         let arguments = try String(contentsOfFile: worktreePath + "/agent-arguments.txt", encoding: .utf8)
@@ -105,7 +120,7 @@ struct SessionServiceIntegrationTests {
 
         // The canonical path is the readable one now; no symlink
         // stands beside it.
-        #expect(worktreePath.hasSuffix("/worktrees/repo/do_the_thing"))
+        #expect(worktreePath.contains("/worktrees/repo/do_the_thing"))
         #expect(FileManager.default.fileExists(atPath: world.paths.friendlyWorktreesDirectory) == false)
     }
 

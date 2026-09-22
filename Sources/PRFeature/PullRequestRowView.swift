@@ -138,7 +138,7 @@ struct PullRequestRowView: View {
                 ChecksStyle.checksOcticonName,
                 colour: ChecksStyle.colour(for: summary.checks),
             )
-            .accessibilityLabel("Checks: \(summary.checks.lowercased())")
+            .accessibilityLabel("Checks: " + summary.checksDescription)
         }
         .buttonStyle(.plain)
         .hoverHelp(

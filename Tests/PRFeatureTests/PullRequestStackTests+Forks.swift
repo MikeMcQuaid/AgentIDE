@@ -8,16 +8,18 @@ extension PullRequestStackTests {
     func `fork stacks disable actions while lone fork branches can still push`(stacked: Bool) async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
-        model.stacking.fetch = { _ in
-            BranchStack(
-                base: "main",
-                branches: stacked ? ["feature", "upper"] : ["feature"],
-                checkedOut: "feature",
-                stackingBlocker: "GitHub does not support pull request stacks across forks.",
+        model.stacking.facts = { _ in
+            StackFacts(
+                stack: BranchStack(
+                    base: "main",
+                    branches: stacked ? ["feature", "upper"] : ["feature"],
+                    checkedOut: "feature",
+                    stackingBlocker: "GitHub does not support pull request stacks across forks.",
+                ),
+                outOfPlace: ["feature"],
+                unpushed: ["feature"],
             )
         }
-        model.stacking.pending = { _ in true }
-        model.stacking.unpushed = { _ in ["feature"] }
         await model.reload()
         model.pullRequests.rememberListing(
             repositoryPath: model.repository.path,

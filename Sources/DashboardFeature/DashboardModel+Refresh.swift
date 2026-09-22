@@ -194,4 +194,19 @@ public extension DashboardModel {
         await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: forces)
     }
+
+    /// Asks about one repository now, however recently the poll last
+    /// asked: the manual answer to state GitHub changed between
+    /// ticks, and to an outage that dropped a round of answers. One
+    /// repository rather than all of them, since asking about every
+    /// branch everywhere is how a rate limit is reached.
+    func refreshRepository(path: String) async {
+        // Asked for by hand, so a machine with no route says so here,
+        // once, where a poll refused for the same reason stays quiet.
+        if NetworkMonitor.shared.isOnline == false {
+            report("Refreshing pull requests needs the network, and there is no route to the network right now.")
+        }
+        pullRequests.invalidateListings(repositoryPath: path)
+        await refresh(forcing: path)
+    }
 }

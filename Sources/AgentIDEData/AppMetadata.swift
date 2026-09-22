@@ -164,6 +164,19 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// minute of another one's fetch reuses it.
     public var gitFetchedAt: [String: Date] = [:]
 
+    /// The status checks each base branch requires of a pull request
+    /// into it, by `repositoryPath#branch`, and each repository's
+    /// labels by path: what decides a rollup's colour and what the
+    /// label menu offers, each asked for once a day rather than on
+    /// every fetch and every visit.
+    public var requiredChecksCache: [String: [String]] = [:]
+    public var labelsCache: [String: [String]] = [:]
+
+    /// Each worktree's last stack facts against the refs they were
+    /// derived from, by worktree path, so a relaunch derives nothing
+    /// that has not moved; see `CachedStackFacts`.
+    public var stackFacts: [String: CachedStackFacts] = [:]
+
     /// Branches a worktree's stack should leave out, by worktree
     /// path. The stack is inferred from ancestry, which cannot know
     /// that an old branch sharing history is nothing to do with the
@@ -298,6 +311,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         conversationCache = conversationCache.filter { $0.value.savedAt > old }
         enrichedSummaryCache = enrichedSummaryCache.filter { $0.value.savedAt > old }
         threadsCache = threadsCache.filter { $0.value.savedAt > old }
+        stackFacts = stackFacts.filter { $0.value.savedAt > old }
         if threadsCache.count > Self.conversationCap {
             let newest = threadsCache
                 .sorted { $0.value.savedAt > $1.value.savedAt }
@@ -321,6 +335,10 @@ public struct AppMetadata: Codable, Equatable, Sendable {
             pendingSince = try container.decodeIfPresent([String: Date].self, forKey: .pendingSince) ?? [:]
             terminalSchemes = try container.decodeIfPresent([String: String].self, forKey: .terminalSchemes) ?? [:]
             gitFetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .gitFetchedAt) ?? [:]
+            requiredChecksCache = try container
+                .decodeIfPresent([String: [String]].self, forKey: .requiredChecksCache) ?? [:]
+            labelsCache = try container.decodeIfPresent([String: [String]].self, forKey: .labelsCache) ?? [:]
+            stackFacts = try container.decodeIfPresent([String: CachedStackFacts].self, forKey: .stackFacts) ?? [:]
         }
 
         // MARK: Internal
@@ -332,6 +350,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         var pendingSince: [String: Date] = [:]
         var terminalSchemes: [String: String] = [:]
         var gitFetchedAt: [String: Date] = [:]
+        var requiredChecksCache: [String: [String]] = [:]
+        var labelsCache: [String: [String]] = [:]
+        var stackFacts: [String: CachedStackFacts] = [:]
     }
 
     /// How long a fetch stamp is worth keeping: longer than the
@@ -358,5 +379,8 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         gitFetchedAt = ledgers.gitFetchedAt
         pendingSince = ledgers.pendingSince
         terminalSchemes = ledgers.terminalSchemes
+        requiredChecksCache = ledgers.requiredChecksCache
+        labelsCache = ledgers.labelsCache
+        stackFacts = ledgers.stackFacts
     }
 }

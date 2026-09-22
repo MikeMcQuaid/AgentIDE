@@ -40,7 +40,11 @@ extension DashboardModel {
             derivedStacks[path] = stack
             // A branch standing on its own is the common case and
             // the cheap answer to be wrong about for a while, so it
-            // is asked about far less often than a real stack.
+            // is asked about far less often than a real stack. The
+            // watcher marks a worktree due the moment its repository
+            // moves, so both timers only catch a lost event; timed
+            // alone, the rota was a process every ten seconds all
+            // night for stacks that had not moved.
             let interval = RefreshCadence.slowed(
                 stack.isStacked ? Self.stackInterval : Self.loneInterval,
                 onBattery: isOnBattery(),
@@ -77,7 +81,7 @@ extension DashboardModel {
         stackInterval * loneMultiplier
     }
 
-    private static let loneMultiplier: TimeInterval = 5
+    private static let loneMultiplier: TimeInterval = 60
 
     private static let stacksPerRefresh = 8
 }

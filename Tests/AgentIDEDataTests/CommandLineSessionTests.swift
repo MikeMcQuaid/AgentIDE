@@ -23,8 +23,10 @@ struct CommandLineSessionTests {
         #expect(plan["label"] == label)
         #expect(plan["worktree"] == shared + "/worktrees/brew/" + branch)
         #expect(plan["prompt"] == shared + "/agentide/prompts/" + label + ".md")
-        // The window's own last choices, which the app publishes.
+        // The window's own last choices, which the app publishes,
+        // and the prompt after `--` the way the app passes it.
         #expect(plan["command"]?.hasPrefix("claude --model opus-5 --effort high ") == true)
+        #expect(plan["command"]?.hasSuffix(" -- \"$(cat '" + shared + "/agentide/prompts/" + label + ".md')\"") == true)
     }
 
     @Test

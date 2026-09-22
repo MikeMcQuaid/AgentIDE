@@ -74,7 +74,7 @@ struct GitHubClientTests {
     }
 
     @Test
-    func `summaries carry failing check links and click through sensibly`() throws {
+    func `summaries carry failing check links and click through sensibly`() async throws {
         let json = """
         [{"number": 7, "title": "Fix", "url": "https://github.com/o/r/pull/7",
           "headRefName": "agent/fix", "mergeable": "MERGEABLE", "reviewDecision": "",
@@ -83,7 +83,7 @@ struct GitHubClientTests {
             {"state": "COMPLETED", "conclusion": "FAILURE", "detailsUrl": "https://ci/broken"}
           ]}]
         """
-        let summary = try #require(GitHubClient.summaries(fromJSON: json).first)
+        let summary = try #require(await GitHubClient.summaries(fromJSON: json) { _ in [] }.first)
         #expect(summary.checks == "FAILURE")
         #expect(summary.failingCheckLinks == ["https://ci/broken"])
         #expect(summary.checksClickURL == "https://ci/broken")
@@ -91,7 +91,7 @@ struct GitHubClientTests {
     }
 
     @Test
-    func `many failing checks click through to the checks page`() throws {
+    func `many failing checks click through to the checks page`() async throws {
         let json = """
         [{"number": 8, "title": "Fix", "url": "https://github.com/o/r/pull/8",
           "headRefName": "b", "mergeable": "", "reviewDecision": "",
@@ -100,7 +100,7 @@ struct GitHubClientTests {
             {"state": "COMPLETED", "conclusion": "FAILURE", "detailsUrl": "https://ci/two"}
           ]}]
         """
-        let summary = try #require(GitHubClient.summaries(fromJSON: json).first)
+        let summary = try #require(await GitHubClient.summaries(fromJSON: json) { _ in [] }.first)
         #expect(summary.checksClickURL == "https://github.com/o/r/pull/8/checks")
     }
 
@@ -207,13 +207,13 @@ struct GitHubClientTests {
     }
 
     @Test
-    func `summaries carry base branch and state`() throws {
+    func `summaries carry base branch and state`() async throws {
         let json = """
         [{"number": 9, "title": "T", "url": "https://github.com/o/r/pull/9",
           "headRefName": "b", "baseRefName": "main", "state": "MERGED",
           "mergeable": "", "reviewDecision": ""}]
         """
-        let summary = try #require(GitHubClient.summaries(fromJSON: json).first)
+        let summary = try #require(await GitHubClient.summaries(fromJSON: json) { _ in [] }.first)
         #expect(summary.baseBranch == "main")
         #expect(summary.state == "MERGED")
     }

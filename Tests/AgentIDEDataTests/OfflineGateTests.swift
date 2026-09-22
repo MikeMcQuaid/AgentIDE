@@ -44,6 +44,10 @@ struct OfflineGateTests {
     func `the refusal reads as an outage, so it is pooled not repeated`() {
         let refusal = OfflineError(doing: "Fetching brew")
         #expect(GitHubOutage.isLikely(refusal))
+        #expect(GitHubOutage.isOffline(refusal))
+        let down = ProcessResult(status: 1, standardOutput: "", standardError: "HTTP 502")
+        let outage = CommandError(command: "gh", result: down)
+        #expect(GitHubOutage.isOffline(outage) == false)
         #expect(refusal.localizedDescription.contains("Fetching brew"))
     }
 

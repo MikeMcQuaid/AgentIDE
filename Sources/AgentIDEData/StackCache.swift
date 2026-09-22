@@ -27,6 +27,21 @@ actor StackCache {
         entries[worktreePath] = Entry(fingerprint: fingerprint, stack: stack)
     }
 
+    /// The remembered facts, kept the same way: the lists are read
+    /// from the same refs the stack is, so what says the stack
+    /// stands says they do too.
+    func facts(for worktreePath: String, derivedFrom fingerprint: String) -> StackFacts? {
+        guard let entry = factEntries[worktreePath], entry.fingerprint == fingerprint else {
+            return nil
+        }
+
+        return entry.facts
+    }
+
+    func remember(_ facts: StackFacts, for worktreePath: String, derivedFrom fingerprint: String) {
+        factEntries[worktreePath] = FactsEntry(fingerprint: fingerprint, facts: facts)
+    }
+
     // MARK: Private
 
     private struct Entry {
@@ -34,5 +49,11 @@ actor StackCache {
         let stack: BranchStack
     }
 
+    private struct FactsEntry {
+        let fingerprint: String
+        let facts: StackFacts
+    }
+
     private var entries: [String: Entry] = [:]
+    private var factEntries: [String: FactsEntry] = [:]
 }

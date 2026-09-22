@@ -9,23 +9,14 @@ extension PullRequestsModel {
     /// Points the stack's work at the service; kept here so the
     /// model's own initialiser stays about pull requests.
     func wireStack(service: SessionService) {
-        stacking.fetch = { worktree in
-            await service.stack(for: worktree)
+        stacking.facts = { worktree in
+            await service.stackFacts(for: worktree)
         }
         stacking.restack = { worktree in
             try await service.restack(worktree: worktree)
         }
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
-        }
-        stacking.pending = { worktree in
-            await service.branchesOutOfPlace(worktree: worktree).isEmpty == false
-        }
-        stacking.unpushed = { worktree in
-            await service.branchesUnpushed(worktree: worktree)
-        }
-        stacking.unsigned = { worktree in
-            await service.branchesUnsigned(worktree: worktree)
         }
     }
 
@@ -141,19 +132,16 @@ extension PullRequestsModel {
 
         stacking.stackGeneration += 1
         let generation = stacking.stackGeneration
-        let derived = await stacking.fetch(worktree)
-        let needsRestack = await stacking.pending(worktree)
-        let unpushed = await stacking.unpushed(worktree)
-        let unsigned = await stacking.unsigned(worktree)
+        let facts = await stacking.facts(worktree)
         guard generation == stacking.stackGeneration else {
             return
         }
 
-        stacking.stack = derived
-        stacking.needsRestack = needsRestack
-        stacking.unpushedBranches = unpushed
-        stacking.unsignedBranches = unsigned
-        stacking.needsPush = unpushed.isEmpty == false
+        stacking.stack = facts.stack
+        stacking.needsRestack = facts.outOfPlace.isEmpty == false
+        stacking.unpushedBranches = facts.unpushed
+        stacking.unsignedBranches = facts.unsigned
+        stacking.needsPush = facts.unpushed.isEmpty == false
         // The entry in view: the one remembered for this worktree,
         // else the first that could have a pull request opened (the
         // top of a stack often cannot yet), else the checked-out

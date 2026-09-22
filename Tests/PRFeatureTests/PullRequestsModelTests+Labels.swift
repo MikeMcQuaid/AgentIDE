@@ -9,7 +9,6 @@ extension PullRequestsModelTests {
     @MainActor
     func `toggling a label on an open pull request edits it on GitHub`() async {
         let model = makeModel()
-        model.fetchPullRequestLabels = { _ in ["bug"] }
         model.fetchLabels = { ["bug", "ci"] }
         var added = [[String]]()
         var removed = [[String]]()
@@ -17,8 +16,9 @@ extension PullRequestsModelTests {
             added.append(add)
             removed.append(remove)
         }
-        model.select(summary(4, head: "feature"))
-        await model.loadSelectedLabels(4)
+        // The pull request's own labels come with its summary.
+        model.select(summary(4, head: "feature", labels: ["bug"]))
+        await model.loadAvailableLabels()
         #expect(model.selectedLabels == ["bug"])
         #expect(model.availableLabels == ["bug", "ci"])
 

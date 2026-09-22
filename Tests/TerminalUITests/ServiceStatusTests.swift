@@ -46,6 +46,35 @@ struct ServiceStatusTests {
         #expect(reported(what)?.contains("not read again") == true)
     }
 
+    @Test
+    func `losing the network says nothing until something asked for it fails`() {
+        let status = ServiceStatus.shared
+        let before = ErrorLog.shared.entries.count
+        defer { status.networkChanged(isOnline: true) }
+
+        status.networkChanged(isOnline: false)
+        #expect(status.hasNetwork == false)
+        #expect(status.isUnavailable)
+        // A poll refused for want of a route is not news either, and
+        // neither is the route coming back.
+        status.record(failure: Failure(errorDescription: "no route to the network right now"), doing: "Polling")
+        status.networkChanged(isOnline: true)
+        #expect(status.isUnavailable == false)
+        #expect(ErrorLog.shared.entries.count == before)
+    }
+
+    @Test
+    func `the app's own refusal arriving before the monitor's word is not an outage`() {
+        let status = ServiceStatus.shared
+        let before = ErrorLog.shared.entries.count
+        status.record(
+            failure: Failure(errorDescription: "no route to the network right now"),
+            doing: "Polling " + UUID().uuidString,
+        )
+        #expect(ErrorLog.shared.entries.count == before)
+        #expect(status.isUnavailable == false)
+    }
+
     // MARK: Private
 
     private struct Failure: LocalizedError {

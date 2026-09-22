@@ -1,3 +1,5 @@
+import AgentIDEDomain
+
 /// The remotes a branch belongs to. A pull request opened from a fork
 /// is checked out with the fork's URL written straight into the
 /// branch's config and no remote named for it, which leaves the
@@ -18,6 +20,29 @@ public extension GitClient {
             }
         }
         return nil
+    }
+
+    /// The GitHub owner the branch pushes to, which a pull request
+    /// from a fork names as its head; nil when the branch has no
+    /// remote or it is not on GitHub. Remembered against the config
+    /// file the branch's remote lives in: three processes per branch
+    /// per poll read the same answer all day.
+    func headOwner(repositoryPath: String, branch: String) async -> String? {
+        let modified = Self.configModified(at: repositoryPath)
+        let key = repositoryPath + "#" + branch
+        if let known = await RepositoryFacts.shared.headOwner(of: key, at: modified) {
+            return known.value
+        }
+
+        let remote = await branchRemote(worktreePath: repositoryPath, branch: branch) ?? "origin"
+        let owner: String? =
+            if GitHubRemote.isURL(remote) {
+                GitHubRemote.owner(ofURL: remote)
+            } else {
+                await remoteURL(named: remote, worktreePath: repositoryPath).flatMap(GitHubRemote.owner(ofURL:))
+            }
+        await RepositoryFacts.shared.remember(headOwner: owner, of: key, at: modified)
+        return owner
     }
 
     /// A remote's URL, nil when there is no such remote.

@@ -32,6 +32,12 @@ public struct GitHubClient: Sendable {
         case open
     }
 
+    /// Which checks a pull request into a base branch must pass,
+    /// answered by whoever remembers the answer (the store); empty
+    /// when nothing is required or GitHub cannot say, when every
+    /// check counts.
+    public typealias RequiredChecksReader = @Sendable (String) async -> Set<String>
+
     /// How many pull requests any one listing asks for. Kept small
     /// deliberately: a repository with thousands open (homebrew-core,
     /// homebrew-cask) made every scope's query slow enough to feel
@@ -69,9 +75,14 @@ public struct GitHubClient: Sendable {
         repositoryPath: String,
         scope: ListScope = .open,
         limit: Int = Self.listLimit,
+        requiredChecks: RequiredChecksReader = { _ in [] },
     ) async throws -> [PullRequestSummary] {
         let result = try await gh(Self.listArguments(scope: scope, limit: limit), in: repositoryPath)
-        return Self.summaries(fromJSON: result.standardOutput)
+        return await Self.summaries(
+            fromJSON: result.standardOutput,
+            requiredChecks: requiredChecks,
+            askedForChecks: scope != .open,
+        )
     }
 
     /// One pull request's full summary, fetched when a light list
@@ -79,10 +90,11 @@ public struct GitHubClient: Sendable {
     public func pullRequestSummary(
         repositoryPath: String,
         number: Int,
+        requiredChecks: RequiredChecksReader = { _ in [] },
     ) async throws -> PullRequestSummary? {
         let fields = Self.coreFields + "," + Self.statusFields
         let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
-        return Self.summaries(fromJSON: "[" + result.standardOutput + "]").first
+        return await Self.summaries(fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks).first
     }
 
     /// The authenticated user's login followed by their
@@ -225,7 +237,7 @@ public struct GitHubClient: Sendable {
     /// A remembered answer, including the answer that there is none.
     /// Cheap fields, including the body so a click-through shows the
     /// conversation immediately.
-    static let coreFields = "number,title,url,headRefName,headRefOid,baseRefName,state,isDraft,author,body"
+    static let coreFields = "number,title,url,headRefName,headRefOid,baseRefName,state,isDraft,author,body,labels"
 
     /// The expensive dashboard fields; computing these across every
     /// open pull request timed out (HTTP 504) on busy repositories,
@@ -266,42 +278,25 @@ public struct GitHubClient: Sendable {
         return arguments
     }
 
-    /// Parses `gh pr list` JSON into summaries; separated for tests.
-    static func summaries(fromJSON json: String) -> [PullRequestSummary] {
-        guard let data = json.data(using: .utf8) else {
-            return []
+    /// Parses `gh pr list` JSON into summaries, each base branch's
+    /// required checks deciding its rows' rollups, asked for once
+    /// per base branch; separated for tests. A query
+    /// that asked for the rollup and got none back has a pull
+    /// request with no reported checks, which the rules may still
+    /// be waiting on; only the light listing, which never asks, has
+    /// nothing to say.
+    static func summaries(
+        fromJSON json: String,
+        requiredChecks: RequiredChecksReader,
+        askedForChecks: Bool = true,
+    ) async -> [PullRequestSummary] {
+        let rows = rows(fromJSON: json)
+        var required = [String: Set<String>]()
+        for base in Set(rows.filter { askedForChecks || $0.statusCheckRollup != nil }.compactMap(\.baseRefName)) {
+            required[base] = await requiredChecks(base)
         }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let rows = (try? decoder.decode([PullRequestRow].self, from: data)) ?? []
         return rows.map { row in
-            let rollup = row.statusCheckRollup ?? []
-            return PullRequestSummary(
-                number: row.number,
-                title: row.title,
-                url: row.url,
-                headBranch: row.headRefName,
-                mergeable: row.mergeable ?? "",
-                reviewDecision: row.reviewDecision ?? "",
-                checks: Self.aggregateChecks(rollup),
-                failingCheckLinks: rollup
-                    .filter { ($0.conclusion ?? $0.state ?? "").uppercased() == "FAILURE" }
-                    .compactMap(\.detailsUrl), // swiftformat:disable:this acronyms
-                baseBranch: row.baseRefName ?? "",
-                state: row.state ?? "OPEN",
-                isDraft: row.isDraft ?? false,
-                hasAutomerge: row.autoMergeRequest != nil,
-                author: row.author?.login,
-                body: row.body,
-                closedAt: row.closedAt,
-                headCommit: row.headRefOid,
-                awaitsCopilotReview: (row.reviewRequests ?? []).contains { Self.isCopilot($0.login) },
-                copilotReviewedAt: (row.latestReviews ?? [])
-                    .filter { Self.isCopilot($0.author?.login) }
-                    .compactMap(\.submittedAt)
-                    .max(),
-            )
+            summary(from: row, requiredChecks: required[row.baseRefName ?? ""] ?? [], askedForChecks: askedForChecks)
         }
     }
 
@@ -339,18 +334,49 @@ public struct GitHubClient: Sendable {
 
     private let isOnline: @Sendable () -> Bool
 
-    private static func aggregateChecks(_ rows: [CheckRow]) -> String {
-        let states = rows.map { ($0.conclusion ?? $0.state ?? "").uppercased() }
-        guard states.isEmpty == false else {
-            return ""
+    private static func rows(fromJSON json: String) -> [PullRequestRow] {
+        guard let data = json.data(using: .utf8) else {
+            return []
         }
 
-        if states.contains(where: { $0 == "FAILURE" || $0 == "ERROR" }) {
-            return "FAILURE"
-        }
-        if states.allSatisfy({ $0 == "SUCCESS" || $0 == "NEUTRAL" || $0 == "SKIPPED" }) {
-            return "SUCCESS"
-        }
-        return "PENDING"
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([PullRequestRow].self, from: data)) ?? []
+    }
+
+    private static func summary(
+        from row: PullRequestRow,
+        requiredChecks: Set<String>,
+        askedForChecks: Bool,
+    ) -> PullRequestSummary {
+        let rollup = Self.rollup(row.statusCheckRollup ?? [], required: requiredChecks)
+        return PullRequestSummary(
+            number: row.number,
+            title: row.title,
+            url: row.url,
+            headBranch: row.headRefName,
+            mergeable: row.mergeable ?? "",
+            reviewDecision: row.reviewDecision ?? "",
+            // A listing that never asked for the rollup has no
+            // checks to speak of; one that did is judged by the
+            // rules, which can be waiting on checks not yet reported.
+            checks: row.statusCheckRollup == nil && askedForChecks == false ? "" : rollup.checks,
+            failingCheckLinks: rollup.failingLinks,
+            baseBranch: row.baseRefName ?? "",
+            state: row.state ?? "OPEN",
+            isDraft: row.isDraft ?? false,
+            hasAutomerge: row.autoMergeRequest != nil,
+            author: row.author?.login,
+            body: row.body,
+            closedAt: row.closedAt,
+            headCommit: row.headRefOid,
+            awaitsCopilotReview: (row.reviewRequests ?? []).contains { Self.isCopilot($0.login) },
+            copilotReviewedAt: (row.latestReviews ?? [])
+                .filter { Self.isCopilot($0.author?.login) }
+                .compactMap(\.submittedAt)
+                .max(),
+            labels: (row.labels ?? []).map(\.name).sorted(),
+            optionalFailures: rollup.optionalFailures,
+        )
     }
 }

@@ -3,7 +3,7 @@
 /// Derived from ancestry rather than recorded anywhere, so a stack an
 /// agent builds by checking out branches of its own is a stack here
 /// too, and nothing is lost when the app quits.
-public struct BranchStack: Hashable, Sendable {
+public struct BranchStack: Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a stack, bottom first.

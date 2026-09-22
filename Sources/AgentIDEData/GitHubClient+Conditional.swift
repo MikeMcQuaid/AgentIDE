@@ -64,14 +64,7 @@ public extension GitHubClient {
             )
         }
 
-        let git = GitClient(runner: runner)
-        let remote = await git.branchRemote(worktreePath: repositoryPath, branch: branch) ?? "origin"
-        let owner =
-            if GitHubRemote.isURL(remote) {
-                GitHubRemote.owner(ofURL: remote)
-            } else {
-                await git.remoteURL(named: remote, worktreePath: repositoryPath).flatMap(GitHubRemote.owner(ofURL:))
-            }
+        let owner = await GitClient(runner: runner).headOwner(repositoryPath: repositoryPath, branch: branch)
         // Encoded as a query value: a branch name may hold `#`, `&`
         // or a space, any of which cuts the query short or splits it.
         let head = ((owner ?? fullName.split(separator: "/").first.map(String.init) ?? "") + ":" + branch)
@@ -115,6 +108,7 @@ public extension GitHubClient {
                 // other reader carried lit the Copilot icon again
                 // while GitHub still showed the request waiting.
                 awaitsCopilotReview: (row.requestedReviewers ?? []).contains { Self.isCopilot($0.login) },
+                labels: (row.labels ?? []).map(\.name).sorted(),
             )
         }
     }
@@ -149,7 +143,13 @@ private struct RESTPullRow: Decodable {
         // Presence is the signal.
     }
 
+    struct Label: Decodable {
+        let name: String
+    }
+
     let number: Int
+    // swiftlint:disable:next discouraged_optional_collection
+    let labels: [Label]?
     // Absent when nobody is asked.
     // swiftlint:disable:next discouraged_optional_collection
     let requestedReviewers: [User]?

@@ -46,6 +46,48 @@ extension PullRequestsModelTests {
     }
 
     @Test
+    func `a body opened with the template is edited in two fields and saved as one`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        await model.reload()
+        model.hasTemplate = true
+        model.originalTemplate = "## Checklist\n- [ ] Tests"
+        model.selected = summary(9, head: "feature", body: "What it did.\n\n## Checklist\n- [x] Tests")
+        var saved = [String]()
+        model.performEdit = { _, _, body in saved.append(body) }
+
+        // The template is found by its first line, boxes ticked and
+        // all, and edited where it was filled in.
+        model.beginEditing()
+        #expect(model.editsTemplate)
+        #expect(model.prBody == "What it did.")
+        #expect(model.prTemplate == "## Checklist\n- [x] Tests")
+
+        model.prBody = "What it did, in full."
+        model.prTemplate = "## Checklist\n- [x] Tests\n- [x] Docs"
+        #expect(await model.saveEdits())
+        #expect(saved == ["What it did, in full.\n\n## Checklist\n- [x] Tests\n- [x] Docs"])
+
+        // A description using the template's own heading keeps it:
+        // the template was appended last, so the last such line is
+        // where it starts.
+        model.selected = summary(11, head: "feature", body: "## Checklist\nMine.\n\n## Checklist\n- [x] Tests")
+        model.beginEditing()
+        #expect(model.prBody == "## Checklist\nMine.")
+        #expect(model.prTemplate == "## Checklist\n- [x] Tests")
+        model.cancelEditing()
+
+        // A body opened without the template is all body, and saves
+        // as it reads.
+        model.selected = summary(10, head: "feature", body: "Just words.")
+        model.beginEditing()
+        #expect(model.editsTemplate == false)
+        #expect(model.prBody == "Just words.")
+        #expect(model.prTemplate.isEmpty)
+        #expect(await model.saveEdits())
+        #expect(saved.last == "Just words.")
+    }
+
+    @Test
     func `cancelling an edit changes nothing, and a blank title cannot save`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         await model.reload()

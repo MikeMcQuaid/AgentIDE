@@ -37,16 +37,6 @@ extension DashboardModel {
         return summary.map { stamped($0, repositoryPath: item.worktree.repositoryPath) }
     }
 
-    /// Asks about one repository now, however recently the poll last
-    /// asked: the manual answer to state GitHub changed between
-    /// ticks, and to an outage that dropped a round of answers. One
-    /// repository rather than all of them, since asking about every
-    /// branch everywhere is how a rate limit is reached.
-    public func refreshRepository(path: String) async {
-        pullRequests.invalidateListings(repositoryPath: path)
-        await refresh(forcing: path)
-    }
-
     /// Refreshes which pull requests are in each repository's merge
     /// queue. One query per repository names every entry, which no
     /// per-pull-request field can answer, and it runs on the poll
@@ -142,11 +132,7 @@ extension DashboardModel {
                     }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
-                    persist(
-                        summary,
-                        repositoryPath: item.worktree.repositoryPath,
-                        branch: item.worktree.branch,
-                    )
+                    persist(summary, previous: previous, worktree: item.worktree)
                     await cleanUpIfMerged(item, previous: previous, fresh: summaries)
                     ServiceStatus.shared.recordSuccess(doing: "Pull requests for " + group.repository.name)
                 } catch {
@@ -243,7 +229,12 @@ extension DashboardModel {
     }
 
     private static let selectedInterval: TimeInterval = 60
-    private static let queueInterval: TimeInterval = 60
+    /// While nothing is queued the queue changes only through a
+    /// merge, which invalidates it, so the idle question is asked at
+    /// the pace of an expanded repository: asked every minute it
+    /// was the app's most expensive idle call, a second of GraphQL
+    /// for an empty answer.
+    private static let queueInterval: TimeInterval = 300
 
     /// How often a pull request with checks running or a place in
     /// the queue is asked about: the store's floor is one minute,
@@ -367,8 +358,14 @@ extension DashboardModel {
         }
     }
 
-    private func persist(_ summary: PullRequestSummary?, repositoryPath: String, branch: String) {
-        pullRequests.rememberBranchSummary(summary, repositoryPath: repositoryPath, branch: branch)
+    /// Records the branch's summary where the pane reads it too and,
+    /// when it changed, tells the pane now: its header changes with
+    /// the row rather than on its own next fetch.
+    private func persist(_ summary: PullRequestSummary?, previous: PullRequestSummary?, worktree: Worktree) {
+        pullRequests.rememberBranchSummary(summary, repositoryPath: worktree.repositoryPath, branch: worktree.branch)
+        if previous != summary {
+            UtilityTabTarget.pullRequestCacheChanged()
+        }
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {

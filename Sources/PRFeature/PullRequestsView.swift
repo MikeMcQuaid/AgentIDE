@@ -111,6 +111,9 @@ public struct PullRequestsView: View {
         // the new one is read.
         .onChange(of: branchName) { Task { await model.reload(keepingSelection: true) } }
         .onChange(of: items) { model.items = items }
+        // The sidebar's poll cached a fresher summary: the pane reads
+        // the same cache, so the header and the row change together.
+        .onChange(of: cacheGeneration) { model.repaintFromCache() }
         // The menu bar's Push and Rebase land here through the
         // storage bus, acting on whichever worktree the pane shows.
         .onChange(of: pushRequest) { Task { _ = await model.push() } }
@@ -126,6 +129,9 @@ public struct PullRequestsView: View {
     // MARK: Private
 
     private static let headerPadding: CGFloat = 8
+
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var cacheGeneration = 0
 
     /// The menu bar's action signals.
     @AppStorage("pushRequest")
