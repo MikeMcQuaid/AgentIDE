@@ -220,6 +220,13 @@ Rules that follow from that shape:
   not mean the agent wants shell key bindings. Agent panes leave
   those keys to SwiftTerm's modified-arrow encoding; only local
   shells use `TerminalKeys` for traditional word navigation.
+- **The numeric keypad types its numbers in shell panes.** zsh asks
+  for application keypad mode at every prompt, and SwiftTerm answers
+  it as a VT does, sending `ESC O u` for the 5, which a shell has
+  nothing bound to. A Mac keyboard has no Num Lock to turn that mode
+  off with, so a local shell pane sends the labelled character
+  instead (`PaneTerminalView.routeKey`); Enter, Clear and any pane
+  that turned the kitty keyboard protocol on keep the encoding.
 - **Scrollback lives in herdr.** The pane keeps none
   (`changeScrollback(nil)`), since a scroll answers with a repaint and a
   local history filled with replaced screens showed output three times

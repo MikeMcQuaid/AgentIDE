@@ -405,6 +405,20 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   herdr-backed panes keep SwiftTerm's encoding: the frames omit the
   agent's keyboard modes, so an empty local mode cannot identify a
   shell. Applying the shell mapping there broke Option-Up in Codex.
+- zsh asks for application keypad mode at every prompt, since
+  `smkx` for `xterm-256color` is `ESC [ ? 1 h ESC =` and the `ESC =`
+  is DECKPAM. SwiftTerm 1.19 honours it as a VT terminal does and
+  sent `ESC O q` for the keypad 1, which zsh has nothing bound to,
+  so the whole numeric keypad typed nothing while the top row
+  worked. A Mac keyboard has no Num Lock, which is what xterm turns
+  the mode off with, and SwiftTerm's encoder strips that modifier
+  rather than applying the rule, so `PaneTerminalView.routeKey`
+  sends the labelled character for every keypad key that has one in
+  a local shell pane, leaving Enter and Clear, the modified presses
+  and any pane that turned the kitty keyboard protocol on to
+  SwiftTerm. Shift or Option already worked: the encoder falls back
+  to the key's own text as soon as a modifier is held. Recheck on a
+  SwiftTerm upgrade.
 - An agent pane keeps no scrollback of its own, through
   `changeScrollback(nil)`: herdr owns the history and answers a
   scroll with a full repaint, so a local history filled up with
