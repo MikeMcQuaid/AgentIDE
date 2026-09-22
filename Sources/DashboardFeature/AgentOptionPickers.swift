@@ -17,36 +17,22 @@ public struct AgentOptionPickers: View {
         model: Binding<String>,
         effort: Binding<String>,
         choices: @escaping (AgentKind) -> AgentChoices,
+        showsAgent: Bool = true,
     ) {
         _agent = agent
         _model = model
         _effort = effort
         self.choices = choices
+        self.showsAgent = showsAgent
     }
 
     // MARK: Public
 
     public var body: some View {
         HStack(spacing: Self.spacing) {
-            Picker("Agent", selection: $agent) {
-                ForEach(AgentKind.allCases, id: \.self) { kind in
-                    Label {
-                        // The installed CLI's version beside the
-                        // name, as probed once at launch.
-                        Text("""
-                        \(kind.displayName)\(Text(choices(kind).version.map { " " + $0 } ?? "")
-                            .foregroundStyle(.secondary))
-                        """)
-                    } icon: {
-                        Image(kind.iconAssetName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: Self.agentIconSize, height: Self.agentIconSize)
-                    }
-                    .tag(kind)
-                }
+            if showsAgent {
+                agentPicker
             }
-            .hoverHelp("The agent CLI to run")
             Picker("Model", selection: $model) {
                 ForEach(choices(agent).models, id: \.self) { name in
                     Text(AgentOptionName.display(name, named: choices(agent).names)).tag(name)
@@ -76,11 +62,34 @@ public struct AgentOptionPickers: View {
     @Binding var effort: String
 
     let choices: (AgentKind) -> AgentChoices
+    let showsAgent: Bool
 
     // MARK: Private
 
     private static let spacing: CGFloat = 6
     private static let agentIconSize: CGFloat = 8
+
+    private var agentPicker: some View {
+        Picker("Agent", selection: $agent) {
+            ForEach(AgentKind.allCases, id: \.self) { kind in
+                Label {
+                    // The installed CLI's version beside the
+                    // name, as probed once at launch.
+                    Text("""
+                    \(kind.displayName)\(Text(choices(kind).version.map { " " + $0 } ?? "")
+                        .foregroundStyle(.secondary))
+                    """)
+                } icon: {
+                    Image(kind.iconAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: Self.agentIconSize, height: Self.agentIconSize)
+                }
+                .tag(kind)
+            }
+        }
+        .hoverHelp("The agent CLI to run")
+    }
 
     /// A model or effort picked for one agent may not exist on
     /// another, and neither does the empty string a form opens on the

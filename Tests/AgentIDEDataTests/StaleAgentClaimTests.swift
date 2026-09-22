@@ -90,6 +90,7 @@ private struct StaleClaimRunner: ProcessRunner {
         _ arguments: [String],
         workingDirectory _: String?,
         environment _: [String: String],
+        outputLimit _: Int?,
     ) -> ProcessResult {
         let output =
             if arguments.contains("snapshot") {

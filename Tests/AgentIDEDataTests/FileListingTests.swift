@@ -125,6 +125,7 @@ private final class SlowCountingRunner: ProcessRunner, Sendable {
         _: [String],
         workingDirectory _: String?,
         environment _: [String: String],
+        outputLimit _: Int?,
     ) async throws -> ProcessResult {
         count.withLock { $0 += 1 }
         try await Task.sleep(for: .milliseconds(Self.stallMilliseconds))

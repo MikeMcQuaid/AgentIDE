@@ -106,6 +106,7 @@ extension RootView {
                 git: dependencies.git,
                 github: dependencies.github,
                 service: dependencies.service,
+                localReviews: dependencies.localReviews,
             )
             .hidden(shown != .review)
             editorPane(for: item, role: .utility)

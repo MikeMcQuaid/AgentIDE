@@ -71,6 +71,7 @@ private struct FailingRunner: ProcessRunner {
         _: [String],
         workingDirectory _: String?,
         environment _: [String: String],
+        outputLimit _: Int?,
     ) throws -> ProcessResult {
         throw Failure(marker: marker)
     }

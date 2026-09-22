@@ -12,7 +12,13 @@ public struct ReviewView: View {
 
     /// Creates the review view for a worktree; the GitHub client
     /// feeds the inline pull request conversations.
-    public init(worktree: Worktree, git: GitClient, github: GitHubClient, service: SessionService) {
+    public init(
+        worktree: Worktree,
+        git: GitClient,
+        github: GitHubClient,
+        service: SessionService,
+        localReviews: LocalReviewStore,
+    ) {
         worktreePath = worktree.path
         self.worktree = worktree
         self.service = service
@@ -60,59 +66,47 @@ public struct ReviewView: View {
         }
         makeModel = builder
         _model = State(initialValue: builder())
+        let reviewBuilder = { localReviews.model(worktreePath: worktree.path) }
+        makeLocalReview = reviewBuilder
+        _localReview = State(initialValue: reviewBuilder())
     }
 
     // MARK: Public
 
-    /// The toolbar, diff list and commit message editor.
+    /// The diff and local findings share the selected scope.
     public var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-            // Only a stack shows it, so a branch standing on its own
-            // reviews exactly as it always did.
-            if stack.isStacked {
-                BranchStackStrip(stack: stack, selected: selectedBranch) { branch in
-                    show(branch)
+        codeReview
+            .disabled(model.isAmending)
+            // The find bar fades in rather than popping; nothing else
+            // in the stack changes with it.
+            .animation(Motion.quick, value: showsFind)
+            // State survives view re-initialisation: rebuild the diff
+            // and reconnect to this worktree's retained local review.
+            .task(id: worktreePath) {
+                model = makeModel()
+                localReview = makeLocalReview()
+                showsLocalReview = false
+                stack = await service.stack(for: worktree)
+                // The same entry the pull request tab is on, when one is
+                // remembered for this worktree.
+                let remembered = StackSelection.branch(for: worktreePath)
+                show(remembered.flatMap { stack.branches.contains($0) ? $0 : nil } ?? stack.checkedOut)
+            }
+            // Cmd-F reaches the pane through the storage bus: a diff is
+            // not a text view, so AppKit's own find bar, which the
+            // editor and the terminals answer, has nothing to attach to.
+            .onChange(of: findRequest) { showsFind = true }
+            .onChange(of: findNextRequest) { model.moveFind(by: 1) }
+            .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
+            // The menu bar's Commit Outstanding lands here through the
+            // storage bus.
+            .onChange(of: commitRequest) {
+                if localReview.isBusy == false {
+                    Task { await commitOutstanding(model: model) }
                 }
-                Divider()
             }
-            if showsFind {
-                ReviewFindBar(model: model, focusRequest: findRequest) { closeFind() }
-                Divider()
-            }
-            diffList
-            ReviewFooterView(
-                model: model,
-                onCommit: { await commitOutstanding(model: model) },
-                onAmend: { await amendOutstanding(model: model) },
-                canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
-            )
-        }
-        .disabled(model.isAmending)
-        // The find bar fades in rather than popping; nothing else
-        // in the stack changes with it.
-        .animation(Motion.quick, value: showsFind)
-        // The model is rebuilt whenever the worktree changes: state
-        // survives the view struct's re-initialisation, so the first
-        // worktree's model would otherwise review every one.
-        .task(id: worktreePath) {
-            model = makeModel()
-            stack = await service.stack(for: worktree)
-            // The same entry the pull request tab is on, when one is
-            // remembered for this worktree.
-            let remembered = StackSelection.branch(for: worktreePath)
-            show(remembered.flatMap { stack.branches.contains($0) ? $0 : nil } ?? stack.checkedOut)
-        }
-        // Cmd-F reaches the pane through the storage bus: a diff is
-        // not a text view, so AppKit's own find bar, which the
-        // editor and the terminals answer, has nothing to attach to.
-        .onChange(of: findRequest) { showsFind = true }
-        .onChange(of: findNextRequest) { model.moveFind(by: 1) }
-        .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
-        // The menu bar's Commit Outstanding lands here through the
-        // storage bus.
-        .onChange(of: commitRequest) { Task { await commitOutstanding(model: model) } }
+            .onChange(of: model.files) { localReview.update(files: model.files) }
+            .sheet(isPresented: $localReview.showsPrompt) { LocalReviewPromptView(model: localReview) }
     }
 
     // MARK: Internal
@@ -123,16 +117,16 @@ public struct ReviewView: View {
     /// Internal for the same reason as `worktreePath`.
     let service: SessionService
 
+    let worktree: Worktree
+
     // MARK: Private
 
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
-    private static let iconPadding: CGFloat = 4
-    private static let iconCornerRadius: CGFloat = 5
-    private static let iconSelectedOpacity = 0.2
-    private static let disabledOpacity = 0.4
 
     @State private var model: ReviewModel
+    @State private var localReview: LocalReviewModel
+    @State private var showsLocalReview = false
 
     /// The stack the worktree's branch belongs to, and which entry
     /// of it this pane is showing. A stack of one is every branch
@@ -158,9 +152,41 @@ public struct ReviewView: View {
     @AppStorage("reviewFindPreviousRequest")
     private var findPreviousRequest = 0
 
-    private let worktree: Worktree
-
     private let makeModel: () -> ReviewModel
+    private let makeLocalReview: () -> LocalReviewModel
+
+    private var codeReview: some View {
+        VStack(spacing: 0) {
+            toolbar
+            Divider()
+            // Only a stack shows it, so a branch standing on its own
+            // reviews exactly as it always did.
+            if stack.isStacked {
+                BranchStackStrip(stack: stack, selected: selectedBranch) { branch in
+                    show(branch)
+                }
+                .disabled(localReview.isBusy)
+                Divider()
+            }
+            if showsFind {
+                ReviewFindBar(model: model, focusRequest: findRequest) { closeFind() }
+                Divider()
+            }
+            diffList(
+                model: model,
+                localReview: localReview,
+                collapsedAll: collapsedAll,
+                collapseOverrides: $collapseOverrides,
+            )
+            ReviewFooterView(
+                model: model,
+                onCommit: { await commitOutstanding(model: model) },
+                onAmend: { await amendOutstanding(model: model) },
+                canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
+            )
+            .disabled(localReview.isBusy)
+        }
+    }
 
     /// Icon-only controls in two grouped capsules, every one
     /// explained by its tooltip.
@@ -171,8 +197,10 @@ public struct ReviewView: View {
             }
             .padding(Self.captionSpacing)
             .background(.thinMaterial, in: Capsule())
+            .disabled(localReview.isBusy)
             Spacer()
             displayToggles
+                .disabled(localReview.isBusy)
             Spacer()
             Text(model.files.count == 1 ? "1 file" : String(model.files.count) + " files")
                 .interfaceFont(.callout)
@@ -185,6 +213,8 @@ public struct ReviewView: View {
             .hoverHelp("Lines added and deleted across the diff")
             RefreshButton { await model.reload() }
                 .hoverHelp("Reload the diff from git")
+                .disabled(localReview.isBusy)
+            localReviewButton(model: model, localReview: localReview, isPresented: $showsLocalReview)
         }
         .padding(Self.spacing)
     }
@@ -232,32 +262,6 @@ public struct ReviewView: View {
         )
     }
 
-    @ViewBuilder private var diffList: some View {
-        if model.hasLoaded == false {
-            // A local `git diff` lands in well under half a second;
-            // a wait that short shows nothing rather than a flash.
-            Color.clear
-        } else if model.files.isEmpty {
-            ContentUnavailableView("No changes", systemImage: "checkmark.circle")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ReviewFileListView(
-                model: model,
-                worktreePath: worktreePath,
-                hideAllByDefault: collapsedAll,
-                collapseOverrides: $collapseOverrides,
-            )
-            .contextMenu {
-                Button("Reject Selected Lines") { Task { await model.rejectSelected() } }
-                    .disabled(
-                        model.selections.values.allSatisfy(\.isEmpty)
-                            || model.scope == .branch || model.scope == .upstream
-                            || model.isReadOnly,
-                    )
-            }
-        }
-    }
-
     private func scopeButton(
         _ scope: ReviewModel.Scope,
         systemImage: String,
@@ -270,33 +274,6 @@ public struct ReviewView: View {
             collapseOverrides = [:]
             Task { await model.reload() }
         }
-    }
-
-    /// One icon control; a selected one fills its bubble.
-    private func iconButton(
-        _ systemImage: String,
-        help: String,
-        isOn: Bool = false,
-        disabled: Bool = false,
-        action: @escaping () -> Void,
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                .padding(Self.iconPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: Self.iconCornerRadius)
-                        .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
-                )
-                .contentShape(Rectangle())
-                .accessibilityLabel(help)
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? Self.disabledOpacity : 1)
-        // The colour fill alone is invisible to VoiceOver.
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-        .hoverHelp(help)
     }
 
     /// Retargets the pane at a stack entry: the checked-out branch

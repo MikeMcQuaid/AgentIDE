@@ -74,6 +74,28 @@ updates.
 - Code reviews uncommitted work, the last commit, unpushed commits, the
   whole branch or any single commit, as a syntax-highlighted diff with
   the pull request's conversations inline under their files.
+- Asks the other agent to review the selected diff through its Claude
+  or Codex icon at the top of Review, which shows a spinner while a
+  review runs. The popover starts with an
+  editable review prompt, prefilled with the existing instructions,
+  and attaches the selected diff automatically. Reviews cover
+  actionable bugs and major readability, documentation and security
+  improvements. Findings appear both beneath their files and in the
+  popover, marked as local reviews with the reviewer's icon. Make fixes
+  prepares one editable prompt for all unresolved findings to copy
+  into the main agent pane, grouping comments by file like copied GitHub
+  reviews and omitting empty notes. Each finding also offers Make fix
+  for just that comment. Resolve comment dismisses it locally and can be
+  undone with Reopen comment; preparing a fix does not claim the code
+  has been fixed. Raw output stays out of the popover. Reviews continue
+  in the background when switching worktrees or panes; returning shows
+  their progress or results. Completed reviews, their edited instructions
+  and resolved comments survive relaunches;
+  changed code needs a fresh review. Settings chooses the default
+  reviewer and each agent's review model and effort. With no recorded
+  session, Other agent uses the opposite of the general session default.
+  Diff controls stay locked during review and fix-prompt preparation;
+  a reviewer exceeding 256 KiB on either output stream is stopped.
 - Edits files in a built-in editor that reads `.editorconfig`, comments
   with Cmd-/, moves and duplicates lines, guides columns 80 and 118 and
   bars every uncommitted line; an uncommitted file can also be put back
@@ -163,6 +185,10 @@ Settings (Cmd-,) controls:
 
 - **General**: the agent, model and effort new sessions start on, whether
   commits must be signed, and the browser Cmd-click opens.
+- **Review**: which reviewer a pane starts with, either the other agent
+  or a named agent, and separate model and effort preferences for each.
+  Model and effort changes apply to the next review without changing
+  new-session defaults.
 - **Notifications**: which events notify, badge the Dock and make a
   sound.
 - **Fonts**: fonts and sizes for every piece of text in the app, so it

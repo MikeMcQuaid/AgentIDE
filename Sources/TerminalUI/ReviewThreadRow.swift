@@ -2,7 +2,7 @@ import AgentIDEDomain
 import AppKit
 import SwiftUI
 
-/// One pull request conversation: a single header line with the
+/// One GitHub conversation or local finding: a header with the
 /// anchor, edit jump, author and resolve toggle over the comments;
 /// resolved conversations start minimised to their header.
 public struct ReviewThreadRow: View {
@@ -14,10 +14,18 @@ public struct ReviewThreadRow: View {
     public init(
         thread: ReviewThread,
         onEdit: (@MainActor () -> Void)? = nil,
-        onToggleResolved: @escaping @MainActor () async -> Void,
+        localReviewer: AgentKind? = nil,
+        onMakeFix: (@MainActor () async -> Void)? = nil,
+        onToggleResolved: (@MainActor () async -> Void)? = nil,
+        allowsActions: Bool = true,
+        allowsFix: Bool = true,
     ) {
         self.thread = thread
         self.onEdit = onEdit
+        self.localReviewer = localReviewer
+        self.onMakeFix = onMakeFix
+        self.allowsActions = allowsActions
+        self.allowsFix = allowsFix
         self.onToggleResolved = onToggleResolved
     }
 
@@ -34,12 +42,33 @@ public struct ReviewThreadRow: View {
                 HStack {
                     Spacer()
                     resolveButton
+                    if let onMakeFix, thread.isResolved == false {
+                        BusyButton(
+                            "Make fix",
+                            busy: "Preparing",
+                            prominent: true,
+                            disabled: allowsFix == false,
+                            action: onMakeFix,
+                        )
+                        .controlSize(.small)
+                        .hoverHelp("Prepare an editable fix prompt for this finding to copy into the main agent pane")
+                    }
                 }
+                .disabled(allowsActions == false)
             }
         }
         .padding(Self.padding)
         .background(.quaternary.opacity(Self.backgroundOpacity), in: RoundedRectangle(cornerRadius: Self.corner))
+        .overlay {
+            if localReviewer != nil {
+                RoundedRectangle(cornerRadius: Self.corner)
+                    .strokeBorder(Color.accentColor, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         .opacity(thread.isResolved ? Self.resolvedOpacity : 1)
+        .onChange(of: thread.isResolved) { expandOverrides = [] }
+        .animation(Motion.quick, value: thread.isResolved)
     }
 
     // MARK: Private
@@ -49,6 +78,7 @@ public struct ReviewThreadRow: View {
     private static let corner: CGFloat = 6
     private static let backgroundOpacity = 0.5
     private static let resolvedOpacity = 0.6
+    private static let iconSize: CGFloat = 16
 
     /// Overrides per row once toggled; resolved conversations
     /// otherwise start minimised.
@@ -56,7 +86,11 @@ public struct ReviewThreadRow: View {
 
     private let thread: ReviewThread
     private let onEdit: (@MainActor () -> Void)?
-    private let onToggleResolved: @MainActor () async -> Void
+    private let localReviewer: AgentKind?
+    private let onMakeFix: (@MainActor () async -> Void)?
+    private let allowsActions: Bool
+    private let allowsFix: Bool
+    private let onToggleResolved: (@MainActor () async -> Void)?
 
     private var isExpanded: Bool {
         expandOverrides.last ?? (thread.isResolved == false)
@@ -85,9 +119,17 @@ public struct ReviewThreadRow: View {
         Button {
             expandOverrides = [isExpanded == false]
         } label: {
-            Image(systemName: thread.isResolved ? "checkmark.bubble" : "bubble.left")
-                .foregroundStyle(thread.isResolved ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
-                .accessibilityLabel(thread.isResolved ? "Resolved conversation" : "Open conversation")
+            if let localReviewer {
+                Image(localReviewer.iconAssetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.iconSize, height: Self.iconSize)
+                    .accessibilityLabel(localReviewer.displayName + " local review")
+            } else {
+                Image(systemName: thread.isResolved ? "checkmark.bubble" : "bubble.left")
+                    .foregroundStyle(thread.isResolved ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .accessibilityLabel(thread.isResolved ? "Resolved GitHub conversation" : "Open GitHub conversation")
+            }
         }
         .buttonStyle(.borderless)
         .hoverHelp("Collapse or expand this conversation")
@@ -95,17 +137,19 @@ public struct ReviewThreadRow: View {
 
     @ViewBuilder private var resolveButton: some View {
         // A REST-fallback thread carries no id to resolve.
-        if thread.resolveID.isEmpty == false {
+        if thread.resolveID.isEmpty == false || localReviewer != nil, let onToggleResolved {
             BusyButton(
-                thread.isResolved ? "Unresolve" : "Resolve",
+                localReviewer == nil
+                    ? (thread.isResolved ? "Unresolve" : "Resolve")
+                    : (thread.isResolved ? "Reopen comment" : "Resolve comment"),
                 busy: thread.isResolved ? "Unresolving" : "Resolving",
                 action: onToggleResolved,
             )
             .controlSize(.small)
             .hoverHelp(
-                thread.isResolved
-                    ? "Reopen this conversation on GitHub"
-                    : "Mark this conversation resolved on GitHub",
+                localReviewer == nil
+                    ? (thread.isResolved ? "Reopen on GitHub" : "Resolve on GitHub")
+                    : (thread.isResolved ? "Reopen this local finding" : "Resolve locally without changing code"),
             )
         }
     }
@@ -117,6 +161,9 @@ public struct ReviewThreadRow: View {
             Text(thread.comments.first?.author ?? "")
                 .interfaceFont(.callout, weight: .semibold)
                 .textSelection(.enabled)
+            Text(localReviewer == nil ? "GitHub" : (thread.isResolved ? "Resolved locally" : "Local review"))
+                .interfaceFont(.caption)
+                .foregroundStyle(localReviewer == nil ? Color.secondary : Color.accentColor)
             Text(anchor)
                 .interfaceFont(.callout, monospaced: true)
                 .foregroundStyle(.secondary)

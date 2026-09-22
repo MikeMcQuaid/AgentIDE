@@ -169,6 +169,7 @@ private final class ScriptedGitHubRunner: ProcessRunner, Sendable {
         _ arguments: [String],
         workingDirectory _: String?,
         environment _: [String: String],
+        outputLimit _: Int?,
     ) -> ProcessResult {
         let command = arguments.joined(separator: " ")
         return switch answers[command] {

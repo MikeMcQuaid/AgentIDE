@@ -293,7 +293,12 @@ final class RecordingRunner: ProcessRunner, @unchecked Sendable {
 
     private(set) var commands: [[String]] = []
 
-    func run(_ arguments: [String], workingDirectory _: String?, environment _: [String: String]) -> ProcessResult {
+    func run(
+        _ arguments: [String],
+        workingDirectory _: String?,
+        environment _: [String: String],
+        outputLimit _: Int?,
+    ) -> ProcessResult {
         commands.append(arguments)
         return ProcessResult(status: 0, standardOutput: "", standardError: "")
     }

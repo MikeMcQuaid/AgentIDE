@@ -8,10 +8,16 @@ public struct ProcessResult: Sendable {
     // MARK: Lifecycle
 
     /// Creates a result.
-    public init(status: Int32, standardOutput: String, standardError: String) {
+    public init(
+        status: Int32,
+        standardOutput: String,
+        standardError: String,
+        outputLimitExceeded: Bool = false,
+    ) {
         self.status = status
         self.standardOutput = standardOutput
         self.standardError = standardError
+        self.outputLimitExceeded = outputLimitExceeded
     }
 
     // MARK: Public
@@ -19,15 +25,18 @@ public struct ProcessResult: Sendable {
     /// The process's exit status.
     public let status: Int32
 
-    /// Everything the process wrote to standard output.
+    /// Captured standard output, up to the requested byte limit.
     public let standardOutput: String
 
-    /// Everything the process wrote to standard error.
+    /// Captured standard error, up to the requested byte limit.
     public let standardError: String
 
-    /// Whether the process exited zero.
+    /// Whether either captured stream exceeded its byte limit.
+    public let outputLimitExceeded: Bool
+
+    /// Whether the process exited zero without exceeding its output limit.
     public var succeeded: Bool {
-        status == 0
+        status == 0 && outputLimitExceeded == false
     }
 }
 
@@ -101,18 +110,30 @@ enum ProcessEnvironment {
 
 /// Runs external commands and captures their output.
 public protocol ProcessRunner: Sendable {
-    /// Runs an argv, resolved via `/usr/bin/env`, and captures output.
+    /// Runs an argv, resolved via `/usr/bin/env`; an optional byte limit caps each stream and stops overflow.
     func run(
         _ arguments: [String],
         workingDirectory: String?,
         environment: [String: String],
+        outputLimit: Int?,
     ) async throws -> ProcessResult
+}
+
+public extension ProcessRunner {
+    /// Runs without an output limit, as required by callers that capture large diffs or logs.
+    func run(
+        _ arguments: [String],
+        workingDirectory: String?,
+        environment: [String: String],
+    ) async throws -> ProcessResult {
+        try await run(arguments, workingDirectory: workingDirectory, environment: environment, outputLimit: nil)
+    }
 }
 
 // MARK: - FoundationProcessRunner
 
-/// A `ProcessRunner` backed by Foundation's `Process`, writing output
-/// to temporary files so large output can never deadlock a pipe.
+/// A `ProcessRunner` backed by Foundation's `Process`, capturing output
+/// in temporary files or bounded, continuously drained pipes.
 public struct FoundationProcessRunner: ProcessRunner {
     // MARK: Lifecycle
 
@@ -132,6 +153,7 @@ public struct FoundationProcessRunner: ProcessRunner {
         _ arguments: [String],
         workingDirectory: String?,
         environment: [String: String],
+        outputLimit: Int?,
     ) async throws -> ProcessResult {
         // Every process the app runs passes through here, so this is
         // where each one's cost is recorded: the command's first
@@ -141,7 +163,7 @@ public struct FoundationProcessRunner: ProcessRunner {
             Self.name(of: arguments),
             context: workingDirectory ?? "",
         ) {
-            try await Self.launch(arguments, workingDirectory, environment)
+            try await Self.launch(arguments, workingDirectory, environment, outputLimit: outputLimit)
         }
     }
 
@@ -195,14 +217,8 @@ public struct FoundationProcessRunner: ProcessRunner {
         _ arguments: [String],
         _ workingDirectory: String?,
         _ extraEnvironment: [String: String],
+        outputLimit: Int?,
     ) async throws -> ProcessResult {
-        let outputURL = temporaryFile()
-        let errorURL = temporaryFile()
-        defer {
-            try? FileManager.default.removeItem(at: outputURL)
-            try? FileManager.default.removeItem(at: errorURL)
-        }
-
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
@@ -210,11 +226,21 @@ public struct FoundationProcessRunner: ProcessRunner {
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
         }
         process.environment = ProcessEnvironment.scrubbed(merging: extraEnvironment)
+        process.standardInput = FileHandle.nullDevice
+        if let outputLimit {
+            return try await BoundedProcessOutput(limit: outputLimit).run(process)
+        }
+
+        let outputURL = temporaryFile()
+        let errorURL = temporaryFile()
+        defer {
+            try? FileManager.default.removeItem(at: outputURL)
+            try? FileManager.default.removeItem(at: errorURL)
+        }
         let outputHandle = try FileHandle(forWritingTo: outputURL)
         let errorHandle = try FileHandle(forWritingTo: errorURL)
         process.standardOutput = outputHandle
         process.standardError = errorHandle
-        process.standardInput = FileHandle.nullDevice
 
         return try await withCheckedThrowingContinuation { (continuation: Exit) in
             process.terminationHandler = { finished in

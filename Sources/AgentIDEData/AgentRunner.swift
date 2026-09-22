@@ -63,6 +63,17 @@ public protocol AgentRunner: Sendable {
     /// The command line arguments selecting a model and effort; nil
     /// values fall back to the agent's defaults.
     func optionArguments(model: String?, effort: String?) -> String
+
+    /// A non-interactive review over a supplied snapshot.
+    func reviewCommand(
+        executable: String,
+        promptFile: String,
+        schemaFile: String,
+        options: AgentLaunchOptions,
+    ) -> String
+
+    /// Extracts the schema-constrained response from the CLI's envelope.
+    func reviewOutput(_ output: String) throws -> String
 }
 
 extension AgentRunner {

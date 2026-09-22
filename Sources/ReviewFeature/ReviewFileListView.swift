@@ -10,6 +10,7 @@ struct ReviewFileListView: View {
     // MARK: Internal
 
     let model: ReviewModel
+    @Bindable var localReview: LocalReviewModel
     let worktreePath: String
 
     /// Whether files start collapsed (the Hide All display mode);
@@ -59,6 +60,11 @@ struct ReviewFileListView: View {
             },
         )
         if isCollapsed(file) == false {
+            if localReview.isRunning == false, let review = localReview.review {
+                ForEach(review.threads.filter { $0.path == file.path }) { thread in
+                    LocalReviewThreadRow(model: localReview, diff: model, thread: thread)
+                }
+            }
             ForEach(model.threads(for: file.path)) { thread in
                 ReviewThreadRow(
                     thread: thread,

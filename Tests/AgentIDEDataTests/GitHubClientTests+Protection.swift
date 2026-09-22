@@ -6,7 +6,12 @@ import Testing
 /// A `gh` whose branch read says unprotected and whose rules read
 /// fails, the shape of an outage or an endpoint a plan lacks.
 private struct RulesFailingRunner: ProcessRunner {
-    func run(_ arguments: [String], workingDirectory _: String?, environment _: [String: String]) -> ProcessResult {
+    func run(
+        _ arguments: [String],
+        workingDirectory _: String?,
+        environment _: [String: String],
+        outputLimit _: Int?,
+    ) -> ProcessResult {
         if arguments.first == "git" || arguments.contains("remote") {
             return ProcessResult(status: 0, standardOutput: "git@github.com:mike/repo.git\n", standardError: "")
         }

@@ -1,5 +1,6 @@
 import AgentIDEData
 import DashboardFeature
+import ReviewFeature
 import TerminalUI
 
 /// Builds every adapter once and hands them to the features; the
@@ -36,6 +37,7 @@ final class AppDependencies {
         git = gitClient
         github = githubClient
         service = sessionService
+        localReviews = LocalReviewStore(service: sessionService)
         store = metadataStore
         dashboard = DashboardModel(
             service: sessionService,
@@ -74,6 +76,7 @@ final class AppDependencies {
     let git: GitClient
     let github: GitHubClient
     let service: SessionService
+    let localReviews: LocalReviewStore
     let dashboard: DashboardModel
     let store: MetadataStore
 }
