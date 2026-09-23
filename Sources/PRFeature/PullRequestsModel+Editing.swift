@@ -53,16 +53,21 @@ extension PullRequestsModel {
     /// written, then the template after an empty line. The template
     /// is found by its first line, since ticking its boxes and
     /// filling its sections leaves the rest of it changed, at the
-    /// last place that line opens a line: the template was appended
+    /// last place that whole line matches: the template was appended
     /// after the words, so a description using the same heading
-    /// itself keeps it. A body without that line is all body.
+    /// itself keeps it. Repeated separators are counted back from
+    /// the last match, keeping edited sections and the closing rule.
     static func splitTemplate(from body: String, template: String) -> (body: String, template: String)? {
-        let lines = template.split(whereSeparator: \.isNewline).map(String.init)
-        guard let marker = lines.first(where: { isBlank($0) == false }),
+        let lines = template.split(whereSeparator: \.isNewline).map(String.init).filter { isBlank($0) == false }
+        guard let marker = lines.first,
               let start = body.ranges(of: marker)
-              .last(where: { range in
-                  range.lowerBound == body.startIndex || body[body.index(before: range.lowerBound)].isNewline
-              })?.lowerBound
+              .filter({ range in
+                  (range.lowerBound == body.startIndex || body[body.index(before: range.lowerBound)].isNewline)
+                      && (range.upperBound == body.endIndex || body[range.upperBound].isNewline)
+              })
+              .dropLast(lines.count(where: { $0 == marker }) - 1)
+              .last?
+              .lowerBound
         else {
             return nil
         }

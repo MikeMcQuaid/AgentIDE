@@ -1182,9 +1182,12 @@ steps.
   and reset buttons working as they do before opening and the labels
   left out, since those belong to the pull request itself. A body
   opened with the repository's template is taken apart again at the
-  template's first line, so its boxes and sections are edited where
-  they were filled in, and Save joins the two as opening did; a body
-  without that line is edited whole. Save sends
+  template's first line. When that line repeats, its occurrences in
+  the template are counted back from the body's last match, so edited
+  section text still matches and a closing separator cannot be
+  mistaken for its start. Its boxes and sections are edited
+  where they were filled in, and Save joins the two as opening did;
+  a body without that opening is edited whole. Save sends
   `gh pr edit --title --body` and repaints
   the row and the pane from the caches, Cancel is the one discard.
   The form's draft is keyed by the pull request while it is edited,
