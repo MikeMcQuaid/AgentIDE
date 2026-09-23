@@ -45,7 +45,9 @@ struct TerminalKeyRoutingTests {
     ) throws {
         let pane = try Self.focusedPane(herdrBacked: false)
         defer { pane.window.close() }
-        pane.view.feed(text: "\u{1B}=")
+        pane.view.feed(text: "\u{1B}=selected text")
+        pane.view.selectAll(nil)
+        #expect(pane.view.selectionActive)
         let event = try #require(NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
@@ -64,6 +66,62 @@ struct TerminalKeyRoutingTests {
         }
 
         #expect(String(bytes: pane.capture.bytes, encoding: .utf8) == character)
+        #expect(pane.view.selectionActive == false)
+    }
+
+    @Test(arguments: [NSEvent.ModifierFlags.shift, .option, .control, .command])
+    func `modified keypad keys keep SwiftTerm routing`(modifier: NSEvent.ModifierFlags) throws {
+        let pane = try Self.focusedPane(herdrBacked: false)
+        defer { pane.window.close() }
+        pane.view.feed(text: "\u{1B}=")
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.numericPad, modifier],
+            timestamp: 0,
+            windowNumber: pane.window.windowNumber,
+            context: nil,
+            characters: "5",
+            charactersIgnoringModifiers: "5",
+            isARepeat: false,
+            keyCode: 87,
+        ))
+
+        #expect(pane.view.routeKey(event) === event)
+        #expect(pane.capture.bytes.isEmpty)
+    }
+
+    @Test(arguments: [
+        ("\u{3}", UInt16(76), false, "\u{1B}="),
+        ("\u{F739}", 71, false, "\u{1B}="),
+        ("\u{F700}", 126, false, "\u{1B}="),
+        ("5", 87, true, "\u{1B}="),
+        ("5", 87, false, "\u{1B}=\u{1B}[>1u"),
+    ])
+    func `keypad exceptions keep SwiftTerm routing`(
+        character: String,
+        keyCode: UInt16,
+        herdrBacked: Bool,
+        modes: String,
+    ) throws {
+        let pane = try Self.focusedPane(herdrBacked: herdrBacked)
+        defer { pane.window.close() }
+        pane.view.feed(text: modes)
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: .numericPad,
+            timestamp: 0,
+            windowNumber: pane.window.windowNumber,
+            context: nil,
+            characters: character,
+            charactersIgnoringModifiers: character,
+            isARepeat: false,
+            keyCode: keyCode,
+        ))
+
+        #expect(pane.view.routeKey(event) === event)
+        #expect(pane.capture.bytes.isEmpty)
     }
 
     // MARK: Private

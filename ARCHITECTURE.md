@@ -225,8 +225,9 @@ Rules that follow from that shape:
   it as a VT does, sending `ESC O u` for the 5, which a shell has
   nothing bound to. A Mac keyboard has no Num Lock to turn that mode
   off with, so a local shell pane sends the labelled character
-  instead (`PaneTerminalView.routeKey`); Enter, Clear and any pane
-  that turned the kitty keyboard protocol on keep the encoding.
+  instead (`PaneTerminalView.routeKey`), clearing the selection as
+  normal typing does. Enter, Clear, modified presses and any pane
+  that turned the kitty keyboard protocol on keep SwiftTerm's encoding.
 - **Scrollback lives in herdr.** The pane keeps none
   (`changeScrollback(nil)`), since a scroll answers with a repaint and a
   local history filled with replaced screens showed output three times

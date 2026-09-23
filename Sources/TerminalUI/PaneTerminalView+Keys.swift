@@ -34,10 +34,13 @@ extension PaneTerminalView {
             return nil
         }
 
-        guard let text = Self.numericPadText(of: event) else {
+        guard event.modifierFlags.contains(.shift) == false,
+              let text = Self.numericPadText(of: event)
+        else {
             return event
         }
 
+        selectNone()
         send(txt: text)
         return nil
     }

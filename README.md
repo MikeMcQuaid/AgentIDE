@@ -71,7 +71,8 @@ updates.
   hiding the utility pane or narrowing the window. Shells end when
   closed, when their worktree is deleted or when the app quits.
   Option-arrow keys reach agents as shortcuts and retain shell word
-  navigation, and the numeric keypad types its numbers.
+  navigation, and the numeric keypad types its numbers while preserving
+  modified-key behaviour.
 - Asks Copilot to review a pull request, or to review it again after
   a push, from the Copilot icon in the conversation's header; it dims
   while a request is still waiting on it.
