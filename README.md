@@ -118,8 +118,9 @@ updates.
   is not yours, pushes following a contributor's fork back to it, and
   branches stacked in one worktree; an open pull request's title and
   body are edited in the same form, the template as a field of its
-  own when the body was opened with one, to say what was actually
-  pushed.
+  own when the body was opened with one, including templates with
+  repeated separators and edited section text, to say what was
+  actually pushed.
 - Connects fork worktrees to their upstream pull requests for comments
   and checks, signing and pushing back to the contributor's branch;
   a push refused by the fork reports the error in the pane. Fork
