@@ -70,13 +70,10 @@ final class PullRequestsModel {
             )
         }
         fetchLabels = {
-            await github.labels(repositoryPath: repository.path)
+            await gate.labels(repositoryPath: repository.path)
         }
         fetchFailedRunLog = { runID in
             try await github.failedRunLog(repositoryPath: repository.path, runID: runID)
-        }
-        fetchPullRequestLabels = { number in
-            await github.pullRequestLabels(repositoryPath: repository.path, number: number)
         }
         performLabelChange = { number, add, remove in
             try await github.editLabels(repositoryPath: repository.path, number: number, add: add, remove: remove)
@@ -284,9 +281,6 @@ final class PullRequestsModel {
     /// One failing Actions run's failed-step log.
     var fetchFailedRunLog: (Int) async throws -> String = { _ in "" }
 
-    /// The selected pull request's labels, read on selection.
-    var fetchPullRequestLabels: (Int) async -> [String] = { _ in [] }
-
     /// Adds and removes labels on a pull request.
     var performLabelChange: (Int, [String], [String]) async throws -> Void = { _, _, _ in
         // Replaced by the initialiser.
@@ -326,6 +320,10 @@ final class PullRequestsModel {
     /// The open pull request whose title and body the form is
     /// editing, nil while it opens new ones. See `+Editing`.
     var editingNumber: Int?
+
+    /// Whether the edit found the repository's template in the body
+    /// and shows it as a field of its own; see `+Editing`.
+    var editingSplitsTemplate = false
 
     /// Takes an open pull request back to a draft.
     var performDraftChange: (PullRequestSummary) async throws -> Void

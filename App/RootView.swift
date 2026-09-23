@@ -222,8 +222,9 @@ struct RootView: View {
         .onChange(of: hasLiveWork, initial: true) {
             sleepInhibitor.update(hasLiveWork: hasLiveWork)
         }
-        // Pushes and rebases poke this counter so their counts show
-        // in the sidebar immediately rather than on the next poll.
+        // Pushes, rebases, commits and amends poke this counter so
+        // their counts show in the sidebar immediately rather than on
+        // the next poll.
         .onChange(of: dashboardRefreshRequest) {
             Task { await dependencies.dashboard.refreshSelected() }
         }
@@ -354,7 +355,7 @@ struct RootView: View {
     private var newShellRequest = 0
 
     /// The push and rebase actions' immediate-refresh signal.
-    @AppStorage("dashboardRefreshRequest")
+    @AppStorage(UtilityTabTarget.dashboardRefreshKey)
     private var dashboardRefreshRequest = 0
 
     /// The pull request pane's fresher-summary signal.

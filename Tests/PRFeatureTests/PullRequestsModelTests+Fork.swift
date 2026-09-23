@@ -31,8 +31,8 @@ extension PullRequestsModelTests {
         // The service derives a stack around the branch git says is
         // checked out, not the one the sidebar last cached, so an
         // agent switching branches under the app is seen here too.
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["switched"], checkedOut: "switched")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["switched"], checkedOut: "switched"))
         }
         var listed: GitHubClient.ListScope?
         model.fetchList = { scope, _ in

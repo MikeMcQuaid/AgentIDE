@@ -10,12 +10,49 @@ public extension SessionService {
     /// A branch with nothing under or over it comes back as a stack
     /// of one, which every surface treats as no stack at all.
     func stack(for worktree: Worktree) async -> BranchStack {
+        await stack(from: stackReading(for: worktree))
+    }
+
+    /// Everything a stack is derived from, read once per question:
+    /// where every branch points, which is held, which are left out
+    /// and when the config the remotes live in was written, with
+    /// one process for the refs. The rota derives a stack for a
+    /// worktree at a time all day, and almost none of them have
+    /// moved since last time.
+    internal struct StackReading {
+        let path: String
+        let checkedOut: String
+        let baseRef: String?
+        let excluded: Set<String>
+        let fingerprint: String
+    }
+
+    internal func stackReading(for worktree: Worktree) async -> StackReading {
         let path = worktree.path
         let checkedOut = await git.currentBranch(worktreePath: path) ?? worktree.branch
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         let baseRef = await git.defaultBaseRef(of: repository)
-        let base = baseRef.map(Self.branchName(fromBaseRef:))
-        guard let baseRef else {
+        // The default branch is not part of any stack, and neither
+        // is a branch this worktree has been told to leave out;
+        // whatever is checked out is part of it whatever it says.
+        let excluded = Set(excludedStackBranches(worktreePath: path))
+        let fingerprint = await git.refFingerprint(worktreePath: path)
+            + checkedOut + (baseRef ?? "") + excluded.sorted().joined(separator: ",")
+            + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
+        return StackReading(
+            path: path,
+            checkedOut: checkedOut,
+            baseRef: baseRef,
+            excluded: excluded,
+            fingerprint: fingerprint,
+        )
+    }
+
+    internal func stack(from reading: StackReading) async -> BranchStack {
+        let path = reading.path
+        let checkedOut = reading.checkedOut
+        let base = reading.baseRef.map(Self.branchName(fromBaseRef:))
+        guard let baseRef = reading.baseRef else {
             return await BranchStack(
                 base: nil,
                 branches: [checkedOut],
@@ -24,20 +61,17 @@ public extension SessionService {
             )
         }
 
-        // The default branch is not part of any stack, and neither
-        // is a branch this worktree has been told to leave out;
-        // whatever is checked out is part of it whatever it says.
-        let excluded = Set(excludedStackBranches(worktreePath: path))
-        // Everything the answer depends on, in one process: where
-        // every branch points, which is held, and which are left
-        // out. The rota derives a stack for a worktree at a time all
-        // day, and almost none of them have moved since last time.
-        let fingerprint = await git.refFingerprint(worktreePath: path)
-            + checkedOut + baseRef + excluded.sorted().joined(separator: ",")
-            + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
-        if let known = await StackCache.shared.stack(for: path, derivedFrom: fingerprint) {
+        let excluded = reading.excluded
+        if let known = await StackCache.shared.stack(for: path, derivedFrom: reading.fingerprint) {
             PerformanceLog.record(cacheHit: true, "stack#" + path)
             return known
+        }
+        // The facts the metadata kept across a relaunch carry the
+        // stack they were derived from.
+        if let saved = store.load().stackFacts[path], saved.fingerprint == reading.fingerprint {
+            PerformanceLog.record(cacheHit: true, "stack#" + path)
+            await StackCache.shared.remember(saved.facts.stack, for: path, derivedFrom: reading.fingerprint)
+            return saved.facts.stack
         }
 
         PerformanceLog.record(cacheHit: false, "stack#" + path)
@@ -86,7 +120,7 @@ public extension SessionService {
             checkedOut: standingIn ?? checkedOut,
             stackingBlocker: stackingBlocker(branches: related.map(\.branch) + [checkedOut], worktreePath: path),
         )
-        await StackCache.shared.remember(derived, for: path, derivedFrom: fingerprint)
+        await StackCache.shared.remember(derived, for: path, derivedFrom: reading.fingerprint)
         return derived
     }
 
@@ -158,46 +192,6 @@ public extension SessionService {
             return branch
         }
         return nil
-    }
-
-    /// The branches a restack would actually move: those not
-    /// already sitting on the one below them. Empty means the stack
-    /// is in order and the button has nothing to do.
-    func branchesOutOfPlace(worktree: Worktree) async -> [String] {
-        let path = worktree.path
-        let stack = await stack(for: worktree)
-        guard let base = stack.base else {
-            return []
-        }
-
-        var pending = [String]()
-        for branch in stack.branches {
-            let parent = stack.parent(of: branch) ?? base
-            if await git.isAncestor(parent, of: branch, worktreePath: path) == false {
-                pending.append(branch)
-            }
-        }
-        return pending
-    }
-
-    /// The branches a stack push would actually send: those with
-    /// commits the remote does not carry, or no remote branch yet.
-    func branchesUnpushed(worktree: Worktree) async -> [String] {
-        let path = worktree.path
-        let stack = await stack(for: worktree)
-        var pending = [String]()
-        for branch in stack.branches {
-            let remote = await remoteBranchRef(worktreePath: path, branch: branch)
-            guard await git.refExists(worktreePath: path, ref: remote) else {
-                pending.append(branch)
-                continue
-            }
-
-            if await git.commitCount(from: remote, to: branch, worktreePath: path) > 0 {
-                pending.append(branch)
-            }
-        }
-        return pending
     }
 
     /// Puts every branch of a stack back on the one below it, bottom
@@ -310,25 +304,6 @@ public extension SessionService {
             pushed.append(branch)
         }
         return pushed
-    }
-
-    /// The stack's branches whose tip is not signed, so the button
-    /// that would push them can dim the way a branch's own does
-    /// rather than failing on the first one.
-    func branchesUnsigned(worktree: Worktree) async -> [String] {
-        guard AppSettings.requiresSignedCommits else {
-            return []
-        }
-
-        let stack = await stack(for: worktree)
-        var unsigned = [String]()
-        for branch in stack.branches where await git.isCommitSigned(
-            worktreePath: worktree.path,
-            ref: branch,
-        ) == false {
-            unsigned.append(branch)
-        }
-        return unsigned
     }
 
     /// The branches this worktree's stack has been told to leave

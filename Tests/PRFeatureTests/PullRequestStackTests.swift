@@ -18,10 +18,12 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(
+                stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"),
+                unpushed: ["lower"],
+            )
         }
-        model.stacking.unpushed = { _ in ["lower"] }
         let ranges = Mutex([String?]())
         model.fetchCommitMessages = { _, range in
             ranges.withLock { $0.append(range) }
@@ -55,8 +57,8 @@ struct PullRequestStackTests {
         // being looked at, which is the ordinary way round: reading
         // an entry checks nothing out.
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         let opened = Mutex([String]())
         model.performCreate = { worktree, _, _, _, _ in
@@ -94,8 +96,8 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         await model.reload()
         model.show(branch: "upper")
@@ -146,8 +148,8 @@ struct PullRequestStackTests {
         // local-only name, and the stack lists the pushed twin that
         // stands for it at the same commit.
         model.fetchCurrentBranch = { _ in "worktree-name" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         await model.reload()
 
@@ -167,11 +169,10 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        let stack = BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: stack, unpushed: ["lower", "upper"], unsigned: ["lower"])
         }
-        model.stacking.unpushed = { _ in ["lower", "upper"] }
-        model.stacking.unsigned = { _ in ["lower"] }
         await model.reload()
 
         // A branch's own Push dims until its tip is signed, since
@@ -180,7 +181,7 @@ struct PullRequestStackTests {
         #expect(model.canPushStack == false)
         #expect(model.pushStackHelp.contains("not GPG signed"))
 
-        model.stacking.unsigned = { _ in [] }
+        model.stacking.facts = { _ in StackFacts(stack: stack, unpushed: ["lower", "upper"]) }
         await model.loadStack()
 
         #expect(model.canPushStack)
@@ -191,8 +192,8 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         let done = Mutex([String]())
         model.performRebase = { _ in
@@ -203,10 +204,9 @@ struct PullRequestStackTests {
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
-        // The rebase pushes the stack after; nothing real to push here.
+        // The rebase pushes the stack after; nothing real to push
+        // here, and the stack reads as signed, so Push agrees.
         model.stacking.push = { _ in [] }
-        // Done means Push agrees: the stack is read as signed after.
-        model.stacking.unsigned = { _ in [] }
         await model.reload()
 
         #expect(await model.rebaseSigned())
@@ -229,8 +229,8 @@ struct PullRequestStackTests {
         await model.reload()
         #expect(model.listedRange == "origin/HEAD..feature")
 
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "feature")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "feature"))
         }
         await model.loadStack()
         model.show(branch: "upper")
@@ -242,8 +242,8 @@ struct PullRequestStackTests {
     func `a stack entry stays listed through the reload that reads the real branch`() async {
         let model = makeModel()
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         let asked = Mutex([String]())
         model.fetchList = { scope, _ in
@@ -276,8 +276,12 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        // A branch below has moved on, so the stack needs restacking.
+        model.stacking.facts = { _ in
+            StackFacts(
+                stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"),
+                outOfPlace: ["upper"],
+            )
         }
         let done = Mutex([String]())
         model.performRebase = { _ in
@@ -292,8 +296,6 @@ struct PullRequestStackTests {
             done.withLock { $0.append("push") }
             return ["lower", "upper"]
         }
-        model.stacking.pending = { _ in true }
-        model.stacking.unsigned = { _ in [] }
         await model.reload()
 
         #expect(await model.rebaseSigned())
@@ -313,8 +315,8 @@ struct PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         let pushed = Mutex([String]())
         model.stacking.push = { _ in

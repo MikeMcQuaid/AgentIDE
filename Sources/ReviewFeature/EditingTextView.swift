@@ -129,15 +129,24 @@ final class EditingTextView: NSTextView {
     }
 
     /// Renders tabs at the configured width, both for the text
-    /// already shown and for whatever is typed next.
+    /// already shown and for whatever is typed next. A width the
+    /// whole document already renders at is left alone: writing the
+    /// style again invalidated every line's layout, and this runs on
+    /// every SwiftUI update, keystrokes and poll ticks included.
     func applyTabWidth(_ width: Int?) {
         guard let width, width > 0, let storage = unsafe textStorage else {
             return
         }
 
+        let interval = CGFloat(width) * " ".size(withAttributes: [.font: CodeStyle.nsFont]).width
+        guard defaultParagraphStyle?.defaultTabInterval != interval || rendersTabs(at: interval, in: storage) == false
+        else {
+            return
+        }
+
         let style = NSMutableParagraphStyle()
         style.tabStops = []
-        style.defaultTabInterval = CGFloat(width) * " ".size(withAttributes: [.font: CodeStyle.nsFont]).width
+        style.defaultTabInterval = interval
         defaultParagraphStyle = style
         typingAttributes[.paragraphStyle] = style
         storage.addAttribute(
@@ -231,6 +240,19 @@ final class EditingTextView: NSTextView {
     /// The document as lines, for the indentation unit.
     private var documentLines: [String] {
         string.components(separatedBy: "\n")
+    }
+
+    /// Whether every character of the storage already carries a
+    /// paragraph style with this tab interval.
+    private func rendersTabs(at interval: CGFloat, in storage: NSTextStorage) -> Bool {
+        let whole = NSRange(location: 0, length: storage.length)
+        guard whole.length > 0 else {
+            return true
+        }
+
+        var covered = NSRange()
+        let applied = unsafe storage.attribute(.paragraphStyle, at: 0, longestEffectiveRange: &covered, in: whole)
+        return (applied as? NSParagraphStyle)?.defaultTabInterval == interval && covered == whole
     }
 
     /// A paragraph block as lines, with whether it closed on a

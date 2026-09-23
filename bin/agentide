@@ -354,7 +354,9 @@ agentide_new() {
   arguments="$(printf '%s' "${arguments}" | sed -e 's/^ *//' -e 's/ *$//')"
   command="${agent}"
   [ -z "${arguments}" ] || command="${command} ${arguments}"
-  command="${command} \"\$(cat '${prompt_file}')\""
+  # After `--`, so a prompt opening with a dash is the prompt and
+  # not an option the agent refuses.
+  command="${command} -- \"\$(cat '${prompt_file}')\""
 
   if [ -n "${AGENTIDE_DRY_RUN:-}" ]; then
     remember "${defaults}" "repository=${repository}" "agent=${agent}" \

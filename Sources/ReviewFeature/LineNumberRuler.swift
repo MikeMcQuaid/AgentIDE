@@ -1,13 +1,12 @@
 import AppKit
 import TerminalUI
 
-// NSTextView ranges are UTF-16 offsets, so NSString is the correct
-// arithmetic here, not String.
-// swiftlint:disable legacy_objc_type
-
 // MARK: - LineNumberRuler
 
-/// A minimal line-number ruler for an `NSTextView`.
+/// A minimal line-number ruler for an `NSTextView`. Every scroll
+/// redraws it, so a draw reads only what is on screen: where the
+/// lines start is indexed once per edit (`LineIndex`), the label
+/// font once per size change, and nothing walks the document.
 final class LineNumberRuler: NSRulerView {
     // MARK: Lifecycle
 
@@ -36,26 +35,41 @@ final class LineNumberRuler: NSRulerView {
     /// with a bar down the gutter's inner edge: a tinted number said
     /// the same thing but could not be read down a scrolling file,
     /// which is the whole use of a change bar.
-    var changedLines: Set<Int> = []
+    var changedLines: Set<Int> = [] {
+        didSet {
+            if oldValue != changedLines {
+                needsDisplay = true
+            }
+        }
+    }
 
     override func drawHashMarksAndLabels(in _: NSRect) {
         guard let view = clientView as? NSTextView,
               let layoutManager = unsafe view.layoutManager,
-              let container = unsafe view.textContainer
+              let container = unsafe view.textContainer,
+              let storage = unsafe view.textStorage
         else {
             return
         }
 
-        let visible = layoutManager.glyphRange(forBoundingRect: view.visibleRect, in: container)
-        let content = view.string as NSString
-        let font = NSFont.monospacedDigitSystemFont(ofSize: Self.fontSize, weight: .regular)
+        let glyphs = layoutManager.glyphRange(forBoundingRect: view.visibleRect, in: container)
+        let visible = unsafe layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        // The storage's own string, never `view.string`: bridging
+        // that to Swift copies the whole document, once per frame.
+        let content = storage.mutableString
+        let starts = lineStarts ?? LineIndex.starts(in: content)
+        lineStarts = starts
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
 
         // Labels clip to the ruler so nothing paints over the text or
         // outside the visible strip.
         NSBezierPath(rect: bounds).setClip()
 
-        var line = content.lineNumber(at: visible.location)
-        var index = content.lineStart(at: visible.location)
+        var line = LineIndex.line(at: visible.location, starts: starts)
+        var index = starts[line - 1]
         while index < NSMaxRange(visible) {
             let lineRange = content.lineRange(for: NSRange(location: index, length: 0))
             let glyphRange = unsafe layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
@@ -76,10 +90,6 @@ final class LineNumberRuler: NSRulerView {
                     height: rect.height,
                 ).fill()
             }
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor.secondaryLabelColor,
-            ]
             let label = NSAttributedString(string: String(line), attributes: attributes)
             let labelX = ruleThickness - label.size().width - Self.padding - Self.barWidth
             label.draw(at: NSPoint(x: labelX, y: labelY))
@@ -88,12 +98,27 @@ final class LineNumberRuler: NSRulerView {
         }
     }
 
-    /// Widens the gutter with the code beside it.
+    /// Forgets where the lines start, for the next draw to index
+    /// again: an edit is what moves them.
+    func textChanged() {
+        lineStarts = nil
+        needsDisplay = true
+    }
+
+    /// Widens the gutter with the code beside it, and sizes the
+    /// numbers to keep the proportion their original size had to
+    /// the original code size. Read here, once per change, rather
+    /// than from the preferences on every draw.
     func matchCodeSize() {
-        let scaled = Self.thickness * Self.scale
-        if ruleThickness != scaled {
-            ruleThickness = scaled
+        let codeScale = CodeStyle.pointSize / CodeStyle.defaultPointSize
+        guard codeScale != scale else {
+            return
         }
+
+        scale = codeScale
+        ruleThickness = Self.thickness * codeScale
+        labelFont = NSFont.monospacedDigitSystemFont(ofSize: Self.baseFontSize * codeScale, weight: .regular)
+        needsDisplay = true
     }
 
     // MARK: Private
@@ -106,38 +131,11 @@ final class LineNumberRuler: NSRulerView {
     /// sits against the code it belongs to.
     private static let barWidth: CGFloat = 2
 
-    /// The numbers keep the proportion their original size had to
-    /// the original code size.
-    private static var scale: CGFloat {
-        CodeStyle.pointSize / CodeStyle.defaultPointSize
-    }
+    /// Where each line starts, indexed on the first draw after an
+    /// edit and kept until the next; nil is "not indexed since the
+    /// edit", which an empty document's index, `[0]`, cannot say.
+    private var lineStarts: [Int]? // swiftlint:disable:this discouraged_optional_collection
 
-    private static var fontSize: CGFloat {
-        baseFontSize * scale
-    }
+    private var scale: CGFloat = 0
+    private var labelFont: NSFont = .monospacedDigitSystemFont(ofSize: baseFontSize, weight: .regular)
 }
-
-// MARK: - Line arithmetic
-
-extension NSString {
-    /// The one-based line number containing a character index.
-    func lineNumber(at location: Int) -> Int {
-        var line = 1
-        var index = 0
-        while index < min(location, length) {
-            index = NSMaxRange(lineRange(for: NSRange(location: index, length: 0)))
-            line += 1
-            if index > location {
-                return line - 1
-            }
-        }
-        return line
-    }
-
-    /// The character index starting the line containing `location`.
-    func lineStart(at location: Int) -> Int {
-        lineRange(for: NSRange(location: min(location, length), length: 0)).location
-    }
-}
-
-// swiftlint:enable legacy_objc_type

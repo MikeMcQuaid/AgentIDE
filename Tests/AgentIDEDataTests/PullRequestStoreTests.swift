@@ -63,10 +63,16 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
         // `pr view` answers one object and `pr list` an array; the
         // client wraps a view answer in brackets, so an object serves
         // both here.
+        // Only the fields asked for, as gh answers them: the open
+        // scope never asks for the rollup, so it never reads the
+        // rules that decide one.
+        let rollup = arguments.contains { $0.contains("statusCheckRollup") }
+            ? ", \"statusCheckRollup\": [{\"state\": \"\(checks)\"}]"
+            : ""
         let json = """
         {"number": 7, "title": "Work", "url": "https://example.com/7", "headRefName": "work",
          "baseRefName": "main", "state": "OPEN", "isDraft": false, "author": {"login": "mike"},
-         "body": "", "statusCheckRollup": [{"state": "\(checks)"}]}
+         "body": ""\(rollup)}
         """
         let listed = arguments.contains("list") ? "[" + json + "]" : json
         return ProcessResult(status: 0, standardOutput: listed, standardError: "")
@@ -270,9 +276,29 @@ struct PullRequestStoreTests {
         let remembered = await relaunched.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
         #expect(remembered)
         #expect(runner.calls == 2)
-        relaunched.forgetDefaultPushPolicy(repositoryPath: "/repo")
+        relaunched.forgetRepositorySettings(repositoryPath: "/repo")
         let reasked = await relaunched.acceptsDefaultPushes(repositoryPath: "/repo", branch: "main")
         #expect(reasked)
         #expect(runner.calls == 4)
+    }
+
+    @Test
+    func `a base branch's required checks are read once and forgotten by a refresh`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-rules") + "/state.json"
+        let runner = CountingRunner(checks: "FAILURE")
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        // The summary, then the base branch's two rule reads.
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(runner.calls == 3)
+        // Asked again, the rules are remembered.
+        store.invalidate(repositoryPath: "/repo", number: 7)
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(runner.calls == 4)
+        // A refresh forgets them with the rest of the settings.
+        store.forgetRepositorySettings(repositoryPath: "/repo")
+        store.invalidate(repositoryPath: "/repo", number: 7)
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(runner.calls == 7)
     }
 }

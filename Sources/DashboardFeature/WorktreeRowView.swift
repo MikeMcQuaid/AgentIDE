@@ -347,13 +347,13 @@ private struct PullRequestBadge: View {
             LinkOpener.open(pullRequest.checksClickURL)
         } label: {
             Octicon(ChecksStyle.checksOcticonName, colour: ChecksStyle.colour(for: pullRequest.checks))
-                .accessibilityLabel("Checks: \(pullRequest.checks.lowercased())")
+                .accessibilityLabel("Checks: " + pullRequest.checksDescription)
         }
         .buttonStyle(.plain)
         .hoverHelp(
             pullRequest.failingCheckLinks.count == 1
-                ? "CI \(pullRequest.checks.lowercased()): open the one failing run; Cmd-click for the system browser"
-                : "CI \(pullRequest.checks.lowercased()): open the checks page; Cmd-click for the system browser",
+                ? "CI " + pullRequest.checksDescription + ": open the one failing run; Cmd-click for the system browser"
+                : "CI " + pullRequest.checksDescription + ": open the checks page; Cmd-click for the system browser",
         )
     }
 

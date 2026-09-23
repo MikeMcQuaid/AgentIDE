@@ -6,8 +6,9 @@ import TerminalUI
 /// the branch has no open pull request: title, body and the
 /// repository's template in three fields, with the template appended
 /// below the body when the pull request opens. The same form edits
-/// an open pull request's title and body (`editing`), with the
-/// labels and the template left to the pull request itself.
+/// an open pull request's title and body (`editing`), the template
+/// apart again when the body was opened with it, and the labels left
+/// to the pull request itself.
 struct PullRequestCreateForm: View {
     // MARK: Internal
 
@@ -33,10 +34,10 @@ struct PullRequestCreateForm: View {
                 .clipShape(RoundedRectangle(cornerRadius: Self.fieldCorner))
                 .overlay(RoundedRectangle(cornerRadius: Self.fieldCorner).stroke(.separator))
                 .readOnly(isGenerating || isBlocked)
-                .hoverHelp(editing == nil
+                .hoverHelp(editing == nil || model.editsTemplate
                     ? "The description in your own words; the template below is appended after it"
                     : "The description as it will read on GitHub once saved")
-            if editing == nil {
+            if editing == nil || model.editsTemplate {
                 templateSection
             }
         }

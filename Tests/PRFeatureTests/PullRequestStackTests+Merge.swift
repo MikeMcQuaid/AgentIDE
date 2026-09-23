@@ -12,8 +12,8 @@ extension PullRequestStackTests {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "lower" }
-        model.stacking.fetch = { _ in
-            BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "lower")
+        model.stacking.facts = { _ in
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "lower"))
         }
         await model.reload()
         model.pullRequests.rememberListing(

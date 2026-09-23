@@ -59,10 +59,15 @@ public final class ServiceStatus {
         doing what: String,
         holdingFor hold: Duration = .seconds(holdSeconds),
     ) {
-        // A machine with no route explains every failure at once and
-        // has said so already: repeating it per branch per poll is
-        // what buried the pane.
-        guard hasNetwork else {
+        // A machine with no route explains every failure at once,
+        // and a poll's failure is never how that is said: a route
+        // gone for a moment comes back before anyone would have
+        // acted on it, and only an action of the user's own that
+        // needed the network reports its absence, from where it was
+        // asked. Repeating it per branch per poll is what buried the
+        // pane; the app's own refusal is silent here too, since it
+        // can arrive before the path monitor's word does.
+        guard hasNetwork, GitHubOutage.isOffline(error) == false else {
             return
         }
         guard GitHubOutage.isLikely(error) else {
@@ -102,9 +107,12 @@ public final class ServiceStatus {
     }
 
     /// Told what the system's path monitor sees. Losing the network
-    /// is announced once and everything GitHub waits, since nothing
-    /// can succeed until it is back; regaining it clears the wait so
-    /// the next poll asks straight away.
+    /// makes everything GitHub wait, since nothing can succeed until
+    /// it is back, and regaining it clears the wait so the next poll
+    /// asks straight away. Neither is reported: a route that drops
+    /// for a moment and comes back is not news, and one that stays
+    /// gone is reported by the first action of the user's own that
+    /// needed it. Both go to the messages log for reading afterwards.
     public func networkChanged(isOnline: Bool) {
         guard isOnline != hasNetwork else {
             return
@@ -114,10 +122,7 @@ public final class ServiceStatus {
         guard isOnline else {
             isUnavailable = true
             unavailableSince = unavailableSince ?? Date()
-            ErrorLog.shared.report(
-                "No network connection, so pull request state is what was last fetched. "
-                    + "It refreshes by itself the moment the network is back.",
-            )
+            PerformanceLog.recordMessage("No network route; pull request state is as last fetched", isError: false)
             return
         }
 
@@ -125,7 +130,7 @@ public final class ServiceStatus {
         isUnavailable = false
         unavailableSince = nil
         let waited = since.map { " after " + Self.duration(since: $0) } ?? ""
-        ErrorLog.shared.note("The network is back" + waited + "; pull request state is refreshing.")
+        PerformanceLog.recordMessage("The network is back" + waited + "; refreshing pull request state", isError: false)
     }
 
     /// Records a success, which makes a failure held for what was

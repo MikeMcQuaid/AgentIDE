@@ -1,3 +1,5 @@
+import Foundation
+
 /// The review surfaces' diffs, split from the client body for
 /// length.
 public extension GitClient {
@@ -15,29 +17,28 @@ public extension GitClient {
         }
     }
 
-    /// The worktree's uncommitted diff against `HEAD`.
+    /// The worktree's uncommitted diff against `HEAD`, untracked
+    /// files included as new ones: committing stages everything, so
+    /// showing them is what makes them addable. `git diff` never
+    /// shows untracked files, so they are marked intent-to-add in a
+    /// private index built from `HEAD`, which makes the reading
+    /// three processes however many there are; one `diff --no-index`
+    /// per file ran thirteen thousand times in a minute on a
+    /// worktree an agent had filled. The real index is never touched.
     func uncommittedDiff(worktreePath: String, ignoringWhitespace: Bool = false) async throws -> String {
-        let options = diffOptions(ignoringWhitespace: ignoringWhitespace)
-        var diff = try await git(["diff"] + options + ["HEAD"], in: worktreePath).standardOutput
-        // `git diff` never shows untracked files, so each becomes a
-        // synthetic new-file diff; committing stages everything, so
-        // showing them is what makes them addable.
-        let untracked = try await git(
-            ["ls-files", "--others", "--exclude-standard"],
+        let scratch = FileManager.default
+            .temporaryDirectory
+            .appendingPathComponent("agentide-diff-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let environment = ["GIT_INDEX_FILE": scratch.appendingPathComponent("index").path]
+        try await git(["read-tree", "HEAD"], in: worktreePath, environment: environment)
+        try await git(["add", "--intent-to-add", "--all"], in: worktreePath, environment: environment)
+        return try await git(
+            ["diff"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + ["HEAD"],
             in: worktreePath,
+            environment: environment,
         ).standardOutput
-        for file in untracked.split(separator: "\n") {
-            // Exit status 1 just means the files differ.
-            let extra = try? await git(
-                ["diff"] + options + ["--no-index", "--", "/dev/null", String(file)],
-                in: worktreePath,
-                allowFailure: true,
-            )
-            if let output = extra?.standardOutput, output.isEmpty == false {
-                diff += (diff.isEmpty || diff.hasSuffix("\n") ? "" : "\n") + output
-            }
-        }
-        return diff
     }
 
     /// One commit's own diff, named by anything git resolves.

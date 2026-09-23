@@ -9,9 +9,9 @@ extension PullRequestsModel {
     func repaintFromCache() {
         if let selected,
            let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
-           cached != selected
+           withCachedUnresolved(cached) != selected
         {
-            self.selected = cached
+            self.selected = withCachedUnresolved(cached)
         }
         summaries = summaries.map { row in
             pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row

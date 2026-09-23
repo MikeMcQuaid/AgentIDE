@@ -38,6 +38,6 @@ extension BranchStackIntegrationTests {
         // And it stands in for what is checked out, so the actions
         // that move the checked-out branch stay live.
         #expect(stack.checkedOut == "upper")
-        #expect(await world.service.branchesUnpushed(worktree: worktree).isEmpty)
+        #expect(await world.service.stackFacts(for: worktree).unpushed.isEmpty)
     }
 }

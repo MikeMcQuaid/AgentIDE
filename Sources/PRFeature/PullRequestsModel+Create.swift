@@ -19,6 +19,9 @@ extension PullRequestsModel {
         if let selected, pushed.contains(selected.headBranch), selected.state == "OPEN" {
             self.selected = selected.awaitingChecks()
         }
+        // The rows read the caches just painted: now, not after the
+        // reading the push also asks for.
+        UtilityTabTarget.pullRequestCacheChanged()
     }
 
     /// Pushes every branch of the stack, bottom first, and says so
@@ -34,7 +37,7 @@ extension PullRequestsModel {
             }
             recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
             note("Pushed " + Self.named(pushed) + ".")
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()
             return true
@@ -59,8 +62,7 @@ extension PullRequestsModel {
             return false
         }
 
-        let template = prTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-        let body = prBody + (template.isEmpty ? "" : "\n\n" + template)
+        let body = Self.joined(body: prBody, template: prTemplate)
         isOpening = true
         defer { isOpening = false }
         do {
@@ -75,7 +77,7 @@ extension PullRequestsModel {
                 report("Stacking on GitHub failed: " + error.localizedDescription)
             }
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
             // Straight into what was just opened: the listing has it
             // by number, and its conversation is what the form was
@@ -164,7 +166,7 @@ extension PullRequestsModel {
             }
             recordFinished(.pushed, branch: listedBranch ?? worktree.branch)
             note(Self.describe(push: destination))
-            Self.requestSidebarRefresh()
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
             refreshAfterPush()
             return true
@@ -211,7 +213,6 @@ extension PullRequestsModel {
     func cacheCreated(_ summary: PullRequestSummary, branch: String) {
         pullRequests.rememberBranchSummary(summary, repositoryPath: repository.path, branch: branch)
         cacheEnriched(summary)
-        let key = UtilityTabTarget.pullRequestCacheKey
-        UserDefaults.standard.set(UserDefaults.standard.integer(forKey: key) + 1, forKey: key)
+        UtilityTabTarget.pullRequestCacheChanged()
     }
 }

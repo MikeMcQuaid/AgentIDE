@@ -1,23 +1,16 @@
 /// Labels: the repository's own, and reading and changing a pull
 /// request's, split from the client body for length.
 public extension GitHubClient {
-    /// The repository's labels by name, for the pickers; an
-    /// unreadable answer is no labels rather than an error.
-    func labels(repositoryPath: String) async -> [String] {
+    /// The repository's labels by name, for the pickers; nil when
+    /// GitHub could not be asked, which is not a repository with no
+    /// labels, which the store must not remember for a day. A pull
+    /// request's own arrive with its summary.
+    func labels(repositoryPath: String) async -> [String]? { // swiftlint:disable:this discouraged_optional_collection
         let output = try? await gh(
             ["label", "list", "--json", "name", "--limit", "200", "--jq", ".[].name"],
             in: repositoryPath,
         ).standardOutput
-        return Self.names(fromLines: output ?? "")
-    }
-
-    /// The labels on one pull request, by name.
-    func pullRequestLabels(repositoryPath: String, number: Int) async -> [String] {
-        let output = try? await gh(
-            ["pr", "view", String(number), "--json", "labels", "--jq", ".labels[].name"],
-            in: repositoryPath,
-        ).standardOutput
-        return Self.names(fromLines: output ?? "")
+        return output.map { $0.split(separator: "\n").map(String.init).sorted() }
     }
 
     /// Rewrites an open pull request's title and body, which is how
@@ -32,9 +25,5 @@ public extension GitHubClient {
             + add.flatMap { ["--add-label", $0] }
             + remove.flatMap { ["--remove-label", $0] }
         try await gh(arguments, in: repositoryPath)
-    }
-
-    private static func names(fromLines output: String) -> [String] {
-        output.split(separator: "\n").map(String.init).sorted()
     }
 }

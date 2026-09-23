@@ -29,6 +29,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         headCommit: String? = nil,
         awaitsCopilotReview: Bool = false,
         copilotReviewedAt: Date? = nil,
+        labels: [String] = [],
+        optionalFailures: Int = 0,
     ) {
         self.number = number
         self.title = title
@@ -50,6 +52,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.headCommit = headCommit
         self.awaitsCopilotReview = awaitsCopilotReview
         self.copilotReviewedAt = copilotReviewedAt
+        self.labels = labels
+        self.optionalFailures = optionalFailures
     }
 
     /// Decodes a summary a cache wrote, an older release's included:
@@ -78,6 +82,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         headCommit = try container.decodeIfPresent(String.self, forKey: .headCommit)
         awaitsCopilotReview = try container.decodeIfPresent(Bool.self, forKey: .awaitsCopilotReview) ?? false
         copilotReviewedAt = try container.decodeIfPresent(Date.self, forKey: .copilotReviewedAt)
+        labels = try container.decodeIfPresent([String].self, forKey: .labels) ?? []
+        optionalFailures = try container.decodeIfPresent(Int.self, forKey: .optionalFailures) ?? 0
     }
 
     // MARK: Public
@@ -103,7 +109,9 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// The aggregate check state, for example `SUCCESS` or `FAILURE`.
     public let checks: String
 
-    /// Detail pages of failing check runs, empty when green.
+    /// Detail pages of the failing checks that count, empty when
+    /// green: a failing check the branch does not require is never
+    /// opened or copied from here.
     public let failingCheckLinks: [String]
 
     /// The branch the pull request merges into.
@@ -160,12 +168,34 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// the count is remembered.
     public var unresolvedComments: Int
 
-    /// Whether the checks rollup is red: something has concluded
-    /// failing, even while the rest still runs. Pending and green
-    /// rollups say no, which is what greys the failing-logs button
-    /// until there is a failure to read.
+    /// Its labels by name, sorted; empty from a cache written before
+    /// they were kept.
+    public let labels: [String]
+
+    /// Failing checks the branch does not require, which the rollup
+    /// leaves out: counted so the help can say why a green dot sits
+    /// beside a red run on GitHub, never offered to open or copy.
+    public let optionalFailures: Int
+
+    /// Whether the checks rollup is red: a check the branch requires
+    /// has concluded failing, even while the rest still runs. Pending
+    /// and green rollups say no, which is what greys the failing-logs
+    /// button until there is a failure to read.
     public var hasFailingChecks: Bool {
         checks == "FAILURE"
+    }
+
+    /// The rollup in words: what the dot's colour says, and, when a
+    /// green rollup still has a failing run, that the run is one the
+    /// branch does not require, since a green dot beside a red run
+    /// on GitHub has to say why.
+    public var checksDescription: String {
+        guard checks == "SUCCESS", optionalFailures > 0 else {
+            return checks.lowercased()
+        }
+
+        let plural = optionalFailures == 1 ? "" : "s"
+        return "passing; " + String(optionalFailures) + " optional check" + plural + " failing"
     }
 
     /// The pull request's checks page.
@@ -217,6 +247,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
             copilotReviewedAt: copilotReviewedAt,
+            labels: labels,
+            optionalFailures: optionalFailures,
         )
         edited.unresolvedComments = unresolvedComments
         return edited
@@ -248,6 +280,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
             copilotReviewedAt: copilotReviewedAt,
+            labels: labels,
+            optionalFailures: 0,
         )
         pending.unresolvedComments = unresolvedComments
         return pending

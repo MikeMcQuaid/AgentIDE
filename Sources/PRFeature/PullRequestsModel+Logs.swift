@@ -73,8 +73,12 @@ extension PullRequestsModel {
             toBytes: logTailBytes,
             keepingEnd: true,
         )
-        let cut = lines.count - head.count - tail.count
-        let kept = head + (cut > 0 ? [("", "[" + String(cut) + " lines cut]")] : []) + tail
+        // The verdict of a long run is often in neither end: a
+        // periphery warning or a failed test's own line sits in the
+        // middle, and cutting it left both ends saying only that
+        // something failed.
+        let middle = Array(lines[head.count ..< (lines.count - tail.count)])
+        let kept = head + Self.verdicts(in: middle) + tail
         var sections = [LogSection]()
         for line in kept {
             if let last = sections.indices.last, sections[last].heading == line.heading {
@@ -111,6 +115,64 @@ extension PullRequestsModel {
         }
         return keepingEnd ? fitted.reversed() : fitted
     }
+
+    /// The lines of the cut middle worth keeping, what was cut
+    /// between them counted in their place: every line naming an
+    /// error or a failure, each with the lines either side a diff
+    /// shows, whatever the budget, since those are the point of the
+    /// copy; then lines naming a warning, the last first, while the
+    /// tail's budget allows, since a build can print thousands.
+    static func verdicts(in middle: [LogLine]) -> [LogLine] {
+        var keep = Set<Int>()
+        func context(of index: Int) -> ClosedRange<Int> {
+            max(0, index - logContextLines) ... min(middle.count - 1, index + logContextLines)
+        }
+        for (index, line) in middle.enumerated() where Self.names(Self.failurePattern, line.text) {
+            keep.formUnion(context(of: index))
+        }
+        var budget = logTailBytes
+        for (index, line) in middle.enumerated().reversed()
+            where Self.names(Self.warningPattern, line.text) && keep.contains(index) == false
+        {
+            let cost = context(of: index)
+                .filter { keep.contains($0) == false }
+                .reduce(0) { $0 + middle[$1].text.utf8.count + 1 }
+            guard cost <= budget else {
+                continue
+            }
+
+            budget -= cost
+            keep.formUnion(context(of: index))
+        }
+        var verdicts = [LogLine]()
+        var cut = 0
+        for (index, line) in middle.enumerated() {
+            guard keep.contains(index) else {
+                cut += 1
+                continue
+            }
+
+            if cut > 0 {
+                verdicts.append(("", "[" + String(cut) + " lines cut]"))
+                cut = 0
+            }
+            verdicts.append(line)
+        }
+        if cut > 0 {
+            verdicts.append(("", "[" + String(cut) + " lines cut]"))
+        }
+        return verdicts
+    }
+
+    /// The lines kept either side of a kept line, what a diff shows.
+    static let logContextLines = 3
+
+    private static func names(_ pattern: String, _ text: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private static let failurePattern = "error|fail"
+    private static let warningPattern = "warning"
 
     /// Where a line was cut.
     private static let ellipsis = "\u{2026}"

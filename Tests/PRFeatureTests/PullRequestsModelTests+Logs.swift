@@ -32,6 +32,53 @@ extension PullRequestsModelTests {
     }
 
     @Test
+    func `a verdict in the cut middle is kept with the lines around it`() {
+        // A run's warnings and its failed test land between the head
+        // and the tail: cut with the progress, both ends said only
+        // that something failed and never what. Lines 60 and 90 of
+        // three hundred sit in the middle the head of forty and the
+        // tail of a hundred and sixty leave; line 120 says nothing
+        // an error or a failure says, and goes with the rest.
+        var lines = (1 ... 300).map { "line " + String($0) }
+        lines[59] = "Sources/A.swift:1:1: warning: Unused function 'x()'"
+        lines[89] = "✘ Test \"it\" recorded an issue: Expectation failed: delivered"
+        lines[119] = "Process completed with exit code 1."
+        let text = Self.text(of: lines)
+        #expect(text.contains("\nline 40\n[16 lines cut]\nline 57\nline 58\nline 59\nSources/A.swift:1:1: warning"))
+        #expect(text.contains("'x()'\nline 61\nline 62\nline 63\n[23 lines cut]\nline 87\nline 88\nline 89\n✘ Test"))
+        #expect(text.contains("delivered\nline 91\nline 92\nline 93\n[47 lines cut]\nline 141\n"))
+        #expect(text.contains("exit code") == false)
+    }
+
+    /// The condensed log as one text.
+    private static func text(of lines: [String]) -> String {
+        PullRequestsModel.condensed(log: lines.joined(separator: "\n")).flatMap(\.lines).joined(separator: "\n")
+    }
+
+    @Test
+    func `every error and failure is kept whatever the budget, warnings while it lasts`() {
+        // Eight hundred lines of each, longer than the tail's budget
+        // together: failures are the point of the copy and all stay;
+        // warnings keep the last that fit and count the rest as cut.
+        let padding = String(repeating: "x", count: 40)
+        var lines = (1 ... 1_000).map { "line " + String($0) }
+        for index in 40 ..< 840 {
+            lines[index] = "error: " + String(index + 1) + " " + padding
+        }
+        let errors = Self.text(of: lines)
+        #expect(errors.contains("error: 41 ") && errors.contains("error: 840 "))
+        #expect(errors.contains(" lines cut]") == false)
+
+        for index in 40 ..< 840 {
+            lines[index] = "warning: " + String(index + 1) + " " + padding
+        }
+        let warnings = Self.text(of: lines)
+        #expect(warnings.contains("warning: 840 "))
+        #expect(warnings.contains("warning: 41 ") == false)
+        #expect(warnings.contains("\nline 40\n[") && warnings.contains(" lines cut]\nwarning: "))
+    }
+
+    @Test
     func `an end is bounded in bytes, a giant line cut to fit`() {
         let heading = "job\tstep\t"
         let blob = String(repeating: "x", count: 100_000)

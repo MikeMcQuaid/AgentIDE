@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 
 // MARK: - StackWork
@@ -35,13 +36,13 @@ struct StackWork {
     /// put it right until a later read happened to win.
     var stackGeneration = 0
     var factsGeneration = 0
-    var fetch: (Worktree) async -> BranchStack = { worktree in
-        BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch)
+
+    /// The stack and its lists in one reading, since four readings
+    /// asked git the same question four times.
+    var facts: (Worktree) async -> StackFacts = { worktree in
+        StackFacts(stack: BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch))
     }
 
     var restack: (Worktree) async throws -> [String] = { _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
-    var pending: (Worktree) async -> Bool = { _ in false }
-    var unpushed: (Worktree) async -> [String] = { _ in [] }
-    var unsigned: (Worktree) async -> [String] = { _ in [] }
 }

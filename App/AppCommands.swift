@@ -1,6 +1,7 @@
 import AppKit
 import DashboardFeature
 import SwiftUI
+import TerminalUI
 
 /// The app's menus: session and repository creation replace the
 /// stock New Window item, and View gains the utility pane, its tabs
@@ -38,7 +39,7 @@ struct AppCommands: Commands {
             Button("Commit Outstanding") { bump("commitRequest") }
                 .keyboardShortcut("k", modifiers: [.command, .option])
             Divider()
-            Button("Refresh") { bump("dashboardRefreshRequest") }
+            Button("Refresh") { bump(UtilityTabTarget.dashboardRefreshKey) }
                 .keyboardShortcut("r", modifiers: .command)
         }
         CommandGroup(after: .textEditing) {

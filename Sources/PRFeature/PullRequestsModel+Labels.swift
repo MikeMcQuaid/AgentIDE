@@ -1,16 +1,13 @@
-/// The selected pull request's labels: read on selection, toggled
-/// against GitHub. Split from the actions for length.
+/// The selected pull request's labels, which arrive with its
+/// summary, toggled against GitHub. Split from the actions for
+/// length.
 extension PullRequestsModel {
-    /// The selected pull request's labels and, for the menu, the
-    /// repository's; both read here since the Mine and Open scopes
-    /// never read the worktree facts that carry the repository's.
-    func loadSelectedLabels(_ number: Int) async {
+    /// The repository's labels for the menu, read here since the
+    /// Mine and Open scopes never read the worktree facts that carry
+    /// them; the store answers from its cache for a day.
+    func loadAvailableLabels() async {
         if availableLabels.isEmpty {
             availableLabels = await fetchLabels()
-        }
-        let labels = await fetchPullRequestLabels(number)
-        if selected?.number == number {
-            selectedLabels = labels
         }
     }
 

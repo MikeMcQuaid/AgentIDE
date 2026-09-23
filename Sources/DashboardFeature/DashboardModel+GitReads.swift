@@ -46,6 +46,20 @@ extension DashboardModel {
                         || item.worktree.path.hasPrefix(changedPath)
                 }
             }
+            // A repository whose `.git` something wrote under is due
+            // a stack derivation for each of its worktrees: every
+            // ref lives there, a linked worktree's included, so
+            // nothing moves a branch without the watcher seeing it,
+            // and the rota's own timers are a backstop for a lost
+            // event rather than how a change is found. An agent
+            // editing sources touches the repository without moving
+            // anything, and marked every worktree due each tick.
+            let refsMoved = changed.contains { $0.hasPrefix(path + "/.git") }
+            if refsMoved || paths.contains(path) {
+                for item in group.items {
+                    nextStackDerivation[item.worktree.path] = .distantPast
+                }
+            }
             let safety = RefreshCadence.slowed(interval, onBattery: isOnBattery())
             if touched || Date().timeIntervalSince(last) >= safety {
                 due.insert(path)
