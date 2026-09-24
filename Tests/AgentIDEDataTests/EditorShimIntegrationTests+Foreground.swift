@@ -1,4 +1,5 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Foundation
 import Testing
 
@@ -7,8 +8,8 @@ import Testing
 /// where the app asking for itself is refused by cooperative
 /// activation. Split from the shim tests for length.
 extension EditorShimIntegrationTests {
-    @Test
-    func `a claimed edit brings the app it shipped in forward`() async throws {
+    @Test(arguments: [ExternalEdit.Kind.edit, .open, .select])
+    func `a request brings the app it shipped in forward`(kind: ExternalEdit.Kind) async throws {
         let root = try TestSupport.temporaryDirectory("shim-front")
         defer { try? FileManager.default.removeItem(atPath: root) }
         // The shim judges its bundle from its own location, so give
@@ -30,22 +31,30 @@ extension EditorShimIntegrationTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tools + "/open")
 
         let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let repository = root + "/repositories/repo"
+        try FileManager.default.createDirectory(atPath: repository, withIntermediateDirectories: true)
         let process = try run(
             shim(root: root),
-            arguments: ["--wait", root + "/file.txt"],
+            arguments: (kind == .edit ? ["--wait"] : []) + [kind == .select ? repository : root + "/file.txt"],
             in: root,
+            sharedWorkspace: root,
             executable: bundled,
             toolDirectory: tools,
         )
         let edit = try #require(await firstEdit(in: spool))
-        // Nothing to bring forward until the app has the file.
-        #expect(FileManager.default.fileExists(atPath: opened) == false)
-
-        spool.claim(edit)
+        if kind == .edit {
+            // A waiting edit foregrounds only after the app claims it.
+            #expect(FileManager.default.fileExists(atPath: opened) == false)
+            spool.claim(edit)
+        } else {
+            try await exit(of: process)
+        }
         let raised = await contents(of: opened)
         #expect(raised == root + "/Fake.app")
 
-        spool.finish(edit, saved: true)
+        if kind == .edit {
+            spool.finish(edit, saved: true)
+        }
         try await exit(of: process)
         #expect(process.terminationStatus == 0)
     }

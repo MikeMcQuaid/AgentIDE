@@ -46,6 +46,16 @@ extension DashboardModel {
 
             if changed {
                 await refresh()
+            } else {
+                // A missing pane or unavailable server can refuse immediately.
+                let interval = RefreshCadence.pollSeconds(
+                    setting: Self.pollInterval,
+                    visible: isWindowVisible,
+                    onBattery: isOnBattery(),
+                )
+                guard await (try? Task.sleep(for: .seconds(interval))) != nil else {
+                    return
+                }
             }
             guard let latest = groups.flatMap(\.items)
                 .first(where: { $0.session?.paneID == current.paneID })?

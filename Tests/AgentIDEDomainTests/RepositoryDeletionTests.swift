@@ -5,8 +5,9 @@ struct RepositoryDeletionTests {
     // MARK: Internal
 
     @Test
-    func `a lone, idle, clean, level checkout may be deleted and nothing else may`() {
+    func `a lone, idle, clean checkout with no local commits may be deleted`() {
         #expect(group([checkout()]).deletionBlocker == nil)
+        #expect(group([checkout(behind: 2)]).deletionBlocker == nil)
         #expect(group([checkout(), worktree()]).deletionBlocker == "1 worktree still exists")
         #expect(group([checkout(running: true)]).deletionBlocker == "an agent is still running")
         #expect(group([checkout(dirty: true)]).deletionBlocker == "the checkout has uncommitted or untracked files")
@@ -14,8 +15,12 @@ struct RepositoryDeletionTests {
             group([checkout(ahead: nil)]).deletionBlocker == "where the checkout stands against origin is unknown",
         )
         #expect(
-            group([checkout(behind: 2)]).deletionBlocker
-                == "the checkout is 0 ahead and 2 behind origin's default branch",
+            group([checkout(ahead: 1)]).deletionBlocker
+                == "the checkout is 1 ahead and 0 behind origin's default branch",
+        )
+        #expect(
+            group([checkout(ahead: 1, behind: 2)]).deletionBlocker
+                == "the checkout is 1 ahead and 2 behind origin's default branch",
         )
         #expect(group([]).deletionBlocker == "the checkout has not been read yet")
     }

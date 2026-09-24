@@ -3,7 +3,8 @@ public extension RepositoryGroup {
     /// nil when it can: deleting is only offered once nothing would
     /// be lost, so the checkout must be alone (no worktrees), idle
     /// (no running agent), clean (nothing uncommitted or untracked)
-    /// and level with origin's default branch as last fetched.
+    /// and have no commits absent from origin's default branch as
+    /// last fetched. Being behind origin loses no local work.
     var deletionBlocker: String? {
         let worktrees = items.filter { $0.worktree.path != repository.path }
         if worktrees.isEmpty == false {
@@ -24,7 +25,7 @@ public extension RepositoryGroup {
             return "where the checkout stands against origin is unknown"
         }
 
-        if ahead > 0 || behind > 0 {
+        if ahead > 0 {
             return "the checkout is " + String(ahead) + " ahead and " + String(behind)
                 + " behind origin's default branch"
         }

@@ -35,13 +35,16 @@ updates.
   so nothing public discloses the fix before the advisory is published.
   New branches start from origin's default branch, fetching first when
   the last fetch was over an hour ago, including with `agentide new`.
+  Starting work expands its repository in the sidebar. A launch finishing
+  preserves any new prompt already being drafted for the next session.
 - Runs Claude Code or Codex CLI as a sandboxed, non-admin user, with
   no permission prompts necessary and no access to your admin user's
   files or credentials.
 - Groups worktrees by repository with unread activity, agent state, open
   pull requests, merge conflicts, uncommitted work and drift from what
   was pushed, adopting worktrees made outside the app in the same
-  locations.
+  locations. Copy path on a repository header's right-click menu
+  copies its checkout's full path.
 - Says what a pull request is doing in GitHub's own icons, one glyph per
   fact, watching checks and queued merges until they settle. The checks
   dot follows the checks the base branch requires: an optional job
@@ -130,7 +133,8 @@ updates.
   the branch requires into a prompt, resolves conversations and merges
   or queues, each with a click.
 - Stays quiet while idle, and quieter still on battery, with agent
-  and file changes still landing at once.
+  and file changes still landing at once. Failed agent-state waits
+  back off rather than repeatedly launching sandbox commands.
 - Says when the sandbox user's login keychain has stopped opening after
   a macOS update, with the commands that put it right, rather than
   letting every agent start behind a password dialog; no keychain is
@@ -145,6 +149,10 @@ updates.
 - Deletes a worktree and its branch once its pull request merges, and
   keeps every conversation browsable and resumable after the worktree is
   gone.
+- Offers Delete repository on a repository header's right-click menu
+  once only its clean, idle checkout remains and it has no commits
+  missing from origin's default branch. Being behind origin does not
+  prevent deletion; a confirmation names the checkout removed from disk.
 - Starts and steers work from a phone: `agentide new` over SSH, Shortcuts
   and Siri, and `herdr` for the sessions themselves.
 
@@ -232,7 +240,9 @@ fi
 ```
 
 `agentide .` from any terminal switches the window to the worktree you
-are in.
+are in. `agentide /some/file` opens the file in its worktree's editor.
+Both expand the repository and bring AgentIDE to the foreground; a
+file outside every worktree opens beside the current selection.
 
 ## 📱 iPhone SSH access
 

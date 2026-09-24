@@ -201,10 +201,14 @@ public enum FileOpener {
         }
     }
 
-    // MARK: Private
+    // MARK: Internal
 
     /// The resolved path, but only when it stays inside the worktree.
-    private static func safePath(relativePath: String, worktreePath: String) -> String? {
+    static func safePath(relativePath: String, worktreePath: String) -> String? {
+        guard relativePath.hasPrefix("/") == false else {
+            return nil
+        }
+
         let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
         let target = URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
         return target == base || target.hasPrefix(base + "/") ? target : nil

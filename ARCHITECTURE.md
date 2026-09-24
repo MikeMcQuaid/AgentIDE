@@ -474,6 +474,12 @@ each waited on the other until the app was restarted.
    surface starts a session. Submitting inserts a placeholder row
    instantly and narrates creation through `LaunchProgress` until herdr
    detects the agent's interface (`awaitReady`, bounded at a minute).
+   Selecting a worktree or starting a session expands its repository,
+   including a repeated request for the current selection. Background
+   refreshes leave repository disclosure alone. A completed launch
+   clears only the draft it submitted, preserving newer typing in
+   another form while the launch was in flight. It compares the current
+   defaults value: a disappeared form's `AppStorage` no longer updates.
 2. The branch name summarises the prompt through `FoundationModelClient`
    (underscore-separated, no prefix), or the prompt's first words when
    the model is unavailable. An advisory session is the exception: its
@@ -583,7 +589,10 @@ page resumes any past conversation into a fresh worktree.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
-  the safety net. Whether the machine has a route out at all comes
+  the safety net. A failed wait backs off at `RefreshCadence`'s poll
+  interval, slowing when covered or on battery: a wait refused at once
+  otherwise spawned hundreds of sandbox commands within seconds.
+  Whether the machine has a route out at all comes
   from the system's own path monitor (`NetworkMonitor.shared`,
   `NWPathMonitor`): without one every network call fails identically,
   so the app holds that work rather than spawning processes per
@@ -916,8 +925,9 @@ writes `.open`, then `.done` with the exit status the shim takes (zero
 saved, non-zero cancelled, which aborts a rebase). A symlinked file
 resolves to its target before it is asked for: the editor saves
 atomically, which would otherwise replace the link itself with a
-plain file. On `.open` the shim
-runs `open` on the bundle it shipped in, bringing the app forward: the
+plain file. A file or directory request runs `open` on the bundle the
+shim shipped in immediately; a waiting edit does so on `.open`, once
+the app has claimed it. This brings the app forward: the
 terminal's own child may ask that of the system where the app asking
 for itself is refused by cooperative activation, and the copy outside
 any bundle (the shared workspace's, for SSH) skips it. A request whose
@@ -925,6 +935,8 @@ process has gone is swept. Nothing inside the sandbox can reach the
 spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
 selects the worktree holding it, and `agentide new` starts a session.
+Explicit absolute file paths may belong to no worktree and open beside
+the current selection; relative paths remain confined to their worktree.
 
 The editor's work per frame is bounded by what is on screen, since
 every scroll redraws the ruler and the visible text: line starts are
@@ -1325,7 +1337,12 @@ steps.
   level with origin (reset when it carries nothing local, signed rebase
   when it does) and every merged branch deleted. Only Delete worktree
   forces, after a dialog naming what is lost. A repository is deleted
-  only when `RepositoryGroup.deletionBlocker` names nothing.
+  from its header's context menu only when
+  `RepositoryGroup.deletionBlocker` names nothing: no extra worktrees,
+  running agent, uncommitted files or commits absent from origin's
+  default branch. Being behind origin is safe. The service checks the
+  rule again before removing the checkout from disk. `RepositoryMenu`
+  also copies `Repository.path` to the clipboard through Copy path.
 
 ### Sessions over time
 

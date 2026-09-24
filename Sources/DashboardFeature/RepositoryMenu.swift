@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -15,6 +16,12 @@ struct RepositoryMenu: ViewModifier {
             .contextMenu {
                 Button("Refresh") { Task { await model.refreshRepository(path: group.repository.path) } }
                     .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
+                Divider()
+                Button("Copy path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(group.repository.path, forType: .string)
+                }
+                .hoverHelp("Copy this repository's full path")
                 Divider()
                 Button("Add local directory…", systemImage: "laptopcomputer") { addDirectory() }
                     .hoverHelp(
@@ -42,7 +49,8 @@ struct RepositoryMenu: ViewModifier {
                 }
             } message: {
                 Text("The checkout at " + group.repository.path + " and its home directory symlink are removed. "
-                    + "It has no worktrees, no running agent, nothing uncommitted and is level with origin.")
+                    + "It has no worktrees, no running agent, nothing uncommitted "
+                    + "and no commits missing from origin's default branch.")
             }
     }
 
