@@ -1,9 +1,24 @@
 import AgentIDEDomain
+import Foundation
 import TerminalUI
 
 /// The repository finder's model surface: listing everything the
 /// user can reach on GitHub and jumping to or cloning a pick.
 public extension DashboardModel {
+    /// Explicit navigation reveals the row; background readings do not.
+    internal func reveal(_ item: WorktreeItem) {
+        let defaults = UserDefaults.standard
+        let collapsed = defaults.string(forKey: "collapsedRepositories") ?? ""
+        let repositoryPath = groups.group(holding: item)?.repository.path ?? item.worktree.repositoryPath
+        let remaining = collapsed.split(separator: "\n")
+            .filter { $0 != repositoryPath }
+            .joined(separator: "\n")
+        if remaining != collapsed {
+            defaults.set(remaining, forKey: "collapsedRepositories")
+        }
+        selection = item
+    }
+
     /// The owners listed last time, for an instant first step.
     func cachedOrganisations() -> [String] {
         store.load().organisations
@@ -85,11 +100,11 @@ public extension DashboardModel {
         let group = groups.first { candidate in
             candidate.repository.fullName == fullName || candidate.repository.name == name
         }
-        guard let group else {
+        guard let item = group?.items.first else {
             return false
         }
 
-        selection = group.items.first
+        reveal(item)
         return true
     }
 }

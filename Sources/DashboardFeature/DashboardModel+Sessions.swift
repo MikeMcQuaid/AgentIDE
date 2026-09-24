@@ -168,7 +168,7 @@ public extension DashboardModel {
         launchProgress.begin("Starting")
         showsNewSession = false
         if let pending {
-            selection = pending
+            reveal(pending)
         }
         defer {
             if let pending {
@@ -191,7 +191,7 @@ public extension DashboardModel {
             await refreshUntil { items in items.contains { $0.session?.name == sessionName } }
             if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
                 launchProgress.report("Listed; opening the pane of `" + sessionName + "`")
-                selection = created
+                reveal(created)
             } else {
                 launchProgress.report("`" + sessionName + "` never appeared in a listing; select it by hand")
             }

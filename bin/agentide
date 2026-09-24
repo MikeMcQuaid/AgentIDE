@@ -532,9 +532,12 @@ for file in "$@"; do
     "$$" "${kind}" >"${request}.partial"
   mv "${request}.partial" "${request}"
 
-  # Only an editor waits for the app; everything else has said what
-  # it wanted and is done.
-  [ "${kind}" = edit ] || continue
+  # Non-waiting requests must foreground the app from the calling
+  # terminal too: cooperative activation can refuse the app itself.
+  if [ "${kind}" != edit ]; then
+    [ -z "${app_bundle}" ] || open "${app_bundle}" 2>/dev/null || true
+    continue
+  fi
 
   # The app claims a request as soon as it shows the file, so an
   # unclaimed one means it is not running.

@@ -24,7 +24,7 @@ struct FileEditorView: View {
         onClose: (() -> Void)? = nil,
     ) {
         // A hostile repository could put `../` in a diff path, so a
-        // file that resolves outside the worktree gets no path at
+        // relative file that resolves outside the worktree gets no path at
         // all and the editor refuses to read or write it.
         let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
         // A path of its own is the file: `agentide` can be handed
@@ -33,7 +33,7 @@ struct FileEditorView: View {
         let target = relativePath.hasPrefix("/")
             ? URL(fileURLWithPath: relativePath).standardizedFileURL.path
             : URL(fileURLWithPath: worktreePath + "/" + relativePath).standardizedFileURL.path
-        let safe = target == base || target.hasPrefix(base + "/") ? target : nil
+        let safe = relativePath.hasPrefix("/") || target == base || target.hasPrefix(base + "/") ? target : nil
         path = safe
         title = relativePath
         language = SyntaxLanguage.language(forPath: relativePath)
@@ -83,6 +83,9 @@ struct FileEditorView: View {
         let icon: String
         let help: String
     }
+
+    /// The file, absolute and already checked; nil for an unsafe relative path.
+    let path: String?
 
     /// The editor under its header. Save enables only with unsaved
     /// changes and reports Saved after writing; a file some command
@@ -155,10 +158,6 @@ struct FileEditorView: View {
 
     @Environment(\.dismiss)
     private var dismiss
-
-    /// The file, absolute and already checked; nil when the path
-    /// resolved outside the worktree it claimed to be in.
-    private let path: String?
 
     private let title: String
     private let language: SyntaxLanguage?

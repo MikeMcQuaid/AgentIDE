@@ -175,13 +175,12 @@ public final class DashboardModel {
     public func selectMainCheckout(of repository: Repository?) {
         guard let repository,
               let group = groups.first(where: { $0.repository.path == repository.path }),
-              let main = group.items.first,
-              selection?.id != main.id
+              let main = group.items.first
         else {
             return
         }
 
-        selection = main
+        reveal(main)
     }
 
     /// Selecting from the sidebar is a middle-pane action, so it
@@ -189,7 +188,7 @@ public final class DashboardModel {
     public func select(_ item: WorktreeItem) {
         showsNewSession = false
         showsRepositoryFinder = false
-        selection = item
+        reveal(item)
     }
 
     /// The models and efforts an agent offers, and what to start on:

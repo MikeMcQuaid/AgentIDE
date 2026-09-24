@@ -290,12 +290,13 @@ struct AgentSessionForm: View {
         }
 
         isStarting = true
+        let draft = prompt
         let submission = Submission(
             source: source,
             number: number,
             ghsaID: ghsaID,
-            prompt: source == .prompt ? prompt : "",
-            context: source == .prompt ? "" : prompt,
+            prompt: source == .prompt ? draft : "",
+            context: source == .prompt ? "" : draft,
             agent: agent.wrappedValue,
             options: AgentLaunchOptions(
                 model: agentModel.isEmpty ? nil : agentModel,
@@ -305,7 +306,11 @@ struct AgentSessionForm: View {
         Task {
             await onSubmit(submission)
             isStarting = false
-            prompt = ""
+            // A disappeared form's AppStorage stays stale while the
+            // next form types, so compare against the store itself.
+            if UserDefaults.standard.string(forKey: "newSessionPrompt") == draft {
+                prompt = ""
+            }
         }
     }
 }
