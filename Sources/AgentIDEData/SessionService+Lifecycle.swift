@@ -46,6 +46,7 @@ public extension SessionService {
             try await git.forgetWorktree(repository: repository, branch: worktree.branch)
         }
         removeFriendlySymlink(worktree: worktree)
+        try await git.removeUnusedForkRemotes(repositoryPath: repository.path)
     }
 
     /// Deletes a repository's checkout from disk, refusing while the
@@ -192,6 +193,7 @@ public extension SessionService {
         )
         removeFriendlySymlink(worktree: worktree)
         backup.forget(worktree: worktree)
+        try await git.removeUnusedForkRemotes(repositoryPath: repository.path)
         return nil
     }
 
