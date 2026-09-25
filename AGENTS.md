@@ -5,6 +5,12 @@ read `README.md` and `ARCHITECTURE.md` before changing anything and
 update them in the same commit when behaviour they describe changes.
 This repository is readme-driven: documentation leads, code follows.
 
+Keep `README.md` focused on capabilities users care about, with one
+concise sentence per feature and one sentence per Settings pane.
+In `README.md`, put each sentence on its own line without wrapping.
+Describe user benefits there; keep implementation details and regression
+histories in `ARCHITECTURE.md` or the relevant platform notes.
+
 AgentIDE is a native SwiftUI macOS app for running, steering and
 reviewing sandboxed AI coding agents.
 
