@@ -577,7 +577,7 @@ page resumes any past conversation into a fresh worktree.
 - **Fetches cover the remotes in use.** `GitClient` fetches origin
   and the upstream and push remotes of checked-out branches, read
   together through `for-each-ref`. Unused fork remotes are left
-  configured but skipped: a deleted fork must not block unrelated
+  out of fetches: a deleted fork must not block unrelated
   work. A failure from a remote still in use remains an error.
 - **Unread.** A worktree is unread when its spool file or transcripts
   are newer than its per-worktree seen time; viewing records that time
@@ -1138,11 +1138,24 @@ steps.
   config (all `gh pr checkout` leaves behind), so it is given a remote
   named after the fork's owner, with both its tracking and push remote
   set there; occupied names gain a numeric suffix so remote refs and
-  leases still work. Every push and count follows that remote back to
-  the fork. A fork's refusal reaches the pane without trying another
-  destination. Otherwise `viewerPermission` decides: write access
-  pushes to the repository, anything less to the viewer's fork
-  (`gh repo fork` on first use).
+  leases still work. A newly added remote records its original URL in
+  local git config as `remote.<name>.agentide-created-url`. After a
+  worktree and its branch are deleted, including merge cleanup, unused
+  marked remotes are removed. Both tracking and push remotes of all
+  remaining branches and `remote.pushDefault` keep a remote in use.
+  Origin, pre-existing remotes, unmarked remotes from older versions
+  and remotes whose configuration changed are kept, including custom
+  fetch refspecs and additional remote options. Cleanup compares the
+  whole remote section with the URL, default fetch refspec and ownership
+  marker written on creation. Adoption, PR checkout, pushes and cleanup
+  share an asynchronous queue per canonical common git directory, across
+  clients and linked worktrees. The queue stays held across awaits, so
+  a branch cannot adopt a remote between cleanup's check and removal;
+  unrelated repositories continue independently. Every push and count
+  follows that remote back to the fork. A fork's refusal reaches the pane
+  without trying another destination. Otherwise `viewerPermission`
+  decides: write access pushes to the repository, anything less to the
+  viewer's fork (`gh repo fork` on first use).
   Either fork names the pull request's head `owner:branch`. Rewritten
   history pushes with `--force-with-lease --force-if-includes`. The bare
   lease protects nothing under constant background fetches;

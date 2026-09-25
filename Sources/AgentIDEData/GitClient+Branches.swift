@@ -101,25 +101,27 @@ public extension GitClient {
         remote: String = "origin",
         expectedTip: String? = nil,
     ) async throws {
-        // A rewritten branch forces with a lease, and the includes
-        // check refuses a remote tip never integrated here: the
-        // difference between rewriting your own work and overwriting
-        // someone else's. leaseRefusal carries the full story.
-        var force = [String]()
-        if let expectedTip {
-            // Naming the tip is the confirmation the includes check
-            // exists to demand: the refusal was seen, the remote
-            // fetched and its version set aside, all in the app.
-            force = ["--force-with-lease=" + branch + ":" + expectedTip]
-        } else if await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote) {
-            force = ["--force-with-lease", "--force-if-includes"]
-        }
-        do {
-            try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
-        } catch let error as CommandError
-            where error.result.standardError.contains("remote ref updated since checkout")
-        {
-            throw leaseRefusal(error, branch: branch, remote: remote)
+        try await withRemoteOperation(worktreePath: worktreePath) {
+            // A rewritten branch forces with a lease, and the includes
+            // check refuses a remote tip never integrated here: the
+            // difference between rewriting your own work and overwriting
+            // someone else's. leaseRefusal carries the full story.
+            var force = [String]()
+            if let expectedTip {
+                // Naming the tip is the confirmation the includes check
+                // exists to demand: the refusal was seen, the remote
+                // fetched and its version set aside, all in the app.
+                force = ["--force-with-lease=" + branch + ":" + expectedTip]
+            } else if await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote) {
+                force = ["--force-with-lease", "--force-if-includes"]
+            }
+            do {
+                try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+            } catch let error as CommandError
+                where error.result.standardError.contains("remote ref updated since checkout")
+            {
+                throw leaseRefusal(error, branch: branch, remote: remote)
+            }
         }
     }
 

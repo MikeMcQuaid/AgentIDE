@@ -128,7 +128,10 @@ updates.
   and checks, signing and pushing back to the contributor's branch;
   a push refused by the fork reports the error in the pane. Fork
   branches cannot create or publish PR stacks, which GitHub does not
-  support across forks.
+  support across forks. Deleting a PR worktree removes the fork remote
+  AgentIDE added once no branch uses it. Remotes that already existed
+  or whose configuration changed are kept. Opening another PR worktree
+  while cleanup runs preserves the remote it needs.
 - Copies unresolved review comments and the failing logs of the checks
   the branch requires into a prompt, resolves conversations and merges
   or queues, each with a click.
