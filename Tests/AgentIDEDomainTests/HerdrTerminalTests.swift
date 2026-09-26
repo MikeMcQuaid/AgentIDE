@@ -53,13 +53,15 @@ struct HerdrTerminalTests {
         #expect(resize?["rows"] as? Int == 40)
 
         let scroll = try JSONSerialization.jsonObject(
-            with: Data(HerdrTerminal.scrollCommand(upwards: true, lines: 3).utf8),
+            with: Data(HerdrTerminal.scrollCommand(upwards: true, lines: 3, column: 7, row: 4).utf8),
         ) as? [String: Any]
         #expect(scroll?["type"] as? String == "terminal.scroll")
         #expect(scroll?["direction"] as? String == "up")
         #expect(scroll?["lines"] as? Int == 3)
+        #expect(scroll?["column"] as? Int == 7)
+        #expect(scroll?["row"] as? Int == 4)
         let down = try JSONSerialization.jsonObject(
-            with: Data(HerdrTerminal.scrollCommand(upwards: false, lines: 1).utf8),
+            with: Data(HerdrTerminal.scrollCommand(upwards: false, lines: 1, column: 0, row: 0).utf8),
         ) as? [String: Any]
         #expect(down?["direction"] as? String == "down")
     }
@@ -68,6 +70,6 @@ struct HerdrTerminalTests {
     func `commands are single lines, the framing the stream needs`() {
         #expect(HerdrTerminal.inputCommand(bytes: Array("a\nb".utf8)).contains("\n") == false)
         #expect(HerdrTerminal.resizeCommand(columns: 1, rows: 1).contains("\n") == false)
-        #expect(HerdrTerminal.scrollCommand(upwards: false, lines: 2).contains("\n") == false)
+        #expect(HerdrTerminal.scrollCommand(upwards: false, lines: 2, column: 0, row: 0).contains("\n") == false)
     }
 }

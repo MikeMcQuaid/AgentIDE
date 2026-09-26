@@ -19,9 +19,10 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
 - Shows agent activity, pull requests, CI checks and uncommitted changes across repositories in one sidebar.
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
+- Scrolls the agent conversation under the pointer.
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
 - Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
-- Edits code in a built-in editor with syntax highlighting, search and change tracking.
+- Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.
 - Pushes, rebases and manages pull requests, including forks and stacked branches.

@@ -35,9 +35,10 @@ public struct EditorPane: View {
         _searchesContents = AppStorage(wrappedValue: false, role.key("finderSearchesContents"))
         _finderFocusRequest = AppStorage(wrappedValue: 0, role.key("finderFocusRequest"))
         _editorFileRequest = AppStorage(wrappedValue: 0, role.key("editorFileRequest"))
-        _editorFilePath = AppStorage(wrappedValue: "", role.key("editorFilePath"))
-        _editorFileLine = AppStorage(wrappedValue: 0, role.key("editorFileLine"))
-        _editorFileWorktree = AppStorage(wrappedValue: "", role.key("editorFileWorktree"))
+        _editorFilePath = AppStorage(
+            wrappedValue: role.file(in: worktreePath) ?? "", role.key("editorFilePath", worktreePath: worktreePath),
+        )
+        _editorFileLine = AppStorage(wrappedValue: 0, role.key("editorFileLine", worktreePath: worktreePath))
     }
 
     // MARK: Public
@@ -57,8 +58,6 @@ public struct EditorPane: View {
         }
         .task(id: worktreePath) {
             files = await service.listFiles(worktreePath: worktreePath)
-            target = nil
-            openStoredFile()
             if query.isEmpty == false {
                 search()
             }
@@ -90,16 +89,14 @@ public struct EditorPane: View {
     /// the finder as soon as the buttons are pressed.
     @State private var finishedEdit: String?
 
-    /// The query, mode and open file persist across restarts, each
-    /// under the slot's own keys, set in the initialiser from the
-    /// role.
+    /// The finder belongs to the slot; its open file belongs to the
+    /// worktree as well, so switching worktrees loses neither file.
     @AppStorage private var query: String
     @AppStorage private var searchesContents: Bool
     @AppStorage private var finderFocusRequest: Int
     @AppStorage private var editorFileRequest: Int
     @AppStorage private var editorFilePath: String
     @AppStorage private var editorFileLine: Int
-    @AppStorage private var editorFileWorktree: String
 
     @FocusState private var finderFocused: Bool
 
@@ -249,14 +246,15 @@ public struct EditorPane: View {
         }
     }
 
-    /// Opens the stored file when it belongs to this worktree; the
-    /// store survives restarts and other panes write it.
+    /// A line request is consumed once; returning to the worktree
+    /// restores the file's scroll position instead of jumping again.
     private func openStoredFile() {
-        guard editorFileWorktree == worktreePath, editorFilePath.isEmpty == false else {
+        guard editorFilePath.isEmpty == false else {
             return
         }
 
         target = FinderResult(file: editorFilePath, line: editorFileLine > 0 ? editorFileLine : nil)
+        editorFileLine = 0
     }
 
     /// Releases the command waiting on the file and returns the

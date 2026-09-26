@@ -324,11 +324,12 @@ extension TerminalRepresentable {
             self.view = view
             switch transport {
             case let .control(command):
-                // The wheel goes to herdr, which owns the scrollback
-                // and repaints the viewport scrolled; the local
-                // buffer only ever holds the rendered screen.
-                view.onScroll = { [weak self] upwards, lines in
-                    self?.channel?.send(HerdrTerminal.scrollCommand(upwards: upwards, lines: lines))
+                // herdr owns scrollback and mouse routing; the local
+                // buffer holds only the rendered screen.
+                view.onScroll = { [weak self] upwards, lines, column, row in
+                    self?.channel?.send(HerdrTerminal.scrollCommand(
+                        upwards: upwards, lines: lines, column: column, row: row,
+                    ))
                 }
                 startControl(command, in: view)
 
