@@ -29,10 +29,9 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// Clears the rectangular selection when native selection takes over.
     var onNativeSelection: (() -> Void)?
 
-    /// Routes the wheel to herdr for agent panes: scrollback lives
-    /// in the server, which repaints the viewport scrolled, so the
-    /// local buffer (only ever the rendered screen) never scrolls.
-    var onScroll: ((_ upwards: Bool, _ lines: Int) -> Void)?
+    /// Routes the wheel and pointer cell to herdr, which scrolls
+    /// its history or forwards mouse input to the agent.
+    var onScroll: ((_ upwards: Bool, _ lines: Int, _ column: Int, _ row: Int) -> Void)?
 
     /// Takes the files a paste carries, staged and typed the way a
     /// drop is; nil leaves every paste to the terminal.
@@ -243,7 +242,14 @@ final class PaneTerminalView: LocalProcessTerminalView {
             lines = Int(event.scrollingDeltaY.rounded())
         }
         if lines != 0 {
-            onScroll(lines > 0, abs(lines))
+            let point = convert(event.locationInWindow, from: nil)
+            let cell = Self.cellSize(of: self)
+            onScroll(
+                lines > 0,
+                abs(lines),
+                min(max(Int(point.x / cell.width), 0), getTerminal().cols - 1),
+                min(max(Int((bounds.height - point.y) / cell.height), 0), getTerminal().rows - 1),
+            )
         }
         return nil
     }

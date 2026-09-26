@@ -41,6 +41,10 @@ private struct HerdrTerminalInput: Encodable {
     var direction: String?
     // periphery:ignore
     var lines: Int?
+    // periphery:ignore
+    var column: Int?
+    // periphery:ignore
+    var row: Int?
 }
 
 // MARK: - HerdrTerminal
@@ -87,10 +91,12 @@ public enum HerdrTerminal {
         encode(HerdrTerminalInput(type: "terminal.resize", cols: columns, rows: rows))
     }
 
-    /// The command that scrolls the attached viewport; herdr owns
-    /// the scrollback, so the wheel pages through it server-side.
-    public static func scrollCommand(upwards: Bool, lines: Int) -> String {
-        encode(HerdrTerminalInput(type: "terminal.scroll", direction: upwards ? "up" : "down", lines: lines))
+    /// Scrolls at a zero-based cell, so mouse-aware agents receive
+    /// the pointer position rather than herdr's top-left default.
+    public static func scrollCommand(upwards: Bool, lines: Int, column: Int, row: Int) -> String {
+        encode(HerdrTerminalInput(
+            type: "terminal.scroll", direction: upwards ? "up" : "down", lines: lines, column: column, row: row,
+        ))
     }
 
     // MARK: Private

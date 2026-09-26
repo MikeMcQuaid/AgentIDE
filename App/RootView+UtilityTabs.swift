@@ -57,7 +57,7 @@ extension RootView {
     /// command waits on goes only to the preferred slot, so it can
     /// never take over both, and the move button is offered only
     /// while the other slot could take the file.
-    func editorPane(for item: WorktreeItem, role: EditorPane.Role) -> EditorPane {
+    func editorPane(for item: WorktreeItem, role: EditorPane.Role) -> some View {
         let path = item.worktree.path
         let prefersCentre = centreShowsEditor(for: item)
         let canMove = role == .centre || centreCanShowEditor(for: item)
@@ -73,6 +73,7 @@ extension RootView {
             onFinishedWaiting: { finishedWaitingEdit() },
             waitingEdit: (role == .centre) == prefersCentre ? waitingEdit(in: path) : nil,
         )
+        .id(path)
     }
 
     /// The worktree the review surfaces describe: on the repository

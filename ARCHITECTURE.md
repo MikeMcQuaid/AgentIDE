@@ -231,10 +231,13 @@ Rules that follow from that shape:
 - **Scrollback lives in herdr.** The pane keeps none
   (`changeScrollback(nil)`), since a scroll answers with a repaint and a
   local history filled with replaced screens showed output three times
-  over. The wheel pages herdr, the scroll indicator is hidden and Copy
-  All Output reads `pane read --source recent-unwrapped`, because a
-  selection can never reach what scrolled past. Known limitation: herdr
-  does not rewrap scrollback on resize.
+  over. Wheel requests carry the pointer's terminal column and row:
+  herdr forwards them to agents handling mouse input, or pages its own
+  history otherwise. Omitting the position sent every wheel event to
+  the top-left cell, outside Codex's conversation. The scroll indicator
+  is hidden. Copy All Output reads `pane read --source recent-unwrapped`,
+  because a selection can never reach what scrolled past. Known
+  limitation: herdr does not rewrap scrollback on resize.
 - **`--takeover`** replaces a controller leaked by an earlier app run,
   which would otherwise own the pane's input forever. Full herdr
   clients (SSH, Moshi) attach independently and are never dropped.
@@ -882,10 +885,16 @@ view, and the primary pane's branch order is what guarantees a live
 session always outranks the centre editor, so one can never cover the
 other. Every file remembers where it was scrolled to
 (`EditorScrollPositions`, capped at two hundred files, written when
-its editor goes away), so a worktree switch or a relaunch brings it
-back in place unless a line was asked for by name. Each slot persists
-its own finder and open file under
-role-suffixed defaults keys; open-file and finder-focus requests
+its editor leaves the pane), so a worktree switch or a relaunch brings it
+back in place unless a line was asked for by name. A requested line is
+consumed once, so returning to the file restores its scroll position
+instead of repeating the earlier jump. Each slot persists its own
+finder under role-suffixed defaults keys and its open file per worktree
+path, so opening a file in another worktree cannot replace it. The old
+slot-wide file is retained for the worktree it belonged to. Both slots
+key their mounted editor by worktree path, so a switch rebuilds its
+state against that worktree's saved file and line.
+Open-file and finder-focus requests
 travel the shared keys and the window routes each to the preferred
 slot: the side editor unless the centre editor is on screen, and
 always the slot already holding the requested file, so one file never

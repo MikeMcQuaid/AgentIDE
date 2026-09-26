@@ -1,6 +1,8 @@
+import Foundation
+
 public extension EditorPane {
     /// The slot an editor pane fills. Each slot keeps its own finder
-    /// and open file under key-suffixed defaults, so two mounted
+    /// and worktree files under key-suffixed defaults, so two mounted
     /// editors never answer one request twice; the window routes
     /// requests between them by these names. Split from the pane
     /// for length.
@@ -27,8 +29,16 @@ public extension EditorPane {
         // swiftlint:enable explicit_enum_raw_value
 
         /// The slot's defaults key for one of the shared base names.
-        public func key(_ base: String) -> String {
-            base + "." + rawValue
+        public func key(_ base: String, worktreePath: String? = nil) -> String {
+            base + "." + rawValue + (worktreePath.map { "." + $0 } ?? "")
+        }
+
+        /// The worktree's open file, falling back to the old slot-wide
+        /// record until this worktree has saved a choice of its own.
+        public func file(in worktreePath: String, defaults: UserDefaults = .standard) -> String? {
+            defaults.string(forKey: key("editorFilePath", worktreePath: worktreePath))
+                ?? (defaults.string(forKey: key("editorFileWorktree")) == worktreePath
+                    ? defaults.string(forKey: key("editorFilePath")) : nil)
         }
     }
 }

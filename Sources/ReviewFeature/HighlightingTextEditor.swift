@@ -30,13 +30,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
             for observer in observers {
                 NotificationCenter.default.removeObserver(observer)
             }
-            // Written once, here, rather than on every wheel tick:
-            // an editor goes away on a worktree switch, a move to
-            // the other slot or a close, and each is the moment its
-            // file's place is worth keeping.
-            if let scrollKey, let origin = lastOrigin {
-                EditorScrollPositions.remember(origin, for: scrollKey)
-            }
         }
 
         // MARK: Internal
@@ -82,18 +75,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
         /// window under its neighbours.
         func watchDisplayChanges(of scroll: NSScrollView) {
             scrollView = scroll
-            // Every scroll is noted in memory; the clip view's bounds
-            // are the one truth about where the document sits.
-            scroll.contentView.postsBoundsChangedNotifications = true
-            observers.append(NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification,
-                object: scroll.contentView,
-                queue: .main,
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.lastOrigin = self?.scrollView?.contentView.bounds.origin
-                }
-            })
             let names: [Notification.Name] = [
                 NSWindow.didChangeScreenNotification,
                 NSApplication.didChangeScreenParametersNotification,
@@ -142,9 +123,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
         private weak var scrollView: NSScrollView?
 
-        /// Where the clip view last was, as the notifications said.
-        private var lastOrigin: CGPoint?
-
         private static func colour(for kind: SyntaxToken.Kind) -> NSColor {
             switch kind {
             case .keyword:
@@ -178,6 +156,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
     /// What the file's `.editorconfig` says: the indentation Tab
     /// inserts and the width tabs render at.
     var settings: EditorConfigSettings = .init()
+
+    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+        if let path = coordinator.scrollKey {
+            EditorScrollPositions.remember(scroll.contentView.bounds.origin, for: path)
+        }
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         // A hand-built text stack, because the layout manager draws

@@ -68,14 +68,14 @@ extension RootView {
         // would reopen it beside the routed copy when it next
         // shows; the file lives in one slot only.
         let other = role.other
-        if defaults.string(forKey: other.key("editorFilePath")) == file,
-           defaults.string(forKey: other.key("editorFileWorktree")) == worktree
-        {
-            defaults.set("", forKey: other.key("editorFilePath"))
+        if other.file(in: worktree) == file {
+            defaults.set("", forKey: other.key("editorFilePath", worktreePath: worktree))
         }
-        defaults.set(file, forKey: role.key("editorFilePath"))
-        defaults.set(defaults.integer(forKey: "editorFileLine"), forKey: role.key("editorFileLine"))
-        defaults.set(worktree, forKey: role.key("editorFileWorktree"))
+        defaults.set(file, forKey: role.key("editorFilePath", worktreePath: worktree))
+        defaults.set(
+            defaults.integer(forKey: "editorFileLine"),
+            forKey: role.key("editorFileLine", worktreePath: worktree),
+        )
         bump(role.key("editorFileRequest"))
         revealEditor(role)
     }
@@ -99,9 +99,8 @@ extension RootView {
     /// revealing it; moving to the centre opens the centre editor.
     func receiveMoved(file: String, line: Int?, at worktreePath: String, into role: EditorPane.Role) {
         let defaults = UserDefaults.standard
-        defaults.set(file, forKey: role.key("editorFilePath"))
-        defaults.set(line ?? 0, forKey: role.key("editorFileLine"))
-        defaults.set(worktreePath, forKey: role.key("editorFileWorktree"))
+        defaults.set(file, forKey: role.key("editorFilePath", worktreePath: worktreePath))
+        defaults.set(line ?? 0, forKey: role.key("editorFileLine", worktreePath: worktreePath))
         bump(role.key("editorFileRequest"))
         if role == .centre {
             setCentreEditor(true, at: worktreePath)
@@ -119,16 +118,15 @@ extension RootView {
         let centre = EditorPane.Role.centre
         for path in nowRunning where centreEditorPaths.contains(path) {
             setCentreEditor(false, at: path)
-            guard defaults.string(forKey: centre.key("editorFileWorktree")) == path,
-                  let file = defaults.string(forKey: centre.key("editorFilePath")), file.isEmpty == false
+            guard let file = centre.file(in: path), file.isEmpty == false
             else {
                 continue
             }
 
-            defaults.set("", forKey: centre.key("editorFilePath"))
+            defaults.set("", forKey: centre.key("editorFilePath", worktreePath: path))
             receiveMoved(
                 file: file,
-                line: defaults.integer(forKey: centre.key("editorFileLine")),
+                line: defaults.integer(forKey: centre.key("editorFileLine", worktreePath: path)),
                 at: path,
                 into: .utility,
             )
@@ -143,12 +141,10 @@ extension RootView {
     /// twice. Roles are tried centre first, matching what is on
     /// screen.
     private func preferredEditorRole(file: String?, worktreePath: String?) -> EditorPane.Role {
-        let defaults = UserDefaults.standard
         let centreVisible = dependencies.dashboard.selection.map { centreShowsEditor(for: $0) } ?? false
         if let file, file.isEmpty == false, let worktreePath {
             for role in EditorPane.Role.allCases
-                where defaults.string(forKey: role.key("editorFilePath")) == file
-                && defaults.string(forKey: role.key("editorFileWorktree")) == worktreePath
+                where role.file(in: worktreePath) == file
             {
                 // A file held by a centre slot that is not on screen
                 // must not route into the void.
