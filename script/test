@@ -82,12 +82,15 @@ swift test "${swift_args[@]}"
 
 # The App Intents run through the system's own runtime from a UI
 # testing bundle, which only xcodebuild can build and run: host and
-# CI, never the sandbox. AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
+# CI on macOS 27 or later, never the sandbox.
+# AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
 # The framework refuses a runner signed differently from the app
 # ("does not have permission to perform this"), so both sign with one
 # real team, named in the environment; without one the bundle is left
 # out, which is what CI has.
-if [[ -z "${AGENTIDE_DEVELOPMENT_TEAM:-}" ]]; then
+if [[ "$(sw_vers -productVersion | cut -d. -f1)" -lt 27 ]]; then
+  echo "AppIntentsTesting requires macOS 27: skipping the App Intents tests" >&2
+elif [[ -z "${AGENTIDE_DEVELOPMENT_TEAM:-}" ]]; then
   echo "AGENTIDE_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
 elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
   xcodegen generate --use-cache

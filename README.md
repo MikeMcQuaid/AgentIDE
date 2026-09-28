@@ -41,7 +41,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 
 ## 📋 Requirements
 
-- macOS Golden Gate (27) or later.
+- An Apple silicon Mac running macOS Tahoe (26) or later.
 - [Homebrew](https://brew.sh), which installs the rest.
 - [sandvault](https://github.com/webcoyote/sandvault), which creates the sandbox user and the shared workspace.
 - [`gh`](https://cli.github.com) authenticated as you; it stays with your user and agents never see it.
@@ -139,10 +139,11 @@ A session steered from the phone is the same session the Mac shows.
 Project code treats compiler and linker warnings as errors, with Swift's strict concurrency and memory safety checks enabled.
 Xcode also runs Apple's static analyser during builds.
 `script/analyze` adds SwiftLint's analysis and dead-code detection on the host and CI.
-CI also runs the tests under Address Sanitizer.
+CI runs the test suite with Address Sanitizer on macOS 27.
 Thread Sanitizer is available locally; its CI gate awaits a compatible SwiftTerm release fixing a shell-exit race.
 
 Releases run the **Release** workflow from the Actions tab on `main` with a bare `MAJOR.MINOR.PATCH` version.
+Releases publish only after the packaged app passes startup checks on macOS Tahoe and macOS 27.
 
 ## 🚧 Status
 

@@ -31,10 +31,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   certificate, notarise and staple it, then remake its zip
 - `script/test`: run the unit and integration tests, then on the
   host the App Intents tests through `xcodebuild` (a UI testing
-  bundle, since `AppIntentsTesting` drives the system's own runtime;
-  they need `AGENTIDE_DEVELOPMENT_TEAM` set to a real team id, since
-  the framework refuses a runner signed differently from the app, and
-  `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out regardless)
+  bundle on macOS 27 or later, since `AppIntentsTesting` drives the
+  system's own runtime; they need `AGENTIDE_DEVELOPMENT_TEAM` set to a
+  real team id, since the framework refuses a runner signed differently
+  from the app, and `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out
+  regardless)
 - `script/analyze`: static analysis (SwiftLint analyzer and, on the
   host or CI, periphery for dead code)
 - `script/style`: run all linters; `--fix` also applies safe fixes
