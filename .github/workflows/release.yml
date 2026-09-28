@@ -31,11 +31,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     runs-on: xcode-27
     timeout-minutes: 45
-    permissions:
-      contents: write # to push the tag and create the release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Set up Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +51,7 @@ jobs:
           exit 1
 
       - name: Create local version tag
+        id: version
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
@@ -77,7 +78,7 @@ jobs:
           fi
           git tag "${version}"
           [[ "$(git describe --tags --exact-match HEAD)" == "${version}" ]]
-          echo "VERSION=${version}" >>"${GITHUB_ENV}"
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@848c272c7bfe984a197bd4d16383f4c106ec61e6 # 2026.09.21.1
@@ -123,27 +124,84 @@ jobs:
         run: script/package
 
       - name: Upload the app
-        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: AgentIDE
-          path: .build/AgentIDE-*.zip
+          path: .build/AgentIDE-${{ steps.version.outputs.version }}.zip
           # The zip lives in a hidden directory, skipped by default.
           include-hidden-files: true
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
       - name: Check releases in a dry run
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release list
+        run: gh release list --repo "${GITHUB_REPOSITORY}"
+
+  smoke-test:
+    name: test (macOS ${{ matrix.macos }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            macos: "26"
+          - runner: xcode-27
+            macos: "27"
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    steps:
+      - name: Check runtime platform
+        env:
+          EXPECTED_MACOS: ${{ matrix.macos }}
+        run: |
+          sw_vers
+          [[ "$(sw_vers -productVersion | cut -d. -f1)" == "${EXPECTED_MACOS}" && "$(uname -m)" == arm64 ]]
+
+      - name: Download app
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: AgentIDE
+          path: .test-scratch
+
+      - name: Launch app
+        run: |
+          ditto -x -k .test-scratch/AgentIDE-*.zip .test-scratch
+          .test-scratch/AgentIDE.app/Contents/MacOS/AgentIDE &
+          pid=$!
+          trap 'kill "${pid}" &>/dev/null || true' EXIT
+          sleep 10
+          kill -0 "${pid}"
+
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build, smoke-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # to push the tag and create the release
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the app
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: AgentIDE
+          path: .build
 
       - name: Create the release
-        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
+          git tag "${VERSION}" "${GITHUB_SHA}"
           gh auth setup-git
           git push origin "refs/tags/${VERSION}"
-          gh release create "${VERSION}" --verify-tag --generate-notes \
+          gh release create "${VERSION}" --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes \
             ".build/AgentIDE-${VERSION}.zip"

@@ -3,12 +3,13 @@ options:
   bundleIdPrefix: com.mikemcquaid
   createIntermediateGroups: true
   deploymentTarget:
-    macOS: "27.0"
+    macOS: "26.0"
 packages:
   AgentIDEPackage:
     path: .
 settings:
   base:
+    ARCHS: arm64
     SUPPRESS_WARNINGS: NO
     SWIFT_SUPPRESS_WARNINGS: NO
     GCC_WARN_INHIBIT_ALL_WARNINGS: NO
@@ -99,7 +100,7 @@ targets:
           AgentIDE reads a directory you listed yourself, or a repository on a
           removable disk. Deny this and keep your work on the internal disk if
           you would rather it never looked.
-        MACOSX_DEPLOYMENT_TARGET: "27.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
         SWIFT_VERSION: "6.0"
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
@@ -113,7 +114,8 @@ targets:
         - AgentIDEIntentTests
   # The App Intents exercised through the system's own runtime, out
   # of process: a UI testing bundle is what AppIntentsTesting wants.
-  # Host and CI only, since xcodebuild cannot run in the sandbox.
+  # macOS 27 hosts only: AppIntentsTesting needs it, and xcodebuild
+  # cannot run in the sandbox.
   AgentIDEIntentTests:
     type: bundle.ui-testing
     platform: macOS

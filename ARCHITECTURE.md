@@ -9,7 +9,7 @@ live in [AGENTS.md](AGENTS.md); this document does not repeat them.
 
 ## Overview
 
-AgentIDE is a native SwiftUI macOS app (macOS 27 or later, Swift 6.4,
+AgentIDE is a native SwiftUI macOS app (macOS 26 or later, Swift 6.4,
 AGPL-3.0) that runs, steers and reviews sandboxed AI coding agents in
 parallel git worktrees. Its user supervises rather than types, so the
 window is arranged around the agent loop, not around an editor.
@@ -1609,14 +1609,16 @@ reach manual testing live in the seams; test runners strip `HERDR_*`
 from the environment so a teardown can never reach the production
 server. The editor-spool event test delays safety sweeps beyond its
 deadline, so scheduling delays do not count as missed directory events.
-CI (`.github/workflows/tests.yml`) runs style on
-every push and pull request, and build-and-test and analyze in parallel
-on the `xcode-27` image, each asserting Xcode 27 rather than skipping.
-The test job also runs `script/test --sanitize address`, failing on
-memory errors. `script/test --sanitize thread` checks for data races
+CI (`.github/workflows/tests.yml`) runs style on every push and pull
+request, and build-and-test and analyze in parallel on the `xcode-27`
+image, each asserting Xcode 27 rather than skipping. The test job also
+runs `script/test --sanitize address`, failing on memory errors.
+`script/test --sanitize thread` checks for data races
 locally. Both instrument package tests and, when signing is configured,
-the App Intents tests. Thread Sanitizer currently catches SwiftTerm 1.19's
-PTY reader racing process termination in `ShellLifetimeTests`. Its
+the App Intents tests. The App Intents bundle requires macOS 27 for
+AppIntentsTesting; `script/test` skips it on older systems.
+Thread Sanitizer currently catches SwiftTerm 1.19's PTY reader racing
+process termination in `ShellLifetimeTests`. Its
 [upstream lifecycle fix](https://github.com/migueldeicaza/SwiftTerm/commit/a7260892a5cfcd510f635e30ed0993d9397e3d16)
 uses byte-loading APIs incompatible with the current Xcode 27 beta, so
 the thread CI gate awaits a compatible dependency release. The race is
@@ -1643,8 +1645,8 @@ so that only the last needs credentials:
   continues rather than claiming `0.0.0`, which is left for a
   repository with no tags at all. `CURRENT_PROJECT_VERSION` remains
   the build number and counts the default branch's commits, which is
-  what tells two builds of one version apart. The release workflow selects the
-  Release configuration; local builds stay Debug.
+  what tells two builds of one version apart. The release workflow
+  selects the Release configuration; other builds stay Debug.
 - `script/zip` verifies the built app's signature, then zips it with
   `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the
   built `Info.plist`, with `AgentIDE.app` as the only top-level entry.
@@ -1669,26 +1671,33 @@ must be run on `main`. It rejects leading zeroes, `v`, prerelease
 suffixes and build metadata, the development and dry-run versions, an
 existing requested tag and a commit already carrying any tag. It
 creates the local tag before building so `script/build` stamps it into
-the app, then zips, signs and notarises. Nothing reaches GitHub until
-packaging succeeds; only then does the workflow upload the zip as an
-artefact, push the tag and create a release with generated notes and
-the zip attached.
+the app, then zips, signs and notarises. The workflow uploads the
+packaged zip as an artefact, then launches the app in a matrix on the
+ARM64 `macos-26` and `xcode-27` images. Each job checks the actual OS and
+architecture and fails if the app exits within ten seconds. This
+catches startup crashes and linking failures without needing Xcode 27
+on Tahoe; it does not exercise sessions or UI interactions. Only after
+both checks pass does a separate publishing job recreate the tag at
+the original commit, push it and create a release with generated notes
+and that exact zip attached.
 
 A push that touches the workflow, packaging scripts or metadata uses
 `9999.0.0` as a reserved local-only version and repeats the build,
-signing and notarisation as a dry run, but uploads no artefact and
-pushes no tag or release. Dependabot cannot read Actions secrets, so
-its dry runs skip signing and notarisation. Nothing here bumps the
-cask: the `agentide` cask in Homebrew/homebrew-cask is open source and
-Homebrew's own autobump reads each release through `brew livecheck`
-and opens the pull request itself, so the release needs no GitHub
-token of its own.
+signing, notarisation and startup checks as a dry run, uploading the
+test artefact but pushing no tag or release. Dependabot cannot read
+Actions secrets, so its dry runs skip signing and notarisation.
+Nothing here bumps the cask: the `agentide` cask in
+Homebrew/homebrew-cask is open source and Homebrew's own autobump reads
+each release through `brew livecheck` and opens the pull request
+itself, so the release needs no GitHub token of its own.
 
 The release contract is also the cask contract: the tag is the bare
 version, the zip is `AgentIDE-<version>.zip` and the app's
 `CFBundleShortVersionString` is the same value, so the cask can use the
 stable URL
 `https://github.com/MikeMcQuaid/AgentIDE/releases/download/#{version}/AgentIDE-#{version}.zip`.
+Releases are ARM64-only; the cask must require Apple silicon and macOS
+26 or later.
 Every release is Developer ID signed with the hardened runtime,
 notarised and stapled so Homebrew's signing audit and Gatekeeper accept
 it. Releases are full releases, never drafts or prereleases, which lets
