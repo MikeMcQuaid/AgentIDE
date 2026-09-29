@@ -4,6 +4,15 @@ import Foundation
 /// Putting back or throwing away the working files the uncommitted
 /// diff shows. Split from the model body for length.
 extension ReviewModel {
+    /// Toggles one line's selection.
+    func toggle(file: DiffFile, selection: DiffSelection) {
+        var set = selections[file.path] ?? []
+        if set.remove(selection) == nil {
+            set.insert(selection)
+        }
+        selections[file.path] = set
+    }
+
     /// Puts a tracked working file back to what HEAD has, staged
     /// changes included, then reloads so the diff no longer shows
     /// it. False means git refused and the status says why.

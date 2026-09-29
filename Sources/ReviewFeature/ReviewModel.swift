@@ -50,6 +50,9 @@ final class ReviewModel {
     /// Whether any scope has loaded yet; before, progress shows.
     private(set) var hasLoaded = false
 
+    /// Updated by the status extension when a failed read finds missing Git metadata.
+    var isRepositoryAvailable = true
+
     /// Whether the diff shows uncommitted changes.
     private(set) var showsUncommitted = false
 
@@ -198,17 +201,17 @@ final class ReviewModel {
                     commitMessage = ""
                 }
                 originalMessage = ""
-            } else {
+            } else if scope != .lastCommit {
                 commitMessage = try await git.commitMessage(
                     worktreePath: worktreePath,
-                    commit: scope == .lastCommit ? lastCommitHash ?? "HEAD" : "HEAD",
+                    commit: "HEAD",
                 )
                 originalMessage = commitMessage
             }
             threads = await fetchThreads()
-            recordReload(nil)
+            await recordReload(nil)
         } catch {
-            recordReload(error)
+            await recordReload(error)
         }
         hasLoaded = true
     }
@@ -226,15 +229,6 @@ final class ReviewModel {
 
         commitMessage = drafted
         return true
-    }
-
-    /// Toggles one line's selection.
-    func toggle(file: DiffFile, selection: DiffSelection) {
-        var set = selections[file.path] ?? []
-        if set.remove(selection) == nil {
-            set.insert(selection)
-        }
-        selections[file.path] = set
     }
 
     /// Reverse-applies every selected line and, when reviewing the
@@ -260,6 +254,24 @@ final class ReviewModel {
         }
     }
 
+    func loadLastCommit() async throws {
+        let head = await git.commitHash(of: "HEAD", worktreePath: worktreePath)
+        let committed = try await DiffParser.parse(git.commitDiff(
+            worktreePath: worktreePath,
+            commit: head ?? "HEAD",
+            ignoringWhitespace: hidesWhitespace,
+        ))
+        let message = try await git.commitMessage(worktreePath: worktreePath, commit: head ?? "HEAD")
+        showsUncommitted = false
+        if lastCommitHash != head {
+            excludedFromCommit = []
+        }
+        lastCommitHash = head
+        files = committed
+        commitMessage = message
+        originalMessage = message
+    }
+
     // MARK: Private
 
     private let baseRefProvider: () async -> String?
@@ -272,27 +284,14 @@ final class ReviewModel {
     private let fetchThreads: () async -> [ReviewThread]
     private let setThreadResolved: (String, Bool) async throws -> Void
 
-    private func loadLastCommit() async throws {
-        let head = await git.commitHash(of: "HEAD", worktreePath: worktreePath)
-        let committed = try await DiffParser.parse(git.commitDiff(
-            worktreePath: worktreePath,
-            commit: head ?? "HEAD",
-            ignoringWhitespace: hidesWhitespace,
-        ))
-        showsUncommitted = false
-        if lastCommitHash != head {
-            excludedFromCommit = []
-        }
-        lastCommitHash = head
-        files = committed
-    }
-
     /// The upstream scope's commits and their own diff, empty with
     /// a message until the branch has been pushed.
     private func loadUpstream(currentBranch: String?) async throws {
         branchCommits = []
         guard let currentBranch, hasUpstream else {
-            setStatus("This branch has not been pushed yet.")
+            if currentBranch != nil {
+                setStatus("This branch has not been pushed yet.")
+            }
             files = []
             return
         }
@@ -334,8 +333,9 @@ final class ReviewModel {
             // checked-out tip and nothing else.
             commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: branch)
             originalMessage = commitMessage
+            await recordReload(nil)
         } catch {
-            report(error.localizedDescription)
+            await recordReload(error)
         }
     }
 
@@ -368,8 +368,9 @@ final class ReviewModel {
             ))
             commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: commit)
             originalMessage = commitMessage
+            await recordReload(nil)
         } catch {
-            report(error.localizedDescription)
+            await recordReload(error)
         }
     }
 

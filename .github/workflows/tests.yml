@@ -32,7 +32,6 @@ jobs:
         with:
           core: false
           cask: false
-          test-bot: false
 
       - name: Bootstrap
         run: script/bootstrap
@@ -54,7 +53,6 @@ jobs:
         with:
           core: false
           cask: false
-          test-bot: false
 
       - name: Select Xcode 27
         run: |
@@ -105,7 +103,6 @@ jobs:
         with:
           core: false
           cask: false
-          test-bot: false
 
       - name: Select Xcode 27
         run: |

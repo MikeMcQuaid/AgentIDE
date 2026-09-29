@@ -197,6 +197,13 @@ pane keeps a client, most of them silent, and reads that wait on each
 other left a fresh attach blank until some other pane's agent spoke.
 Rules that follow from that shape:
 
+- **Visited agent panes stay mounted across sidebar selections.**
+  Each keeps its terminal buffer, controller and full pane geometry,
+  hiding its native view while inactive. Switching back needs no
+  attach or resize round trip: a fresh controller first painted a
+  half-height screen before the agent redrew at the window's size.
+  Unvisited agents do not attach, and removing a session or worktree
+  releases its pane. A real window resize still sizes hidden panes.
 - **Frames carry the screen, never the modes.** Cursor moves, colours
   and synchronised updates arrive; the private modes an agent set
   (bracketed paste, kitty keyboard) never do. So the local terminal
@@ -330,6 +337,11 @@ way round: a mounted pane whose worktree vanished mid-read (a branch
 renamed away, cleanup after a merge) reports nothing, since that is
 the workspace changing rather than a failure, and the sidebar drops
 the row on its own.
+If the directory remains but its Git metadata is missing or unreadable,
+Review shows that the repository is unavailable instead of repeating
+git failures or claiming there are no changes. A failed review read
+checks the repository before reporting; ordinary reads add no probe.
+Restoring the metadata and refreshing brings the review back.
 
 There is no windowless resident mode: the app quits with its last
 window. Sessions keep running; the event spool is durable files, so a
@@ -1061,9 +1073,12 @@ steps.
   the message at the same time. A private index starts from the
   reviewed commit and restores unticked paths from its parent, both
   sides of a rename together; the working tree and real index stay
-  intact, including unrelated staged work. A changed HEAD refuses
-  the amend so the user can review again. A new commit or scope
-  resets the ticks. The fold names its paths on the amend
+  intact, including unrelated staged work. If HEAD changed, Amend
+  refreshes and retries once, preserving the edited message and
+  unticked paths still in the new diff while keeping newly added
+  files. Recovery reports only the successful amend. An ordinary
+  refresh onto a new commit or a scope change resets the ticks.
+  The fold names its paths on the amend
   itself, so the last commit's tree plus those paths is what lands
   and anything else staged or uncommitted stays where it was. A
   commit already pushed needs pushing again, which the lease covers.

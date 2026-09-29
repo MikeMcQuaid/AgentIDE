@@ -28,7 +28,7 @@ extension RootView {
     /// or the centre editor when the worktree chose it; a worktree
     /// with nothing to list offers the new session form.
     @ViewBuilder
-    func primary(for item: WorktreeItem) -> some View {
+    func primary(for item: WorktreeItem, isSelected: Bool) -> some View {
         if item.worktree.isHostDirectory {
             // The editor takes the pane an agent would have: a
             // directory of your own is pinned to the centre slot.
@@ -50,7 +50,7 @@ extension RootView {
             // the conversations page would claim the session ended.
             LaunchProgressView("Attaching to the agent…", waitingOn: "herdr to answer")
         } else if let session = item.session {
-            agentTerminal(for: session, at: item.worktree.path, isActive: isCovered == false)
+            agentTerminal(for: session, at: item.worktree.path, isActive: isSelected && isCovered == false)
                 .id(session.name)
                 // Dropped files stage into the shared workspace (the
                 // sandbox cannot read host paths) and their staged
@@ -117,14 +117,18 @@ extension RootView {
     /// that pane's header shows it, so it never moves on toggle:
     /// inside the session strip when there is one, floating over a
     /// page that has none.
-    func primaryColumn(for item: WorktreeItem) -> some View {
+    func primaryColumn(for item: WorktreeItem, isSelected: Bool) -> some View {
         VStack(spacing: 0) {
             sessionStrip(for: item)
-            primary(for: item)
+            primary(for: item, isSelected: isSelected)
         }
         .opacity(isCovered ? 0 : 1)
         .allowsHitTesting(isCovered == false)
-        .overlay { coveringPage }
+        .overlay {
+            if isSelected {
+                coveringPage
+            }
+        }
         // A page fades over the pane rather than cutting; the panes
         // stay mounted either way.
         .animation(Motion.quick, value: isCovered)

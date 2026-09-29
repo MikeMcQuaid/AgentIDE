@@ -20,6 +20,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Shows agent activity, pull requests, CI checks and uncommitted changes across repositories in one sidebar.
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
 - Scrolls the agent conversation under the pointer.
+- Switches between visited agents instantly, preserving their terminal size and content.
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
 - Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.

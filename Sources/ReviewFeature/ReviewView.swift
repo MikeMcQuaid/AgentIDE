@@ -178,13 +178,15 @@ public struct ReviewView: View {
                 collapsedAll: collapsedAll,
                 collapseOverrides: $collapseOverrides,
             )
-            ReviewFooterView(
-                model: model,
-                onCommit: { await commitOutstanding(model: model) },
-                onAmend: { await amendOutstanding(model: model) },
-                canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
-            )
-            .disabled(localReview.isBusy)
+            if model.isRepositoryAvailable {
+                ReviewFooterView(
+                    model: model,
+                    onCommit: { await commitOutstanding(model: model) },
+                    onAmend: { await amendOutstanding(model: model) },
+                    canCommit: model.showsUncommitted && model.files.isEmpty == false && model.isReadOnly == false,
+                )
+                .disabled(localReview.isBusy)
+            }
         }
     }
 
