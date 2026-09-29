@@ -1,6 +1,13 @@
 import Foundation
 
 public extension GitClient {
+    /// The private index must be rebuilt from the new tip before retrying.
+    struct CommitChanged: LocalizedError {
+        public var errorDescription: String? {
+            "The last commit changed before it could be amended."
+        }
+    }
+
     /// Amends only the reviewed commit, preserving staged and
     /// working changes and leaving excluded changes uncommitted.
     func amend(
@@ -38,7 +45,7 @@ public extension GitClient {
             )
         }
         guard await commitHash(of: "HEAD", worktreePath: worktreePath) == expectedHead else {
-            throw SessionServiceError("The last commit changed. Refresh the review before amending it.")
+            throw CommitChanged()
         }
 
         try await git(["commit", "--amend", "-m", message], in: worktreePath, environment: environment)

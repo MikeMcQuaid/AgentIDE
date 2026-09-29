@@ -13,6 +13,13 @@ extension ReviewView {
             // A local `git diff` lands in well under half a second;
             // a wait that short shows nothing rather than a flash.
             Color.clear
+        } else if model.isRepositoryAvailable == false {
+            ContentUnavailableView(
+                "Git repository unavailable",
+                systemImage: "folder.badge.questionmark",
+                description: Text("Restore this worktree and its Git metadata, then refresh."),
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.files.isEmpty {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -59,7 +66,7 @@ extension ReviewView {
                 }
         }
         .buttonStyle(.glass)
-        .disabled(worktree.isHostDirectory)
+        .disabled(worktree.isHostDirectory || model.isRepositoryAvailable == false)
         .accessibilityLabel("Review with " + localReview.reviewer.displayName)
         .accessibilityValue(localReview.isRunning ? "Review in progress" : "")
         .hoverHelp(localReview.isRunning ? "Review in progress" : "Edit the review prompt and manage local findings")

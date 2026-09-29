@@ -3,6 +3,12 @@ import Foundation
 /// Branch inspection and the repository-local exclude file, split
 /// from the client body for length.
 public extension GitClient {
+    /// Whether git can resolve this directory's worktree metadata.
+    func isWorktree(worktreePath: String) async throws -> Bool {
+        let result = try await git(["rev-parse", "--is-inside-work-tree"], in: worktreePath, allowFailure: true)
+        return result.succeeded && result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
+    }
+
     /// The branch actually checked out in a worktree, nil when
     /// detached or unreadable; agents sometimes switch away from the
     /// branch the worktree was created for. The full symbolic ref

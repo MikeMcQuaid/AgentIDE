@@ -1,5 +1,6 @@
 import AgentIDEDomain
 import DashboardFeature
+import SessionFeature
 import SwiftUI
 import TerminalUI
 
@@ -24,10 +25,16 @@ extension RootView {
     /// keeps one shape whatever it is showing.
     var detail: some View {
         HStack(spacing: 0) {
-            if let item = dependencies.dashboard.selection {
-                primaryColumn(for: item)
-            } else {
-                unselectedColumn
+            ZStack {
+                WorktreePanes(
+                    items: dependencies.dashboard.groups.flatMap(\.items),
+                    selection: dependencies.dashboard.selection,
+                ) { item, isSelected in
+                    primaryColumn(for: item, isSelected: isSelected)
+                }
+                if dependencies.dashboard.selection == nil {
+                    unselectedColumn
+                }
             }
             if showsUtility {
                 PaneDivider(width: $utilityPaneWidth, range: PaneLayout.utilityRange, controlsLeadingPane: false) {

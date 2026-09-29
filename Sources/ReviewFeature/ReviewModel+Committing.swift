@@ -1,3 +1,5 @@
+import AgentIDEData
+import AgentIDEDomain
 import TerminalUI
 
 /// Which files the next or amended commit carries; split from the
@@ -8,7 +10,7 @@ import TerminalUI
 /// commit instead of being silently dropped from it.
 extension ReviewModel {
     var isReadOnly: Bool {
-        stackTarget != nil || commitTarget != nil
+        isRepositoryAvailable == false || stackTarget != nil || commitTarget != nil
     }
 
     var showsCommitTicks: Bool {
@@ -24,19 +26,42 @@ extension ReviewModel {
     /// Keeps ticked files in the reviewed commit; excluded changes
     /// remain uncommitted without taking any staged work with them.
     func amendLastCommit() async {
-        guard canAmendLastCommit, let lastCommitHash else {
+        guard canAmendLastCommit else {
             return
         }
 
         isAmending = true
         defer { isAmending = false }
+        let message = messageEdited ? commitMessage : nil
+        let excluded = excludedFromCommit
+        var retrying = false
         do {
-            try await git.amend(
-                worktreePath: worktreePath,
-                excluding: files.map(\.path).filter { isCommitting($0) == false },
-                message: commitMessage,
-                expectedHead: lastCommitHash,
-            )
+            for attempt in 0 ... 1 {
+                guard let lastCommitHash else {
+                    return
+                }
+
+                do {
+                    try await git.amend(
+                        worktreePath: worktreePath,
+                        excluding: files.map(\.path).filter { isCommitting($0) == false },
+                        message: commitMessage,
+                        expectedHead: lastCommitHash,
+                    )
+                    break
+                } catch let error as GitClient.CommitChanged where attempt == 0 {
+                    PerformanceLog.recordMessage(
+                        "Amend of " + repositoryName + ": " + error.localizedDescription,
+                        isError: false,
+                    )
+                    retrying = true
+                    try await loadLastCommit()
+                    excludedFromCommit = excluded.intersection(files.map(\.path))
+                    if let message {
+                        commitMessage = message
+                    }
+                }
+            }
             excludedFromCommit = []
             await reload()
             // The tip moved: the sidebar's counts and the pull
@@ -45,7 +70,7 @@ extension ReviewModel {
             UtilityTabTarget.requestSidebarRefresh()
             setStatus("Amended the last commit.")
         } catch {
-            report(error.localizedDescription)
+            report((retrying ? "Amend failed after refreshing the changed commit: " : "") + error.localizedDescription)
         }
     }
 
@@ -72,7 +97,7 @@ extension ReviewModel {
     /// the button whether it is dimmed, so the answer has to be
     /// here rather than in the button's state.
     var hasSomethingToCommit: Bool {
-        files.isEmpty == false && committingCount > 0
+        isRepositoryAvailable && files.isEmpty == false && committingCount > 0
     }
 
     /// Whether a file is ticked for the next commit.

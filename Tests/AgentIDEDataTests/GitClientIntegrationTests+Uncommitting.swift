@@ -127,7 +127,7 @@ extension GitClientIntegrationTests {
         try "new\n".write(toFile: path + "/new.txt", atomically: true, encoding: .utf8)
         try await git.commitAll(worktreePath: path, message: "Newer work")
         let head = await git.commitHash(of: "HEAD", worktreePath: path)
-        await #expect(throws: (any Error).self) {
+        await #expect(throws: GitClient.CommitChanged.self) {
             try await git.amend(
                 worktreePath: path,
                 excluding: ["README.md"],

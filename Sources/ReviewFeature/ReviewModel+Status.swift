@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import TerminalUI
 
@@ -38,16 +39,25 @@ extension ReviewModel {
     /// itself has gone: one can vanish between the poll that mounted
     /// this pane and the reload that reads it (a branch renamed away,
     /// cleanup after a merge), which is the workspace changing, not
-    /// a failure, and the sidebar drops the row on its own.
-    func recordReload(_ error: (any Error)?) {
+    /// a failure, and the sidebar drops the row on its own. A directory
+    /// left behind with broken Git metadata shows an unavailable state.
+    func recordReload(_ error: (any Error)?) async {
         let what = "Review of " + repositoryName
         guard let error else {
+            isRepositoryAvailable = true
             ServiceStatus.shared.recordSuccess(doing: what)
             return
         }
 
-        if worktreeExists(worktreePath) {
+        isRepositoryAvailable = worktreeExists(worktreePath)
+        if isRepositoryAvailable, let available = try? await git.isWorktree(worktreePath: worktreePath) {
+            isRepositoryAvailable = available
+        }
+        if isRepositoryAvailable {
             ServiceStatus.shared.record(failure: error, doing: what)
+        } else {
+            PerformanceLog.recordMessage(what + ": " + error.localizedDescription, isError: false)
+            ServiceStatus.shared.recordSuccess(doing: what)
         }
     }
 }
