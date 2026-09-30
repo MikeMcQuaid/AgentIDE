@@ -23,6 +23,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Switches between visited agents instantly, preserving their terminal size and content.
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
 - Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
+- Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.

@@ -1,4 +1,5 @@
 import AgentIDEData
+import AppKit
 import Foundation
 @testable import PRFeature
 import TerminalUI
@@ -8,6 +9,28 @@ import Testing
 /// log cut to its head and tail, condensed to what a fix prompt
 /// needs.
 extension PullRequestsModelTests {
+    @Test(arguments: [false, true])
+    func `copying logs clears stale clipboard contents before fetching`(fails: Bool) async {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.setString("stale text", forType: .string)
+        let model = makeModel()
+        model.fetchFailedRunLog = { _ in
+            #expect(pasteboard.string(forType: .string) == nil)
+            if fails {
+                throw GitHubClient.RunLogsUnavailable(failedJobs: 1)
+            }
+            return "failure details"
+        }
+
+        let copied = await model.copyFailingLogs(
+            summary(1, head: "feature", failingCheckLinks: ["https://github.com/o/r/actions/runs/123/job/1"]),
+            pasteboard: pasteboard,
+        )
+        #expect(copied == !fails)
+        #expect(pasteboard.string(forType: .string) == (fails ? nil : "## Run 123\nfailure details"))
+    }
+
     @Test
     func `failing logs gather each run's head and tail once`() async throws {
         let links = [

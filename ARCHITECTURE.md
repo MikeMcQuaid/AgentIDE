@@ -1350,7 +1350,9 @@ steps.
   4 KiB and 16 KiB, since one dumped blob can outweigh the rest)
   condensed (job and step named
   once in a heading, timestamps and colour stripped), Cmd opening the check in the
-  browser and Shift in the Browser tab. A run still in progress has
+  browser and Shift in the Browser tab. Copying clears the clipboard
+  before fetching logs and fills it when they arrive; a failed fetch
+  leaves it empty. A run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than
   failing while the rest of the run decides; gh gates even a

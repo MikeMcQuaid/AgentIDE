@@ -238,7 +238,8 @@ extension PullRequestsModel {
     /// Copies the failing logs to the clipboard; false opens the
     /// errors surface, and a pull request whose failing checks are
     /// not Actions runs has nothing to copy.
-    func copyFailingLogs(_ summary: PullRequestSummary) async -> Bool {
+    func copyFailingLogs(_ summary: PullRequestSummary, pasteboard: NSPasteboard = .general) async -> Bool {
+        pasteboard.clearContents()
         let runs = Self.runIDs(in: summary.failingCheckLinks)
         guard runs.isEmpty == false else {
             report("None of #" + String(summary.number) + "'s failing checks is an Actions run; open them instead.")
@@ -247,8 +248,7 @@ extension PullRequestsModel {
 
         do {
             let text = try await failingLogs(for: summary)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            pasteboard.setString(text, forType: .string)
             note("Copied the failing logs of " + String(runs.count) + " runs from #" + String(summary.number) + ".")
             return true
         } catch let error as GitHubClient.RunLogsUnavailable {
