@@ -1278,10 +1278,8 @@ steps.
   Only one branch action runs at a time: while one does, Rebase and
   Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and
-  everything below it: a stacked pull request merged as a lone one
-  fails on a merge queue, which `gh pr merge` joins through
-  auto-merge and GitHub refuses for stacked pull requests, where
-  `gh stack merge` queues the layers in order. Rebasing one
+  everything below it, through the same asynchronous merge API that
+  merges or queues a lone pull request. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Pushing any entry
   pushes every branch of the stack, bottom first, whether or not each
@@ -1316,12 +1314,12 @@ steps.
   skipping a branch already in place and signed, from whichever entry
   asked. Each pull request opens against the branch below
   with both `--head` and `--base` named; `gh stack link` links what is
-  open (idempotent, additive), and stack merge is
-  `gh stack merge <number> --yes --merge-method <method>` after
-  linking, offered only when every pull request below is mergeable,
-  green and approved. Standing (`2/3`) comes from the pull request
-  chain the store has cached, falling back to the worktree's derived
-  stack. `gh stack view` knows only stacks it created; never read it.
+  open (idempotent, additive), and stack merge uses the asynchronous
+  merge API after linking, offered only when every pull request below
+  is mergeable, green and approved. Standing (`2/3`) comes from the
+  pull request chain the store has cached, falling back to the
+  worktree's derived stack. `gh stack view` knows only stacks it
+  created; never read it.
 - **One merge button, one readiness rule.** `isReadyToMerge` (open,
   not a draft, mergeable, checks green, review approved or none
   required) decides whether the button says Merge or Queue; anything
@@ -1333,6 +1331,21 @@ steps.
   answers that the queue sets the strategy, and that automerge is
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
+- **Merge completion comes from GitHub.** Individual and stacked
+  merges submit `PUT /repos/{owner}/{repo}/pulls/{number}/merge-async`
+  through `gh api`, using the repository's allowed merge method and
+  the default action, which honours its merge queue without bypassing
+  rules. The action returns as soon as GitHub accepts the request;
+  an existing pending request is accepted too, without following its
+  UUID. The usual poll reads requested or queued branches every minute
+  and merge queues every half minute, slowing on battery or when the
+  window is hidden. A requested merge keeps this cadence for up to an
+  hour; queued pull requests keep it until they leave the queue. A
+  stack request gives every branch through the selected layer this
+  cadence.
+  Cleanup stays with that poll's observed merge, leaving the selected
+  worktree in place. Enabling and cancelling automerge still use
+  `gh pr merge`, since the async API does not offer those operations.
 - **Last mile buttons** say what they copy: Reviews and Checks,
   each carrying the app's copy symbol inline and its count in the run
   the sidebar's arrows use (`Reviews ⎘3` as `Push ↑9`, the symbol the
@@ -1375,8 +1388,8 @@ steps.
   that the API gives a job's log up only once the job has finished
   and links each failed job's page (the run's own address and the
   job's id, from `--json url,jobs`).
-- **Cleanup after merge** runs from the Merge button, the context menu
-  and the poll (only on an observed open-to-merged transition, never a
+- **Cleanup after merge** runs from the context menu and the poll
+  (only on an observed open-to-merged transition, never a
   missing pull request) through one path: `git branch -d` refuses
   unmerged, a dirty worktree is refused, the main checkout is brought
   level with origin (reset when it carries nothing local, signed rebase

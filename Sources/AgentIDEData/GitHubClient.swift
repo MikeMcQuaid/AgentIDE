@@ -193,12 +193,6 @@ public struct GitHubClient: Sendable {
         try await gh(["pr", "ready", "--undo", String(number)], in: repositoryPath)
     }
 
-    /// Merges a pull request immediately.
-    public func merge(repositoryPath: String, number: Int) async throws {
-        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
-        try await gh(["pr", "merge", String(number), flag], in: repositoryPath)
-    }
-
     /// The repository's default branch as GitHub itself has it,
     /// for the rare clone whose remote was never given a head and
     /// which has no local main or master to fall back on.

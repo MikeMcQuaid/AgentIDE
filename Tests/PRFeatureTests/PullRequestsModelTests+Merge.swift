@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 @testable import PRFeature
 import Testing
@@ -6,6 +7,19 @@ import Testing
 /// would merge now; a review still outstanding makes it Automerge,
 /// which is what GitHub's own refusal asks for.
 extension PullRequestsModelTests {
+    @Test(arguments: [GitHubClient.MergeResult.pending, .merged, .enqueued])
+    func `requesting a merge leaves cleanup to the poll`(outcome: GitHubClient.MergeResult) async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.selected = summary(7, head: "feature", mergeable: "MERGEABLE", checks: "SUCCESS")
+        model.hasMergeQueue = true
+        model.performMergeChange = { _ in outcome }
+
+        await model.performMergeAction()
+
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "feature"))
+        #expect(model.worktree(on: "feature")?.branch == "feature")
+    }
+
     @Test
     func `a review outstanding turns merge into automerge`() async {
         let reviewed = PullRequestSummary(
@@ -20,12 +34,10 @@ extension PullRequestsModelTests {
             state: "OPEN",
         )
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
-        var cleaned = false
-        model.performPostMergeCleanup = { _, _ in cleaned = true }
         model.selected = reviewed
         #expect(model.mergeActionTitle == "Automerge")
         await model.performMergeAction()
-        #expect(cleaned == false)
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "feature") == false)
     }
 
     @Test
@@ -43,8 +55,6 @@ extension PullRequestsModelTests {
             isDraft: true,
         )
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
-        var cleaned = false
-        model.performPostMergeCleanup = { _, _ in cleaned = true }
         model.selected = draft
 
         // Everything else about it says merge, and GitHub would
@@ -55,8 +65,7 @@ extension PullRequestsModelTests {
         #expect(PullRequestsModel.isReadyToMerge(draft) == false)
 
         await model.performMergeAction()
-        // Nothing merged, so nothing is cleaned up behind it.
-        #expect(cleaned == false)
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "feature") == false)
     }
 
     @Test

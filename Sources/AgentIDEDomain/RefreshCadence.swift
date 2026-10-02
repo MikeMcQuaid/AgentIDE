@@ -9,6 +9,9 @@ import Foundation
 /// every tick that asks herdr is a `sudo` login shell, and a machine
 /// on battery with nothing happening should cost nothing.
 public enum RefreshCadence {
+    /// How long a requested merge keeps its branches on the faster cadence.
+    public static let mergeRequestPatience: TimeInterval = 3_600
+
     /// The slowest a window on battery ticks while it shows.
     public static let batteryPollSeconds = 60
 

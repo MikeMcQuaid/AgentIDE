@@ -141,9 +141,9 @@ public extension SessionService {
     }
 
     /// Merges a stacked pull request and every one below it.
-    func mergeStack(worktree: Worktree, number: Int) async throws {
+    func mergeStack(worktree: Worktree, number: Int) async throws -> GitHubClient.MergeResult {
         try await requireStackable(stack(for: worktree))
-        try await github.mergeStack(repositoryPath: worktree.repositoryPath, number: number)
+        return try await github.merge(repositoryPath: worktree.repositoryPath, number: number)
     }
 
     /// Where this branch belongs: the repository itself when GitHub

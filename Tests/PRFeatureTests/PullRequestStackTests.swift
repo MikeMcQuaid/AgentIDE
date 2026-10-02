@@ -134,10 +134,15 @@ struct PullRequestStackTests {
         // takes the merge with it.
         let done = Mutex([String]())
         model.performLinkStack = { _ in done.withLock { $0.append("link") } }
-        model.performMergeStack = { _, number in done.withLock { $0.append("merge " + String(number)) } }
+        model.performMergeStack = { _, number in
+            done.withLock { $0.append("merge " + String(number)) }
+            return .merged
+        }
         model.selected = fixtures.summary(2, head: "upper", base: "lower")
         #expect(await model.mergeStack())
         #expect(done.withLock { $0 } == ["link", "merge 2"])
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "lower"))
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "upper"))
     }
 
     @Test

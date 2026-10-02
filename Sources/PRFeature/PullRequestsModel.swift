@@ -139,9 +139,6 @@ final class PullRequestsModel {
             defer { gate.invalidate(repositoryPath: repository.path, number: number) }
             try await github.requestCopilotReview(repositoryPath: repository.path, number: number)
         }
-        performPostMergeCleanup = { worktree, mergedBranch in
-            await Self.cleanUpAfterMerge(worktree: worktree, mergedBranch: mergedBranch, service: service)
-        }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
         }
@@ -291,7 +288,7 @@ final class PullRequestsModel {
     var performLinkStack: (Worktree) async throws -> Void
 
     /// Merges a stacked pull request and every one below it.
-    var performMergeStack: (Worktree, Int) async throws -> Void
+    var performMergeStack: (Worktree, Int) async throws -> GitHubClient.MergeResult
 
     /// The picker's models and the effort a launch without a flag
     /// runs at, for a disclosure of a session started on defaults.
@@ -312,7 +309,7 @@ final class PullRequestsModel {
     var fetchCommitCount: (Worktree, String?) async -> Int = { _, _ in 0 }
     var generateDescription: ([String], String) async -> (title: String, body: String)?
     var fillTemplate: ([String], String) async -> String?
-    var performMergeChange: (PullRequestSummary) async throws -> Void
+    var performMergeChange: (PullRequestSummary) async throws -> GitHubClient.MergeResult?
 
     /// Rewrites an open pull request's title and body.
     var performEdit: (Int, String, String) async throws -> Void
@@ -332,7 +329,6 @@ final class PullRequestsModel {
     /// Bumped as each ask of Copilot is recorded, so the header's
     /// icon, which reads the record, repaints at once.
     var copilotAsks = 0
-    var performPostMergeCleanup: (Worktree, String) async -> Void
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
 
