@@ -24,6 +24,9 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
     /// What the one-pull-request answer says its checks are doing.
     var checks: String
 
+    /// Whether the branch's listing reports its pull request merged.
+    var isMerged = false
+
     // periphery:ignore - read by the tests below.
     private(set) var calls = 0
 
@@ -50,9 +53,12 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
                     standardError: "",
                 )
             }
+            let state = isMerged
+                ? #""state": "closed", "merged_at": "2026-10-01T00:00:00Z", "closed_at": "2026-10-01T00:00:00Z""#
+                : #""state": "open""#
             let body = """
             [{"number": 7, "title": "Work", "html_url": "https://example.com/7", "head": {"ref": "work"},
-              "base": {"ref": "main"}, "state": "open", "draft": false, "user": {"login": "mike"}, "body": ""}]
+              "base": {"ref": "main"}, \(state), "draft": false, "user": {"login": "mike"}, "body": ""}]
             """
             return ProcessResult(
                 status: 0,
@@ -85,6 +91,8 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
 /// twice in a minute, GitHub hears it once, and the timer outlives
 /// the app rather than the view that happened to ask.
 struct PullRequestStoreTests {
+    // MARK: Internal
+
     @Test
     func `a pull request is asked about once a minute however often it is looked at`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-store") + "/state.json"
@@ -243,6 +251,75 @@ struct PullRequestStoreTests {
     }
 
     @Test
+    func `a listing that saw the merge replaces the open summary the row paints`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-merged") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        // Enriched while open, then merged on GitHub: only open pull
+        // requests are enriched again, so the listing has to say so.
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(store.cachedSummary(repositoryPath: "/repo", number: 7)?.state == "OPEN")
+
+        runner.isMerged = true
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        #expect(store.cachedSummary(repositoryPath: "/repo", number: 7)?.state == "MERGED")
+    }
+
+    @Test
+    func `a listing answered unchanged still corrects an open summary it outdates`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-merged-304") + "/state.json"
+        let runner = CountingRunner()
+        runner.isMerged = true
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        // The merge reached the listing before the open summary was
+        // corrected, so every later answer is a 304.
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(store.cachedSummary(repositoryPath: "/repo", number: 7)?.state == "OPEN")
+
+        store.invalidateListings(repositoryPath: "/repo")
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        #expect(runner.unchangedAnswers == 1)
+        #expect(store.cachedSummary(repositoryPath: "/repo", number: 7)?.state == "MERGED")
+    }
+
+    @Test
+    func `a listing the pane fetched corrects an open summary too`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-merged-pane") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        store.rememberListing(
+            repositoryPath: "/repo",
+            scope: .branch("work"),
+            summaries: [Self.summary(state: "MERGED")],
+        )
+        #expect(store.cachedSummary(repositoryPath: "/repo", number: 7)?.state == "MERGED")
+    }
+
+    @Test
+    func `a pull request reopened is asked about again rather than painted finished`() async throws {
+        let file = try TestSupport.temporaryDirectory("pr-reopened") + "/state.json"
+        let runner = CountingRunner()
+        let store = PullRequestStore(github: GitHubClient(runner: runner), store: MetadataStore(file: file)) { false }
+
+        // Closed and enriched as closed inside the interval, then
+        // reopened: the summary is not due, so without the listing
+        // dropping its stamp the cache would answer closed.
+        _ = try await store.summary(repositoryPath: "/repo", number: 7)
+        store.rememberSummary(repositoryPath: "/repo", summary: Self.summary(state: "CLOSED"))
+        _ = try await store.listing(repositoryPath: "/repo", scope: .branch("work"))
+        let before = runner.calls
+
+        let reopened = try await store.summary(repositoryPath: "/repo", number: 7)
+        #expect(runner.calls == before + 1)
+        #expect(reopened?.state == "OPEN")
+    }
+
+    @Test
     func `a caller cannot ask for a shorter interval than the floor`() async throws {
         let file = try TestSupport.temporaryDirectory("pr-floor") + "/state.json"
         let runner = CountingRunner()
@@ -300,5 +377,21 @@ struct PullRequestStoreTests {
         store.invalidate(repositoryPath: "/repo", number: 7)
         _ = try await store.summary(repositoryPath: "/repo", number: 7)
         #expect(runner.calls == 7)
+    }
+
+    // MARK: Private
+
+    private static func summary(state: String) -> PullRequestSummary {
+        PullRequestSummary(
+            number: 7,
+            title: "Work",
+            url: "https://example.invalid/7",
+            headBranch: "work",
+            mergeable: "",
+            reviewDecision: "",
+            checks: "",
+            baseBranch: "main",
+            state: state,
+        )
     }
 }
