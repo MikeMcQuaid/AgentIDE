@@ -48,7 +48,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-go", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-rust", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-java", exact: "0.23.5"),
-        .package(url: "https://github.com/tree-sitter/tree-sitter-php", exact: "0.24.2"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-php", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-html", exact: "0.23.2"),
         // Pin 0.23.2 by revision for the same scanner lookup bug as Python.
         // https://github.com/tree-sitter/tree-sitter-css/pull/99 explicitly
