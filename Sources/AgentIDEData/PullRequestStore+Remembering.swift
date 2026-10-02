@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// Answers fetched elsewhere, remembered so they answer later reads
 /// and hold off later fetches like the store's own. Split from the
@@ -17,10 +16,12 @@ public extension PullRequestStore {
     ) -> [PullRequestSummary] {
         var kept = summaries
         store.update { metadata in
-            kept = Self.painted(summaries, repositoryPath: repositoryPath, in: &metadata)
-            metadata.pullRequestListsCache[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] =
-                CachedPullRequestList(summaries: kept)
-            metadata.fetchedAt[Self.listingKey(repositoryPath: repositoryPath, scope: scope)] = Date()
+            kept = Self.record(
+                summaries,
+                key: Self.listingKey(repositoryPath: repositoryPath, scope: scope),
+                repositoryPath: repositoryPath,
+                in: &metadata,
+            )
         }
         return kept
     }

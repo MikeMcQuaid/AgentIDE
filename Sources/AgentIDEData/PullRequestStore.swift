@@ -110,17 +110,20 @@ public struct PullRequestStore: Sendable {
             )
             switch answer {
             case .unchanged:
-                store.update { $0.fetchedAt[key] = Date() }
+                // An unchanged listing can still outdate a summary
+                // enriched since it arrived.
+                store.update { metadata in
+                    metadata.fetchedAt[key] = Date()
+                    Self.correctSummaries(from: cached ?? [], repositoryPath: repositoryPath, in: &metadata)
+                }
                 PerformanceLog.record(.cacheHit, "etag " + key, seconds: 0)
                 return cached ?? []
 
             case let .changed(body, etag):
                 var fetched = GitHubClient.summaries(fromRESTJSON: body)
                 store.update { metadata in
-                    fetched = Self.painted(fetched, repositoryPath: repositoryPath, in: &metadata)
-                    metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
+                    fetched = Self.record(fetched, key: key, repositoryPath: repositoryPath, in: &metadata)
                     metadata.etags[key] = etag
-                    metadata.fetchedAt[key] = Date()
                 }
                 return fetched
             }
@@ -133,9 +136,7 @@ public struct PullRequestStore: Sendable {
             requiredChecks: requiredChecksReader(repositoryPath: repositoryPath),
         )
         store.update { metadata in
-            fetched = Self.painted(fetched, repositoryPath: repositoryPath, in: &metadata)
-            metadata.pullRequestListsCache[key] = CachedPullRequestList(summaries: fetched)
-            metadata.fetchedAt[key] = Date()
+            fetched = Self.record(fetched, key: key, repositoryPath: repositoryPath, in: &metadata)
         }
         return fetched
     }

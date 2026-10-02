@@ -1144,7 +1144,13 @@ steps.
   row at once, without the poll having heard of it: the form records
   what it opened where the row already looks, GitHub's own listing
   where it has caught up and the bare facts the form knows otherwise,
-  which the next fetch replaces.
+  which the next fetch replaces. Only open pull requests are
+  enriched, so every listing, whichever side fetched it, corrects
+  the enriched summaries it outdates: one it reports merged or
+  closed replaces a summary still calling it open (otherwise a pull
+  request merged elsewhere stayed open on its row until clicked),
+  and one it reports open again is asked about at the next
+  enrichment rather than painted finished from the cache.
 - **A guarded default branch is not pushed from here.** Whether the
   default branch takes a push is GitHub's to say: the branch's own
   summary says whether classic protection is on it, and the rules
