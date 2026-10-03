@@ -1278,8 +1278,8 @@ steps.
   Only one branch action runs at a time: while one does, Rebase and
   Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and
-  everything below it, through the same asynchronous merge API that
-  merges or queues a lone pull request. Rebasing one
+  everything below it, through the asynchronous merge API that also
+  queues a lone pull request. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Pushing any entry
   pushes every branch of the stack, bottom first, whether or not each
@@ -1331,11 +1331,13 @@ steps.
   answers that the queue sets the strategy, and that automerge is
   unsupported for a stacked pull request. Its button says Queue
   throughout and dims until the pull request is ready.
-- **Merge completion comes from GitHub.** Individual and stacked
-  merges submit `PUT /repos/{owner}/{repo}/pulls/{number}/merge-async`
-  through `gh api`, using the repository's allowed merge method and
-  the default action, which honours its merge queue without bypassing
-  rules. The action returns as soon as GitHub accepts the request;
+- **Merge completion comes from GitHub.** Plain individual merges
+  submit `PUT /repos/{owner}/{repo}/pulls/{number}/merge` through
+  `gh api`, using the repository's allowed merge method. A failed
+  synchronous merge falls back once to the asynchronous `merge-async`
+  endpoint; stacks and merge queues use it immediately. Its default
+  action honours the merge queue without bypassing rules. An
+  asynchronous action returns as soon as GitHub accepts the request;
   an existing pending request is accepted too, without following its
   UUID. The usual poll reads requested or queued branches every minute
   and merge queues every half minute, slowing on battery or when the
