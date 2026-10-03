@@ -18,7 +18,11 @@ extension PullRequestsModel {
         } else if summary.hasAutomerge {
             try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
         } else if isReadyToMerge(summary) {
-            return try await github.merge(repositoryPath: repository.path, number: summary.number)
+            return try await github.merge(
+                repositoryPath: repository.path,
+                number: summary.number,
+                asynchronously: gate.hasMergeQueue(repositoryPath: repository.path),
+            )
         } else {
             try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
         }

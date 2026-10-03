@@ -28,7 +28,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.
 - Pushes, rebases and manages pull requests, including forks and stacked branches.
-- Merges or queues individual and stacked pull requests in the background on GitHub and can automatically remove clean, fully merged worktrees and branches when it observes a merge, leaving the selected worktree and main checkout in place.
+- Merges individual pull requests directly, queues or merges stacks in the background on GitHub and can automatically remove clean, fully merged worktrees and branches when it observes a merge, leaving the selected worktree and main checkout in place.
 - Notifies you when an agent finishes or needs input.
 - Starts and steers work from a phone through SSH, Shortcuts and Siri.
 
