@@ -10,6 +10,85 @@ import Testing
 struct SessionNavigationTests {
     // MARK: Internal
 
+    struct Fixture {
+        // MARK: Lifecycle
+
+        init(runner: any ProcessRunner = EmptyRunner()) {
+            let paths = WorkspacePaths(
+                hostUser: "test",
+                sharedWorkspace: root + "/shared",
+                sandboxHome: root + "/home",
+                metadataFile: root + "/state.json",
+            )
+            let store = MetadataStore(file: paths.metadataFile)
+            let github = GitHubClient(runner: runner) { true }
+            let service = SessionService(
+                paths: paths,
+                git: GitClient(runner: runner),
+                herdr: HerdrClient(
+                    runner: runner,
+                    launcher: SandvaultLauncher(hostUser: "test"),
+                    isInsideSandbox: true,
+                    configHome: root + "/herdr",
+                ),
+                github: github,
+                transcripts: TranscriptReader(),
+                spool: EventSpool(directory: paths.eventsDirectory),
+                store: store,
+                runners: [],
+            )
+            model = DashboardModel(service: service, store: store, github: github)
+            repository = Repository(name: "repo", path: paths.repositoriesDirectory + "/repo")
+            let item = WorktreeItem(
+                worktree: Worktree(
+                    repositoryName: repository.name,
+                    repositoryPath: repository.path,
+                    branch: "main",
+                    path: repository.path,
+                ),
+                session: nil,
+                isDirty: false,
+                aheadOfUpstream: nil,
+                hasUnread: false,
+            )
+            model.groups = [RepositoryGroup(repository: repository, items: [item])]
+        }
+
+        // MARK: Internal
+
+        let root = FileManager.default.currentDirectoryPath + "/.test-scratch/navigation-" + UUID().uuidString
+        let model: DashboardModel
+        let repository: Repository
+
+        func typeAndSubmit(in host: NSView, windowNumber: Int) throws {
+            let editor = try #require(textView(in: host))
+            editor.insertText(" prompt", replacementRange: NSRange(location: editor.string.utf16.count, length: 0))
+            let key = try #require(NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: .command,
+                timestamp: 1,
+                windowNumber: windowNumber,
+                context: nil,
+                characters: "\r",
+                charactersIgnoringModifiers: "\r",
+                isARepeat: false,
+                keyCode: 36,
+            ))
+            #expect(host.performKeyEquivalent(with: key))
+        }
+
+        func close() {
+            try? FileManager.default.removeItem(atPath: root)
+        }
+
+        // MARK: Private
+
+        private func textView(in view: NSView) -> NSTextView? {
+            (view as? NSTextView) ?? view.subviews.lazy.compactMap { textView(in: $0) }.first
+        }
+    }
+
     @Test
     func `a failed agent wait backs off and cancellation stops it`() async throws {
         let runner = FailedWaitRunner()
@@ -141,85 +220,6 @@ struct SessionNavigationTests {
     }
 
     // MARK: Private
-
-    private struct Fixture {
-        // MARK: Lifecycle
-
-        init(runner: any ProcessRunner = EmptyRunner()) {
-            let paths = WorkspacePaths(
-                hostUser: "test",
-                sharedWorkspace: root + "/shared",
-                sandboxHome: root + "/home",
-                metadataFile: root + "/state.json",
-            )
-            let store = MetadataStore(file: paths.metadataFile)
-            let github = GitHubClient(runner: runner)
-            let service = SessionService(
-                paths: paths,
-                git: GitClient(runner: runner),
-                herdr: HerdrClient(
-                    runner: runner,
-                    launcher: SandvaultLauncher(hostUser: "test"),
-                    isInsideSandbox: true,
-                    configHome: root + "/herdr",
-                ),
-                github: github,
-                transcripts: TranscriptReader(),
-                spool: EventSpool(directory: paths.eventsDirectory),
-                store: store,
-                runners: [],
-            )
-            model = DashboardModel(service: service, store: store, github: github)
-            repository = Repository(name: "repo", path: paths.repositoriesDirectory + "/repo")
-            let item = WorktreeItem(
-                worktree: Worktree(
-                    repositoryName: repository.name,
-                    repositoryPath: repository.path,
-                    branch: "main",
-                    path: repository.path,
-                ),
-                session: nil,
-                isDirty: false,
-                aheadOfUpstream: nil,
-                hasUnread: false,
-            )
-            model.groups = [RepositoryGroup(repository: repository, items: [item])]
-        }
-
-        // MARK: Internal
-
-        let root = FileManager.default.currentDirectoryPath + "/.test-scratch/navigation-" + UUID().uuidString
-        let model: DashboardModel
-        let repository: Repository
-
-        func typeAndSubmit(in host: NSView, windowNumber: Int) throws {
-            let editor = try #require(textView(in: host))
-            editor.insertText(" prompt", replacementRange: NSRange(location: editor.string.utf16.count, length: 0))
-            let key = try #require(NSEvent.keyEvent(
-                with: .keyDown,
-                location: .zero,
-                modifierFlags: .command,
-                timestamp: 1,
-                windowNumber: windowNumber,
-                context: nil,
-                characters: "\r",
-                charactersIgnoringModifiers: "\r",
-                isARepeat: false,
-                keyCode: 36,
-            ))
-            #expect(host.performKeyEquivalent(with: key))
-        }
-
-        func close() {
-            try? FileManager.default.removeItem(atPath: root)
-        }
-
-        // MARK: Private
-
-        private func textView(in view: NSView) -> NSTextView? {
-            (view as? NSTextView) ?? view.subviews.lazy.compactMap { textView(in: $0) }.first
-        }
-    }
 
     private struct EmptyRunner: ProcessRunner {
         @concurrent

@@ -37,6 +37,11 @@ public extension PullRequestStore {
         store.update { metadata in
             if let summary {
                 metadata.pullRequestCache[key] = Self.painted(summary, repositoryPath: repositoryPath, in: &metadata)
+                if summary.state != "OPEN" {
+                    metadata.fetchedAt.removeValue(
+                        forKey: Self.mergeRequestKey(repositoryPath: repositoryPath, branch: branch),
+                    )
+                }
             } else {
                 metadata.pullRequestCache.removeValue(forKey: key)
             }

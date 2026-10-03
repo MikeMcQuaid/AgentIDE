@@ -278,10 +278,11 @@ extension PullRequestsModel {
     /// it, in order; false opens the errors surface. GitHub decides
     /// how each is merged, so the button says only that it merges.
     func mergeStack() async -> Bool {
-        guard let worktree = listedWorktree, let number = selected?.number else {
+        guard let worktree = listedWorktree, let selected else {
             return false
         }
 
+        let branches = Array(stack.branches.prefix { $0 != selected.headBranch }) + [selected.headBranch]
         do {
             // Linked first, and only then merged: a chain of pull
             // requests GitHub does not hold as a stack must not be
@@ -289,9 +290,20 @@ extension PullRequestsModel {
             // covers a bottom pull request opened anywhere else.
             // A link that fails takes the merge with it.
             try await performLinkStack(worktree)
-            try await performMergeStack(worktree, number)
+            let outcome = try await performMergeStack(worktree, selected.number)
+            pullRequests.markMergeRequested(repositoryPath: repository.path, branches: branches)
             pullRequests.invalidateListings(repositoryPath: repository.path)
-            setStatus("Merging the stack.")
+            switch outcome {
+            case .pending:
+                setStatus("Requested the stack merge.")
+
+            case .merged:
+                setStatus("Merged the stack.")
+
+            case .enqueued:
+                setStatus("Queued the stack.")
+            }
+            UtilityTabTarget.requestSidebarRefresh()
             await reload(keepingSelection: true)
             return true
         } catch {
@@ -301,18 +313,17 @@ extension PullRequestsModel {
     }
 
     /// Merges, queues, enables automerge or cancels either, per the
-    /// label; an immediate merge from the main checkout also cleans
-    /// the checkout up, returning to the default branch and deleting
-    /// the merged one. The header refreshes to show the new state.
+    /// label. The usual poll observes completion and handles cleanup.
     func performMergeAction() async {
         guard let selected, selected.state == "OPEN" else {
             return
         }
 
-        let merges = selected.hasAutomerge == false && Self.isReadyToMerge(selected)
-        let succeeded = await act { try await performMergeChange(selected) }
-        if succeeded, merges, let worktree = actionWorktree {
-            await performPostMergeCleanup(worktree, selected.headBranch)
+        await act {
+            if try await performMergeChange(selected) != nil {
+                pullRequests.markMergeRequested(repositoryPath: repository.path, branches: [selected.headBranch])
+                UtilityTabTarget.requestSidebarRefresh()
+            }
         }
         await refreshSummary(selected.number)
     }

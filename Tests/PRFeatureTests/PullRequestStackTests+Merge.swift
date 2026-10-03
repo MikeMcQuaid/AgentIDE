@@ -7,8 +7,12 @@ import Testing
 /// Merging from the bottom of a stack. Split from the stack tests
 /// for length.
 extension PullRequestStackTests {
-    @Test
-    func `the bottom of a stack merges through the stack`() async {
+    @Test(arguments: [
+        (GitHubClient.MergeResult.pending, "Requested the stack merge."),
+        (.merged, "Merged the stack."),
+        (.enqueued, "Queued the stack."),
+    ])
+    func `the bottom of a stack merges through the stack`(outcome: GitHubClient.MergeResult, status: String) async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "lower" }
@@ -32,9 +36,15 @@ extension PullRequestStackTests {
 
         let done = Mutex([String]())
         model.performLinkStack = { _ in done.withLock { $0.append("link") } }
-        model.performMergeStack = { _, number in done.withLock { $0.append("merge " + String(number)) } }
+        model.performMergeStack = { _, number in
+            done.withLock { $0.append("merge " + String(number)) }
+            return outcome
+        }
         model.selected = fixtures.summary(1, head: "lower", base: "main")
         #expect(await model.mergeStack())
         #expect(done.withLock { $0 } == ["link", "merge 1"])
+        #expect(model.status == status)
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "lower"))
+        #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "upper") == false)
     }
 }

@@ -45,7 +45,13 @@ extension DashboardModel {
         // One query for every repository due, not one each.
         // While anything is queued the queue is what is about to
         // change, so it is asked about as often as the pull request.
-        let anythingQueued = branchPullRequests.values.contains { $0?.isQueued == true }
+        let anythingQueued = queuedNumbers.values.contains { $0.isEmpty == false }
+            || groups.flatMap(\.items).contains { item in
+                pullRequests.mergeRequestedRecently(
+                    repositoryPath: item.worktree.repositoryPath,
+                    branch: item.worktree.branch,
+                )
+            }
         let answers = await pullRequests.queuedNumbers(
             repositoryPaths: groups.map(\.repository.path),
             interval: anythingQueued ? Self.inFlightInterval : Self.queueInterval,
@@ -236,9 +242,8 @@ extension DashboardModel {
     /// for an empty answer.
     private static let queueInterval: TimeInterval = 300
 
-    /// How often a pull request with checks running or a place in
-    /// the queue is asked about: the store's floor is one minute,
-    /// so this asks as soon as it may.
+    /// A requested merge, queued pull request or running check uses
+    /// the shortest cadence; branch listings keep the minute floor.
     private static let inFlightInterval: TimeInterval = 30
 
     /// Checks running longer than this are a stalled run or GitHub
@@ -246,10 +251,12 @@ extension DashboardModel {
     /// its tier rather than asking twice a minute for hours.
     private static let pendingPatience: TimeInterval = 3_600
 
-    /// Whether a pull request is about to change: queued, or with
-    /// checks that started running less than an hour ago.
+    /// Whether a pull request is about to change: queued, recently
+    /// requested to merge or with checks running less than an hour.
     private func isInFlight(_ pullRequest: PullRequestSummary, in repositoryPath: String) -> Bool {
-        if pullRequest.isQueued {
+        if queuedNumbers[repositoryPath]?.contains(pullRequest.number) == true
+            || pullRequests.mergeRequestedRecently(repositoryPath: repositoryPath, branch: pullRequest.headBranch)
+        {
             return true
         }
         guard pullRequest.checks == "PENDING",
@@ -265,8 +272,8 @@ extension DashboardModel {
     /// for a branch of the same name: thirty days.
     private static let collisionAge: TimeInterval = 2_592_000
 
-    /// A merge made on GitHub or elsewhere is tidied on the poll that
-    /// first sees it: the branch's pull request that was open at the
+    /// A merge is tidied on the poll that first sees it: the branch's
+    /// pull request that was open at the
     /// last poll now reports merged. Only that observed transition
     /// counts, never a merely missing pull request (a stale cache or
     /// a branch that never had one), and dirty worktrees are left
@@ -369,10 +376,8 @@ extension DashboardModel {
     }
 
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {
-        // A pull request in flight is about to change: checks still
-        // running will pass or fail, and a queued one will merge or
-        // leave the queue within the hour. Those are asked about
-        // every half minute whatever their row's tier.
+        // Requested merges, queue entries and running checks are
+        // asked about at the fastest cadence whatever their row's tier.
         let pullRequest = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
             .flatMap(\.self)
         if let pullRequest, pullRequest.state == "OPEN", isInFlight(pullRequest, in: item.worktree.repositoryPath) {

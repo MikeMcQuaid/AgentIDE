@@ -31,19 +31,12 @@ extension PullRequestsModelTests {
         model.performLinkStack = { _ in
             // Succeeds without side effects.
         }
-        model.performMergeStack = { _, _ in
-            // Succeeds without side effects.
-        }
+        model.performMergeStack = { _, _ in .merged }
         model.fetchTemplate = { _ in nil }
         model.fetchCommitMessages = { _, _ in [] }
         model.generateDescription = { _, _ in nil }
         model.fillTemplate = { _, _ in nil }
-        model.performMergeChange = { _ in
-            // Succeeds without side effects.
-        }
-        model.performPostMergeCleanup = { _, _ in
-            // Succeeds without side effects.
-        }
+        model.performMergeChange = { _ in nil }
         model.fetchCurrentBranch = { _ in nil }
         model.fetchRebaseNeed = { _ in .nothing }
         model.performPush = { _ in .origin }

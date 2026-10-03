@@ -3,8 +3,8 @@ import AgentIDEDomain
 import TerminalUI
 
 /// Cleanup after a merge, split from the model body for length: the
-/// one merge-safe path behind the Merge button, the context menu and
-/// the poll's own merge detection.
+/// one merge-safe path behind the context menu and the poll's own
+/// merge detection.
 public extension DashboardModel {
     /// Deletes a repository's checkout from disk; the sidebar only
     /// offers it while `deletionBlocker` is nil and the service
@@ -47,8 +47,8 @@ public extension DashboardModel {
     /// is fully on the base branch (git's `-d` rule), otherwise the
     /// refusal comes back for the caller to show; the main checkout is
     /// returned to the default branch with the merged branch safely
-    /// deleted. The one path behind the Merge button, the context menu
-    /// and the poll's own merge detection: nothing here can lose
+    /// deleted. The one path behind the context menu and the poll's
+    /// own merge detection: nothing here can lose
     /// work, and only the explicit, confirmed Delete worktree forces.
     @discardableResult
     func cleanUp(item: WorktreeItem) async -> SessionService.CleanupRefusal? {
