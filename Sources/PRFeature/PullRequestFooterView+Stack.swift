@@ -94,50 +94,10 @@ extension PullRequestFooterView {
         .hoverHelp(model.pushStackHelp)
     }
 
-    /// Why the stacked merge is in its current state: what it does
-    /// when it can, and what it is waiting for when it cannot.
-    private var mergeStackHelp: String {
-        if let blocker = model.stack.stackingBlocker {
-            return blocker
-        }
-        guard model.isStackLinked else {
-            return "The pull requests below this one are not all open, so there is no stack to "
-                + "merge and this branch must not be merged into its base on its own"
-        }
-        guard model.isStackBelowReady else {
-            return "A stack merges all at once, and a pull request below this one is not ready: "
-                + "it is in conflict, its checks have not passed, or a review it needs is missing"
-        }
-
-        return "Stack these pull requests on GitHub if they are not already, then merge, queue or "
-            + "automerge this one and every one below it, in order, as the repository allows"
-    }
-
     /// The same, for a stack: how many of its branches the remote
     /// lacks, since a stack pushes by branch rather than by commit.
     private var stackPushCount: String {
         let branches = model.stacking.unpushedBranches.count
         return branches > 0 ? String(branches) : ""
-    }
-
-    /// A stacked entry merges with everything under it or not at
-    /// all: merging one out of order would land its parent's commits
-    /// under another pull request's name. Queue where the repository
-    /// merges through a queue and Merge otherwise, as the lone
-    /// button says it, and dim until GitHub knows the stack.
-    @ViewBuilder var mergeStackButton: some View {
-        if model.selected?.state == "OPEN" {
-            BusyButton(
-                model.hasMergeQueue ? "Queue" : "Merge",
-                busy: model.hasMergeQueue ? "Queueing" : "Merging",
-                prominent: true,
-                disabled: model.canMergeStack == false,
-            ) {
-                if await model.mergeStack() == false {
-                    utilityTab = UtilityTabTarget.errors
-                }
-            }
-            .hoverHelp(mergeStackHelp)
-        }
     }
 }

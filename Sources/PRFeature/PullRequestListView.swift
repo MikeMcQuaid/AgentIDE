@@ -175,16 +175,17 @@ struct PullRequestFooterView: View {
             draftAndOpenButtons
             if model.isEditing {
                 // Saving is the one thing to do while editing.
-            } else if model.isInStack {
-                mergeStackButton
             } else if let mergeTitle = model.mergeActionTitle {
                 BusyButton(
                     mergeTitle,
                     busy: model.mergeActionBusyTitle,
-                    prominent: true,
+                    systemImage: model.isMergeScheduled ? "checkmark" : nil,
+                    prominent: model.isMergeScheduled == false,
                     disabled: model.canMergeAction == false,
                 ) {
-                    await model.performMergeAction()
+                    if await model.performMergeAction() == false {
+                        utilityTab = UtilityTabTarget.errors
+                    }
                 }
                 .hoverHelp(model.mergeActionHelp)
             }

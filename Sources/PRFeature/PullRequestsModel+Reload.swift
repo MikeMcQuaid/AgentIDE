@@ -9,6 +9,12 @@ extension PullRequestsModel {
     /// whether the merge action queues or merges.
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
+        if hasMergeQueue {
+            _ = await pullRequests.queuedNumbers(repositoryPaths: [repository.path])
+            if let selected {
+                self.selected = withCachedUnresolved(selected)
+            }
+        }
     }
 
     /// Whether the default branch takes a push, which is the one

@@ -5,7 +5,7 @@ import AgentIDEDomain
 /// real ones, split from the initialiser for length.
 extension PullRequestsModel {
     /// The one merge action: takes a draft out of draft, cancels
-    /// automerge, merges what is ready, or asks for automerge.
+    /// automerge or queueing, merges what is ready or enables automerge.
     static func mergeChange(
         _ summary: PullRequestSummary,
         github: GitHubClient,
@@ -15,16 +15,22 @@ extension PullRequestsModel {
         defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
         if summary.isDraft {
             try await github.markReady(repositoryPath: repository.path, number: summary.number)
+        } else if summary.isQueued {
+            try await github.dequeue(repositoryPath: repository.path, number: summary.number)
         } else if summary.hasAutomerge {
             try await github.disableAutomerge(repositoryPath: repository.path, number: summary.number)
-        } else if isReadyToMerge(summary) {
-            return try await github.merge(
-                repositoryPath: repository.path,
-                number: summary.number,
-                asynchronously: gate.hasMergeQueue(repositoryPath: repository.path),
-            )
         } else {
-            try await github.enableAutomerge(repositoryPath: repository.path, number: summary.number)
+            let hasMergeQueue = await gate.hasMergeQueue(repositoryPath: repository.path)
+            if isReadyToMerge(summary) {
+                return try await github.merge(
+                    repositoryPath: repository.path,
+                    number: summary.number,
+                    asynchronously: hasMergeQueue,
+                )
+            }
+            try await github.enableAutomerge(
+                repositoryPath: repository.path, number: summary.number, usingMergeQueue: hasMergeQueue,
+            )
         }
         return nil
     }

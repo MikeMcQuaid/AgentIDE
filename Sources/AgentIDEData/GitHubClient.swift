@@ -169,13 +169,12 @@ public struct GitHubClient: Sendable {
     }
 
     /// Enables automerge for a pull request.
-    public func enableAutomerge(repositoryPath: String, number: Int) async throws {
-        let flag = await mergeMethodFlag(repositoryPath: repositoryPath)
-        try await gh(["pr", "merge", String(number), "--auto", flag], in: repositoryPath)
+    public func enableAutomerge(repositoryPath: String, number: Int, usingMergeQueue: Bool = false) async throws {
+        let flags = await usingMergeQueue ? [] : [mergeMethodFlag(repositoryPath: repositoryPath)]
+        try await gh(["pr", "merge", String(number), "--auto"] + flags, in: repositoryPath)
     }
 
-    /// Cancels automerge, which on merge-queue repositories also
-    /// leaves the queue.
+    /// Cancels automerge before queue admission or merging.
     public func disableAutomerge(repositoryPath: String, number: Int) async throws {
         try await gh(["pr", "merge", String(number), "--disable-auto"], in: repositoryPath)
     }
