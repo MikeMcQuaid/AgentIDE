@@ -133,12 +133,15 @@ extension PullRequestsModel {
     /// A summary with its unresolved-conversation count from the
     /// threads cache: no listing or summary query carries the count,
     /// so what the conversation pane last cached stands in, the way
-    /// the sidebar rows count theirs.
+    /// the sidebar rows count theirs. Queue membership uses the same
+    /// shared cache as the sidebar too.
     func withCachedUnresolved(_ summary: PullRequestSummary) -> PullRequestSummary {
         let key = AppMetadata.threadsKey(repositoryPath: repository.path, number: summary.number)
-        let threads = store.load().threadsCache[key]?.threads ?? []
+        let metadata = store.load()
+        let threads = metadata.threadsCache[key]?.threads ?? []
         var stamped = summary
         stamped.unresolvedComments = threads.count { $0.isResolved == false }
+        stamped.isQueued = metadata.queuedCache[repository.path]?.contains(summary.number) ?? summary.isQueued
         return stamped
     }
 
@@ -314,18 +317,28 @@ extension PullRequestsModel {
 
     /// Merges, queues, enables automerge or cancels either, per the
     /// label. The usual poll observes completion and handles cleanup.
-    func performMergeAction() async {
-        guard let selected, selected.state == "OPEN" else {
-            return
+    @discardableResult
+    func performMergeAction() async -> Bool {
+        guard let selected, canMergeAction else {
+            return false
         }
 
-        await act {
-            if try await performMergeChange(selected) != nil {
-                pullRequests.markMergeRequested(repositoryPath: repository.path, branches: [selected.headBranch])
-                UtilityTabTarget.requestSidebarRefresh()
+        let succeeded: Bool =
+            if isInStack, selected.isDraft == false, isMergeScheduled == false {
+                await mergeStack()
+            } else {
+                await act {
+                    if try await performMergeChange(selected) != nil {
+                        pullRequests.markMergeRequested(
+                            repositoryPath: repository.path, branches: [selected.headBranch],
+                        )
+                    }
+                    UtilityTabTarget.requestSidebarRefresh()
+                }
             }
-        }
+        await loadMergeQueue()
         await refreshSummary(selected.number)
+        return succeeded
     }
 
     @discardableResult

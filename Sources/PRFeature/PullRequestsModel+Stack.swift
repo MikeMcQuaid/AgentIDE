@@ -182,7 +182,7 @@ extension PullRequestsModel {
     /// bottom included. Rebase and Merge are the stack's from any
     /// layer: rebasing the bottom alone loses the layers above it,
     /// and merging it as a lone pull request fails on a merge
-    /// queue, which gh joins through auto-merge and GitHub refuses
+    /// queue, which gh joins through automerge and GitHub refuses
     /// for a stacked pull request.
     var isInStack: Bool {
         stacking.stack.isStacked

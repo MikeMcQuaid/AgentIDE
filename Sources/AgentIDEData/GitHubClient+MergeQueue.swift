@@ -6,6 +6,15 @@ import Foundation
 /// to GraphQL, and a failure answers "not queued" rather than taking
 /// a pull request listing down with it.
 public extension GitHubClient {
+    /// Removes a queued pull request; disabling automerge is a separate action.
+    func dequeue(repositoryPath: String, number: Int) async throws {
+        let id = try await gh(["pr", "view", String(number), "--json", "id", "--jq", ".id"], in: repositoryPath)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = "mutation($id: ID!) { dequeuePullRequest(input: { id: $id }) { clientMutationId } }"
+        try await gh(["api", "graphql", "-f", "query=" + query, "-f", "id=" + id], in: repositoryPath)
+    }
+
     /// Whether the repository merges through a merge queue, so merge
     /// controls can say queue rather than merge.
     func hasMergeQueue(repositoryPath: String) async -> Bool {

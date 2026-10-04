@@ -168,61 +168,83 @@ extension PullRequestsModel {
             return nil
         }
 
-        // A draft cannot be merged or queued, and GitHub refuses
-        // automerge on one too: what a click can do here is take it
-        // out of draft, and the label says so.
         if selected.isDraft {
-            return "Mark ready"
+            return "Ready"
+        }
+        if selected.isQueued {
+            return "Queued"
         }
         if selected.hasAutomerge {
-            return hasMergeQueue ? "Dequeue" : "Cancel automerge"
+            return "Automerge"
         }
-        if Self.isReadyToMerge(selected) {
+        if Self.isReadyToMerge(selected), isInStack == false || isStackBelowReady {
             return hasMergeQueue ? "Queue" : "Merge"
         }
-        // GitHub refuses automerge where a merge queue sets the
-        // branch's strategy, and refuses it on a stacked pull
-        // request: offering it there only ever ended in that
-        // refusal, so the queue's own button waits instead.
-        return hasMergeQueue ? "Queue" : "Automerge"
+        return isInStack ? "Waiting" : "Automerge"
     }
 
-    /// Whether the merge action can run as things stand. Only a
-    /// queue's button waits: everywhere else the label already
-    /// names something a click can do now, automerge included.
+    /// Whether GitHub has scheduled merging, independent of readiness.
+    var isMergeScheduled: Bool {
+        selected?.hasAutomerge == true || selected?.isQueued == true
+    }
+
+    /// Draft and cancellation actions do not wait for stack readiness.
     var canMergeAction: Bool {
-        guard let selected, hasMergeQueue, selected.isDraft == false,
-              selected.hasAutomerge == false
-        else {
-            return true
+        guard let selected, selected.state == "OPEN" else {
+            return false
         }
 
-        return Self.isReadyToMerge(selected)
+        return selected.isDraft || isMergeScheduled || isInStack == false
+            || (canMergeStack && Self.isReadyToMerge(selected))
     }
 
     /// Why the merge action is in the state it is in.
     var mergeActionHelp: String {
-        guard canMergeAction else {
-            return "This repository's merge queue sets the merge strategy, so there is no "
-                + "automerge to ask for: the queue takes it once its checks have passed and "
-                + "the reviews it needs are in"
-        }
+        switch mergeActionTitle {
+        case "Automerge":
+            if selected?.hasAutomerge == true {
+                return "Automerge is enabled on GitHub. Click to disable it"
+            }
+            return "Ask GitHub to merge when its requirements are met, using its merge queue if required"
 
-        return "The one merge action for the open conversation: its label names exactly "
-            + "what a click does now, and a second click cancels automerge or queueing"
+        case "Queued":
+            if isInStack {
+                return "Queued on GitHub. Click to remove this pull request and those above it from the queue"
+            }
+            return "Queued for merging on GitHub. Click to remove it from the queue"
+
+        case "Waiting":
+            return "GitHub does not support automerge for stacked pull requests; the stack must be ready to merge"
+
+        case "Ready":
+            return "Take this pull request out of draft"
+
+        default:
+            break
+        }
+        if isInStack {
+            if let blocker = stack.stackingBlocker {
+                return blocker
+            }
+            if isStackLinked == false {
+                return "Open the pull requests below this one before merging the stack"
+            }
+            return "Merge or queue this pull request and every pull request below it"
+        }
+        return "Merge or queue this pull request on GitHub"
     }
 
     /// The present-tense form while the merge action runs.
     var mergeActionBusyTitle: String {
         switch mergeActionTitle {
-        case "Mark ready":
-            "Marking ready"
+        case "Ready":
+            "Readying"
 
-        case "Dequeue":
+        case "Queued":
             "Dequeuing"
 
-        case "Cancel automerge":
-            "Cancelling"
+        case "Automerge":
+            selected?.hasAutomerge == true ? "Disabling" : "Enabling"
 
         case "Queue":
             "Queueing"
@@ -231,7 +253,7 @@ extension PullRequestsModel {
             "Merging"
 
         default:
-            "Enabling automerge"
+            "Waiting"
         }
     }
 

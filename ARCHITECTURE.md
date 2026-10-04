@@ -1035,7 +1035,7 @@ steps.
   keep an idle tab quiet must not answer a click.
 - **A draft's one action is to stop being one.** GitHub refuses to
   merge a draft and refuses automerge on one too, so the merge
-  button reads "Mark ready" while a pull request is a draft and runs
+  button reads "Ready" while a pull request is a draft and runs
   `gh pr ready`; the next click is the Merge, Queue or Automerge it
   would always have been. Nothing is cleaned up behind it, since
   nothing merged. Draft stays in its place afterwards, taking an
@@ -1320,17 +1320,23 @@ steps.
   pull request chain the store has cached, falling back to the
   worktree's derived stack. `gh stack view` knows only stacks it
   created; never read it.
-- **One merge button, one readiness rule.** `isReadyToMerge` (open,
-  not a draft, mergeable, checks green, review approved or none
-  required) decides whether the button says Merge or Queue; anything
-  short of it says Automerge and runs `gh pr merge --auto`, which is
-  what GitHub's own refusal asks for. Judging from checks and
-  mergeability alone offered Merge on a branch whose policy still
-  wanted a review, and `gh` refused it. A repository with a merge
-  queue has no automerge to ask for: `enablePullRequestAutoMerge`
-  answers that the queue sets the strategy, and that automerge is
-  unsupported for a stacked pull request. Its button says Queue
-  throughout and dims until the pull request is ready.
+- **One merge button shows whether merging is scheduled.**
+  Standalone pull requests and stacks share the same button. It says
+  "Automerge" or "Queued" from GitHub's reported state,
+  with a tick and a click to cancel. Queue membership comes from the
+  shared queue cache, separately from `autoMergeRequest`; enabling
+  automerge does not mean queue admission. Otherwise `isReadyToMerge`
+  (open, not a draft, mergeable, checks green, review approved or none
+  required) selects Merge or Queue when ready and Automerge
+  while waiting. Waiting standalone pull requests use `gh pr merge
+  --auto`, omitting the merge method when a queue owns it. Requesting
+  an asynchronous merge alone does not enable automerge.
+  GitHub does not support automerge for stacks: a waiting stack says
+  "Waiting" and explains why, while a ready stack
+  still merges or queues through the asynchronous API. Drafts say
+  Ready, including in stacks. Cancellation remains available
+  even when a stack is no longer ready. Labels stay one word,
+  including while busy; hover help explains each action.
 - **Merge completion comes from GitHub.** Plain individual merges
   submit `PUT /repos/{owner}/{repo}/pulls/{number}/merge` through
   `gh api`, using the repository's allowed merge method. A failed
@@ -1346,8 +1352,9 @@ steps.
   stack request gives every branch through the selected layer this
   cadence.
   Cleanup stays with that poll's observed merge, leaving the selected
-  worktree in place. Enabling and cancelling automerge still use
-  `gh pr merge`, since the async API does not offer those operations.
+  worktree in place. Enabling and cancelling automerge use
+  `gh pr merge`; leaving a queue uses `dequeuePullRequest`, since
+  disabling automerge and removing a queued entry are separate actions.
 - **Last mile buttons** say what they copy: Reviews and Checks,
   each carrying the app's copy symbol inline and its count in the run
   the sidebar's arrows use (`Reviews ⎘3` as `Push ↑9`, the symbol the

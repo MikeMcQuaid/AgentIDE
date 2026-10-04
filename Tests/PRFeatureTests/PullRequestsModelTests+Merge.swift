@@ -4,7 +4,7 @@ import AgentIDEDomain
 import Testing
 
 /// The merge button says Merge only for a pull request GitHub
-/// would merge now; a review still outstanding makes it Automerge,
+/// would merge now; a review still outstanding offers automerge,
 /// which is what GitHub's own refusal asks for.
 extension PullRequestsModelTests {
     @Test(arguments: [GitHubClient.MergeResult.pending, .merged, .enqueued])
@@ -60,24 +60,28 @@ extension PullRequestsModelTests {
         // Everything else about it says merge, and GitHub would
         // refuse both that and automerge: "Pull Request is still a
         // draft". The button says the step that has to come first.
-        #expect(model.mergeActionTitle == "Mark ready")
-        #expect(model.mergeActionBusyTitle == "Marking ready")
+        #expect(model.mergeActionTitle == "Ready")
+        #expect(model.mergeActionBusyTitle == "Readying")
         #expect(PullRequestsModel.isReadyToMerge(draft) == false)
 
         await model.performMergeAction()
         #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "feature") == false)
     }
 
-    @Test
-    func `a merge queue waits rather than asking for automerge`() {
+    @Test(arguments: [
+        ("MERGEABLE", "PENDING", "APPROVED"),
+        ("MERGEABLE", "SUCCESS", "REVIEW_REQUIRED"),
+        ("UNKNOWN", "SUCCESS", "APPROVED"),
+    ])
+    func `a waiting PR can enable automerge with a queue`(mergeable: String, checks: String, review: String) {
         let waiting = PullRequestSummary(
             number: 23_703,
             title: "Awaiting review",
             url: "",
             headBranch: "feature",
-            mergeable: "MERGEABLE",
-            reviewDecision: "REVIEW_REQUIRED",
-            checks: "SUCCESS",
+            mergeable: mergeable,
+            reviewDecision: review,
+            checks: checks,
             baseBranch: "main",
             state: "OPEN",
         )
@@ -85,13 +89,9 @@ extension PullRequestsModelTests {
         model.selected = waiting
         model.hasMergeQueue = true
 
-        // GitHub refuses automerge where the queue sets the merge
-        // strategy: "Auto-merge is not supported for stacked pull
-        // requests", and the strategy is the queue's. The button
-        // says what the queue will take, and waits for it.
-        #expect(model.mergeActionTitle == "Queue")
-        #expect(model.mergeActionBusyTitle == "Queueing")
-        #expect(model.canMergeAction == false)
+        #expect(model.mergeActionTitle == "Automerge")
+        #expect(model.mergeActionBusyTitle == "Enabling")
+        #expect(model.canMergeAction)
 
         // Ready, and it takes it.
         model.selected = PullRequestSummary(

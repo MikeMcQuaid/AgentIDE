@@ -28,7 +28,7 @@ extension PullRequestStackTests {
 
         // Nothing below it to wait on, and never the lone pull
         // request's merge: on a merge queue gh joins the queue
-        // through auto-merge, which GitHub refuses for a stacked
+        // through automerge, which GitHub refuses for a stacked
         // pull request, so queueing the bottom failed.
         #expect(model.isStackedEntry == false)
         #expect(model.isInStack)
@@ -40,8 +40,8 @@ extension PullRequestStackTests {
             done.withLock { $0.append("merge " + String(number)) }
             return outcome
         }
-        model.selected = fixtures.summary(1, head: "lower", base: "main")
-        #expect(await model.mergeStack())
+        model.selected = fixtures.summary(1, head: "lower", base: "main", mergeable: "MERGEABLE", checks: "SUCCESS")
+        #expect(await model.performMergeAction())
         #expect(done.withLock { $0 } == ["link", "merge 1"])
         #expect(model.status == status)
         #expect(model.pullRequests.mergeRequestedRecently(repositoryPath: "/repo", branch: "lower"))
