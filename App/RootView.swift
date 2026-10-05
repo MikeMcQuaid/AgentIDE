@@ -173,7 +173,7 @@ struct RootView: View {
         .navigationTitle(windowTitle)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fitPanes(to: $0) }
         .onChange(of: resizePanesRequest) { evenPanes(in: windowWidth) }
-        .sheet(isPresented: sessionManagerBinding) { sessionManager }
+        .modifier(SettingsEvents(dependencies: dependencies) { closeBrowser(at: $0) })
         .task {
             FlavourIcon.apply()
             // Focus counters from the previous run must not fire on

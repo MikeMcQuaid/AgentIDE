@@ -7,21 +7,17 @@ import TerminalUI
 /// itself, with where each lives, what it costs and a way to stop
 /// it. The escape hatch when something is running that should not
 /// be.
-public struct SessionManagerSheet: View {
+public struct SessionManagerView: View {
     // MARK: Lifecycle
 
-    /// Creates the manager; `onCloseBrowser` closes a browser page,
-    /// which only the window can do, and `onDismiss` closes the
-    /// sheet.
+    /// Creates the Settings pane; only the main window can unmount a browser.
     @preconcurrency
     public init(
         service: SessionService,
         onCloseBrowser: @escaping @MainActor (String) -> Void,
-        onDismiss: @escaping @MainActor () -> Void,
     ) {
         self.service = service
         self.onCloseBrowser = onCloseBrowser
-        self.onDismiss = onDismiss
     }
 
     // MARK: Public
@@ -32,10 +28,8 @@ public struct SessionManagerSheet: View {
             HStack {
                 Text("Sessions").interfaceFont(.title2)
                 Spacer()
-                Button("Refresh") { Task { await reload() } }
+                BusyButton("Refresh", busy: "Refreshing") { await reload() }
                     .hoverHelp("List the sessions again")
-                Button("Done") { onDismiss() }
-                    .keyboardShortcut(.cancelAction)
             }
             if hasLoaded == false {
                 LaunchProgressView(
@@ -131,7 +125,6 @@ public struct SessionManagerSheet: View {
     private let browsers: BrowserPanes = .shared
     private let service: SessionService
     private let onCloseBrowser: @MainActor (String) -> Void
-    private let onDismiss: @MainActor () -> Void
 
     /// One row: what it is, where it lives, what it costs and how to
     /// stop it.

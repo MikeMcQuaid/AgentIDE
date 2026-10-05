@@ -103,6 +103,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// Local findings and human decisions, inaccessible to sandboxed agents.
     public var localReviews: [String: LocalReview] = [:]
 
+    /// Repository schedules and their durable launch claims.
+    public var scheduledPrompts: [ScheduledPrompt] = []
+
     /// Directories of your own listed under a repository: paths on
     /// the Mac that get a shell, an editor and a diff but never an
     /// agent, keyed by the repository they are listed under.
@@ -339,6 +342,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
                 .decodeIfPresent([String: [String]].self, forKey: .requiredChecksCache) ?? [:]
             labelsCache = try container.decodeIfPresent([String: [String]].self, forKey: .labelsCache) ?? [:]
             stackFacts = try container.decodeIfPresent([String: CachedStackFacts].self, forKey: .stackFacts) ?? [:]
+            scheduledPrompts = try container.decodeIfPresent([ScheduledPrompt].self, forKey: .scheduledPrompts) ?? []
         }
 
         // MARK: Internal
@@ -353,6 +357,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         var requiredChecksCache: [String: [String]] = [:]
         var labelsCache: [String: [String]] = [:]
         var stackFacts: [String: CachedStackFacts] = [:]
+        var scheduledPrompts: [ScheduledPrompt] = []
     }
 
     /// How long a fetch stamp is worth keeping: longer than the
@@ -382,5 +387,6 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         requiredChecksCache = ledgers.requiredChecksCache
         labelsCache = ledgers.labelsCache
         stackFacts = ledgers.stackFacts
+        scheduledPrompts = ledgers.scheduledPrompts
     }
 }

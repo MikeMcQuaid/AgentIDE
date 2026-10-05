@@ -31,22 +31,16 @@ struct WorktreeActions: View {
         Button("Refresh") { Task { await model.refreshRepository(path: item.worktree.repositoryPath) } }
             .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
         Divider()
-        Button("Copy branch name") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(item.worktree.branch, forType: .string)
-        }
-        .hoverHelp("Copy this worktree's branch name")
+        CopyBranchNameButton(item.worktree.branch)
+            .hoverHelp("Copy this worktree's branch name")
         Button("Copy path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(item.worktree.path, forType: .string)
         }
         .hoverHelp("Copy this worktree's full path")
         if let pullRequest = model.pullRequest(for: item) {
-            Button("Copy pull request URL") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(pullRequest.url, forType: .string)
-            }
-            .hoverHelp("Copy the URL of pull request #" + String(pullRequest.number))
+            CopyPullRequestURLButton(pullRequest.url)
+                .hoverHelp("Copy the URL of pull request #" + String(pullRequest.number))
         }
         Divider()
         Button("Fetch") { Task { await model.fetch(item: item) } }

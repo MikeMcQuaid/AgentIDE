@@ -192,6 +192,12 @@ struct PullRequestFooterView: View {
         }
         .padding(Self.padding)
         .background(.bar)
+        .contextMenu {
+            if let selected = model.selected {
+                CopyPullRequestURLButton(selected.url)
+                CopyBranchNameButton(selected.headBranch)
+            }
+        }
     }
 
     /// Opening as a draft is its own button beside Open PR: the two

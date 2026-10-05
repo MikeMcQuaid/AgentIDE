@@ -576,6 +576,33 @@ page resumes any past conversation into a fresh worktree.
 
 ### Watch and steer
 
+Scheduled prompts belong to the host metadata, with a repository path,
+prompt, agent, model, effort and daily, weekly or monthly recurrence.
+Settings' Schedules pane uses repeat, day and time controls, showing the
+time zone recorded when the schedule was created. Monthly dates absent
+from a month are skipped; a missing daylight-saving time runs at the
+next valid time, and a repeated time runs once. Schedules can be edited,
+paused or deleted, and show their next run and last launch result.
+
+One timer waits for the next enabled schedule, rearmed on edits and
+clock changes and checked on wake. AgentIDE must be open: reopening or
+waking catches up once per overdue schedule, never once per missed
+occurrence. The next occurrence is saved before launching, so a restart
+cannot replay a claimed run; a crash between that save and launch can
+skip that run. A failed save never launches. Each run uses the existing
+session service in a fresh worktree with a deterministic schedule and
+date identifier, reused for one automatic retry. Failures after retry
+appear in Messages and beside the schedule. Launches do not change the
+current selection or foreground launch progress.
+
+The session manager lives in Settings' Sessions pane, also opened by
+the Manage Sessions app menu command. Browser close requests reach
+the main window through the existing defaults signal bus. Pull request
+rows, conversation headers and footer actions offer Copy pull request
+URL and Copy branch name for the pull request they display. Branch
+copying uses that pull request's head branch, including when a stack
+shows a different branch from the one checked out.
+
 - **Hooks.** `HookInstaller` manages the Claude Code settings template
   at `<workspace>/user/.claude/settings.json`, which sandvault rsyncs
   into the sandbox home each session start, adding its entries beside
@@ -1756,18 +1783,26 @@ it. Releases are full releases, never drafts or prereleases, which lets
 
 Not scheduled, recorded so the pieces already built line up with them:
 
-- A CI fix loop: the poll already sees checks change, so a run turning
-  red (a transition, never a repeat) can gather what the copy button
-  gathers, write it into a prompt and hand it to the worktree's agent
-  through `herdr agent prompt --wait`, or start a session; one attempt
-  per run, never on the default branch, the push left to the human, with
-  ask-first or automatic per repository.
-- Reviewer comments addressed automatically: the unresolved threads the
-  copy button gathers, sent the same way when a comment lands, each
-  thread resolved when the agent's commit answers it.
-- Scheduled jobs: per-repository cadence, agent and prompt template,
-  each run in a worktree named by date so a failed run is inspectable
-  and merge cleanup disposes of it.
+- Event-triggered prompts: enable Autofix CI and Autofix review comments
+  separately for each pull request in its UI when it is ready. Both
+  feed the existing running session, waiting for its current turn, and
+  never start or reopen a session. Reuse the existing GitHub refreshes
+  and prompt preparation, with persistent event IDs preventing repeats.
+- Autofix CI waits for all required jobs on the current head commit to
+  finish, then sends only required failures in one prompt. Recheck the
+  head before delivery; one attempt per run, never on the default
+  branch, with pushing left to the human.
+- Autofix review comments considers only comments from people with
+  write access to the pull request's repository. A new push resolves
+  the threads addressed by the autofix. Also offer a manual Resolve on
+  next push action on individual review threads, recording the marked
+  threads so later comments are not resolved accidentally.
+- Conversation search: put its entry point at the bottom of the left
+  sidebar, with repository-scoped access from the context menu. Search
+  across repositories and agents, including retained conversations from
+  deleted worktrees, and open the existing transcript viewer at the
+  matching message. Start with ripgrep over rebuildable decoded text,
+  without a database; measure before adding a full-text index.
 - An Answer Agent intent, once herdr's key sending has a wrapper beside
   `typeText`, so a blocked question can be answered from a notification
   or a phone.

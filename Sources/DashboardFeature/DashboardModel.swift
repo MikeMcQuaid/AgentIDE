@@ -48,9 +48,6 @@ public final class DashboardModel {
     /// pane covering the split while a session is created or resumed.
     public let launchProgress: LaunchProgress
 
-    /// Whether the session manager sheet is shown.
-    public var showsSessionManager = false
-
     /// Whether the window is visible on screen at all; minimised or
     /// fully covered, the poll slows to a safety tick, since nobody
     /// is reading what it refreshes. The window reports it.
