@@ -45,11 +45,16 @@ public struct MetadataStore: Sendable {
     /// is how a branch's cached pull requests, and the session
     /// recorded for a worktree, went missing while the app was busy.
     public func update(_ change: (inout AppMetadata) -> Void) {
+        try? updatePersisting(change)
+    }
+
+    /// A launch claim must reach disk before its side effect starts.
+    public func updatePersisting(_ change: (inout AppMetadata) -> Void) throws {
         Self.lock.lock()
         defer { Self.lock.unlock() }
         var metadata = load()
         change(&metadata)
-        write(metadata)
+        try write(metadata)
     }
 
     // MARK: Private
@@ -78,17 +83,10 @@ public struct MetadataStore: Sendable {
     /// lock. A value equal to the copy in memory is not encoded or
     /// written at all: the poll saves its snapshot every tick, and
     /// most ticks change nothing.
-    private func write(_ metadata: AppMetadata) {
+    private func write(_ metadata: AppMetadata) throws {
         var metadata = metadata
         metadata.enforceCacheCaps()
-        let unchanged = Self.cached.withLock { cache in
-            if cache[file] == metadata {
-                return true
-            }
-
-            cache[file] = metadata
-            return false
-        }
+        let unchanged = Self.cached.withLock { $0[file] == metadata }
         guard unchanged == false else {
             return
         }
@@ -98,15 +96,14 @@ public struct MetadataStore: Sendable {
         // Sorted for stable diffs; not pretty-printed, which doubled
         // the bytes encoded and written on every save.
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(metadata) else {
-            return
-        }
+        let data = try encoder.encode(metadata)
 
         let url = URL(fileURLWithPath: file)
-        try? FileManager.default.createDirectory(
+        try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true,
         )
-        try? data.write(to: url, options: .atomic)
+        try data.write(to: url, options: .atomic)
+        Self.cached.withLock { $0[file] = metadata }
     }
 }

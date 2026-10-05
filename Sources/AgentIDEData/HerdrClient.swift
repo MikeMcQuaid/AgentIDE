@@ -129,7 +129,7 @@ public struct HerdrClient: Sendable {
     let confirmations: PaneConfirmations = .init()
 
     /// Where launches narrate their steps.
-    let progress: LaunchReporter
+    var progress: LaunchReporter
 
     /// Ensures the server is up, starting it detached when it is
     /// not: herdr does not daemonise itself, so birth is explicit.

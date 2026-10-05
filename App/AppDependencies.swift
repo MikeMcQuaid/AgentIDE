@@ -39,6 +39,7 @@ final class AppDependencies {
         service = sessionService
         localReviews = LocalReviewStore(service: sessionService)
         store = metadataStore
+        schedules = ScheduledPromptsModel(store: metadataStore, service: sessionService)
         dashboard = DashboardModel(
             service: sessionService,
             store: metadataStore,
@@ -78,5 +79,6 @@ final class AppDependencies {
     let service: SessionService
     let localReviews: LocalReviewStore
     let dashboard: DashboardModel
+    let schedules: ScheduledPromptsModel
     let store: MetadataStore
 }

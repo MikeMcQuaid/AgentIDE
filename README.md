@@ -17,6 +17,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
+- Schedules repository prompts daily, weekly or monthly while AgentIDE is open, catching up once after reopening or waking.
 - Shows agent activity, pull requests, CI checks and uncommitted changes across repositories in one sidebar.
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
 - Scrolls the agent conversation under the pointer.
@@ -24,6 +25,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
 - Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
 - Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
+- Copies pull request URLs and branch names from context menus on pull request rows, headers and actions, including stacked pull requests.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.
@@ -74,6 +76,8 @@ script/install
 Settings (Cmd-,) controls:
 
 - **General**: Choose session defaults, commit signing requirements and the external browser.
+- **Schedules**: Manage each repository's recurring prompts, agent choices and next run.
+- **Sessions**: Inspect and stop running agent sessions and browser pages.
 - **Review**: Choose the reviewer and each agent's review model and effort.
 - **Notifications**: Choose which events notify, badge the Dock or play a sound.
 - **Fonts**: Customise fonts and sizes throughout the app.

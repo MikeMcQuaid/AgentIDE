@@ -2,6 +2,7 @@ import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import DashboardFeature
+import SessionFeature
 import SwiftUI
 import TerminalUI
 
@@ -15,32 +16,51 @@ struct SettingsView: View {
     let dependencies: AppDependencies
 
     var body: some View {
-        TabView {
+        TabView(selection: $pane) {
             GeneralSettingsPane(dashboard: dependencies.dashboard)
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag("general")
+            ScheduledPromptsView(model: dependencies.schedules, dashboard: dependencies.dashboard)
+                .tabItem { Label("Schedules", systemImage: "calendar") }
+                .tag("schedules")
+            SessionManagerView(service: dependencies.service) { path in
+                UserDefaults.standard.set(path, forKey: "closeBrowserPath")
+                closeBrowserRequest += 1
+            }
+            .tabItem { Label("Sessions", systemImage: "terminal") }
+            .tag("sessions")
             ReviewSettingsPane(dashboard: dependencies.dashboard)
                 .tabItem { Label("Review", systemImage: "text.bubble") }
+                .tag("review")
             FontsSettingsPane()
                 .tabItem { Label("Fonts", systemImage: "textformat.size") }
+                .tag("fonts")
             NotificationsSettingsPane()
                 .tabItem { Label("Notifications", systemImage: "bell") }
+                .tag("notifications")
             EditorSettingsPane()
                 .tabItem { Label("Editor", systemImage: "square.and.pencil") }
+                .tag("editor")
             AdvancedSettingsPane()
                 .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
+                .tag("advanced")
         }
         .frame(width: Self.width)
     }
 
     // MARK: Private
 
-    private static let width: CGFloat = 560
+    private static let width: CGFloat = 760
+
+    @AppStorage("settingsPane")
+    private var pane = "general"
+    @AppStorage("closeBrowserRequest")
+    private var closeBrowserRequest = 0
 }
 
 // MARK: - GeneralSettingsPane
 
-/// Defaults for new sessions, the signing policy and the way to the
-/// session manager.
+/// Defaults for new sessions, signing and external links.
 private struct GeneralSettingsPane: View {
     // MARK: Internal
 
@@ -61,15 +81,6 @@ private struct GeneralSettingsPane: View {
             }
             signingSection
             linksSection
-            Section("Sessions") {
-                Button("Manage Sessions…") {
-                    NSApp.activate()
-                    dashboard.showsSessionManager = true
-                }
-                Text("Every agent, shell and browser pane with what it costs, in the main window.")
-                    .interfaceFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
     }

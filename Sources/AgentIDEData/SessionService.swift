@@ -132,7 +132,7 @@ public struct SessionService: Sendable {
 
     let paths: WorkspacePaths
     let git: GitClient
-    let herdr: HerdrClient
+    var herdr: HerdrClient
     let github: GitHubClient
 
     let transcripts: TranscriptReader
@@ -143,7 +143,7 @@ public struct SessionService: Sendable {
     let launcher: SandvaultLauncher
 
     /// Where launches narrate their steps.
-    let progress: LaunchReporter
+    var progress: LaunchReporter
 
     /// Worktrees never viewed count as seen at launch, so a fresh
     /// install does not flag every historic conversation unread.

@@ -46,6 +46,9 @@ struct PullRequestRowView: View {
         // The same actions as the buttons, reachable from list rows
         // that hide them.
         .contextMenu {
+            CopyPullRequestURLButton(summary.url)
+            CopyBranchNameButton(summary.headBranch)
+            Divider()
             Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
             Button("Open Failing Checks") { Task { await onOpenChecks() } }
             Divider()

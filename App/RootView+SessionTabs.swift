@@ -6,13 +6,6 @@ import TerminalUI
 
 /// The session tab identities, titles and capsule strip.
 extension RootView {
-    var sessionManagerBinding: Binding<Bool> {
-        Binding(
-            get: { dependencies.dashboard.showsSessionManager },
-            set: { dependencies.dashboard.showsSessionManager = $0 },
-        )
-    }
-
     var utilityTab: UtilityTab {
         UtilityTab(rawValue: utilityTabName) ?? .review
     }
@@ -58,15 +51,6 @@ extension RootView {
                 .fixedSize()
         }
         .padding(Self.stripSpacing)
-    }
-
-    /// Everything the app has running, listed with what it costs.
-    var sessionManager: some View {
-        SessionManagerSheet(
-            service: dependencies.service,
-            onCloseBrowser: { closeBrowser(at: $0) },
-            onDismiss: { dependencies.dashboard.showsSessionManager = false },
-        )
     }
 
     /// A repository page's conversations, across all its worktrees.

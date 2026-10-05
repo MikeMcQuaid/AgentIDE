@@ -22,7 +22,7 @@ struct AppCommands: Commands {
             Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             Divider()
-            Button("Manage Sessions…") { dashboard.showsSessionManager = true }
+            SettingsPaneLink("Manage Sessions…", pane: "sessions")
         }
         CommandMenu("Worktree") {
             Button("New Shell") { newShell() }
