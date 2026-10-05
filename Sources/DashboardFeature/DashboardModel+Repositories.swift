@@ -71,8 +71,7 @@ public extension DashboardModel {
     /// Jumps to a repository, cloning it into the workspace first
     /// when it is not there yet.
     func openRepository(fullName: String) async {
-        let name = fullName.split(separator: "/").last.map(String.init) ?? fullName
-        if selectMainCheckout(fullName: fullName, name: name) {
+        if revealMainCheckout(where: { $0.isNamed(fullName) }) {
             showsRepositoryFinder = false
             return
         }
@@ -81,9 +80,9 @@ public extension DashboardModel {
             screenError = nil
             status = "Cloning \(fullName)…"
             ErrorLog.shared.note("Cloning \(fullName)…")
-            _ = try await service.cloneRepository(fullName: fullName)
+            let cloned = try await service.cloneRepository(fullName: fullName)
             await refresh()
-            _ = selectMainCheckout(fullName: fullName, name: name)
+            _ = revealMainCheckout { $0.path == cloned.path }
             showsRepositoryFinder = false
             status = nil
         } catch {
@@ -96,11 +95,8 @@ public extension DashboardModel {
         }
     }
 
-    private func selectMainCheckout(fullName: String, name: String) -> Bool {
-        let group = groups.first { candidate in
-            candidate.repository.fullName == fullName || candidate.repository.name == name
-        }
-        guard let item = group?.items.first else {
+    private func revealMainCheckout(where matches: (Repository) -> Bool) -> Bool {
+        guard let item = groups.first(where: { matches($0.repository) })?.items.first else {
             return false
         }
 
