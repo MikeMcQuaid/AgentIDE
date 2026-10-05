@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 import Synchronization
 
 // MARK: - AgentLaunchOptions
@@ -250,29 +249,6 @@ public extension SessionService {
             scope: .open,
             limit: GitHubClient.pickerLimit,
         )
-    }
-
-    /// The user's login and organisations, for the repository
-    /// finder's owner step. Empty when GitHub is unreachable.
-    func organisations() async -> [String] {
-        await (try? github.organisations(directory: paths.repositoriesDirectory)) ?? []
-    }
-
-    /// Every repository under one owner on GitHub. Empty when GitHub
-    /// is unreachable.
-    func repositories(owner: String) async -> [String] {
-        await (try? github.repositories(owner: owner, directory: paths.repositoriesDirectory)) ?? []
-    }
-
-    /// Clones a repository into the shared workspace when it is not
-    /// already there, returning it either way.
-    func cloneRepository(fullName: String) async throws -> Repository {
-        let name = fullName.split(separator: "/").last.map(String.init) ?? fullName
-        let path = paths.repositoriesDirectory + "/" + name
-        if FileManager.default.fileExists(atPath: path) == false {
-            try await github.clone(fullName: fullName, into: paths.repositoriesDirectory)
-        }
-        return Repository(name: name, path: path, fullName: fullName)
     }
 
     /// The file's uncommitted line numbers, for the editor's gutter.

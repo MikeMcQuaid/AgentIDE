@@ -516,13 +516,17 @@ each waited on the other until the app was restarted.
    `agentide new` re-points `origin/HEAD` the same way; an old clone
    once needed `git remote set-head origin --auto` by hand before it
    could start anything. `git worktree add` runs under
-   `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`. Older
-   `worktrees/<uuid>/<branch>` checkouts keep working because everything
-   derives from `git worktree list`. Each poll also adopts checkouts the
-   canonical listing does not know (an agent may clone a base of its own
-   and cut worktrees from it), with the owning clone as their
-   repository path. Sessions always launch from the real path because
-   transcripts are keyed by cwd.
+   `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`, where
+   `<repository>` names the main checkout's directory. A clone takes
+   the repository's name, or `<owner>-<name>` when another owner's
+   clone already holds it. The finder marks and opens checkouts by
+   `owner/name` alone, never the bare name, so a fork and its upstream
+   sit side by side. Older `worktrees/<uuid>/<branch>` checkouts keep
+   working because everything derives from `git worktree list`. Each
+   poll also adopts checkouts the canonical listing does not know (an
+   agent may clone a base of its own and cut worktrees from it), with
+   the owning clone as their repository path. Sessions always launch
+   from the real path because transcripts are keyed by cwd.
 4. The prompt is written to `agentide/prompts/<session>.md` in the
    shared workspace and travels inside the launch command as
    `-- "$(cat …)"`, the path shell-quoted: pasting it after launch

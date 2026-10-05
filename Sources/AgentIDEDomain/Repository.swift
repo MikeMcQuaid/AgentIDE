@@ -29,4 +29,11 @@ public struct Repository: Identifiable, Hashable, Sendable {
     public var id: String {
         path
     }
+
+    /// Whether GitHub's `owner/name` names this repository. GitHub
+    /// names are case-insensitive, and a remote's URL need not match
+    /// a listing's case.
+    public func isNamed(_ fullName: String) -> Bool {
+        self.fullName?.lowercased() == fullName.lowercased()
+    }
 }

@@ -122,10 +122,9 @@ public struct GitHubClient: Sendable {
         return result.standardOutput.split(separator: "\n").map(String.init)
     }
 
-    /// Clones a repository into a directory, named after the
-    /// repository, using the host's credentials.
-    public func clone(fullName: String, into directory: String) async throws {
-        let name = fullName.split(separator: "/").last.map(String.init) ?? fullName
+    /// Clones a repository into a named checkout inside a directory,
+    /// using the host's credentials.
+    public func clone(fullName: String, into directory: String, as name: String) async throws {
         try await gh(["repo", "clone", fullName, name], in: directory)
     }
 

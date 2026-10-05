@@ -68,10 +68,6 @@ public struct RepositoryFinderPane: View {
             : Array(FuzzyMatcher.rank(source, query: query).prefix(Self.resultLimit))
     }
 
-    private var clonedNames: Set<String> {
-        Set(model.repositories.flatMap { [$0.fullName ?? "", $0.name] })
-    }
-
     private var finder: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             header
@@ -156,8 +152,7 @@ public struct RepositoryFinderPane: View {
             listRow(result, systemImage: "building.2")
                 .hoverHelp("List this owner's repositories")
         } else {
-            let name = result.split(separator: "/").last.map(String.init) ?? result
-            let isCloned = clonedNames.contains(result) || clonedNames.contains(name)
+            let isCloned = model.groups.contains { $0.repository.isNamed(result) }
             listRow(
                 result,
                 systemImage: isCloned ? "internaldrive" : "icloud.and.arrow.down",
