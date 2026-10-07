@@ -47,7 +47,8 @@ extension PullRequestFooterView {
                 + "replays and leaving alone any branch already in place and signed, then push the whole "
                 + "stack bottom first, publishing any branch nobody has pushed yet; a conflict aborts and "
                 + "reports to Messages"
-                : model.stack.stackingBlocker ?? "Every branch is already on the one below it, with its tip signed",
+                : model.stack.stackingBlocker ?? model.restackBlocker
+                ?? "Every branch is already on the one below it, with its tip signed",
             shortcut: "⌥⌘R",
         )
     }

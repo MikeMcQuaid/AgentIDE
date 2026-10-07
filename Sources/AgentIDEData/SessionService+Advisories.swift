@@ -16,12 +16,13 @@ public extension SessionService {
         context: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async throws -> String {
         await clearQuarantine(for: agent)
         async let probed = probeVersion(of: agent)
         let advisory = try await github.securityAdvisory(repositoryPath: repository.path, ghsaID: ghsaID)
         let branch = await availableBranch(repository: repository, base: Self.advisoryBranch)
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
+        let worktreePath = try await createWorktreePath(repository: repository, branch: branch, base: baseBranch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: GitHubClient.advisoryPrompt(advisory, context: context),

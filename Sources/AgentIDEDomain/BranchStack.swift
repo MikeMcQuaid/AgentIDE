@@ -1,5 +1,6 @@
-/// A stack of branches in one worktree: each branch built on the one
-/// below it, the bottom built on the repository's default branch.
+/// A stack of branches, as one worktree sees it (others may hold some
+/// of them): each branch built on the one below it, the bottom built
+/// on the repository's default branch.
 /// Derived from ancestry rather than recorded anywhere, so a stack an
 /// agent builds by checking out branches of its own is a stack here
 /// too, and nothing is lost when the app quits.

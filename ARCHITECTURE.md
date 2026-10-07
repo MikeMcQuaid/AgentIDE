@@ -483,6 +483,11 @@ each waited on the other until the app was restarted.
    Advisory source is chosen and never cached in the metadata, since
    their titles describe unpublished vulnerabilities; issues and pull
    requests paint from their caches first.
+   Prompt, issue and advisory sessions can pick a base branch: the
+   default, then worktree branches (from memory), then other local
+   branches. A worktree's context menu presets it. The model holds
+   it, so a failed launch comes back with it, and every opener
+   clears it, so nothing stacks by accident.
    What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
@@ -506,9 +511,11 @@ each waited on the other until the app was restarted.
    is, and a name summarising the prompt would have disclosed it.
 3. The app fetches through `GitClient` unless the repository was fetched
    within the last hour, reusing the timestamp explicit fetches and
-   rebases record. New branches start from origin's default branch,
+   rebases record. New branches start from the chosen local base
+   (unpushed commits included) or origin's default branch,
    falling back to the local default or `HEAD` without one, and never
-   track it as their upstream. A default branch GitHub has renamed
+   track either as their upstream. A missing base stops the launch
+   before anything is created. A default branch GitHub has renamed
    leaves `origin/HEAD` naming a branch the pruning fetch has just
    removed, so a base that does not resolve is followed to where
    origin's HEAD points now, exactly as an explicit fetch follows it
@@ -853,8 +860,10 @@ reads additional source files.
    them into files, hunks and lines. Scope is the last commit (or
    uncommitted changes when there are any), the unpushed commits, or
    the whole branch against its merge base, remembered per worktree
-   (`ReviewModel+Scope`). Unpushed is what pushing would change on
-   the remote with the base's movement factored out: the upstream
+   (`ReviewModel+Scope`), whose base is the open pull request's, else
+   the branch below in its stack, else the default branch. Unpushed
+   is what pushing would change on the remote with the base's
+   movement factored out: the upstream
    replayed onto the base the branch now sits on (`git merge-tree`,
    a rebase as a merge with no worktree) and diffed against `HEAD`,
    so an amended commit shows the lines the amend changed, a rebase
@@ -1325,6 +1334,17 @@ steps.
 - **Stacks are derived, never recorded**: branches sharing a fork point
   beyond the default branch, ordered by where each forks; two branches
   at one commit are one entry and the name the remote knows wins.
+  A stack is a line, so three branches parting at one commit (two
+  sessions started on one branch) are a fork: a branch past it stays
+  only on the checked-out branch's side. Two branches that have both
+  moved on since they last met cannot say from ancestry which was cut
+  from which, so the reflog's `Created from` entry decides: the
+  checked-out branch's parent stays, and a branch cut from it or from
+  another candidate drops out, so a parent never stacks on its child
+  nor a child on its sibling. With no such entry (cut from `HEAD`,
+  or expired), the other branch is read as the parent, and a fork
+  whose shared branch has moved on stacks none of them rather than
+  guess.
   Reading one needs no checkout (`git diff parent...branch`). The
   derivation is cached against one `for-each-ref` line (`StackCache`),
   remotes included, since a fetch that moves the default branch changes
@@ -1343,14 +1363,19 @@ steps.
   per worktree) and cuts new ones. Restacking records every tip, then
   rebases bottom up with `--onto <parent> <recorded tip>`, signed,
   skipping a branch already in place and signed, from whichever entry
-  asked. Each pull request opens against the branch below
-  with both `--head` and `--base` named; `gh stack link` links what is
-  open (idempotent, additive), and stack merge uses the asynchronous
-  merge API after linking, offered only when every pull request below
-  is mergeable, green and approved. Standing (`2/3`) comes from the
-  pull request chain the store has cached, falling back to the
-  worktree's derived stack. `gh stack view` knows only stacks it
-  created; never read it.
+  asked. A stack can span worktrees: git will not check out a branch
+  another worktree holds, so that branch is rebased (and rolled back),
+  named, in its own worktree. Before anything moves, the restack
+  refuses while such a worktree is dirty or its agent is not idle or
+  done, and Rebase dims with the reason, Push with it while the stack
+  needs that rebase; it stops when that worktree has switched
+  branches by the time its turn comes. Each pull request opens
+  against the branch below with both `--head` and `--base` named; `gh stack link` links what is open (idempotent, additive),
+  and stack merge uses the asynchronous merge API after linking,
+  offered only when every pull request below is mergeable, green and
+  approved. Standing (`2/3`) comes from the pull request chain the
+  store has cached, falling back to the worktree's derived stack.
+  `gh stack view` knows only stacks it created; never read it.
 - **One merge button shows whether merging is scheduled.**
   Standalone pull requests and stacks share the same button. It says
   "Automerge" or "Queued" from GitHub's reported state,

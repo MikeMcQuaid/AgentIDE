@@ -82,7 +82,7 @@ extension PullRequestsModel {
     /// behind what the remote has, GitHub reads a stack whose parents
     /// moved as no stack at all, and the button says and Push.
     private func restackAndPush(_ worktree: Worktree) async throws -> (moved: [String], pushed: [String]) {
-        let moved = try await stacking.restack(worktree)
+        let moved = try await stacking.restack(worktree, busyWorktrees)
         guard moved.isEmpty == false else {
             return (moved, [])
         }

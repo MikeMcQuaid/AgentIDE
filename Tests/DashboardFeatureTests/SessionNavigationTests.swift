@@ -169,6 +169,18 @@ struct SessionNavigationTests {
     }
 
     @Test
+    func `a base branch is kept only until another opener opens the form`() {
+        let fixture = Fixture()
+        defer { fixture.close() }
+
+        fixture.model.openNewSession(for: fixture.repository, base: "part_one")
+        #expect(fixture.model.newSessionBase == "part_one")
+
+        fixture.model.openNewSession(for: fixture.repository)
+        #expect(fixture.model.newSessionBase == nil)
+    }
+
+    @Test
     func `explicit navigation reveals a collapsed repository even when already selected`() {
         let fixture = Fixture()
         defer { fixture.close() }

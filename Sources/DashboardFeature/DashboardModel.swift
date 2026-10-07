@@ -66,6 +66,11 @@ public final class DashboardModel {
     /// session button.
     public var newSessionRepository: Repository?
 
+    /// The base branch the form starts from. Kept here rather than in
+    /// the form, which a failed launch rebuilds, and cleared by every
+    /// opener, so no session stacks by accident.
+    public var newSessionBase: String?
+
     /// The last background error, for display; the repository
     /// extension also reports through it.
     public internal(set) var status: String?
@@ -160,7 +165,8 @@ public final class DashboardModel {
     /// checkout: the form is a middle-pane action on the repository,
     /// so the sidebar reflects it. Selection is set directly rather
     /// than through `select`, which would cancel the form it opens.
-    public func openNewSession(for repository: Repository?) {
+    public func openNewSession(for repository: Repository?, base: String? = nil) {
+        newSessionBase = base
         newSessionRepository = repository
         showsNewSession = true
         selectMainCheckout(of: repository)

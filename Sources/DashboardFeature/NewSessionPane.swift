@@ -24,26 +24,35 @@ public struct NewSessionPane: View {
             // No cancel button: any other middle-pane action, like
             // selecting a worktree, replaces this page.
             Text("New agent session").interfaceFont(.subheadline, weight: .semibold)
-            Picker("Repository", selection: $repository) {
-                Text("Choose repository").tag(Repository?.none)
-                ForEach(model.repositories) { repository in
-                    Text(repository.fullName ?? repository.name).tag(Repository?.some(repository))
+            HStack {
+                Picker("Repository", selection: $repository) {
+                    Text("Choose repository").tag(Repository?.none)
+                    ForEach(model.repositories) { repository in
+                        Text(repository.fullName ?? repository.name).tag(Repository?.some(repository))
+                    }
                 }
+                .labelsHidden()
+                // A preset repository is the whole point of the opener
+                // that set it, so it cannot be changed here.
+                .disabled(model.newSessionRepository != nil)
+                .hoverHelp(
+                    model.newSessionRepository == nil
+                        ? "The repository the worktree is created in; issues, pull requests and advisories load from it"
+                        : "Fixed by where you opened this from",
+                )
+                BaseBranchPicker(
+                    model: model,
+                    repository: repository,
+                    unavailableReason: source == .pullRequest ? "A pull request starts on its own branch" : nil,
+                    selection: $model.newSessionBase,
+                )
             }
-            .labelsHidden()
-            // A preset repository is the whole point of the opener
-            // that set it, so it cannot be changed here.
-            .disabled(model.newSessionRepository != nil)
-            .hoverHelp(
-                model.newSessionRepository == nil
-                    ? "The repository the worktree is created in; issues, pull requests and advisories load from it"
-                    : "Fixed by where you opened this from",
-            )
             AgentSessionForm(
                 model: model,
                 repository: repository,
                 submitTitle: "Start agent",
                 submitHelp: "Create a worktree and branch and launch the agent in it (Cmd-Return)",
+                onSourceChange: { source = $0 },
             ) { submission in await start(submission) }
             if let failure = model.screenError {
                 Text(failure)
@@ -69,8 +78,14 @@ public struct NewSessionPane: View {
         }
         // Picking here is a middle-pane action on that repository
         // too, so the sidebar follows the picker like it follows
-        // the openers.
-        .onChange(of: repository) { model.selectMainCheckout(of: repository) }
+        // the openers. A new repository resets the base unless the
+        // opener chose it with the base.
+        .onChange(of: repository) {
+            model.selectMainCheckout(of: repository)
+            if repository?.path != model.newSessionRepository?.path {
+                model.newSessionBase = nil
+            }
+        }
     }
 
     // MARK: Private
@@ -80,8 +95,10 @@ public struct NewSessionPane: View {
     private static let maximumWidth: CGFloat = 640
 
     @State private var repository: Repository?
+    /// Mirrors the form's source, since a pull request ignores the base.
+    @State private var source = AgentSessionForm.PromptSource.prompt
 
-    private let model: DashboardModel
+    @Bindable private var model: DashboardModel
 
     /// The preset re-resolved against the picker's own list: the
     /// sidebar's copy differs (its full name comes from GitHub), and
@@ -106,6 +123,7 @@ public struct NewSessionPane: View {
                 prompt: submission.prompt,
                 agent: submission.agent,
                 options: submission.options,
+                baseBranch: model.newSessionBase,
             )
 
         case .issue:
@@ -119,6 +137,7 @@ public struct NewSessionPane: View {
                 context: submission.context,
                 agent: submission.agent,
                 options: submission.options,
+                baseBranch: model.newSessionBase,
             )
 
         case .pullRequest:
@@ -145,6 +164,7 @@ public struct NewSessionPane: View {
                 context: submission.context,
                 agent: submission.agent,
                 options: submission.options,
+                baseBranch: model.newSessionBase,
             )
         }
     }

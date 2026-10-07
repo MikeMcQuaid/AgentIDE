@@ -17,6 +17,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
+- Starts a session on top of another branch's work, so a large change splits into stacked pull requests.
 - Schedules repository prompts daily, weekly or monthly while AgentIDE is open, catching up once after reopening or waking.
 - Shows agent activity, pull requests, CI checks and uncommitted changes across repositories in one sidebar.
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.

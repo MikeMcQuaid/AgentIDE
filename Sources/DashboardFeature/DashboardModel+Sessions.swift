@@ -29,6 +29,7 @@ public extension DashboardModel {
         prompt: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async {
         await run(in: repository, placeholder: Self.placeholderName(from: prompt)) {
             try await service.createSession(
@@ -36,6 +37,7 @@ public extension DashboardModel {
                 prompt: prompt,
                 agent: agent,
                 options: options,
+                baseBranch: baseBranch,
             )
         }
     }
@@ -47,6 +49,7 @@ public extension DashboardModel {
         context: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async {
         await run(in: repository, placeholder: "issue-\(number)") {
             try await service.createSession(
@@ -55,6 +58,7 @@ public extension DashboardModel {
                 context: context,
                 agent: agent,
                 options: options,
+                baseBranch: baseBranch,
             )
         }
     }
@@ -86,6 +90,7 @@ public extension DashboardModel {
         context: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async {
         await run(in: repository, placeholder: SessionService.advisoryBranch) {
             try await service.createSession(
@@ -94,6 +99,7 @@ public extension DashboardModel {
                 context: context,
                 agent: agent,
                 options: options,
+                baseBranch: baseBranch,
             )
         }
     }

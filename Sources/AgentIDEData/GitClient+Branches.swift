@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 /// Branch inspection and the repository-local exclude file, split
@@ -141,6 +142,23 @@ public extension GitClient {
         try await git(["pull", "--ff-only", "origin", branch], in: worktreePath)
     }
 
+    /// Creates an untracked branch from `base` (a local branch) or
+    /// the default base, falling back to `HEAD`.
+    func createWorktree(
+        repository: Repository,
+        branch: String,
+        at path: String,
+        base: String? = nil,
+    ) async throws {
+        let startPoint =
+            if let base {
+                "refs/heads/" + base
+            } else {
+                await defaultBaseRef(of: repository) ?? "HEAD"
+            }
+        try await git(["worktree", "add", "--no-track", "-b", branch, path, startPoint], in: repository.path)
+    }
+
     /// Cuts a branch at the worktree's tip and checks it out, which
     /// is how a stack grows without a second worktree.
     func createBranch(named name: String, worktreePath: String) async throws {
@@ -157,6 +175,41 @@ public extension GitClient {
             allowFailure: true,
         )
         return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
+    }
+
+    /// The worktree path holding each checked-out local branch.
+    func branchHolders(worktreePath: String) async -> [String: String] {
+        let result = try? await git(
+            ["for-each-ref", "--format=%(refname:short)%09%(worktreepath)", "refs/heads"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        var holders = [String: String]()
+        for line in (result?.standardOutput ?? "").split(separator: "\n") {
+            // A branch no worktree holds has an empty path, so one field.
+            let fields = line.split(separator: "\t", maxSplits: 1)
+            if let branch = fields.first, let path = fields.dropFirst().first {
+                holders[String(branch)] = String(path)
+            }
+        }
+        return holders
+    }
+
+    /// The local branch `branch` was created from, as its reflog's
+    /// first entry records it, or nil when it was cut from `HEAD`
+    /// or the reflog no longer reaches back that far.
+    func createdFrom(_ branch: String, worktreePath: String) async -> String? {
+        let result = try? await git(
+            ["reflog", "show", "--format=%gs", "refs/heads/" + branch, "--"],
+            in: worktreePath,
+            allowFailure: true,
+        )
+        let prefix = "branch: Created from refs/heads/"
+        guard let first = (result?.standardOutput ?? "").split(separator: "\n").last, first.hasPrefix(prefix) else {
+            return nil
+        }
+
+        return String(first.dropFirst(prefix.count))
     }
 
     /// Whether one ref is in another's history, which is what makes

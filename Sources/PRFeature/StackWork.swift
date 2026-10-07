@@ -43,6 +43,7 @@ struct StackWork {
         StackFacts(stack: BranchStack(base: nil, branches: [worktree.branch], checkedOut: worktree.branch))
     }
 
-    var restack: (Worktree) async throws -> [String] = { _ in [] }
+    /// Restacks the worktree, given the busy worktrees to leave alone.
+    var restack: (Worktree, Set<String>) async throws -> [String] = { _, _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
 }
