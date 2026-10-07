@@ -61,7 +61,6 @@ public extension SessionService {
             )
         }
 
-        let excluded = reading.excluded
         if let known = await StackCache.shared.stack(for: path, derivedFrom: reading.fingerprint) {
             PerformanceLog.record(cacheHit: true, "stack#" + path)
             return known
@@ -75,8 +74,38 @@ public extension SessionService {
         }
 
         PerformanceLog.record(cacheHit: false, "stack#" + path)
+        let related = await relatedCandidates(to: reading, base: base, baseRef: baseRef)
+        // Ordered by where each forks from the line of work, then by
+        // how far it has come: that is the order they were built in
+        // and the order they must be rebased in.
+        // Two branches at the same commit are one branch renamed or
+        // one cut by mistake, not two entries: see `collapsingTwins`.
+        let branches = await collapsingTwins(related, checkedOut: checkedOut, worktreePath: path)
+        // A worktree sitting on the default branch has no stack of
+        // its own, and listing the base as its only entry showed the
+        // same branch twice wherever both were named.
+        let fallback = checkedOut == base ? [] : [checkedOut]
+        // A checked-out branch collapsed into its twin is still the
+        // branch the worktree holds: the twin stands for it, at the
+        // same commit, so the actions that move what is checked out
+        // stay live rather than dimming on a name that has gone.
+        let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
+        let derived = await BranchStack(
+            base: base,
+            branches: branches.isEmpty ? fallback : branches,
+            checkedOut: standingIn ?? checkedOut,
+            stackingBlocker: stackingBlocker(branches: related.map(\.branch) + [checkedOut], worktreePath: path),
+        )
+        await StackCache.shared.remember(derived, for: path, derivedFrom: reading.fingerprint)
+        return derived
+    }
+
+    /// The branches sharing the checked-out branch's line of work.
+    private func relatedCandidates(to reading: StackReading, base: String?, baseRef: String) async -> [StackCandidate] {
+        let path = reading.path
+        let checkedOut = reading.checkedOut
         let candidates = await git.branches(worktreePath: path)
-            .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
+            .filter { $0 != base && ($0 == checkedOut || reading.excluded.contains($0) == false) }
         var related = [StackCandidate]()
         for branch in candidates {
             // Related when the two last shared history beyond the
@@ -104,30 +133,7 @@ public extension SessionService {
                 tipCommit: tipCommit,
             ))
         }
-        related = await droppingForks(related, checkedOut: checkedOut, worktreePath: path)
-        // Ordered by where each forks from the line of work, then by
-        // how far it has come: that is the order they were built in
-        // and the order they must be rebased in.
-        // Two branches at the same commit are one branch renamed or
-        // one cut by mistake, not two entries: see `collapsingTwins`.
-        let branches = await collapsingTwins(related, checkedOut: checkedOut, worktreePath: path)
-        // A worktree sitting on the default branch has no stack of
-        // its own, and listing the base as its only entry showed the
-        // same branch twice wherever both were named.
-        let fallback = checkedOut == base ? [] : [checkedOut]
-        // A checked-out branch collapsed into its twin is still the
-        // branch the worktree holds: the twin stands for it, at the
-        // same commit, so the actions that move what is checked out
-        // stay live rather than dimming on a name that has gone.
-        let standingIn = await twin(of: checkedOut, among: branches, worktreePath: path)
-        let derived = await BranchStack(
-            base: base,
-            branches: branches.isEmpty ? fallback : branches,
-            checkedOut: standingIn ?? checkedOut,
-            stackingBlocker: stackingBlocker(branches: related.map(\.branch) + [checkedOut], worktreePath: path),
-        )
-        await StackCache.shared.remember(derived, for: path, derivedFrom: reading.fingerprint)
-        return derived
+        return await droppingForks(related, checkedOut: checkedOut, worktreePath: path)
     }
 
     /// The stack's entries in build order, with branches at one
@@ -267,13 +273,7 @@ public extension SessionService {
                 moved.append(branch)
             }
         } catch {
-            await progress("Putting the stack back as it was")
-            for branch in moved.reversed() {
-                if let tip = tips[branch] {
-                    try? await git.reset(branch: branch, to: tip, worktreePath: holders[branch] ?? path)
-                }
-            }
-            try? await git.checkout(branch: stack.checkedOut, worktreePath: path)
+            await undoRestack(moved, tips: tips, holders: holders, checkedOut: stack.checkedOut, worktreePath: path)
             throw error
         }
 

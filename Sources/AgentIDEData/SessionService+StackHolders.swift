@@ -50,4 +50,23 @@ extension SessionService {
 
         throw stackError("`" + branch + "`'s worktree switched branches; rebase again", in: worktreePath)
     }
+
+    /// Puts the branches a failed restack moved back where they were,
+    /// each in the worktree holding it, and the worktree back on the
+    /// branch it started on.
+    func undoRestack(
+        _ moved: [String],
+        tips: [String: String],
+        holders: [String: String],
+        checkedOut: String,
+        worktreePath: String,
+    ) async {
+        await progress("Putting the stack back as it was")
+        for branch in moved.reversed() {
+            if let tip = tips[branch] {
+                try? await git.reset(branch: branch, to: tip, worktreePath: holders[branch] ?? worktreePath)
+            }
+        }
+        try? await git.checkout(branch: checkedOut, worktreePath: worktreePath)
+    }
 }

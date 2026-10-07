@@ -10,15 +10,42 @@ extension SessionService {
     /// with it beyond the fork. A parent that moved on after its child
     /// was cut is two branches parting, not three, and stays.
     func droppingForks(
-        _ related: [StackCandidate],
+        _ candidates: [StackCandidate],
         checkedOut: String,
         worktreePath: String,
     ) async -> [StackCandidate] {
-        let related = await droppingOtherLines(related, checkedOut: checkedOut, worktreePath: worktreePath)
-        guard related.count > 2 else {
+        let related = await droppingOtherLines(candidates, checkedOut: checkedOut, worktreePath: worktreePath)
+        guard related.count >= Self.branchesAtFork else {
             return related
         }
 
+        let meets = await meets(of: related, checkedOut: checkedOut, worktreePath: worktreePath)
+        var dropped = Set<String>()
+        for (firstIndex, first) in related.enumerated() {
+            for (secondIndex, second) in related.enumerated().dropFirst(firstIndex + 1) {
+                for third in related.dropFirst(secondIndex + 1) {
+                    let past = await pastFork(
+                        of: [first, second, third],
+                        meets: meets,
+                        checkedOut: checkedOut,
+                        worktreePath: worktreePath,
+                    )
+                    dropped.formUnion(past)
+                }
+            }
+        }
+        return related.filter { dropped.contains($0.branch) == false }
+    }
+
+    /// A fork is three branches meeting at one commit.
+    private static let branchesAtFork = 3
+
+    /// Where each pair last shared history, keyed by the pair.
+    private func meets(
+        of related: [StackCandidate],
+        checkedOut: String,
+        worktreePath: String,
+    ) async -> [Set<String>: String] {
         var meets = [Set<String>: String]()
         for (index, first) in related.enumerated() {
             for second in related.dropFirst(index + 1) {
@@ -32,34 +59,38 @@ extension SessionService {
                     }
             }
         }
+        return meets
+    }
 
-        var dropped = Set<String>()
-        for (firstIndex, first) in related.enumerated() {
-            for (secondIndex, second) in related.enumerated().dropFirst(firstIndex + 1) {
-                for third in related.dropFirst(secondIndex + 1) {
-                    guard let meet = meets[[first.branch, second.branch]],
-                          meets[[first.branch, third.branch]] == meet,
-                          meets[[second.branch, third.branch]] == meet
-                    else {
-                        continue
-                    }
-
-                    let past = [first, second, third].filter { $0.tipCommit != meet }
-                    guard past.count > 1 else {
-                        continue
-                    }
-
-                    for entry in past where entry.branch != checkedOut {
-                        let shared = entry.forkCommit
-                        if shared != meet, await git.isAncestor(meet, of: shared, worktreePath: worktreePath) {
-                            continue
-                        }
-                        dropped.insert(entry.branch)
-                    }
-                }
-            }
+    /// The branches of three meeting at a fork that go: those past it
+    /// with which the checked-out branch shares nothing beyond it.
+    private func pastFork(
+        of trio: [StackCandidate],
+        meets: [Set<String>: String],
+        checkedOut: String,
+        worktreePath: String,
+    ) async -> [String] {
+        let pairMeets = trio.enumerated().flatMap { index, first in
+            trio.dropFirst(index + 1).map { meets[[first.branch, $0.branch]] }
         }
-        return related.filter { dropped.contains($0.branch) == false }
+        guard case let meet?? = pairMeets.first, pairMeets.allSatisfy({ $0 == meet }) else {
+            return []
+        }
+
+        let past = trio.filter { $0.tipCommit != meet }
+        guard past.count > 1 else {
+            return []
+        }
+
+        var dropped = [String]()
+        for entry in past where entry.branch != checkedOut {
+            let shared = entry.forkCommit
+            if shared != meet, await git.isAncestor(meet, of: shared, worktreePath: worktreePath) {
+                continue
+            }
+            dropped.append(entry.branch)
+        }
+        return dropped
     }
 
     /// Without the branches that parted from the checked-out one on

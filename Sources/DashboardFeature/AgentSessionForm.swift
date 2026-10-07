@@ -53,7 +53,7 @@ struct AgentSessionForm: View {
 
     let submitTitle: String
     let submitHelp: String
-    var onSourceChange: @MainActor (PromptSource) -> Void = { _ in }
+    var onSourceChange: (@MainActor (PromptSource) -> Void)?
     let onSubmit: @MainActor (Submission) async -> Void
 
     var body: some View {
@@ -86,7 +86,7 @@ struct AgentSessionForm: View {
             }
         }
         .task(id: repository?.id ?? "") { await reloadSources() }
-        .onChange(of: source) { onSourceChange(source) }
+        .onChange(of: source) { onSourceChange?(source) }
     }
 
     // MARK: Private

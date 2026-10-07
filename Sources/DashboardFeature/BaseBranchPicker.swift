@@ -66,8 +66,10 @@ struct BaseBranchPicker: View {
 
     /// Branches other worktrees hold, limited once listed to real
     /// branches (a worktree mid-rebase reports its directory name).
-    // swiftlint:disable:next discouraged_optional_collection
-    private static func worktreeBranches(in group: RepositoryGroup?, listed: [String]?) -> [String] {
+    private static func worktreeBranches(
+        in group: RepositoryGroup?,
+        listed: [String]?, // swiftlint:disable:this discouraged_optional_collection
+    ) -> [String] {
         let held = (group?.items ?? [])
             .filter { $0.isPlaceholder == false }
             .map(\.worktree)

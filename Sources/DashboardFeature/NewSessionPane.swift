@@ -24,36 +24,15 @@ public struct NewSessionPane: View {
             // No cancel button: any other middle-pane action, like
             // selecting a worktree, replaces this page.
             Text("New agent session").interfaceFont(.subheadline, weight: .semibold)
-            HStack {
-                Picker("Repository", selection: $repository) {
-                    Text("Choose repository").tag(Repository?.none)
-                    ForEach(model.repositories) { repository in
-                        Text(repository.fullName ?? repository.name).tag(Repository?.some(repository))
-                    }
-                }
-                .labelsHidden()
-                // A preset repository is the whole point of the opener
-                // that set it, so it cannot be changed here.
-                .disabled(model.newSessionRepository != nil)
-                .hoverHelp(
-                    model.newSessionRepository == nil
-                        ? "The repository the worktree is created in; issues, pull requests and advisories load from it"
-                        : "Fixed by where you opened this from",
-                )
-                BaseBranchPicker(
-                    model: model,
-                    repository: repository,
-                    unavailableReason: source == .pullRequest ? "A pull request starts on its own branch" : nil,
-                    selection: $model.newSessionBase,
-                )
-            }
+            pickers
             AgentSessionForm(
                 model: model,
                 repository: repository,
                 submitTitle: "Start agent",
                 submitHelp: "Create a worktree and branch and launch the agent in it (Cmd-Return)",
                 onSourceChange: { source = $0 },
-            ) { submission in await start(submission) }
+                onSubmit: { submission in await start(submission) },
+            )
             if let failure = model.screenError {
                 Text(failure)
                     .interfaceFont(.callout)
@@ -109,6 +88,33 @@ public struct NewSessionPane: View {
         }
 
         return model.repositories.first { $0.path == preset.path } ?? preset
+    }
+
+    /// The repository, then the branch the session starts from.
+    private var pickers: some View {
+        HStack {
+            Picker("Repository", selection: $repository) {
+                Text("Choose repository").tag(Repository?.none)
+                ForEach(model.repositories) { repository in
+                    Text(repository.fullName ?? repository.name).tag(Repository?.some(repository))
+                }
+            }
+            .labelsHidden()
+            // A preset repository is the whole point of the opener
+            // that set it, so it cannot be changed here.
+            .disabled(model.newSessionRepository != nil)
+            .hoverHelp(
+                model.newSessionRepository == nil
+                    ? "The repository the worktree is created in; issues, pull requests and advisories load from it"
+                    : "Fixed by where you opened this from",
+            )
+            BaseBranchPicker(
+                model: model,
+                repository: repository,
+                unavailableReason: source == .pullRequest ? "A pull request starts on its own branch" : nil,
+                selection: $model.newSessionBase,
+            )
+        }
     }
 
     private func start(_ submission: AgentSessionForm.Submission) async {

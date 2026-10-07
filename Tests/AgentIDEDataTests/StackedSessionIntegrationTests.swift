@@ -154,7 +154,8 @@ struct StackedSessionIntegrationTests {
         let service = pair.world.service
 
         #expect(await service.stackReviewBase(for: pair.child) == "refs/heads/part_one")
-        #expect(await service.stackReviewBase(for: pair.parent) == service.git.defaultBaseRef(of: pair.world.repository))
+        let defaultBase = await service.git.defaultBaseRef(of: pair.world.repository)
+        #expect(await service.stackReviewBase(for: pair.parent) == defaultBase)
     }
 
     @Test
