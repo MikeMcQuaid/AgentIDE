@@ -55,6 +55,18 @@ struct WorktreeActions: View {
             .hoverHelp("Show which branches are stacked in this worktree, drop any that are not, or cut a new one")
         Button("Switch branch…") { pendingBranchSwitch = item }
             .hoverHelp("Check out another local branch here; branches held by other worktrees are not offered")
+        // The default branch is what every session starts from
+        // anyway, and a row still being created has no branch yet.
+        if item.worktree.path != item.worktree.repositoryPath, item.isPlaceholder == false,
+           let group = model.groups.first(where: { $0.repository.path == item.worktree.repositoryPath }),
+           item.worktree.branch != group.defaultBranch
+        {
+            let repository = group.repository
+            Button("New session on this branch…") {
+                model.openNewSession(for: repository, base: item.worktree.branch)
+            }
+            .hoverHelp("Start another agent in a new worktree whose branch is cut from this one, stacking on its work")
+        }
         Divider()
         Button("Mark as unread") { Task { await model.markUnread(item: item) } }
             .hoverHelp("Show the unread dot until this worktree is next viewed")

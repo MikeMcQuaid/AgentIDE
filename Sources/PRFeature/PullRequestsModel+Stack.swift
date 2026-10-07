@@ -12,8 +12,8 @@ extension PullRequestsModel {
         stacking.facts = { worktree in
             await service.stackFacts(for: worktree)
         }
-        stacking.restack = { worktree in
-            try await service.restack(worktree: worktree)
+        stacking.restack = { worktree, busy in
+            try await service.restack(worktree: worktree, busyWorktrees: busy)
         }
         stacking.push = { worktree in
             try await service.pushStack(worktree: worktree)
@@ -59,21 +59,60 @@ extension PullRequestsModel {
     /// second half an in-place stack with unsigned commits greyed
     /// this button while Push waited on exactly this.
     var canRestack: Bool {
-        stack.stackingBlocker == nil && isBranchActionRunning == false
+        stack.stackingBlocker == nil && restackBlocker == nil && isBranchActionRunning == false
             && (stacking.needsRestack || stacking.unsignedBranches.isEmpty == false)
     }
 
+    /// Why a branch held by another worktree cannot be rebased yet:
+    /// its agent is busy or it has uncommitted changes.
+    var restackBlocker: String? {
+        for branch in stack.branches {
+            guard let holder = items.first(where: { $0.worktree.branch == branch && $0.worktree.path != worktreePath })
+            else {
+                continue
+            }
+
+            if busyWorktrees.contains(holder.worktree.path) {
+                return "`" + branch + "`'s agent is busy; rebase once it is idle or done"
+            }
+            if holder.isDirty {
+                return "Commit or discard the changes in `" + branch + "`'s worktree first"
+            }
+        }
+        return nil
+    }
+
+    /// Worktrees whose running agent is not idle or done.
+    var busyWorktrees: Set<String> {
+        Set(
+            items.compactMap { item in
+                guard let session = item.session, session.status == .running else {
+                    return nil
+                }
+
+                return session.activity == .idle || session.activity == .done ? nil : item.worktree.path
+            },
+        )
+    }
+
     /// Whether any branch of the stack has commits the remote does
-    /// not carry.
+    /// not carry. A stack that needs the rebase a busy or dirty
+    /// worktree is holding up does not push either: Push would send
+    /// branches still sitting on stale parents, the busy agent's
+    /// among them.
     var canPushStack: Bool {
         stack.stackingBlocker == nil && isBranchActionRunning == false
             && stacking.needsPush && stacking.unsignedBranches.isEmpty
+            && (stacking.needsRestack == false || restackBlocker == nil)
     }
 
     /// Why the stack's push is in its current state, said the way a
     /// branch's own push says it.
     var pushStackHelp: String {
         if let blocker = stack.stackingBlocker {
+            return blocker
+        }
+        if stacking.needsRestack, let blocker = restackBlocker {
             return blocker
         }
         guard stacking.needsPush else {

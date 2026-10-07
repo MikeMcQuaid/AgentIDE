@@ -160,6 +160,12 @@ public extension SessionService {
         return all.filter { held.contains($0) == false }
     }
 
+    /// Local branches a new session could start on, bar the default.
+    func baseBranches(repository: Repository) async -> [String] {
+        let defaultBranch = await defaultBranchName(of: repository)
+        return await git.branches(worktreePath: repository.path).filter { $0 != defaultBranch }
+    }
+
     /// Checks out another local branch in place; git reports a
     /// conflicting dirty file rather than losing it.
     func switchBranch(_ branch: String, worktree: Worktree) async throws {

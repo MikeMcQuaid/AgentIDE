@@ -93,6 +93,7 @@ public extension SessionService {
         context: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async throws -> String {
         await clearQuarantine(for: agent)
         async let probed = probeVersion(of: agent)
@@ -104,7 +105,7 @@ public extension SessionService {
             context: context,
         )
         let branch = await availableBranch(repository: repository, prompt: "issue-\(number)-" + issue.title)
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
+        let worktreePath = try await createWorktreePath(repository: repository, branch: branch, base: baseBranch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: prompt,
@@ -275,11 +276,10 @@ public extension SessionService {
         return try await launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
     }
 
-    /// The base ref whole-branch reviews diff against: the branch's
-    /// open pull request base when one exists, otherwise the
-    /// repository's default branch.
+    /// The base ref whole-branch reviews diff against: the open pull
+    /// request's base, else the branch below in its stack, else the
+    /// default branch.
     func reviewBase(for worktree: Worktree) async -> String? {
-        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         let summaries = try? await pullRequests.listing(
             repositoryPath: worktree.repositoryPath,
             scope: .branch(worktree.branch),
@@ -287,7 +287,21 @@ public extension SessionService {
         if let base = summaries?.first(where: { $0.state == "OPEN" })?.baseBranch, base.isEmpty == false {
             return "origin/" + base
         }
-        return await git.defaultBaseRef(of: repository)
+        return await stackReviewBase(for: worktree)
+    }
+
+    /// The review base without a pull request: the branch below in
+    /// its stack, named in full so a branch sharing a path's name
+    /// cannot read as that path, else the default branch. One
+    /// reading answers both, since the stack is cached against it
+    /// and it carries the default base ref.
+    internal func stackReviewBase(for worktree: Worktree) async -> String? {
+        let reading = await stackReading(for: worktree)
+        let stack = await stack(from: reading)
+        if let parent = stack.parent(of: stack.checkedOut), parent != stack.base {
+            return "refs/heads/" + parent
+        }
+        return reading.baseRef
     }
 
     /// The worktree's tracked and untracked files, gitignore aware,

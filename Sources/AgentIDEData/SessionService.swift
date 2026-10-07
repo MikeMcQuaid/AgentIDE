@@ -89,6 +89,7 @@ public struct SessionService: Sendable {
         prompt: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        baseBranch: String? = nil,
     ) async throws -> String {
         // The version probe costs a sandbox launch of its own, so it
         // runs beside the naming and the worktree rather than in
@@ -101,7 +102,7 @@ public struct SessionService: Sendable {
         await progress("Naming the branch from the prompt, and asking the CLI its version beside it")
         let branch = await availableBranch(repository: repository, prompt: prompt)
         await progress("Creating the worktree for `" + branch + "`")
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
+        let worktreePath = try await createWorktreePath(repository: repository, branch: branch, base: baseBranch)
         let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: prompt,

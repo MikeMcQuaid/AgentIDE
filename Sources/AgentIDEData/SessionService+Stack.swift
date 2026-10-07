@@ -1,6 +1,6 @@
 import AgentIDEDomain
 
-/// Stacked branches, all in one worktree: each built on the one
+/// Stacked branches, in one worktree or several: each built on the one
 /// below, the bottom on the repository's default branch. The stack is
 /// derived from ancestry every time it is asked for, so a branch an
 /// agent cuts for itself belongs to the stack as surely as one this
@@ -61,7 +61,6 @@ public extension SessionService {
             )
         }
 
-        let excluded = reading.excluded
         if let known = await StackCache.shared.stack(for: path, derivedFrom: reading.fingerprint) {
             PerformanceLog.record(cacheHit: true, "stack#" + path)
             return known
@@ -75,30 +74,7 @@ public extension SessionService {
         }
 
         PerformanceLog.record(cacheHit: false, "stack#" + path)
-        let candidates = await git.branches(worktreePath: path)
-            .filter { $0 != base && ($0 == checkedOut || excluded.contains($0) == false) }
-        var related = [StackCandidate]()
-        for branch in candidates {
-            // Related when the two last shared history beyond the
-            // default branch: one was cut from the other. What the
-            // default branch has since done to either of them is
-            // beside the point, and asking that it still be their
-            // ancestor threw away every stack cut before the last
-            // few merges landed, which is the one a restack exists
-            // to put back in order.
-            let fork = branch == checkedOut
-                ? await git.tip(of: branch, worktreePath: path)
-                : await git.mergeBase(branch, checkedOut, worktreePath: path)
-            guard let fork, await git.isAncestor(fork, of: baseRef, worktreePath: path) == false else {
-                continue
-            }
-
-            await related.append(StackCandidate(
-                branch: branch,
-                fork: git.commitCount(from: baseRef, to: fork, worktreePath: path),
-                tip: git.commitCount(from: baseRef, to: branch, worktreePath: path),
-            ))
-        }
+        let related = await relatedCandidates(to: reading, base: base, baseRef: baseRef)
         // Ordered by where each forks from the line of work, then by
         // how far it has come: that is the order they were built in
         // and the order they must be rebased in.
@@ -124,6 +100,42 @@ public extension SessionService {
         return derived
     }
 
+    /// The branches sharing the checked-out branch's line of work.
+    private func relatedCandidates(to reading: StackReading, base: String?, baseRef: String) async -> [StackCandidate] {
+        let path = reading.path
+        let checkedOut = reading.checkedOut
+        let candidates = await git.branches(worktreePath: path)
+            .filter { $0 != base && ($0 == checkedOut || reading.excluded.contains($0) == false) }
+        var related = [StackCandidate]()
+        for branch in candidates {
+            // Related when the two last shared history beyond the
+            // default branch: one was cut from the other. What the
+            // default branch has since done to either of them is
+            // beside the point, and asking that it still be their
+            // ancestor threw away every stack cut before the last
+            // few merges landed, which is the one a restack exists
+            // to put back in order.
+            let fork = branch == checkedOut
+                ? await git.tip(of: branch, worktreePath: path)
+                : await git.mergeBase(branch, checkedOut, worktreePath: path)
+            guard let fork,
+                  await git.isAncestor(fork, of: baseRef, worktreePath: path) == false,
+                  let tipCommit = branch == checkedOut ? fork : await git.tip(of: branch, worktreePath: path)
+            else {
+                continue
+            }
+
+            await related.append(StackCandidate(
+                branch: branch,
+                fork: git.commitCount(from: baseRef, to: fork, worktreePath: path),
+                tip: git.commitCount(from: baseRef, to: branch, worktreePath: path),
+                forkCommit: fork,
+                tipCommit: tipCommit,
+            ))
+        }
+        return await droppingForks(related, checkedOut: checkedOut, worktreePath: path)
+    }
+
     /// The stack's entries in build order, with branches at one
     /// commit collapsed to one, so a restack never replays the same
     /// commits twice. The one the remote knows stands for the pair,
@@ -146,7 +158,7 @@ public extension SessionService {
         var tips = [String: String]()
         var pushed = Set<String>()
         for entry in related {
-            tips[entry.branch] = await git.tip(of: entry.branch, worktreePath: worktreePath)
+            tips[entry.branch] = entry.tipCommit
             if await git.refExists(
                 worktreePath: worktreePath,
                 ref: remoteBranchRef(worktreePath: worktreePath, branch: entry.branch),
@@ -200,11 +212,14 @@ public extension SessionService {
     /// unnecessary rebase changes every commit's name for nothing.
     /// Nothing half-done survives a failure: the branches already
     /// moved go back to where they were and the worktree returns to
-    /// the branch it started on.
-    func restack(worktree: Worktree) async throws -> [String] {
+    /// the branch it started on. A branch another worktree holds is
+    /// rebased there, refused while that worktree is dirty or in
+    /// `busyWorktrees`.
+    func restack(worktree: Worktree, busyWorktrees: Set<String> = []) async throws -> [String] {
         let path = worktree.path
         let stack = try await requireStackable(stack(for: worktree))
         try await requireQuiet(worktree: worktree, action: "restack")
+        let holders = try await quietHolders(of: stack, in: worktree, busyWorktrees: busyWorktrees)
         // The bottom entry rebases onto the default branch, which is
         // only worth rebasing onto if the remote is current.
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
@@ -248,22 +263,17 @@ public extension SessionService {
                 }
 
                 await progress("Rebasing `" + branch + "` onto `" + parent + "`")
+                try await requireStillHeld(branch, holders: holders, worktreePath: path)
                 try await git.rebaseSigned(
                     branch: branch,
                     onto: parent,
                     from: forkedFrom,
-                    worktreePath: path,
+                    worktreePath: holders[branch] ?? path,
                 )
                 moved.append(branch)
             }
         } catch {
-            await progress("Putting the stack back as it was")
-            for branch in moved.reversed() {
-                if let tip = tips[branch] {
-                    try? await git.reset(branch: branch, to: tip, worktreePath: path)
-                }
-            }
-            try? await git.checkout(branch: stack.checkedOut, worktreePath: path)
+            await undoRestack(moved, tips: tips, holders: holders, checkedOut: stack.checkedOut, worktreePath: path)
             throw error
         }
 
@@ -354,7 +364,7 @@ public extension SessionService {
         throw stackError("Commit or discard the worktree's changes first", in: worktree.path)
     }
 
-    private func stackError(_ message: String, in path: String) -> CommandError {
+    internal func stackError(_ message: String, in path: String) -> CommandError {
         CommandError(
             command: "stack in " + path,
             result: ProcessResult(status: 1, standardOutput: "", standardError: message),
@@ -366,8 +376,11 @@ public extension SessionService {
 
 /// A branch that shares the line of work, with where it forks from
 /// the default branch and how far its tip has come.
-private struct StackCandidate {
+struct StackCandidate {
     let branch: String
     let fork: Int
     let tip: Int
+    /// Where it last shared history with the checked-out branch.
+    let forkCommit: String
+    let tipCommit: String
 }

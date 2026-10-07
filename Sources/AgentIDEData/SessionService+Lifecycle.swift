@@ -94,26 +94,31 @@ public extension SessionService {
     }
 
     /// Adds the worktree a new session works in, under the
-    /// repository's own directory.
-    func createWorktreePath(repository: Repository, branch: String) async throws -> String {
+    /// repository's own directory, on `base` or the default branch.
+    func createWorktreePath(repository: Repository, branch: String, base: String? = nil) async throws -> String {
         try await fetchIfStale(repositoryPath: repository.path, maxAge: Self.worktreeFetchInterval)
-        // A default branch GitHub renamed leaves `origin/HEAD` naming
-        // a branch the pruning fetch has just removed, and a worktree
-        // cannot start from a ref that is gone: origin is asked where
-        // its HEAD points now, the way an explicit fetch asks, rather
-        // than failing where a hand-run `git remote set-head` was the
-        // only way on.
-        if let base = await git.defaultBaseRef(of: repository),
-           await git.commitHash(of: base, worktreePath: repository.path) == nil
+        if let base {
+            // It may have been deleted since the form listed it.
+            guard await git.commitHash(of: "refs/heads/" + base, worktreePath: repository.path) != nil else {
+                throw SessionServiceError("`" + base + "` no longer exists; choose another base branch.")
+            }
+        } else if let defaultBase = await git.defaultBaseRef(of: repository),
+                  await git.commitHash(of: defaultBase, worktreePath: repository.path) == nil
         {
-            await progress("`" + base + "` is gone from origin; asking where its HEAD points now")
+            // A default branch GitHub renamed leaves `origin/HEAD`
+            // naming a branch the pruning fetch has just removed, and
+            // a worktree cannot start from a ref that is gone: origin
+            // is asked where its HEAD points now, the way an explicit
+            // fetch asks, rather than failing where a hand-run `git
+            // remote set-head` was the only way on.
+            await progress("`" + defaultBase + "` is gone from origin; asking where its HEAD points now")
             if let move = try await git.followDefaultBranch(of: repository) {
                 await progress("The default branch moved from `" + move.previous + "` to `" + move.current + "`")
             }
         }
         let path = worktreeContainer(repository: repository) + "/" + branch.replacing("/", with: "-")
-        await progress("Running `git worktree add " + path + "`")
-        try await git.createWorktree(repository: repository, branch: branch, at: path)
+        await progress("Running `git worktree add " + path + "`" + (base.map { " on `" + $0 + "`" } ?? ""))
+        try await git.createWorktree(repository: repository, branch: branch, at: path, base: base)
         await progress("Worktree ready at `" + path + "`")
         return path
     }

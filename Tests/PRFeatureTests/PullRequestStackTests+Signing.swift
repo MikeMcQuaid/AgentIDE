@@ -25,7 +25,7 @@ extension PullRequestStackTests {
                 return StackFacts(stack: stack, unsigned: reads >= 2 ? [] : ["lower"])
             }
         }
-        model.stacking.restack = { _ in
+        model.stacking.restack = { _, _ in
             restacks.withLock { $0 += 1 }
             return ["upper"]
         }
@@ -47,7 +47,7 @@ extension PullRequestStackTests {
         model.stacking.facts = { _ in
             StackFacts(stack: stack, unsigned: restacks.withLock { $0 } >= 2 ? [] : ["lower"])
         }
-        model.stacking.restack = { _ in
+        model.stacking.restack = { _, _ in
             restacks.withLock { $0 += 1 }
             return ["upper"]
         }

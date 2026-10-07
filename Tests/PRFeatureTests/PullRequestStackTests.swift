@@ -205,7 +205,7 @@ struct PullRequestStackTests {
             done.withLock { $0.append("rebase") }
             return "origin/main"
         }
-        model.stacking.restack = { _ in
+        model.stacking.restack = { _, _ in
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
@@ -293,7 +293,7 @@ struct PullRequestStackTests {
             done.withLock { $0.append("rebase") }
             return "origin/main"
         }
-        model.stacking.restack = { _ in
+        model.stacking.restack = { _, _ in
             done.withLock { $0.append("restack") }
             return ["upper"]
         }

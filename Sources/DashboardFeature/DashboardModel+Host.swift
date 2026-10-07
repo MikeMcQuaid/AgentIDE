@@ -132,6 +132,11 @@ public extension DashboardModel {
         await service.availableBranches(worktree: item.worktree)
     }
 
+    /// Local branches a new session could start on.
+    func baseBranches(repository: Repository) async -> [String] {
+        await service.baseBranches(repository: repository)
+    }
+
     /// Checks out another branch in place, telling the row at once
     /// the way the pull-default action does.
     func switchBranch(_ branch: String, for item: WorktreeItem) async {

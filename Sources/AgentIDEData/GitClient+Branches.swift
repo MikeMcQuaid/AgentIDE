@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import Foundation
 
 /// Branch inspection and the repository-local exclude file, split
@@ -139,6 +140,23 @@ public extension GitClient {
         try await git(["fetch", "origin"], in: worktreePath)
         try await git(["checkout", branch], in: worktreePath)
         try await git(["pull", "--ff-only", "origin", branch], in: worktreePath)
+    }
+
+    /// Creates an untracked branch from `base` (a local branch) or
+    /// the default base, falling back to `HEAD`.
+    func createWorktree(
+        repository: Repository,
+        branch: String,
+        at path: String,
+        base: String? = nil,
+    ) async throws {
+        let startPoint =
+            if let base {
+                "refs/heads/" + base
+            } else {
+                await defaultBaseRef(of: repository) ?? "HEAD"
+            }
+        try await git(["worktree", "add", "--no-track", "-b", branch, path, startPoint], in: repository.path)
     }
 
     /// Cuts a branch at the worktree's tip and checks it out, which
