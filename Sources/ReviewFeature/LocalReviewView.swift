@@ -11,33 +11,37 @@ struct LocalReviewView: View {
     let diff: ReviewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
-            controls
-            promptEditor
-            if model.isOutdated {
-                Text("The code or review scope changed. Review again before making a fix.")
-                    .interfaceFont(.caption)
-                    .foregroundStyle(.secondary)
+        PopoverContent(width: Self.width) {
+            VStack(alignment: .leading, spacing: Self.spacing) {
+                controls
+                LocalReviewConfigurationView(reviewer: model.reviewer)
+                promptEditor
+                if model.isOutdated {
+                    Text("The code or review scope changed. Review again before making a fix.")
+                        .interfaceFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let error = model.error {
+                    Text(error)
+                        .interfaceFont(.body)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
+                LocalReviewDetailsView(review: model.review)
+                Divider()
+                if model.isRunning {
+                    LaunchProgressView("Reviewing changes", waitingOn: model.reviewer.displayName + "'s findings")
+                } else if diff.hasLoaded == false {
+                    LaunchProgressView("Loading review scope", waitingOn: "the selected diff")
+                } else {
+                    findings
+                    makeFixes
+                }
             }
-            if let error = model.error {
-                Text(error)
-                    .interfaceFont(.caption)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
-            Divider()
-            if model.isRunning {
-                LaunchProgressView("Reviewing changes", waitingOn: model.reviewer.displayName + "'s findings")
-            } else if diff.hasLoaded == false {
-                LaunchProgressView("Loading review scope", waitingOn: "the selected diff")
-            } else {
-                findings
-                makeFixes
-            }
+            .padding(Self.spacing)
         }
-        .padding(Self.spacing)
-        .frame(width: Self.width, height: Self.height)
-        .onAppear { promptFocused = true }
+        .onAppear { promptFocused = true; model.refreshAutomation() }
+        .onChange(of: automationGeneration) { model.refreshAutomation() }
         .onExitCommand { dismiss() }
         .onChange(of: showsInstructions) { _, shown in promptFocused = shown }
         .onChange(of: model.showsPrompt) { _, shown in
@@ -51,15 +55,15 @@ struct LocalReviewView: View {
     // MARK: Private
 
     private static let spacing: CGFloat = 8
-    private static let iconSize: CGFloat = 14
     private static let width: CGFloat = 560
-    private static let height: CGFloat = 600
     private static let promptHeight: CGFloat = 180
 
     @Environment(\.dismiss)
     private var dismiss
     @FocusState private var promptFocused: Bool
     @State private var showsInstructions = true
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var automationGeneration = 0
 
     private var controls: some View {
         HStack {
@@ -87,15 +91,7 @@ struct LocalReviewView: View {
     private var reviewerPicker: some View {
         Picker("Reviewer", selection: $model.reviewer) {
             ForEach(AgentKind.allCases, id: \.self) { agent in
-                Label {
-                    Text(agent.displayName)
-                } icon: {
-                    Image(agent.iconAssetName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: Self.iconSize, height: Self.iconSize)
-                }
-                .tag(agent)
+                ReviewerLabel(agent).tag(agent)
             }
         }
         .disabled(model.isBusy)
@@ -117,24 +113,22 @@ struct LocalReviewView: View {
     }
 
     private var findings: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.spacing) {
-                if let review = model.review, review.failure == nil {
-                    if review.threads.isEmpty {
-                        Text("No findings.").interfaceFont(.body)
-                    } else {
-                        ForEach(review.threads) { thread in
-                            LocalReviewThreadRow(model: model, diff: diff, thread: thread)
-                        }
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            if let review = model.review, review.failure == nil {
+                if review.threads.isEmpty {
+                    Text("No findings.").interfaceFont(.body)
+                } else {
+                    ForEach(review.threads) { thread in
+                        LocalReviewThreadRow(model: model, diff: diff, thread: thread)
                     }
-                } else if model.error == nil {
-                    Text("Run a review to see findings here and beneath the changed files.")
-                        .interfaceFont(.body)
-                        .foregroundStyle(.secondary)
                 }
+            } else if model.error == nil {
+                Text("Run a review to see findings here and beneath the changed files.")
+                    .interfaceFont(.body)
+                    .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder private var makeFixes: some View {

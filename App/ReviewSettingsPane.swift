@@ -18,7 +18,7 @@ struct ReviewSettingsPane: View {
                 Picker("Default reviewer", selection: $reviewAgent) {
                     Text("Other agent").tag("")
                     ForEach(AgentKind.allCases, id: \.self) { agent in
-                        Text(agent.displayName).tag(agent.rawValue)
+                        ReviewerLabel(agent).tag(agent.rawValue)
                     }
                 }
                 Text("Review panes start with this agent; you can choose another before reviewing.")

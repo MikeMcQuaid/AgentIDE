@@ -176,7 +176,7 @@ extension GitHubClient {
     /// dropped rather than pasted, so a prompt can never be handed
     /// an archive's bytes. Nil when neither answers, so one job
     /// still uploading never takes down the logs the others have.
-    private func jobLog(_ job: RunJob, repositoryPath: String) async -> String? {
+    func jobLog(_ job: RunJob, repositoryPath: String) async -> String? {
         // swiftformat:disable:next acronyms
         let jobID = String(job.databaseId)
         if let viewed = try? await gh(["run", "view", "--job", jobID, "--log-failed"], in: repositoryPath),

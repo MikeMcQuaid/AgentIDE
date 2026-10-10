@@ -14,12 +14,14 @@ public struct HighlightedResultsList<Item, ID: Hashable, Row: View>: View {
         id: KeyPath<Item, ID>,
         highlighted: Int,
         help: String,
+        scrolls: Bool = true,
         onPick: @escaping (Item) -> Void,
         @ViewBuilder row: @escaping (Item) -> Row,
     ) {
         self.results = results
         self.id = id
         self.highlighted = highlighted
+        self.scrolls = scrolls
         self.help = help
         self.onPick = onPick
         self.row = row
@@ -28,28 +30,20 @@ public struct HighlightedResultsList<Item, ID: Hashable, Row: View>: View {
     // MARK: Public
 
     public var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(rows) { indexed in
-                        let index = indexed.index
-                        let item = indexed.item
-                        let highlight = index == highlighted ? Style.highlightOpacity : 0
-                        row(item)
-                            .background(Color.accentColor.opacity(highlight))
-                            .contentShape(Rectangle())
-                            .onTapGesture { onPick(item) }
-                            .accessibilityAddTraits(.isButton)
-                            .id(index)
-                    }
+        if scrolls {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    content
                 }
+                // Arrowing past the visible rows scrolls the highlight
+                // into view rather than moving it off screen.
+                .onAppear { proxy.scrollTo(highlighted) }
+                .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
             }
-            // Arrowing past the visible rows scrolls the highlight
-            // into view rather than moving it off screen.
-            .onAppear { proxy.scrollTo(highlighted) }
-            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
+            .hoverHelp(help)
+        } else {
+            content.hoverHelp(help)
         }
-        .hoverHelp(help)
     }
 
     // MARK: Private
@@ -57,6 +51,7 @@ public struct HighlightedResultsList<Item, ID: Hashable, Row: View>: View {
     private let results: [Item]
     private let id: KeyPath<Item, ID>
     private let highlighted: Int
+    private let scrolls: Bool
     private let help: String
     private let onPick: (Item) -> Void
     private let row: (Item) -> Row
@@ -64,6 +59,22 @@ public struct HighlightedResultsList<Item, ID: Hashable, Row: View>: View {
     /// Rows keep their results' identity rather than their position.
     private var rows: [IndexedResult<Item, ID>] {
         results.enumerated().map { IndexedResult(index: $0.offset, item: $0.element, id: $0.element[keyPath: id]) }
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            ForEach(rows) { indexed in
+                let index = indexed.index
+                let item = indexed.item
+                let highlight = index == highlighted ? Style.highlightOpacity : 0
+                row(item)
+                    .background(Color.accentColor.opacity(highlight))
+                    .contentShape(Rectangle())
+                    .onTapGesture { onPick(item) }
+                    .accessibilityAddTraits(.isButton)
+                    .id(index)
+            }
+        }
     }
 }
 

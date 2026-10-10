@@ -75,9 +75,11 @@ extension PullRequestsModel {
     /// Copies every unresolved review conversation to the
     /// clipboard, ready for pasting into an agent or reply.
     func copyUnresolvedComments(_ summary: PullRequestSummary) async {
-        let threads = await fetchThreads(summary.number).filter { $0.isResolved == false }
-        let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.clearContents()
+        await restoreLocalReview(for: summary)
+        let remote = await fetchThreads(summary.number)
+        let threads = (remote + (localReview(for: summary)?.review.threads ?? [])).filter { $0.isResolved == false }
+        let text = ReviewThread.digest(of: threads)
         NSPasteboard.general.setString(text, forType: .string)
         note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }

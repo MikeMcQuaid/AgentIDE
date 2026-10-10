@@ -12,6 +12,11 @@ public extension AgentRunner {
         "exit 1"
     }
 
+    /// The reason printed by a failed reviewer.
+    func reviewFailure(_ output: String) -> String {
+        output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Reads the completed structured response.
     func reviewOutput(_ output: String) -> String {
         output
@@ -35,6 +40,15 @@ public extension ClaudeCodeRunner {
         .joined(separator: " ")
         + " " + optionArguments(model: options.model?.shellQuoted, effort: options.effort?.shellQuoted)
         + " --json-schema \"$(cat " + schemaFile.shellQuoted + ")\" -p < " + promptFile.shellQuoted
+    }
+
+    /// The reason printed by a failed reviewer.
+    func reviewFailure(_ output: String) -> String {
+        guard let envelope = try? JSONSerialization.jsonObject(with: Data(output.utf8)) as? [String: Any] else {
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return envelope["result"] as? String ?? (envelope["errors"] as? [String])?.joined(separator: "\n") ?? ""
     }
 
     /// Reads the completed structured response.

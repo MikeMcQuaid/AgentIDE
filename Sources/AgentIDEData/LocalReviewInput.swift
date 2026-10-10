@@ -104,10 +104,7 @@ public enum LocalReviewInput {
                   finding.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
                   [finding.path, finding.title, finding.body].allSatisfy(Self.hasSafeCharacters),
                   finding.line.map({ line in
-                      line > 0 && file.hunks.contains { hunk in
-                          let count = hunk.lines.count { $0.kind != .deletion }
-                          return line >= hunk.newStart && line - hunk.newStart < count
-                      }
+                      line > 0 && file.hunkIndex(containing: line) != nil
                   }) ?? true
             else {
                 throw SessionServiceError("The reviewer returned an invalid finding or an anchor outside the diff.")
@@ -122,6 +119,7 @@ public enum LocalReviewInput {
                     ReviewThreadComment(author: reviewer.displayName, body: finding.title + "\n\n" + finding.body),
                 ],
                 resolveID: "",
+                codeContext: context(file: file, line: finding.line),
             )
         }
     }

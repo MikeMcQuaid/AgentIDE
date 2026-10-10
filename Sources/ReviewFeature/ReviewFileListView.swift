@@ -23,9 +23,17 @@ struct ReviewFileListView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Self.spacing) {
+                    if conversations.isEmpty == false {
+                        HStack {
+                            Text("Conversations").interfaceFont(.headline)
+                            Spacer()
+                            CopyReviewConversationsButton(threads: conversations)
+                        }
+                    }
                     ForEach(model.files) { file in
                         fileSection(file)
                     }
+                    unplacedConversations
                 }
                 .padding(Self.spacing)
             }
@@ -41,9 +49,27 @@ struct ReviewFileListView: View {
         }
     }
 
+    @ViewBuilder var unplacedConversations: some View {
+        let paths = Set(model.files.map(\.path))
+        let local = (localReview.review?.threads ?? []).filter { paths.contains($0.path) == false }
+        let remote = model.threads.filter { paths.contains($0.path) == false }
+        if local.isEmpty == false || remote.isEmpty == false {
+            Text("Outside the selected diff").interfaceFont(.callout).foregroundStyle(.secondary)
+            ForEach(local) { LocalReviewThreadRow(model: localReview, diff: model, thread: $0) }
+            ForEach(remote) { remoteThread($0) }
+        }
+    }
+
     // MARK: Private
 
     private static let spacing: CGFloat = 8
+
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var automationGeneration = 0
+
+    private var conversations: [ReviewThread] {
+        model.threads + (localReview.review?.threads ?? [])
+    }
 
     @ViewBuilder
     private func fileSection(_ file: DiffFile) -> some View {
@@ -58,23 +84,38 @@ struct ReviewFileListView: View {
             onEdit: {
                 FileOpener.open(relativePath: file.path, line: nil, worktreePath: worktreePath)
             },
+            conversations: { AnyView(threads(in: file, hunk: $0)) },
         )
         if isCollapsed(file) == false {
-            if localReview.isRunning == false, let review = localReview.review {
-                ForEach(review.threads.filter { $0.path == file.path }) { thread in
-                    LocalReviewThreadRow(model: localReview, diff: model, thread: thread)
-                }
-            }
-            ForEach(model.threads(for: file.path)) { thread in
-                ReviewThreadRow(
-                    thread: thread,
-                    onEdit: {
-                        FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath)
-                    },
-                    onToggleResolved: { await model.toggleResolved(thread) },
-                )
-            }
+            threads(in: file, hunk: nil)
         }
+    }
+
+    @ViewBuilder
+    private func threads(in file: DiffFile, hunk: Int?) -> some View {
+        ForEach((localReview.review?.threads ?? []).filter { thread in
+            thread.path == file.path && (localReview.isOutdated ? nil : file.hunkIndex(containing: thread.line)) == hunk
+        }) { thread in
+            LocalReviewThreadRow(model: localReview, diff: model, thread: thread, showsCodeContext: hunk == nil)
+        }
+        ForEach(model.threads(for: file.path).filter { file.hunkIndex(containing: $0.line) == hunk }) { thread in
+            remoteThread(thread)
+        }
+    }
+
+    private func remoteThread(_ thread: ReviewThread) -> some View {
+        ReviewThreadRow(
+            thread: thread,
+            onEdit: { FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath) },
+            onToggleResolved: { await model.toggleResolved(thread) },
+            onToggleResolveOnPush: { await model.toggleResolveOnPush(thread) },
+            isPendingResolution: pendingResolution(thread),
+        )
+    }
+
+    private func pendingResolution(_ thread: ReviewThread) -> Bool {
+        _ = automationGeneration
+        return model.pendingResolution(thread)
     }
 
     private func isCollapsed(_ file: DiffFile) -> Bool {

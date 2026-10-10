@@ -9,7 +9,18 @@ public extension SessionService {
 
     /// Saves human feedback outside the shared workspace.
     func saveLocalReview(_ review: LocalReview, worktreePath: String) {
-        store.update { $0.localReviews[worktreePath] = review }
+        store.update { value in
+            if value.localReviews[worktreePath]?.runID != review.runID {
+                for (key, state) in value.pullRequestAutomation
+                    where state.feedbackWorktreePath == worktreePath || state.localWorktreePath == worktreePath
+                {
+                    if state.collection?.isPending != true {
+                        value.pullRequestAutomation[key]?.collection = nil
+                    }
+                }
+            }
+            value.localReviews[worktreePath] = review
+        }
     }
 
     /// Uses the chosen default, otherwise the other agent for the last session.
@@ -50,6 +61,7 @@ public extension SessionService {
         let input = try LocalReviewInput.prompt(instructions: instructions, snapshot: snapshot)
 
         let revision = try await localReviewRevision(worktreePath: worktreePath)
+        let source = await localReviewSource(worktreePath: worktreePath)
         await clearQuarantine(for: reviewer)
         guard let executable = Quarantine.homebrewBinaries
             .map({ $0 + "/" + reviewer.rawValue })
@@ -85,6 +97,12 @@ public extension SessionService {
             result: result, files: files, adapter: adapter, revision: revision, input: input,
         )
         review.instructions = instructions
+        review.model = options.model
+        review.effort = options.effort
+        review.repositoryPath = source.repository
+        review.branch = source.branch
+        review.pullRequestURL = source.url
+        review.headRepository = source.headRepository
         return review
     }
 }

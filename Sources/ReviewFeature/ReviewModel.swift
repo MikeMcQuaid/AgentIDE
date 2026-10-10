@@ -48,7 +48,7 @@ final class ReviewModel {
     private(set) var files: [DiffFile] = []
 
     /// Whether any scope has loaded yet; before, progress shows.
-    private(set) var hasLoaded = false
+    var hasLoaded = false
 
     /// Updated by the status extension when a failed read finds missing Git metadata.
     var isRepositoryAvailable = true
@@ -83,7 +83,7 @@ final class ReviewModel {
 
     /// The branch's open pull request conversations, shown inline
     /// under the files they anchor to.
-    private(set) var threads: [ReviewThread] = []
+    var threads: [ReviewThread] = []
 
     /// Whether the checked-out branch has its own origin ref, so
     /// the upstream scope has something to diff against; refreshed
@@ -103,6 +103,9 @@ final class ReviewModel {
 
     let worktreePath: String
 
+    var resolveOnPush: ((ReviewThread) async throws -> Void)?
+    var pendingResolution: (ReviewThread) -> Bool = { _ in false }
+
     /// Test seam: whether the worktree's directory still exists,
     /// which decides if a reload failure is worth reporting; the
     /// real file system by default.
@@ -110,6 +113,9 @@ final class ReviewModel {
 
     /// Internal, since the edits extension file resets files through it.
     let git: GitClient
+
+    let fetchThreads: () async -> [ReviewThread]
+    let setThreadResolved: (String, Bool) async throws -> Void
 
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
@@ -137,18 +143,6 @@ final class ReviewModel {
     /// them is showing are derived from it.
     var findQuery = "" {
         didSet { updateFindTargets() }
-    }
-
-    /// Flips one conversation's resolved state on GitHub, then
-    /// refreshes the inline listing.
-    func toggleResolved(_ thread: ReviewThread) async {
-        do {
-            try await setThreadResolved(thread.resolveID, thread.isResolved == false)
-            threads = await fetchThreads()
-        } catch {
-            report(error.localizedDescription)
-        }
-        hasLoaded = true
     }
 
     /// Loads the scope's diff.
@@ -281,8 +275,6 @@ final class ReviewModel {
     private var originalMessage = ""
 
     private let draftMessage: () async -> String?
-    private let fetchThreads: () async -> [ReviewThread]
-    private let setThreadResolved: (String, Bool) async throws -> Void
 
     /// The upstream scope's commits and their own diff, empty with
     /// a message until the branch has been pushed.

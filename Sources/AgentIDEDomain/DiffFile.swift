@@ -96,4 +96,15 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     public var id: String {
         path
     }
+
+    /// A new-side anchor belongs to one hunk; deletions do not advance it.
+    public func hunkIndex(containing line: Int?) -> Int? {
+        guard let line else {
+            return nil
+        }
+
+        return hunks.firstIndex { hunk in
+            line >= hunk.newStart && line - hunk.newStart < hunk.lines.count { $0.kind != .deletion }
+        }
+    }
 }

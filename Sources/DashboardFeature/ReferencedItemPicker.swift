@@ -85,29 +85,33 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
 
     private var search: some View {
         let ranked = results
-        return VStack(alignment: .leading, spacing: Layout.spacing) {
-            TextField(searchPrompt, text: $query)
-                .textFieldStyle(.roundedBorder)
-                .focused($fieldFocused)
-                .onChange(of: query) { highlighted = 0 }
-                .onSubmit { pick(ranked, at: highlighted) }
-                .highlightNavigation($highlighted, count: ranked.count)
-            if ranked.isEmpty {
-                Group {
-                    if items.isEmpty, isLoading {
-                        ProgressView(loadingTitle)
+        return ScrollViewReader { proxy in
+            PopoverContent(width: Layout.width) {
+                VStack(alignment: .leading, spacing: Layout.spacing) {
+                    TextField(searchPrompt, text: $query)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($fieldFocused)
+                        .onChange(of: query) { highlighted = 0 }
+                        .onSubmit { pick(ranked, at: highlighted) }
+                        .highlightNavigation($highlighted, count: ranked.count)
+                    if ranked.isEmpty {
+                        Group {
+                            if items.isEmpty, isLoading {
+                                ProgressView(loadingTitle)
+                            } else {
+                                Text(items.isEmpty ? emptyTitle : "Nothing matches")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        Text(items.isEmpty ? emptyTitle : "Nothing matches")
-                            .foregroundStyle(.secondary)
+                        resultsList(ranked)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: Layout.listHeight)
-            } else {
-                resultsList(ranked)
+                .padding(Layout.spacing)
             }
+            .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
         }
-        .padding(Layout.spacing)
-        .frame(width: Layout.width)
         .onExitCommand { isPresented = false }
         .onAppear {
             highlighted = ranked.firstIndex { $0.id == selection } ?? 0
@@ -124,10 +128,10 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
             id: \.id,
             highlighted: highlighted,
             help: "Arrows move the highlight; return or a click picks",
+            scrolls: false,
             onPick: { pick($0) },
             row: { row($0) },
         )
-        .frame(height: Layout.listHeight)
     }
 
     private func row(_ item: Item) -> some View {
@@ -167,5 +171,4 @@ private enum Layout {
     static let spacing: CGFloat = 8
     static let rowPadding: CGFloat = 4
     static let width: CGFloat = 420
-    static let listHeight: CGFloat = 260
 }

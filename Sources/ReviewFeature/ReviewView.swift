@@ -54,7 +54,7 @@ public struct ReviewView: View {
             )
         }
         let builder = {
-            ReviewModel(
+            let created = ReviewModel(
                 worktreePath: worktree.path,
                 repositoryName: worktree.repositoryName,
                 git: git,
@@ -63,12 +63,13 @@ public struct ReviewView: View {
                 fetchThreads: fetchThreads,
                 setThreadResolved: setThreadResolved,
             )
+            created.configureResolveOnPush(worktree: worktree, git: git, pullRequests: pullRequests)
+            return created
         }
         makeModel = builder
         _model = State(initialValue: builder())
-        let reviewBuilder = { localReviews.model(worktreePath: worktree.path) }
-        makeLocalReview = reviewBuilder
-        _localReview = State(initialValue: reviewBuilder())
+        makeLocalReview = { localReviews.model(worktreePath: worktree.path) }
+        _localReview = State(initialValue: makeLocalReview())
     }
 
     // MARK: Public
@@ -105,7 +106,17 @@ public struct ReviewView: View {
                     Task { await commitOutstanding(model: model) }
                 }
             }
+            .onChange(of: automationGeneration) {
+                if localReview.isBusy == false {
+                    localReview.refreshAutomation()
+                }
+                Task { [model] in model.threads = await model.fetchThreads() }
+            }
             .onChange(of: model.files) { localReview.update(files: model.files) }
+            .onChange(of: localReview.review) {
+                localReview.update(files: model.files)
+                automationGeneration += 1
+            }
             .sheet(isPresented: $localReview.showsPrompt) { LocalReviewPromptView(model: localReview) }
     }
 
@@ -127,6 +138,8 @@ public struct ReviewView: View {
     @State private var model: ReviewModel
     @State private var localReview: LocalReviewModel
     @State private var showsLocalReview = false
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var automationGeneration = 0
 
     /// The stack the worktree's branch belongs to, and which entry
     /// of it this pane is showing. A stack of one is every branch
@@ -172,6 +185,7 @@ public struct ReviewView: View {
                 ReviewFindBar(model: model, focusRequest: findRequest) { closeFind() }
                 Divider()
             }
+            feedbackStatus
             diffList(
                 model: model,
                 localReview: localReview,
@@ -217,6 +231,8 @@ public struct ReviewView: View {
                 .hoverHelp("Reload the diff from git")
                 .disabled(localReview.isBusy)
             localReviewButton(model: model, localReview: localReview, isPresented: $showsLocalReview)
+            feedback
+                .disabled(worktree.isHostDirectory || model.isReadOnly || localReview.isBusy)
         }
         .padding(Self.spacing)
     }

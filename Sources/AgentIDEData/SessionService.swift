@@ -178,6 +178,9 @@ public struct SessionService: Sendable {
     /// one set of in-flight listings.
     let fileListings: FileListings = .init()
     let keychainCheck: KeychainCheck = .init()
+    let feedbackCollector: FeedbackCollector = .init()
+
+    let autofixCoordinator: AutofixCoordinator = .init()
 
     func runner(for agent: AgentKind) -> any AgentRunner {
         runners.first { $0.kind == agent } ?? ClaudeCodeRunner()

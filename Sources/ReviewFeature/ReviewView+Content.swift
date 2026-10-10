@@ -1,7 +1,33 @@
+import AgentIDEDomain
 import SwiftUI
 import TerminalUI
 
 extension ReviewView {
+    var feedback: some View {
+        FeedbackView(
+            service: service,
+            repositoryPath: worktree.repositoryPath,
+            worktreePath: worktreePath,
+            summary: feedbackSummary,
+        )
+        .id(worktreePath)
+    }
+
+    var feedbackStatus: some View {
+        FeedbackStatusView(
+            service: service,
+            repositoryPath: worktree.repositoryPath,
+            worktreePath: worktreePath,
+            summary: feedbackSummary,
+        )
+    }
+
+    private var feedbackSummary: PullRequestSummary? {
+        service.pullRequestReads
+            .cachedListing(repositoryPath: worktree.repositoryPath, scope: .branch(worktree.branch))?
+            .first { $0.state == "OPEN" }
+    }
+
     @ViewBuilder
     func diffList(
         model: ReviewModel,
@@ -20,7 +46,7 @@ extension ReviewView {
                 description: Text("Restore this worktree and its Git metadata, then refresh."),
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.files.isEmpty {
+        } else if model.files.isEmpty, model.threads.isEmpty, localReview.review?.threads.isEmpty != false {
             ContentUnavailableView("No changes", systemImage: "checkmark.circle")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -70,7 +96,9 @@ extension ReviewView {
         .accessibilityLabel("Review with " + localReview.reviewer.displayName)
         .accessibilityValue(localReview.isRunning ? "Review in progress" : "")
         .hoverHelp(localReview.isRunning ? "Review in progress" : "Edit the review prompt and manage local findings")
-        .popover(isPresented: isPresented, arrowEdge: .bottom) { LocalReviewView(model: localReview, diff: model) }
+        .popover(isPresented: isPresented, arrowEdge: .bottom) {
+            LocalReviewView(model: localReview, diff: model)
+        }
     }
 
     /// One icon control; a selected one fills its bubble.

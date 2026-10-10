@@ -1,3 +1,4 @@
+import AgentIDEDomain
 import SwiftUI
 
 // MARK: - Octicon
@@ -171,8 +172,8 @@ public nonisolated enum ChecksStyle {
     /// A short display name for a GitHub login: the code review bot
     /// shortens to its product name and bot suffixes drop.
     public static func authorDisplayName(_ login: String) -> String {
-        if login.lowercased().hasPrefix("copilot") {
-            return "Copilot"
+        if let bot = ReviewBot.allCases.first(where: { $0.matches(login) }) {
+            return bot.displayName
         }
 
         return login.replacing("[bot]", with: "")

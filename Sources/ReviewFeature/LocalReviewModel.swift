@@ -40,11 +40,28 @@ final class LocalReviewModel {
             revision: { try await service.localReviewRevision(worktreePath: worktreePath) },
             save: { service.saveLocalReview($0, worktreePath: worktreePath) },
         )
+        refreshAutomation = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            let saved = service.localReview(worktreePath: worktreePath)
+            guard saved != review else {
+                return
+            }
+
+            review = saved
+            error = saved?.failure
+        }
     }
 
     // MARK: Internal
 
     typealias Run = ([DiffFile], AgentKind, String) async throws -> LocalReview
+
+    var refreshAutomation: () -> Void = {
+        // Unwired models are used by tests.
+    }
 
     var reviewer: AgentKind
     private(set) var isRunning = false
@@ -140,15 +157,7 @@ final class LocalReviewModel {
             return
         }
 
-        let thread = review.threads[index]
-        review.threads[index] = ReviewThread(
-            id: thread.id,
-            path: thread.path,
-            line: thread.line,
-            isResolved: thread.isResolved == false,
-            comments: thread.comments,
-            resolveID: thread.resolveID,
-        )
+        review.threads[index].isResolved.toggle()
         self.review = review
     }
 

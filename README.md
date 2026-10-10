@@ -24,7 +24,20 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Scrolls the agent conversation under the pointer.
 - Switches between visited agents instantly, preserving their terminal size and content.
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
-- Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
+- Shows local AI findings beside matching code in Review and with captured code in PR conversations, and copies them together with GitHub comments using the existing conversation copy buttons.
+- Requests reviews from another agent or your choice of Copilot or CodeRabbit.
+- Gathers local findings, required CI failures, both bots’ comments, GitHub Code Quality and security comments and verified private reviewers’ comments, including nitpicks, for Copy all and autofix.
+- Remembers local and remote reviewer choices for new pull requests and worktrees in each repository.
+- Offers an explicit Start loop action that completes local review rounds before shared GitHub CI and review rounds, with separate limits of one to three and automatic pushing off by default for each PR.
+- Opens autofix from a consistent toolbar icon in Review and PR panes, showing status beneath it only while a loop is active or paused.
+- Shows reviewer icons in menus and infers the PR’s review button from existing bot comments, asking which bot to request when neither or both have commented.
+- Keeps Review, Copy all and loop actions together with progress and expandable activity in the autofix popover.
+- Sizes popovers to their contents, scrolling only when they would exceed the screen.
+- Renders review Markdown, nested disclosures and common HTML formatting while preserving literal code examples.
+- Keeps local review controls separate from GitHub automation and exposes reviewer errors with the model, effort and captured output.
+- Pauses at the local round limit for you to inspect changes before continuing to GitHub or starting another local cycle.
+- Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.
+- Collapses resolved conversations and those marked for the next push, keeping contents expandable and copyable with a distinct pending icon.
 - Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
 - Copies pull request URLs and branch names from context menus on pull request rows, headers and actions, including stacked pull requests.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.

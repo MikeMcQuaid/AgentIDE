@@ -52,8 +52,12 @@ public struct MetadataStore: Sendable {
     public func updatePersisting(_ change: (inout AppMetadata) -> Void) throws {
         Self.lock.lock()
         defer { Self.lock.unlock() }
-        var metadata = load()
+        let previous = load()
+        var metadata = previous
         change(&metadata)
+        for key in metadata.pullRequestAutomation.keys {
+            metadata.pullRequestAutomation[key]?.recordActivity(comparedTo: previous.pullRequestAutomation[key])
+        }
         try write(metadata)
     }
 

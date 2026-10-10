@@ -12,15 +12,16 @@ extension PullRequestFooterView {
     /// click-order run.
     @ViewBuilder
     func copyButtons(for selected: PullRequestSummary) -> some View {
+        let count = reviewCount(for: selected)
         // The word says what, the glyph that a click copies it and
         // the count how much there is; none of it dims the button
         // to the word alone, which is the same fact the count
         // would have reported.
         BusyButton(
-            label: copyLabel("Reviews", count: selected.unresolvedComments),
-            accessibilityLabel: Self.copyTitle("Reviews", count: selected.unresolvedComments),
+            label: copyLabel("Reviews", count: count),
+            accessibilityLabel: Self.copyTitle("Reviews", count: count),
             busy: "Copying",
-            disabled: selected.unresolvedComments == 0,
+            disabled: count == 0,
         ) {
             // Both buttons read the modifier at the click, as
             // `LinkOpener` does: Cmd goes to the browser, Shift to
@@ -31,7 +32,7 @@ extension PullRequestFooterView {
                 await model.copyUnresolvedComments(selected)
             }
         }
-        .hoverHelp("Copy every unresolved review conversation to the clipboard; Cmd-click opens them "
+        .hoverHelp("Copy unresolved local AI and GitHub conversations; Cmd-click opens GitHub reviews "
             + "in your browser, Shift-click in the Browser tab; dimmed while none is unresolved")
         // One button for the failing checks: a click copies their
         // logs, and a modifier opens them instead, since the
@@ -59,11 +60,32 @@ extension PullRequestFooterView {
             + "your browser, Shift-click in the Browser tab; dimmed until a check fails")
     }
 
+    /// Explicit manual copies retain their broader scope beside filtered feedback.
+    func rawFeedbackMenu(for selected: PullRequestSummary) -> some View {
+        Menu("Copy unfiltered feedback") {
+            Button("All unresolved reviews") { Task { await model.copyUnresolvedComments(selected) } }
+                .disabled(reviewCount(for: selected) == 0)
+            Button("Failing CI logs") {
+                Task {
+                    if await model.copyFailingLogs(selected) == false {
+                        utilityTab = UtilityTabTarget.errors
+                    }
+                }
+            }
+            .disabled(selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty)
+        }
+    }
+
     /// The symbol every copy in the app carries, drawn inline at the
     /// text's own size between the word and the count, where
     /// `Push ↑9` puts its arrow: a character that looked like it did
     /// not look like it.
     static let copyIcon = "doc.on.doc"
+
+    private func reviewCount(for summary: PullRequestSummary) -> Int {
+        _ = reviewGeneration
+        return model.reviewCount(for: summary)
+    }
 
     /// A copy button's label: what it copies and, when there is
     /// any, the symbol and the count. Nothing to copy is the word

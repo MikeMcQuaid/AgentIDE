@@ -46,14 +46,18 @@ public extension GitClient {
     }
 
     /// A remote's URL, nil when there is no such remote.
-    func remoteURL(named name: String, worktreePath: String) async -> String? {
-        let result = try? await git(["remote", "get-url", name], in: worktreePath, allowFailure: true)
+    func remoteURL(named name: String, worktreePath: String, forPush: Bool = false) async -> String? {
+        let result = try? await git(
+            ["remote", "get-url"] + (forPush ? ["--push", "--all"] : []) + [name],
+            in: worktreePath,
+            allowFailure: true,
+        )
         guard let result, result.succeeded else {
             return nil
         }
 
         let url = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-        return url.isEmpty ? nil : url
+        return url.isEmpty || url.contains("\n") ? nil : url
     }
 
     /// Adds a remote, fetches the one branch it is wanted for and

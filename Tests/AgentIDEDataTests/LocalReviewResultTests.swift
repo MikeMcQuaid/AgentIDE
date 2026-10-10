@@ -44,6 +44,36 @@ struct LocalReviewResultTests {
     }
 
     @Test
+    func `failed reviewers expose the diagnostic rather than suggesting a blind retry`() {
+        let review = LocalReviewInput.review(
+            result: ProcessResult(status: 1, standardOutput: "", standardError: "Unknown model: retired-model"),
+            files: [],
+            adapter: ClaudeCodeRunner(),
+            revision: "revision",
+            input: "diff",
+        )
+        #expect(review.failure?.contains("Unknown model: retired-model") == true)
+        #expect(review.failure?.contains("Try again") == false)
+    }
+
+    @Test
+    func `claude result errors expose their reason even without stderr`() {
+        let review = LocalReviewInput.review(
+            result: ProcessResult(
+                status: 1,
+                standardOutput: #"{"type":"result","is_error":true,"result":"Invalid model selection"}"#,
+                standardError: "",
+            ),
+            files: [],
+            adapter: ClaudeCodeRunner(),
+            revision: "revision",
+            input: "diff",
+        )
+        #expect(review.failure?.contains("Invalid model selection") == true)
+        #expect(review.failure?.contains("is_error") == false)
+    }
+
+    @Test
     func `excessive output is bounded without accepting truncated findings`() {
         let review = LocalReviewInput.review(
             result: ProcessResult(
