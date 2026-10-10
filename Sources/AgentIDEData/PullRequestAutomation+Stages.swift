@@ -5,9 +5,6 @@ public struct LocalAutofixRounds: Codable, Equatable, Sendable {
     var limit = 1
     var started = 0
     var isComplete = false
-    // Older ledgers omit the pause flag.
-    // swiftlint:disable:next discouraged_optional_boolean
-    var isPaused: Bool?
     var lastAttempt: AutofixAttempt?
     var commit: String?
 }
@@ -34,34 +31,26 @@ public extension PullRequestAutomation {
         autofixLocalReviews && localRounds?.isComplete != true
     }
 
-    /// Reaching the local limit requires inspection before a push or remote round.
-    var isPausedForReview: Bool {
-        localRounds?.isPaused == true
-    }
-
-    /// Releases the existing local result without starting another local cycle.
-    mutating func continueToGitHub() {
-        guard isPausedForReview, isAutomatic == false, attempt == nil, hasRemoteSources else {
-            return
-        }
-
-        localRounds?.isPaused = false
-        localRounds?.isComplete = true
-        attempt = localRounds?.lastAttempt
-        isAutomatic = true
-        pending = "Waiting for this branch's running agent"
-    }
-
     /// Starts a new cycle without forgetting previously handled feedback.
     mutating func startLoop() {
-        if isPausedForReview {
-            collection = nil
-            repeatLocalReview = true
-        }
+        activityLog = []
+        collection = nil
+        repeatLocalReview = true
         localRounds = LocalAutofixRounds(limit: localRoundLimit)
         roundsStarted = 0
         isAutomatic = true
-        pending = "Waiting for this branch's running agent"
+        loopResult = nil
+        lastResult = ""
+        pending = "Starting feedback loop"
+    }
+
+    /// Stops further delivery without interrupting the agent's current turn.
+    mutating func stopLoop() {
+        activityLog = []
+        isAutomatic = false
+        attempt = nil
+        pending = ""
+        loopResult = .stopped
     }
 
     // MARK: Internal

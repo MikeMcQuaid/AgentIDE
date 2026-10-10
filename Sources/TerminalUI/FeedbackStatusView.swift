@@ -16,12 +16,12 @@ public struct FeedbackStatusView: View {
     // MARK: Public
 
     public var body: some View {
-        if state.isAutomatic || state.isPausedForReview || state.attempt != nil {
-            Text(state.activityStatus)
+        if state.isLoopRunning {
+            Text(state.statusSummary)
                 .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .hoverHelp(state.activityStatus)
+                .hoverHelp(state.statusSummary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Self.padding)
         }

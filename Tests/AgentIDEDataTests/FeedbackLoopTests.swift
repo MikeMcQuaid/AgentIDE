@@ -3,6 +3,47 @@ import AgentIDEDomain
 import Testing
 
 struct FeedbackLoopTests {
+    @Test(arguments: [true, false])
+    func `remote feedback waits for a fixing session without running a local review`(checks: Bool) async throws {
+        let fixture = try AutofixFixture()
+        fixture.store.update { value in
+            value.pullRequestAutomation[AutofixFixture.key]?.autofixCI = checks
+            value.pullRequestAutomation[AutofixFixture.key]?.autofixReviews = checks == false
+            value.pullRequestAutomation[AutofixFixture.key]?.startLoop()
+        }
+        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityStatus
+            == "Starting feedback loop")
+        await fixture.update { value in
+            value.hasSession = false
+            value.comments = [AutofixFixture.thread("remote")]
+            value.writers = ["human"]
+        }
+        var driver = await fixture.driver()
+        driver.collect = { _, _, _ in
+            Issue.record("Local review must not run when its source is disabled")
+            return nil
+        }
+        driver.localReview = { _ in
+            Issue.record("Local findings must not be included when their source is disabled")
+            return nil
+        }
+        let coordinator = AutofixCoordinator()
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityStatus
+            == "Waiting for an agent session on this branch to apply fixes")
+        #expect(await fixture.state.deliveries.isEmpty)
+        await fixture.update { $0.hasSession = true; $0.activity = .working }
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityStatus
+            == "Your agent is working on something else. Autofix will wait until it finishes.")
+        #expect(await fixture.state.deliveries.isEmpty)
+        await fixture.update { $0.activity = .done }
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        #expect(await fixture.state.deliveries.count == 1)
+        #expect(await fixture.state.deliveries.first?.sources == (checks ? [.checks] : [.reviews]))
+        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.localRoundsStarted == 0)
+    }
+
     @Test
     func `selected sources are inert until automatic mode is enabled`() async throws {
         let fixture = try AutofixFixture()
@@ -35,6 +76,7 @@ struct FeedbackLoopTests {
             value.pullRequestAutomation[AutofixFixture.key]?.autofixCopilot = true
         }
         await fixture.update { value in
+            value.reviewEvents = [AutofixFixture.botReview(head: "head")]
             value.comments = [
                 AutofixFixture.thread("copilot", comment: "copilot", author: GitHubClient.copilotReviewer, type: "Bot"),
                 AutofixFixture.thread("unknown-bot", comment: "bot", author: "bot", type: "Bot"),

@@ -26,20 +26,7 @@ extension AutofixCoordinator {
         }
 
         if state.canStartRound == false {
-            try context.store.updatePersisting { metadata in
-                guard var current = metadata.pullRequestAutomation[context.key], current.isAutomatic,
-                      current.attempt?.id == attempt.id
-                else {
-                    return
-                }
-
-                current.localRounds?.isPaused = true
-                current.attempt = nil
-                current.isAutomatic = false
-                current.pending = ""
-                current.lastResult = "Local round limit reached; inspect changes before continuing"
-                metadata.pullRequestAutomation[context.key] = current
-            }
+            try await finishLocalStage(summary: summary, target: target, context: context)
         } else if result.commit != attempt.head {
             try complete(key: context.key, message: "Local fix committed; reviewing again", store: context.store)
         } else {
@@ -70,12 +57,17 @@ extension AutofixCoordinator {
         guard let finished else {
             return
         }
+
+        if finished.localWorktreePath != nil {
+            try context.store.updatePersisting { $0.pullRequestAutomation[key]?.isAutomatic = false }
+            try complete(key: key, message: "Local review and fixes complete", store: context.store)
+            return
+        }
         guard let attempt = finished.attempt, let commit = finished.localRounds?.commit else {
             try complete(key: key, message: "Local stage complete", store: context.store)
             return
         }
-        guard await context.driver.ready(target, commit) else {
-            context.store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for the completed local fix" }
+        guard await ready(target, head: commit, context: context) else {
             return
         }
 

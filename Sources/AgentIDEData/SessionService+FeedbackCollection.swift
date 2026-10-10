@@ -106,9 +106,13 @@ extension SessionService {
             return saved
         }
         let base = await reviewBase(for: worktree) ?? "HEAD"
-        let ancestor = await git.mergeBase(base, "HEAD", worktreePath: worktree.path) ?? "HEAD"
+        let head = await git.commitHash(of: "HEAD", worktreePath: worktree.path) ?? "HEAD"
+        let ancestor = await git.mergeBase(base, head, worktreePath: worktree.path) ?? head
+        let commitContext = try await git.reviewCommitContext(
+            worktreePath: worktree.path, revisions: [ancestor + ".." + head],
+        )
         let files = try await DiffParser.parse(git.uncommittedDiff(worktreePath: worktree.path, comparedTo: ancestor))
-        guard files.isEmpty == false else {
+        guard files.isEmpty == false || commitContext.isEmpty == false else {
             return nil
         }
 
@@ -116,7 +120,11 @@ extension SessionService {
             files: files,
             worktreePath: worktree.path,
             reviewer: reviewer,
-            instructions: store.load().localReviews[worktree.path]?.instructions ?? LocalReviewInput.instructions,
+            instructions: FeedbackPrompt.localReview.text(),
+            commitContext: commitContext,
+            uncommittedSnapshot: commitContext.isEmpty ? "" : LocalReviewInput.snapshot(
+                files: DiffParser.parse(git.uncommittedDiff(worktreePath: worktree.path)),
+            ),
         )
     }
 }

@@ -66,6 +66,7 @@ struct AutomatedReviewFeedbackTests {
         }
         await fixture.update { value in
             value.comments = Self.authors.map { AutofixFixture.thread($0, comment: $0, author: $0, type: "Bot") }
+            value.reviewEvents = [AutofixFixture.botReview(head: "head")]
             value.failPush = true
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())

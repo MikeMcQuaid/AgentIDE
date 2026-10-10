@@ -3,12 +3,17 @@ import SwiftUI
 import TerminalUI
 
 extension ReviewView {
-    var feedback: some View {
+    func feedback(
+        model: ReviewModel, localReview: LocalReviewModel, onReview: @escaping (AgentKind) -> Void,
+    ) -> some View {
         FeedbackView(
             service: service,
             repositoryPath: worktree.repositoryPath,
             worktreePath: worktreePath,
-            summary: feedbackSummary,
+            localOnly: true,
+            reviewIsBusy: localReview.isBusy,
+            loopUnavailableReason: model.isReadOnly ? "Select the checked-out branch to start a loop." : nil,
+            onReview: onReview,
         )
         .id(worktreePath)
     }
@@ -18,14 +23,8 @@ extension ReviewView {
             service: service,
             repositoryPath: worktree.repositoryPath,
             worktreePath: worktreePath,
-            summary: feedbackSummary,
+            summary: nil,
         )
-    }
-
-    private var feedbackSummary: PullRequestSummary? {
-        service.pullRequestReads
-            .cachedListing(repositoryPath: worktree.repositoryPath, scope: .branch(worktree.branch))?
-            .first { $0.state == "OPEN" }
     }
 
     @ViewBuilder
@@ -69,38 +68,6 @@ extension ReviewView {
         }
     }
 
-    func localReviewButton(
-        model: ReviewModel,
-        localReview: LocalReviewModel,
-        isPresented: Binding<Bool>,
-    ) -> some View {
-        Button {
-            isPresented.wrappedValue.toggle()
-        } label: {
-            Image(localReview.reviewer.iconAssetName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: Self.reviewIconSize, height: Self.reviewIconSize)
-                .opacity(localReview.isRunning ? 0 : 1)
-                .overlay {
-                    if localReview.isRunning {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-                }
-        }
-        .buttonStyle(.glass)
-        .disabled(worktree.isHostDirectory || model.isRepositoryAvailable == false)
-        .accessibilityLabel("Review with " + localReview.reviewer.displayName)
-        .accessibilityValue(localReview.isRunning ? "Review in progress" : "")
-        .hoverHelp(localReview.isRunning ? "Review in progress" : "Edit the review prompt and manage local findings")
-        .popover(isPresented: isPresented, arrowEdge: .bottom) {
-            LocalReviewView(model: localReview, diff: model)
-        }
-    }
-
     /// One icon control; a selected one fills its bubble.
     func iconButton(
         _ systemImage: String,
@@ -132,5 +99,4 @@ extension ReviewView {
     private static let iconCornerRadius: CGFloat = 5
     private static let iconSelectedOpacity = 0.2
     private static let disabledOpacity = 0.4
-    private static let reviewIconSize: CGFloat = 14
 }

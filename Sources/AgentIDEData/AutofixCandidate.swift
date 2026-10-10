@@ -40,7 +40,7 @@ struct AutofixCandidate: Equatable {
             sources: [.checks],
             events: Set(failures.map(\.runID)),
             text: "Fix these failed required CI jobs on this head:\n"
-                + failures.lazy.map { $0.name + ": " + $0.conclusion + "\n" + $0.link }.joined(separator: "\n\n"),
+                + failures.lazy.map { $0.name + ": " + $0.conclusion }.joined(separator: "\n\n"),
             threads: [:],
         )
     }

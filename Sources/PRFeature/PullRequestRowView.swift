@@ -178,12 +178,12 @@ struct PullRequestRowView: View {
                         }
                     }
                 } label: {
-                    Octicon("octicon-hubot", colour: .primary)
+                    Octicon("octicon-code-review", colour: .primary)
                         .accessibilityLabel("Choose a review bot")
                 }
                 .menuStyle(.button)
                 .menuIndicator(.hidden)
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .disabled(requestableBots.isEmpty)
                 .hoverHelp("Choose Copilot or CodeRabbit to request a review")
             }
@@ -216,5 +216,6 @@ struct PullRequestRowView: View {
                 .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the browser set in Settings")
             }
         }
+        .controlSize(.small)
     }
 }

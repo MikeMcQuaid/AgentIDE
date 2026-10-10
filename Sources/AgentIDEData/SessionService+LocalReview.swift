@@ -44,21 +44,25 @@ public extension SessionService {
         return LocalReviewInput.fingerprint(head + "\n" + changes)
     }
 
+    // Keep the captured exchange and its provenance together.
+    // swiftlint:disable function_body_length
     /// Runs the other CLI against a captured diff without a working copy.
     func runLocalReview(
         files: [DiffFile],
         worktreePath: String,
         reviewer: AgentKind,
-        instructions: String = LocalReviewInput.instructions,
+        instructions: String = FeedbackPrompt.localReview.text(),
+        commitContext: String = "",
+        uncommittedSnapshot: String = "",
     ) async throws -> LocalReview {
         try requireSandboxWorkspace(worktreePath)
         let options = AppSettings.reviewOptions(for: reviewer)
-        let snapshot = LocalReviewInput.snapshot(files: files)
-        guard snapshot.isEmpty == false, snapshot.utf8.count <= LocalReviewInput.byteLimit else {
-            throw SessionServiceError("Choose a non-empty diff smaller than 256 KiB for local review.")
-        }
-
-        let input = try LocalReviewInput.prompt(instructions: instructions, snapshot: snapshot)
+        let input = try LocalReviewInput.prompt(
+            instructions: instructions,
+            snapshot: LocalReviewInput.snapshot(files: files),
+            commitContext: commitContext,
+            uncommittedSnapshot: uncommittedSnapshot,
+        )
 
         let revision = try await localReviewRevision(worktreePath: worktreePath)
         let source = await localReviewSource(worktreePath: worktreePath)
@@ -105,4 +109,5 @@ public extension SessionService {
         review.headRepository = source.headRepository
         return review
     }
+    // swiftlint:enable function_body_length
 }

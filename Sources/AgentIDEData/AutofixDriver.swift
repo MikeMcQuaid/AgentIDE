@@ -22,20 +22,21 @@ struct AutofixDriver {
     var localReview: @Sendable (PullRequestAutomation) async throws -> LocalReview? = { _ in nil }
     let target: @Sendable (PullRequestAutomation, PullRequestSummary) async -> Target?
     var head: @Sendable (Target) async -> String? = { _ in nil }
+    var isDirty: @Sendable (Target) async -> Bool = { _ in false }
     var collect: Collection = { _, _, _ in nil }
     var reviewComments: @Sendable (PullRequestAutomation, Bool) async throws -> [ReviewComment] = { _, _ in [] }
     var requestBot: @Sendable (PullRequestAutomation, ReviewBot) async throws -> Void = { _, _ in
         // Tests without remote review requests need no implementation.
     }
 
-    let ready: @Sendable (Target, String) async -> Bool
+    let waitReason: @Sendable (Target, String) async -> String?
     var prepare: Preparation = { _, _, candidate in
         candidate.text
     }
 
-    let deliver: @Sendable (AutofixAttempt, String) async throws -> Void
+    var deliver: @Sendable (AutofixAttempt, String) async throws -> Void
     let result: @Sendable (AutofixAttempt) async throws -> AutofixResult?
-    let push: @Sendable (Target, PullRequestSummary, String) async throws -> Void
+    let push: @Sendable (Target, PullRequestSummary, String) async throws -> String
     let resolve: @Sendable (PullRequestAutomation, String) async throws -> Void
 }
 

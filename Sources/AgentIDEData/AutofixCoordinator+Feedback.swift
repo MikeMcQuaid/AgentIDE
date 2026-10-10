@@ -4,20 +4,33 @@ extension AutofixCoordinator {
     func feedbackReady(
         _ state: PullRequestAutomation,
         summary: PullRequestSummary,
-        target: AutofixDriver.Target,
+        target: AutofixDriver.Target?,
         context: AutofixContext,
+        fresh: Bool = false,
     ) async throws -> Bool {
         let key = context.key
         let store = context.store
         let driver = context.driver
         if state.hasLocalSources {
-            guard let collection = try await driver.collect(state, target, false), collection.isPending == false else {
+            guard let target, let collection = try await driver.collect(state, target, false),
+                  collection.isPending == false
+            else {
                 return false
             }
 
             if let failure = collection.failure {
-                store.update { $0.pullRequestAutomation[key]?.isAutomatic = false }
+                store.update { value in
+                    value.pullRequestAutomation[key]?.isAutomatic = false
+                    value.pullRequestAutomation[key]?.loopResult = .failed
+                }
                 throw SessionServiceError(failure)
+            }
+        }
+        if state.autofixBots {
+            let bot = state.requestedBot(on: summary.headCommit) ?? state.reviewBot
+            guard try await botReady(bot, state: state, summary: summary, context: context, fresh: fresh) else {
+                store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for " + bot.displayName + "’s review" }
+                return false
             }
         }
         if state.autofixCI, summary.autofixChecks?.isComplete != true {
@@ -36,13 +49,6 @@ extension AutofixCoordinator {
                     : "Waiting for " + String(waiting) + (waiting == 1 ? " required CI job" : " required CI jobs")
             }
             return false
-        }
-        if state.autofixBots {
-            let bot = state.requestedBot(on: summary.headCommit) ?? state.reviewBot
-            guard try await botReady(bot, state: state, summary: summary, context: context) else {
-                store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for " + bot.displayName + "’s review" }
-                return false
-            }
         }
         return true
     }
@@ -78,7 +84,7 @@ extension AutofixCoordinator {
             if state.isAutomatic, state.autofixBots {
                 let bot = state.requestedBot(on: head) ?? state.reviewBot
                 guard bot.isWaiting(summary: summary, request: state.botRequest(bot), events: events) == false,
-                      bot != .codeRabbit || CodeRabbitFeedback.completion(events, head: head) != nil
+                      bot.completion(summary: summary, events: events) != nil
                 else {
                     return nil
                 }

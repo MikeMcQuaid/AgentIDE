@@ -21,7 +21,7 @@ struct LocalReviewInlineTests {
         let local = LocalReviewModel(
             review: review,
             reviewer: .codexCLI,
-            run: { _, _, _ in review },
+            run: { _, _, _, _ in review },
             revision: { "r" },
             save: { _ in
                 // Rendering must not change the saved review.

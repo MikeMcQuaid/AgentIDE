@@ -15,8 +15,9 @@ struct LocalReviewModelTests {
         let model = LocalReviewModel(
             review: savedReview,
             reviewer: .codexCLI,
-            run: { _, _, instructions in
+            run: { _, context, _, instructions in
                 supplied = instructions
+                #expect(context == "commit abc123\nCommit intent")
                 return savedReview
             },
             revision: { "original" },
@@ -26,7 +27,7 @@ struct LocalReviewModelTests {
         )
         #expect(model.reviewInstructions == "Previous instructions")
         model.reviewInstructions += "\nCheck the authentication changes carefully."
-        await model.start(files: [])
+        await model.start(files: [], commitContext: "commit abc123\nCommit intent")
         #expect(supplied == "Previous instructions\nCheck the authentication changes carefully.")
         #expect(model.isRunning == false)
         #expect(model.reviewInstructions == supplied)
@@ -38,7 +39,7 @@ struct LocalReviewModelTests {
         let model = LocalReviewModel(
             review: previous,
             reviewer: .codexCLI,
-            run: { _, _, _ in throw CancellationError() },
+            run: { _, _, _, _ in throw CancellationError() },
             revision: { "original" },
             save: { _ in Issue.record("An incomplete review must not replace the saved review") },
         )
@@ -138,7 +139,7 @@ struct LocalReviewModelTests {
         let model = LocalReviewModel(
             review: review,
             reviewer: .codexCLI,
-            run: { _, _, _ in review },
+            run: { _, _, _, _ in review },
             revision: { "original" },
             save: { saved = $0 },
         )
@@ -171,7 +172,7 @@ struct LocalReviewModelTests {
         return LocalReviewModel(
             review: review,
             reviewer: .codexCLI,
-            run: { _, _, _ in review },
+            run: { _, _, _, _ in review },
             revision: { revision },
             save: { _ in
                 // Persistence is exercised in the metadata tests.

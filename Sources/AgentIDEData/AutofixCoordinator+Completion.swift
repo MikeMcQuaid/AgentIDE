@@ -12,16 +12,35 @@ extension AutofixCoordinator {
         let driver = context.driver
         guard target.session.name == attempt.sessionName, target.session.paneID == attempt.paneID,
               target.worktree.path == attempt.worktreePath, target.worktree.branch == attempt.branch,
-              target.session.status == .running, [.done, .idle].contains(target.session.activity),
-              let result = try await driver.result(attempt)
+              target.session.status == .running
         else {
             return
         }
-        guard result.attemptID == attempt.id, result.head == attempt.head,
-              result.addressedThreadIDs.isSubset(of: Set(attempt.threads.keys)),
-              await driver.ready(target, result.commit)
-        else {
+
+        if target.session.activity == .working, attempt.hasObservedTurn != true {
+            store.update { value in
+                value.pullRequestAutomation[key]?.attempt?.hasObservedTurn = true
+            }
+        }
+        guard [.done, .idle].contains(target.session.activity) else {
+            return
+        }
+
+        let result = try await driver.result(attempt)
+        if let result, result.attemptID != attempt.id || result.head != attempt.head
+            || result.addressedThreadIDs.isSubset(of: Set(attempt.threads.keys)) == false
+        {
             store.update { $0.pullRequestAutomation[key]?.lastResult = "Autofix result does not match the worktree" }
+            return
+        }
+        if await driver.isDirty(target), result != nil || attempt.hasObservedTurn == true {
+            try await requestCommit(attempt, head: result?.commit ?? attempt.head, target: target, context: context)
+            return
+        }
+        guard let result else {
+            return
+        }
+        guard await ready(target, head: result.commit, context: context) else {
             return
         }
         guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id else {
@@ -119,6 +138,10 @@ extension AutofixCoordinator {
         }
 
         let pushKey = PullRequestAutomation.key(for: summary.url)
+        guard state.localWorktreePath == nil else {
+            try complete(key: key, message: "Local fixes committed", store: store)
+            return
+        }
         guard store.load().pullRequestAutomation[pushKey]?.pushAutomatically == true,
               state.allows(attempt.sources), result.commit != attempt.head
         else {
@@ -144,16 +167,19 @@ extension AutofixCoordinator {
         }
 
         do {
-            try await driver.push(target, fresh, result.commit)
+            let pushed = try await driver.push(target, fresh, result.commit)
             try complete(
                 key: key,
                 message: "Autofix pushed; waiting for GitHub confirmation",
                 store: store,
-                pushedCommit: result.commit,
+                pushedCommit: pushed,
                 previousHead: attempt.remoteHead,
             )
         } catch {
-            store.update { $0.pullRequestAutomation[key]?.isAutomatic = false }
+            store.update { value in
+                value.pullRequestAutomation[key]?.isAutomatic = false
+                value.pullRequestAutomation[key]?.loopResult = .failed
+            }
             try complete(key: key, message: "Automatic push failed: " + error.localizedDescription, store: store)
         }
     }
@@ -172,6 +198,7 @@ extension AutofixCoordinator {
             }
 
             metadata.pullRequestAutomation[key]?.attempt?.pushClaimed = true
+            metadata.pullRequestAutomation[key]?.pending = "Preparing and pushing committed fixes through AgentIDE"
             claimed = true
         }
         return claimed
@@ -190,7 +217,9 @@ extension AutofixCoordinator {
                 value.pullRequestAutomation[key]?.localRounds?.lastAttempt = nil
                 value.pullRequestAutomation[key]?.localRounds?.commit = nil
             }
-            if value.pullRequestAutomation[key]?.canStartRound == false || message.contains("without committed fixes") {
+            if value.pullRequestAutomation[key]?.hasRemoteSources == false,
+               value.pullRequestAutomation[key]?.isLocalStage == false
+            {
                 value.pullRequestAutomation[key]?.isAutomatic = false
             }
         }

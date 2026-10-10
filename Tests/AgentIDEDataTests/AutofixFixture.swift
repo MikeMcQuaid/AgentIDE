@@ -25,7 +25,9 @@ actor AutofixFixture {
         var localHead = "head"
         var activity: AgentActivity = .done
         var hasSession = true
+        var isDirty = false
         var checksComplete = true
+        var checkConclusion = "FAILURE"
         var comments: [ReviewThread] = []
         // Nil reuses the initial snapshot; empty explicitly removes its comments.
         // swiftlint:disable:next discouraged_optional_collection
@@ -43,6 +45,7 @@ actor AutofixFixture {
         var localCollection: LocalFeedbackCollection?
         var result: AutofixResult?
         var failPush = false
+        var signedCommit: String?
         var failResolution = false
         var deliveries: [AutofixAttempt] = []
         var prompts: [String] = []
@@ -73,6 +76,19 @@ actor AutofixFixture {
         )
     }
 
+    static func botReview(head: String, date: Date = .distantPast) -> ReviewComment {
+        ReviewComment(
+            id: 1,
+            author: "copilot-pull-request-reviewer[bot]",
+            body: "Review",
+            kind: "COMMENTED",
+            nodeID: head,
+            authorType: "Bot",
+            commit: head,
+            date: date,
+        )
+    }
+
     func update(_ change: @Sendable (inout State) -> Void) {
         change(&state)
     }
@@ -83,12 +99,13 @@ actor AutofixFixture {
             threads: { _, fresh in await self.threads(fresh: fresh) },
             writers: { _, _, fresh in await self.writers(fresh: fresh) },
             localReview: { _ in await self.state.localReview },
-            target: { _, _ in await self.target() },
+            target: { state, _ in await self.target(allowsUncommitted: state.attempt == nil) },
             head: { _ in await self.state.localHead },
-            collect: { _, _, _ in await self.state.localCollection },
+            isDirty: { _ in await self.state.isDirty },
+            collect: { _, _, _ in await self.collect() },
             reviewComments: { _, fresh in await self.reviewEvents(fresh: fresh) },
             requestBot: { _, bot in await self.request(bot) },
-            ready: { _, head in await self.ready(head: head) },
+            waitReason: { target, head in await self.waitReason(target: target, head: head) },
             deliver: { attempt, prompt in await self.deliver(attempt, prompt: prompt) },
             result: { _ in await self.state.result },
             push: { _, _, commit in try await self.push(commit) },
@@ -112,6 +129,12 @@ actor AutofixFixture {
 
     // MARK: Private
 
+    private func collect() -> LocalFeedbackCollection? {
+        let collection = state.localCollection
+        store.update { $0.pullRequestAutomation[Self.key]?.collection = collection }
+        return collection
+    }
+
     private func summary(fresh: Bool) -> PullRequestSummary {
         PullRequestSummary(
             number: 1,
@@ -123,11 +146,17 @@ actor AutofixFixture {
             checks: "FAILURE",
             headCommit: fresh ? state.freshHead : state.head,
             autofixChecks: AutofixChecks(required: ["test", "build"], results: [
-                AutofixCheck(name: "test", status: "COMPLETED", conclusion: "FAILURE", runID: "run:1", link: "test"),
+                AutofixCheck(
+                    name: "test",
+                    status: "COMPLETED",
+                    conclusion: state.checkConclusion,
+                    runID: "run:1",
+                    link: "test",
+                ),
                 AutofixCheck(
                     name: "build",
                     status: state.checksComplete ? "COMPLETED" : "IN_PROGRESS",
-                    conclusion: state.checksComplete ? "FAILURE" : "",
+                    conclusion: state.checksComplete ? state.checkConclusion : "",
                     runID: "run:1",
                     link: "build",
                 ),
@@ -171,7 +200,7 @@ actor AutofixFixture {
         state.requestedBots.append(bot)
     }
 
-    private func target() -> AutofixDriver.Target? {
+    private func target(allowsUncommitted: Bool) -> AutofixDriver.Target? {
         guard state.hasSession else {
             return nil
         }
@@ -185,11 +214,18 @@ actor AutofixFixture {
                 paneID: "pane",
                 activity: state.activity,
             ),
+            allowsUncommitted: allowsUncommitted,
         )
     }
 
-    private func ready(head: String) -> Bool {
-        state.localHead == head && [.done, .idle].contains(state.activity) && state.hasSession
+    private func waitReason(target: AutofixDriver.Target, head: String) -> String? {
+        if state.isDirty, target.allowsUncommitted == false {
+            return "Waiting for a clean worktree before accepting the fix"
+        }
+        if state.localHead == head, [.done, .idle].contains(state.activity), state.hasSession {
+            return nil
+        }
+        return "Your agent is working on something else. Autofix will wait until it finishes."
     }
 
     private func deliver(_ attempt: AutofixAttempt, prompt: String) {
@@ -197,11 +233,13 @@ actor AutofixFixture {
         state.prompts.append(prompt)
     }
 
-    private func push(_ commit: String) throws {
+    private func push(_ commit: String) throws -> String {
         state.pushes.append(commit)
         if state.failPush {
             throw SessionServiceError("Push refused")
         }
+        state.localHead = state.signedCommit ?? commit
+        return state.localHead
     }
 
     private func resolve(_ id: String) throws {

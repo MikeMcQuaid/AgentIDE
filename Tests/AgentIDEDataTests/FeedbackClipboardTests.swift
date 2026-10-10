@@ -34,6 +34,7 @@ struct FeedbackClipboardTests {
         let prompt = try await service.copyFeedback(state)
         #expect(prompt.contains("Fix finding"))
         #expect(prompt.contains("run relevant local checks"))
+        #expect(prompt.contains("GitHub") == false)
         let saved = service.currentFeedback(state)
         #expect(saved.handledEvents == [event])
         #expect(saved.roundsStarted == 0)
@@ -41,6 +42,7 @@ struct FeedbackClipboardTests {
         #expect(saved.isAutomatic == false)
         #expect(saved.collection == nil)
         let calls = await runner.commands
+        #expect(calls.contains { $0.contains("gh") } == false)
         #expect(calls.contains { $0.first == "sudo" } == false)
         #expect(calls.contains { $0.contains("pane") } == false)
         #expect(calls.contains { $0.joined(separator: " ").contains("codex exec") } == false)

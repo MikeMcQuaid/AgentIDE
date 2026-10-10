@@ -1,7 +1,7 @@
 import AgentIDEDomain
 
 public extension SessionService {
-    /// The same persisted selection is used by the review and PR panes.
+    /// Worktree-local loops and PR loops share one ledger with distinct identities.
     func feedbackState(
         repositoryPath: String,
         worktreePath: String?,
@@ -71,6 +71,9 @@ public extension SessionService {
             value.collection?.failure = "Feedback collection was interrupted. Choose Review to retry."
             value.lastResult = value.collection?.failure ?? ""
             value.pending = ""
+            if value.isAutomatic {
+                value.loopResult = .failed
+            }
             value.isAutomatic = false
         }
     }

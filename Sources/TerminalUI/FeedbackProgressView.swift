@@ -6,6 +6,7 @@ struct FeedbackProgressView: View {
     // MARK: Internal
 
     let state: PullRequestAutomation
+    var localOnly = false
 
     var body: some View {
         FlowLayout(spacing: Self.spacing) {
@@ -14,18 +15,21 @@ struct FeedbackProgressView: View {
                 active: state.isAutomatic && state.isLocalStage,
                 enabled: state.autofixLocalReviews,
             )
-            Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
-            stage("Inspect", active: state.isPausedForReview, enabled: state.autofixLocalReviews)
-            Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
-            stage(
-                "GitHub " + String(state.roundsStarted) + "/" + String(state.roundLimit),
-                active: state.isAutomatic && state.isLocalStage == false,
-                enabled: state.hasRemoteSources,
-            )
+            if localOnly == false {
+                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
+                stage("Push", active: state.pushedCommit != nil, enabled: state.pushAutomatically)
+                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
+                stage(
+                    "GitHub " + String(state.roundsStarted) + "/" + String(state.roundLimit),
+                    active: state.isAutomatic && state.isLocalStage == false,
+                    enabled: state.hasRemoteSources,
+                )
+            }
         }
         .interfaceFont(.callout)
         .accessibilityElement(children: .combine)
-        .hoverHelp("Local review rounds finish before inspection and the shared GitHub CI and review rounds")
+        .hoverHelp(localOnly ? "Review and fix for the chosen number of rounds, then inspect the changes"
+            : "Local review and commit rounds finish before pushing and the shared GitHub CI and review rounds")
     }
 
     // MARK: Private

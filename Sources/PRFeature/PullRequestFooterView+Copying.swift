@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import SwiftUI
@@ -54,8 +55,8 @@ extension PullRequestFooterView {
             }
         }
         .hoverHelp("Copy the head and tail of every failing Actions run's log, the first "
-            + String(PullRequestsModel.logHeadLines) + " lines and the last "
-            + String(PullRequestsModel.logTailLines) + " with the bytes of each end capped, a run still "
+            + String(CheckLog.logHeadLines) + " lines and the last "
+            + String(CheckLog.logTailLines) + " with the bytes of each end capped, a run still "
             + "in progress answering with its already-failed jobs; Cmd-click opens the failing check in "
             + "your browser, Shift-click in the Browser tab; dimmed until a check fails")
     }

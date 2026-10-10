@@ -1,3 +1,4 @@
+@testable import AgentIDEData
 import AgentIDEDomain
 import Foundation
 @testable import PRFeature
@@ -40,6 +41,21 @@ extension PullRequestsModelTests {
         let reviewedBefore = reviewed(7, at: Date().addingTimeInterval(-60))
         #expect(model.canRequestBotReview(.copilot, summary: reviewedBefore) == false)
         let reviewedAfter = reviewed(7, at: Date().addingTimeInterval(60))
+        #expect(model.canRequestBotReview(.copilot, summary: reviewedAfter) == false)
+        model.store.update { metadata in
+            metadata.conversationCache[PullRequestStore.conversationKey(repositoryPath: "/repo", number: 7)] =
+                CachedConversation(body: "", events: [
+                    ReviewComment(
+                        id: 1,
+                        author: ReviewBot.copilot.login,
+                        body: "Review",
+                        kind: "COMMENTED",
+                        authorType: "Bot",
+                        commit: "head",
+                        date: .distantFuture,
+                    ),
+                ])
+        }
         #expect(model.canRequestBotReview(.copilot, summary: reviewedAfter))
     }
 

@@ -4,7 +4,14 @@ public extension ReviewBot {
     internal func completion(summary: PullRequestSummary, events: [ReviewComment]) -> BotReviewCompletion? {
         switch self {
         case .copilot:
-            summary.copilotReviewedAt.map { BotReviewCompletion(id: $0.description, date: $0) }
+            events.filter { event in
+                event.authorType == "Bot" && matches(event.author) && event.commit == summary.headCommit
+                    && ["COMMENTED", "APPROVED", "CHANGES_REQUESTED"].contains(event.kind)
+            }
+            .compactMap { event in
+                event.date.map { BotReviewCompletion(id: event.nodeID ?? String(event.id), date: $0) }
+            }
+            .max { $0.date < $1.date }
 
         case .codeRabbit:
             summary.headCommit.flatMap { CodeRabbitFeedback.completion(events, head: $0) }

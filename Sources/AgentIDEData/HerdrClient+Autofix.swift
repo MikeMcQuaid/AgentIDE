@@ -15,6 +15,6 @@ extension HerdrClient {
             throw SessionServiceError("The autofix target's running agent could not be verified")
         }
 
-        try await herdr(["pane", "send-text", paneID, text + "\r"])
+        try await herdr(["agent", "prompt", paneID, text])
     }
 }

@@ -58,6 +58,7 @@ public struct PullRequestsView: View {
                 PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
                 Spacer()
                 RefreshButton { await model.refresh() }
+                    .controlSize(.small)
                     .hoverHelp("Read the pull requests and the branch again")
             }
             .padding(.trailing, Self.headerPadding)

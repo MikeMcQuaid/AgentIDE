@@ -23,6 +23,7 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
     public var localWorktreePath: String?
     public var feedbackWorktreePath: String?
     public var isAutomatic = false
+    public var loopResult: FeedbackLoopResult?
     public var roundLimit = 1
     public var roundsStarted = 0
     public var localRounds: LocalAutofixRounds?
@@ -188,6 +189,10 @@ public struct AutofixAttempt: Codable, Equatable, Sendable {
     public let sessionName: String
     public let paneID: String
     public let threads: [String: PendingThreadResolution]
+    /// A durable claim for one commit-only follow-up within this attempt.
+    public var commitRequestedHead: String?
+    /// Absent from older attempts; idle alone does not prove the fixing turn ran.
+    public var hasObservedTurn: Bool? // swiftlint:disable:this discouraged_optional_boolean
     public var pushClaimed = false
 }
 

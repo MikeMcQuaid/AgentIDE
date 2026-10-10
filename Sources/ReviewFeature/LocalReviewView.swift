@@ -69,21 +69,25 @@ struct LocalReviewView: View {
         HStack {
             reviewerPicker
             Spacer()
+            Button("Close", systemImage: "xmark") { dismiss() }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .hoverHelp("Close the review; running work continues")
             BusyButton(
                 "Review",
                 busy: "Reviewing",
                 prominent: true,
-                disabled: model.isBusy || diff.files.isEmpty
+                disabled: model.isBusy || (diff.files.isEmpty && diff.localReviewContext.isEmpty)
                     || model.reviewInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             ) {
                 showsInstructions = false
                 promptFocused = false
-                await model.start(files: diff.files)
+                await model.start(files: diff.files, commitContext: diff.localReviewContext)
                 await diff.reload()
                 model.update(files: diff.files)
             }
             .keyboardShortcut(.return, modifiers: .command)
-            .hoverHelp("Review the selected diff using the edited prompt")
+            .hoverHelp("Review the selected changes and commit messages using the edited prompt")
         }
         .interfaceFont(.body)
     }
@@ -105,7 +109,7 @@ struct LocalReviewView: View {
                 .focused($promptFocused)
                 .disabled(model.isBusy)
                 .accessibilityLabel("Review prompt")
-            Text("Edit the instructions or add context. The selected diff is attached automatically.")
+            Text("The selected changes and commit messages are attached automatically. Add any extra context here.")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }

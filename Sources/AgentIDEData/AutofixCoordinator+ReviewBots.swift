@@ -3,28 +3,30 @@ import Foundation
 
 extension AutofixCoordinator {
     func botReady(
-        _ bot: ReviewBot, state: PullRequestAutomation, summary: PullRequestSummary, context: AutofixContext,
+        _ bot: ReviewBot,
+        state: PullRequestAutomation,
+        summary: PullRequestSummary,
+        context: AutofixContext,
+        fresh: Bool = false,
     ) async throws -> Bool {
         guard let head = summary.headCommit else {
             return false
         }
 
-        let events = bot == .codeRabbit ? try await context.driver.reviewComments(state, false) : []
+        let events = try await context.driver.reviewComments(state, fresh)
         let request = state.botRequest(bot)
-        if request?.head == head {
-            return bot.isWaiting(summary: summary, request: request, events: events) == false
-        }
-        let threads = try await context.driver.threads(state, false)
-        let existing = threads.flatMap(\.comments).contains { comment in
-            comment.authorType == "Bot" && bot.matches(comment.author)
-                && comment.id.map { state.handledEvents.contains("comment:" + $0) == false } == true
-        }
         let completed = bot.completion(summary: summary, events: events)
-        let ready = (bot == .codeRabbit ? completed != nil : existing)
-            && bot.isWaiting(summary: summary, request: nil, events: events) == false
+        if request?.head == head {
+            return completed != nil && bot.isWaiting(summary: summary, request: request, events: events) == false
+        }
+        let ready = completed != nil && bot.isWaiting(summary: summary, request: nil, events: events) == false
+        guard try await context.driver.summary(state, true)?.headCommit == head else {
+            return false
+        }
+
         var claimed = false
         try context.store.updatePersisting { value in
-            guard value.pullRequestAutomation[context.key]?.canStartRound == true,
+            guard value.pullRequestAutomation[context.key]?.isAutomatic == true,
                   value.pullRequestAutomation[context.key]?.autofixBots == true,
                   value.pullRequestAutomation[context.key]?.reviewBot == state.reviewBot,
                   value.pullRequestAutomation[context.key]?.requestedBot(on: head).map({ $0 == bot }) != false,

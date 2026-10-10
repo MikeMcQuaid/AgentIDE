@@ -7,6 +7,34 @@ struct FeedbackDefaultsTests {
     // MARK: Internal
 
     @Test
+    func `worktree loops remain independent from the same branch PR settings`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let path = world.paths.worktreesDirectory + "/feature"
+        try await world.service.git.createWorktree(repository: world.repository, branch: "feature", at: path)
+        let remote = world.service.feedbackState(
+            repositoryPath: world.repository.path, worktreePath: path, summary: Self.summary(1),
+        )
+        try world.service.updateFeedback(remote) { state in
+            state.pushAutomatically = true
+            state.autofixCI = true
+            state.autofixBots = true
+        }
+        let local = world.service.feedbackState(repositoryPath: world.repository.path, worktreePath: path, summary: nil)
+        #expect(local.url != remote.url)
+        #expect(local.hasRemoteSources == false)
+        #expect(local.pushAutomatically == false)
+        try world.service.updateFeedback(local) { $0.autofixLocalReviews = true; $0.startLoop() }
+        let summary = try #require(try await world.service.automationSummary(local, fresh: true))
+        #expect(summary.url == local.url)
+        #expect(summary.number == 0)
+        #expect(summary.headBranch == "feature")
+        #expect(world.service.currentFeedback(local).isAutomatic)
+        #expect(world.service.currentFeedback(remote).isAutomatic == false)
+        #expect(world.service.currentFeedback(remote).pushAutomatically)
+    }
+
+    @Test
     func `repository defaults seed new PRs and worktrees without enabling automation`() async throws {
         let world = try await World.make()
         defer { world.tearDown() }

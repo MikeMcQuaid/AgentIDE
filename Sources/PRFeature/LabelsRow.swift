@@ -34,7 +34,7 @@ struct LabelsRow: View {
         }
         .menuStyle(.button)
         .menuIndicator(.hidden)
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
         .fixedSize()
         .disabled(isEnabled == false)
         .hoverHelp(help)

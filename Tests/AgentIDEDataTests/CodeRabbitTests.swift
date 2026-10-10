@@ -52,7 +52,7 @@ struct CodeRabbitTests {
         let candidate = try #require(AutofixCandidate.reviewSummaries([review], head: "head", state: state))
         #expect(candidate.events == ["review:review"])
         #expect(candidate.text.contains("Assert the matrix output"))
-        #expect(candidate.text.contains("optional check") == false)
+        #expect(candidate.text == "CodeRabbit review summary:\n" + Self.finding)
         #expect(candidate.threads.isEmpty)
         #expect(AutofixCandidate.reviewSummaries([review], head: "changed", state: state) == nil)
         state.handledEvents = candidate.events

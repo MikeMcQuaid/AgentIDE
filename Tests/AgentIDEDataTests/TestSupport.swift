@@ -272,6 +272,19 @@ struct World {
         )
     }
 
+    func service(herdr: HerdrClient, git: GitClient? = nil) -> SessionService {
+        SessionService(
+            paths: paths,
+            git: git ?? service.git,
+            herdr: herdr,
+            github: service.github,
+            transcripts: service.transcripts,
+            spool: service.spool,
+            store: service.store,
+            runners: [],
+        )
+    }
+
     /// Synchronous, so the server dies before the test process can.
     func tearDown() {
         TestSupport.stopServerSync(configHome: configHome)

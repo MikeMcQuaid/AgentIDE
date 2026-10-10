@@ -39,7 +39,11 @@ actor AutofixCoordinator {
               let summary = try await driver.summary(state, false), state.matches(summary),
               let head = summary.headCommit
         else {
-            store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for the current PR head" }
+            store.update { value in
+                let local = value.pullRequestAutomation[key]?.localWorktreePath != nil
+                value.pullRequestAutomation[key]?.pending = local
+                    ? "Waiting for the current local head" : "Waiting for the current PR head"
+            }
             return
         }
         guard summary.state == "OPEN" else {
@@ -58,12 +62,19 @@ actor AutofixCoordinator {
         guard try confirmPush(state, head: head, context: context) else {
             return
         }
-        guard state.attempt != nil || state.canStartRound else {
+        guard state.attempt != nil || state.isAutomatic else {
             store.update { $0.pullRequestAutomation[key]?.pending = "" }
             return
         }
+
+        if state.attempt == nil, state.isLocalStage == false, state.canStartRound == false {
+            try await finishRemoteStage(state, summary: summary, head: head, target: nil, context: context)
+            return
+        }
         guard let target = await driver.target(state, summary) else {
-            store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for this branch's running agent" }
+            store.update { value in
+                value.pullRequestAutomation[key]?.pending = "Waiting for an agent session on this branch to apply fixes"
+            }
             return
         }
 
@@ -86,10 +97,6 @@ actor AutofixCoordinator {
         guard let head = summary.headCommit else {
             return
         }
-        guard [.done, .idle].contains(target.session.activity) else {
-            store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for the agent's current turn" }
-            return
-        }
 
         let localHead = await driver.head(target) ?? head
         guard state.isLocalStage || state.hasRemoteSources == false || localHead == head else {
@@ -98,8 +105,7 @@ actor AutofixCoordinator {
             }
             return
         }
-        guard await driver.ready(target, localHead) else {
-            store.update { $0.pullRequestAutomation[key]?.pending = "Waiting for the agent and the current head" }
+        guard await ready(target, head: localHead, context: context) else {
             return
         }
         guard try await feedbackReady(state.stageSelection, summary: summary, target: target, context: context) else {
@@ -109,23 +115,21 @@ actor AutofixCoordinator {
             return
         }
 
-        let candidate = try await candidate(
+        let feedback = try await candidate(
             state: current.stageSelection, summary: summary, head: localHead, fresh: false, driver: driver,
         )
-        guard let candidate else {
+        guard let feedback, current.canStartRound else {
             if current.isLocalStage {
                 try await finishLocalStage(summary: summary, target: target, context: context)
-                return
-            }
-            store.update { value in
-                value.pullRequestAutomation[key]?.pending = ""
-                value.pullRequestAutomation[key]?.isAutomatic = false
-                value.pullRequestAutomation[key]?.lastResult = "Selected feedback is clear or already handled"
+            } else {
+                try await finishRemoteStage(
+                    current, summary: summary, head: localHead, target: target, context: context,
+                )
             }
             return
         }
 
-        try await send(candidate, summary: summary, head: localHead, target: target, context: context)
+        try await send(feedback, summary: summary, head: localHead, target: target, context: context)
     }
 
     func send(
@@ -134,6 +138,7 @@ actor AutofixCoordinator {
         head: String,
         target: AutofixDriver.Target,
         context: AutofixContext,
+        committing: Bool = false,
     ) async throws {
         let key = context.key
         let store = context.store
@@ -143,16 +148,22 @@ actor AutofixCoordinator {
         }
 
         let prompt = try await driver.prepare(state, summary, candidate)
+        var selection = state.stageSelection
+        if committing {
+            selection.handledEvents = []
+        }
         guard let fresh = try await driver.summary(state, true), fresh.state == "OPEN", state.matches(fresh),
               fresh.headBranch == summary.headBranch, fresh.headCommit == summary.headCommit,
               let checked = try await self.candidate(
-                  state: state.stageSelection, summary: fresh, head: head, fresh: true, driver: driver,
+                  state: selection, summary: fresh, head: head, fresh: true, driver: driver,
               ),
               checked == candidate, let paneID = target.session.paneID,
-              try await driver.summary(state, true)?.headCommit == summary.headCommit,
-              await driver.ready(target, head)
+              try await driver.summary(state, true)?.headCommit == summary.headCommit
         else {
             store.update { $0.pullRequestAutomation[key]?.pending = "Waiting: head, permissions or feedback changed" }
+            return
+        }
+        guard await ready(target, head: head, context: context) else {
             return
         }
 
@@ -175,19 +186,13 @@ actor AutofixCoordinator {
             sessionName: target.session.name,
             paneID: paneID,
             threads: candidate.threads,
+            commitRequestedHead: committing ? head : nil,
         )
         guard try claim(attempt, events: candidate.events, settings: state, context: context) else {
             return
         }
 
-        do {
-            try await driver.deliver(attempt, prompt)
-        } catch {
-            store.update { value in
-                value.pullRequestAutomation[key]?.lastResult = "Delivery unconfirmed; it will not be repeated. "
-                    + error.localizedDescription
-            }
-        }
+        await deliver(attempt, prompt: prompt, context: context)
     }
 
     func claim(
@@ -199,9 +204,11 @@ actor AutofixCoordinator {
         let key = context.key
         let store = context.store
         var claimed = false
+        let claims: Set<String> = attempt.commitRequestedHead.map { ["commit:" + $0] } ?? events
         try store.updatePersisting { metadata in
             guard var current = metadata.pullRequestAutomation[key], current.attempt == nil,
-                  current.handledEvents.isDisjoint(with: events),
+                  current.handledEvents.isDisjoint(with: claims),
+                  attempt.commitRequestedHead == nil || events.isSubset(of: current.handledEvents),
                   current.canStartRound, current.allows(attempt.sources),
                   current.selectedSources == settings.selectedSources,
                   current.botRequests == settings.botRequests,
@@ -215,15 +222,18 @@ actor AutofixCoordinator {
                 return
             }
 
-            if current.isLocalStage {
+            if attempt.commitRequestedHead == nil, current.isLocalStage {
                 current.localRounds = current.localRounds ?? LocalAutofixRounds()
                 current.localRounds?.started += 1
-            } else {
+            } else if attempt.commitRequestedHead == nil {
                 current.roundsStarted += 1
             }
-            current.handledEvents.formUnion(events)
+            current.handledEvents.formUnion(claims)
             current.attempt = attempt
-            current.pending = "Autofix queued; waiting for the agent’s result"
+            current.lastResult = ""
+            current.pending = attempt.commitRequestedHead == nil
+                ? "Fix-and-commit prompt queued; waiting for the agent’s result"
+                : "Asking the agent to commit existing fixes"
             metadata.pullRequestAutomation[key] = current
             claimed = true
         }

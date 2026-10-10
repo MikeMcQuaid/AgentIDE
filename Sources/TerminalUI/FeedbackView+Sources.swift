@@ -3,11 +3,27 @@ import AgentIDEDomain
 import SwiftUI
 
 extension FeedbackView {
+    @ViewBuilder
     func sourceControls(
         available: FeedbackAvailability?,
         localReview: LocalReview?,
         reviewing: Bool,
         privateReviewersAvailable: Bool,
+    ) -> some View {
+        if localOnly {
+            localSources(available: available, review: localReview, reviewing: reviewing)
+        } else {
+            remoteSourceControls(
+                available: available,
+                localReview: localReview,
+                reviewing: reviewing,
+                privateReviewersAvailable: privateReviewersAvailable,
+            )
+        }
+    }
+
+    private func remoteSourceControls(
+        available: FeedbackAvailability?, localReview: LocalReview?, reviewing: Bool, privateReviewersAvailable: Bool,
     ) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: Self.spacing) {
@@ -42,7 +58,7 @@ extension FeedbackView {
                     .labelsHidden()
                     .fixedSize()
                     .disabled(inputsLocked || state.autofixLocalReviews == false)
-                    .hoverHelp("Also remember this reviewer for new PRs and worktrees in this repository")
+                    .hoverHelp("Also remember this reviewer for this repository")
                 }
                 LocalReviewConfigurationView(reviewer: state.reviewer ?? .claudeCode)
                     .disabled(inputsLocked || state.autofixLocalReviews == false)

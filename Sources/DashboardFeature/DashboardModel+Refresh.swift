@@ -197,6 +197,7 @@ public extension DashboardModel {
         if await service.refreshPullRequestAutomation(groups: groups) {
             UtilityTabTarget.pullRequestCacheChanged()
         }
+        notifyFeedbackChanges()
     }
 
     /// Asks about one repository now, however recently the poll last

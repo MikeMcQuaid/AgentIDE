@@ -118,6 +118,7 @@ public struct ReviewView: View {
                 automationGeneration += 1
             }
             .sheet(isPresented: $localReview.showsPrompt) { LocalReviewPromptView(model: localReview) }
+            .sheet(isPresented: $showsLocalReview) { LocalReviewView(model: localReview, diff: model) }
     }
 
     // MARK: Internal
@@ -228,11 +229,14 @@ public struct ReviewView: View {
             )
             .hoverHelp("Lines added and deleted across the diff")
             RefreshButton { await model.reload() }
+                .controlSize(.small)
                 .hoverHelp("Reload the diff from git")
                 .disabled(localReview.isBusy)
-            localReviewButton(model: model, localReview: localReview, isPresented: $showsLocalReview)
-            feedback
-                .disabled(worktree.isHostDirectory || model.isReadOnly || localReview.isBusy)
+            feedback(model: model, localReview: localReview) { reviewer in
+                localReview.reviewer = reviewer
+                showsLocalReview = true
+            }
+            .disabled(worktree.isHostDirectory || model.isRepositoryAvailable == false)
         }
         .padding(Self.spacing)
     }

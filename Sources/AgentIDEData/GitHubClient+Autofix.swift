@@ -13,6 +13,7 @@ extension GitHubClient {
         }
 
         var sections = [candidate.text]
+        let isPublic = await repositoryIsPrivate(repositoryPath: repositoryPath) == false
         for failure in summary.autofixChecks?.failures ?? [] where candidate.events.contains(failure.runID) {
             guard GitHubRemote.fullName(ofURL: failure.link) == GitHubRemote.fullName(ofURL: summary.url),
                   let url = URL(string: failure.link),
@@ -34,10 +35,11 @@ extension GitHubClient {
                 throw SessionServiceError("Waiting for the required job log: " + failure.name)
             }
 
-            sections.append(String(log.suffix(Self.autofixLogLimit)))
+            sections.append(CheckLog.format(log: log, heading: "Required CI · " + failure.name, complete: true))
+            if isPublic {
+                sections.append(failure.link)
+            }
         }
         return sections.joined(separator: "\n\n")
     }
-
-    private static let autofixLogLimit = 16_384
 }

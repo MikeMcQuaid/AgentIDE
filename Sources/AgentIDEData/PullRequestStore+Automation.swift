@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 public extension PullRequestStore {
     /// Saves preferences before the dashboard can act on them.

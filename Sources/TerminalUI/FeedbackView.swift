@@ -12,27 +12,37 @@ public struct FeedbackView: View {
         repositoryPath: String,
         worktreePath: String?,
         summary: PullRequestSummary? = nil,
+        localOnly: Bool = false,
+        reviewIsBusy: Bool = false,
+        loopUnavailableReason: String? = nil,
+        onReview: ((AgentKind) -> Void)? = nil,
     ) {
         self.service = service
         self.repositoryPath = repositoryPath
         self.worktreePath = worktreePath
-        self.summary = summary
+        self.summary = localOnly ? nil : summary
+        self.localOnly = localOnly
+        self.reviewIsBusy = reviewIsBusy
+        self.loopUnavailableReason = loopUnavailableReason
+        self.onReview = onReview
         _initial = State(initialValue: service.feedbackState(
-            repositoryPath: repositoryPath, worktreePath: worktreePath, summary: summary,
+            repositoryPath: repositoryPath, worktreePath: worktreePath, summary: localOnly ? nil : summary,
         ))
     }
 
     // MARK: Public
 
     public var body: some View {
-        Button("Autofix feedback loop", systemImage: "arrow.triangle.2.circlepath") {
+        Button {
             isPresented.toggle()
+        } label: {
+            FeedbackLoopIcon(isRunning: state.isLoopRunning)
         }
-        .labelStyle(.iconOnly)
         .buttonStyle(.glass)
         .controlSize(.small)
-        .accessibilityValue(state.activityStatus)
-        .hoverHelp("Autofix feedback loop · " + state.activityStatus)
+        .accessibilityLabel("Autofix feedback loop")
+        .accessibilityValue(currentActivity)
+        .hoverHelp("Autofix feedback loop · " + currentActivity)
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             popover { isPresented = false }
         }
@@ -51,6 +61,10 @@ public struct FeedbackView: View {
     let repositoryPath: String
     let worktreePath: String?
     let summary: PullRequestSummary?
+    let localOnly: Bool
+    let reviewIsBusy: Bool
+    let loopUnavailableReason: String?
+    let onReview: ((AgentKind) -> Void)?
 
     var state: PullRequestAutomation {
         _ = generation
@@ -60,13 +74,17 @@ public struct FeedbackView: View {
     }
 
     var inputsLocked: Bool {
-        isCopying || isReviewing || state.isAutomatic || state.attempt != nil || state.collection?.isPending == true
+        isCopying || isReviewing || reviewIsBusy || state.isLoopRunning || state.collection?.isPending == true
     }
 
     var startUnavailableReason: String? {
         if state.isAutomatic {
             "Stop the current loop before starting another."
-        } else if isCopying || isReviewing || state.collection?.isPending == true {
+        } else if state.pushedCommit != nil {
+            "Wait for GitHub to confirm the push."
+        } else if let loopUnavailableReason {
+            loopUnavailableReason
+        } else if isCopying || isReviewing || reviewIsBusy || state.collection?.isPending == true {
             "Wait for the current review or copy to finish."
         } else if state.attempt != nil {
             "A fix is outstanding. Stop the loop to cancel this cycle."
@@ -85,7 +103,9 @@ public struct FeedbackView: View {
 
     @ViewBuilder var configuration: some View {
         if isLoading {
-            LaunchProgressView("Loading feedback", waitingOn: "this branch’s pull request")
+            LaunchProgressView(
+                "Loading feedback", waitingOn: localOnly ? "local review findings" : "this branch’s pull request",
+            )
         } else {
             VStack(alignment: .leading, spacing: Self.spacing) {
                 sourceControls(
@@ -94,9 +114,11 @@ public struct FeedbackView: View {
                     reviewing: isReviewing,
                     privateReviewersAvailable: privateReviewersAvailable,
                 )
-                Toggle("Push fixes automatically", isOn: binding(\.pushAutomatically))
-                    .disabled(state.number <= 0)
-                    .hoverHelp("Shared by all sources; pushes wait until local review rounds finish")
+                if localOnly == false {
+                    Toggle("Push fixes automatically", isOn: binding(\.pushAutomatically))
+                        .disabled(state.number <= 0)
+                        .hoverHelp("Shared by all sources; pushes wait until local review rounds finish")
+                }
                 findings
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -106,18 +128,16 @@ public struct FeedbackView: View {
     var actions: some View {
         FlowLayout(spacing: Self.spacing) {
             loopActions
-            BusyButton("Review", busy: "Reviewing", disabled: state.autofixLocalReviews == false || inputsLocked) {
-                await review()
-            }
-            .hoverHelp("Run the chosen local reviewer; inspect findings before copying or fixing")
+            reviewAction
             BusyButton(
                 "Copy all (" + String(available?.itemCount ?? 0) + ")",
                 busy: "Copying",
-                disabled: available?.canCopy != true || isReading || inputsLocked,
+                disabled: available?.canCopy != true || isReading || inputsLocked || loopUnavailableReason != nil,
             ) {
                 await copy()
             }
-            .hoverHelp("Copy selected ready findings, required job failures and eligible comments as one prompt")
+            .hoverHelp(localOnly ? "Copy current local findings as one prompt"
+                : "Copy selected ready findings, required job failures and eligible comments as one prompt")
         }
         .disabled(isLoading)
     }
@@ -166,6 +186,11 @@ public struct FeedbackView: View {
         } catch { message = error.localizedDescription }
     }
 
+    func openManualReview() {
+        isPresented = false
+        onReview?(state.reviewer ?? .claudeCode)
+    }
+
     // MARK: Private
 
     @State private var privateReviewersAvailable = false
@@ -189,6 +214,14 @@ public struct FeedbackView: View {
             + "#" + String(generation) + "#" + String(isPresented)
     }
 
+    private var currentActivity: String {
+        if reviewIsBusy {
+            "Review in progress"
+        } else {
+            state.statusSummary
+        }
+    }
+
     private func copy() async {
         NSPasteboard.general.clearContents()
         isCopying = true
@@ -203,7 +236,7 @@ public struct FeedbackView: View {
         isReading = true
         defer { isLoading = false; isReading = false }
         do {
-            if summary == nil, let worktreePath {
+            if localOnly == false, summary == nil, let worktreePath {
                 let found = try await service.feedbackSummary(
                     repositoryPath: repositoryPath, worktreePath: worktreePath,
                 )

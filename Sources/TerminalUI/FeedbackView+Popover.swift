@@ -3,10 +3,11 @@ import SwiftUI
 
 extension FeedbackView {
     func popover(onClose: @escaping () -> Void) -> some View {
-        PopoverContent(width: Self.popoverWidth) {
+        PopoverContent(width: localOnly ? Self.localPopoverWidth : Self.popoverWidth) {
             VStack(alignment: .leading, spacing: Self.spacing) {
                 HStack {
                     Text("Autofix feedback loop").interfaceFont(.headline)
+                    Text(state.loopStatus).interfaceFont(.callout).foregroundStyle(.secondary)
                     Spacer()
                     Button("Close", systemImage: "xmark") { onClose() }
                         .labelStyle(.iconOnly)
@@ -16,7 +17,7 @@ extension FeedbackView {
                 configuration
                 Divider()
                 actions
-                FeedbackProgressView(state: state)
+                FeedbackProgressView(state: state, localOnly: localOnly)
                 activity
             }
             .interfaceFont(.body)
@@ -30,29 +31,46 @@ extension FeedbackView {
 
     var loopActions: some View {
         FlowLayout(spacing: Self.spacing) {
-            BusyButton("Start loop", busy: "Starting", prominent: true, disabled: startUnavailableReason != nil) {
-                update { $0.startLoop() }
-            }
-            .hoverHelp(startUnavailableReason ?? "Run local review rounds, then gather selected GitHub feedback")
             BusyButton(
-                "Continue to GitHub",
-                busy: "Continuing",
-                disabled: startUnavailableReason != nil || state.isPausedForReview == false
-                    || state.hasRemoteSources == false || state.number <= 0,
+                "",
+                busy: "",
+                systemImage: canStop ? "stop.fill" : "play.fill",
+                accessibilityLabel: canStop ? "Stop loop" : "Start loop",
+                prominent: true,
+                disabled: canStop == false && startUnavailableReason != nil,
             ) {
-                update { $0.continueToGitHub() }
+                if canStop {
+                    update { $0.stopLoop() }
+                } else {
+                    update { $0.startLoop() }
+                }
             }
-            .hoverHelp("After inspecting local changes, allow the pending push and shared GitHub rounds")
-            Button("Stop loop", systemImage: "stop.fill") {
-                update { $0.isAutomatic = false; $0.attempt = nil; $0.pending = "" }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.glass)
-            .disabled(state.isAutomatic == false && state.attempt == nil)
-            .hoverHelp("Stop further rounds and pushes; the agent’s current turn continues")
+            .hoverHelp(canStop
+                ? "Stop loop; the agent’s current turn continues"
+                : startUnavailableReason ?? (localOnly ? "Start loop: review and fix up to the chosen round limit"
+                    : "Start loop: run local review rounds, then gather selected GitHub feedback"))
         }
     }
 
+    @ViewBuilder var reviewAction: some View {
+        if onReview != nil {
+            Button("Review") { openManualReview() }
+                .buttonStyle(.glass)
+                .disabled(state.isAutomatic || state.attempt != nil || state.collection?.isPending == true)
+                .hoverHelp("Edit the prompt and review the selected changes and commit messages")
+        } else {
+            BusyButton("Review", busy: "Reviewing", disabled: state.autofixLocalReviews == false || inputsLocked) {
+                await review()
+            }
+            .hoverHelp("Run the chosen local reviewer; inspect findings before copying or fixing")
+        }
+    }
+
+    private var canStop: Bool {
+        state.isLoopRunning
+    }
+
     private static let popoverWidth: CGFloat = 620
+    private static let localPopoverWidth: CGFloat = 440
     private static let popoverInset: CGFloat = 16
 }

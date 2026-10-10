@@ -3,7 +3,7 @@ import AgentIDEDomain
 extension SessionService {
     func automationSummary(_ state: PullRequestAutomation, fresh: Bool) async throws -> PullRequestSummary? {
         if state.localWorktreePath != nil {
-            return try await localAutofixSummary(state, fresh: fresh)
+            return await localAutofixSummary(state)
         }
         if fresh {
             return try await github.pullRequestSummary(
@@ -64,7 +64,7 @@ extension SessionService {
         return AutofixDriver.Target(
             worktree: item.worktree,
             session: session,
-            allowsUncommitted: state.isLocalStage && state.attempt == nil,
+            allowsUncommitted: state.attempt == nil,
         )
     }
 }
