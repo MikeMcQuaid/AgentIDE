@@ -18,26 +18,27 @@ struct StackPopover: View {
     let onCreated: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack(spacing: Self.rowSpacing) {
-                Text("Stack in").interfaceFont(.headline)
-                Text(stack?.checkedOut ?? item.worktree.branch).font(nameStyle.font)
+        PopoverContent(width: Self.width) {
+            VStack(alignment: .leading, spacing: Self.spacing) {
+                HStack(spacing: Self.rowSpacing) {
+                    Text("Stack in").interfaceFont(.headline)
+                    Text(stack?.checkedOut ?? item.worktree.branch).font(nameStyle.font)
+                }
+                if let stack {
+                    stacked(stack)
+                } else {
+                    Text("Working out which branches are stacked here…")
+                        .interfaceFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Divider()
+                if let blocker = stack?.stackingBlocker {
+                    Text(blocker).interfaceFont(.caption).foregroundStyle(.secondary)
+                }
+                newBranchField
             }
-            if let stack {
-                stacked(stack)
-            } else {
-                Text("Working out which branches are stacked here…")
-                    .interfaceFont(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Divider()
-            if let blocker = stack?.stackingBlocker {
-                Text(blocker).interfaceFont(.caption).foregroundStyle(.secondary)
-            }
-            newBranchField
+            .padding(Self.padding)
         }
-        .padding(Self.padding)
-        .frame(width: Self.width)
         .task { await load() }
     }
 

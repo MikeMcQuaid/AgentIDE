@@ -299,8 +299,16 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   passing on nothing.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
-  most tests. The toolchain is a downloadable asset each user mounts
-  under its own home, but mounts are visible to everyone: when the
+  most tests. With Metal Toolchain 27A266a, install from the host:
+  `xcodebuild -downloadComponent MetalToolchain`. Its system cryptex
+  mount is readable inside the sandbox. If `xcrun metal --version`
+  still fails there, run `xcrun --kill-cache` there and retry; this
+  restored the standard build, including compiled Metal shaders.
+  Downloading from inside the sandbox instead fails with
+  `DiskArbitration is unavailable` because mounting is denied.
+
+  Older releases used a downloadable asset each user mounted under
+  its own home, but mounts were visible to everyone: when the
   host user has it mounted, Xcode finds that mount, cannot read it
   across the sandbox boundary and refuses rather than making its own.
   Eject the host user's mount, as the host user, then ask for the

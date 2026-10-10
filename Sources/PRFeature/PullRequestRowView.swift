@@ -22,14 +22,16 @@ struct PullRequestRowView: View {
     /// no longer open to edit.
     var onEdit: (@MainActor () -> Void)?
 
-    /// Asks Copilot for a review, or another after a push; nil where
+    /// Asks a remote bot for a review, or another after a push; nil where
     /// the row is not the open conversation's header.
-    var onAskCopilot: (@MainActor () async -> Bool)?
+    var onAskBot: (@MainActor (ReviewBot) async -> Bool)?
 
-    /// Whether Copilot can be asked now, which the model decides
+    /// Which reviewers can be asked now, which the model decides
     /// from GitHub's pending request and its own record of the last
     /// ask.
-    var canAskCopilot = true
+    var requestableBots: Set = .init(ReviewBot.allCases)
+    var reviewBot: ReviewBot?
+    var toolbarActions: AnyView?
 
     var body: some View {
         HStack {
@@ -57,9 +59,6 @@ struct PullRequestRowView: View {
     }
 
     // MARK: Private
-
-    /// Whether the ask is on its way to GitHub.
-    @State private var isAskingCopilot = false
 
     private var nameStyle: NameStyle = .init()
 
@@ -151,30 +150,43 @@ struct PullRequestRowView: View {
         )
     }
 
-    /// Asks Copilot for a review. While a request is still waiting
-    /// on Copilot, asking again would only queue the same review, so
-    /// the icon dims until it answers.
-    @ViewBuilder private var copilotButton: some View {
-        if let onAskCopilot, summary.state == "OPEN" {
-            Button {
-                isAskingCopilot = true
-                Task {
-                    _ = await onAskCopilot()
-                    isAskingCopilot = false
+    @ViewBuilder private var reviewMenu: some View {
+        if let onAskBot, summary.state == "OPEN" {
+            if let reviewBot {
+                BusyButton(
+                    "",
+                    busy: "",
+                    image: reviewBot.iconAssetName,
+                    accessibilityLabel: "Request " + reviewBot.displayName + " review",
+                    disabled: requestableBots.contains(reviewBot) == false,
+                ) {
+                    _ = await onAskBot(reviewBot)
                 }
-            } label: {
-                // Dimmed in its own colour as well as by the button,
-                // so a request still waiting reads at a glance.
-                Octicon("octicon-copilot", colour: canAskCopilot && isAskingCopilot == false ? .primary : .secondary)
-                    .accessibilityLabel("Ask Copilot to review")
+                .hoverHelp("Request a review from " + reviewBot.displayName)
+            } else {
+                Menu {
+                    Section("Request review from") {
+                        ForEach(ReviewBot.allCases, id: \.self) { bot in
+                            BusyButton(
+                                bot.displayName,
+                                busy: "Requesting",
+                                image: bot.iconAssetName,
+                                disabled: requestableBots.contains(bot) == false,
+                            ) {
+                                _ = await onAskBot(bot)
+                            }
+                        }
+                    }
+                } label: {
+                    Octicon("octicon-code-review", colour: .primary)
+                        .accessibilityLabel("Choose a review bot")
+                }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
+                .buttonStyle(.bordered)
+                .disabled(requestableBots.isEmpty)
+                .hoverHelp("Choose Copilot or CodeRabbit to request a review")
             }
-            .buttonStyle(.glass)
-            .disabled(canAskCopilot == false || isAskingCopilot)
-            .hoverHelp(
-                canAskCopilot
-                    ? "Ask Copilot to review this pull request, or to review it again after a push"
-                    : "Copilot has been asked to review this pull request and has not answered yet",
-            )
         }
     }
 
@@ -190,15 +202,20 @@ struct PullRequestRowView: View {
                 .buttonStyle(.glass)
                 .hoverHelp("Edit the title and body, to say what was actually pushed before it merges")
             }
-            copilotButton
-            Button {
-                LinkOpener.open(summary.url)
-            } label: {
-                Image(systemName: "safari")
-                    .accessibilityLabel("Open pull request in browser")
+            reviewMenu
+            if let toolbarActions {
+                toolbarActions
+            } else {
+                Button {
+                    LinkOpener.open(summary.url)
+                } label: {
+                    Image(systemName: "safari")
+                        .accessibilityLabel("Open pull request in browser")
+                }
+                .buttonStyle(.glass)
+                .hoverHelp("Open the pull request in the Browser tab; Cmd-click for the browser set in Settings")
             }
-            .buttonStyle(.glass)
-            .hoverHelp("Open this pull request in the Browser tab; Cmd-click for the Cmd-click browser set in Settings")
         }
+        .controlSize(.small)
     }
 }

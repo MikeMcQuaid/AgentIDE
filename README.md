@@ -24,8 +24,28 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Scrolls the agent conversation under the pointer.
 - Switches between visited agents instantly, preserving their terminal size and content.
 - Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
-- Requests reviews from another agent or Copilot and turns review comments and failing CI logs into prompts for fixes.
+- Shows local AI findings beside matching code in Review and with captured code in PR conversations, and copies them together with GitHub comments using the existing conversation copy buttons.
+- Requests reviews from another agent or your choice of Copilot or CodeRabbit.
+- Reviews committed changes with their full commit messages without a diff size limit, while uncommitted review snapshots remain limited to 256 KiB.
+- Gathers local findings, required CI failures, both bots’ comments, GitHub Code Quality and security comments and verified private reviewers’ comments, including nitpicks, for Copy all and autofix.
+- Remembers local and remote reviewer choices for new pull requests and worktrees in each repository.
+- Offers an explicit Start loop action that completes local review rounds before shared GitHub CI and review rounds, with separate limits of one to three and automatic pushing off by default for each PR.
+- Applies autofixes through the branch's existing agent session, including when local reviewing is disabled or uncommitted work is present, and explains any wait preventing delivery.
+- Asks the fixing agent to commit unfinished autofix changes, then uses AgentIDE to push verified commits when automatic pushing is enabled.
+- Shows autofix progress in the main agent pane while local reviewers use their own prompts without the main conversation's context.
+- Rotates the autofix icon in the toolbar and sidebar while a loop is running and distinguishes loops that have not started, are running or have finished, stopped or failed.
+- Notifies and plays the chosen completion or attention sound when an autofix loop finishes or needs you, and resets loop progress on app launch while preserving duplicate-prevention and thread-resolution records.
+- Opens review and autofix controls from one feedback-loop toolbar icon, with a single play/stop control and status beneath it only while a loop is active.
+- Shows reviewer icons in menus and infers the PR’s review button from existing bot comments, asking which bot to request when neither or both have commented.
+- Keeps Review, Copy all and loop actions together with progress and expandable activity, with a local-only autofix popover in Review and GitHub and push controls in PR.
+- Sizes popovers to their contents, scrolling only when they would exceed the screen.
+- Renders review Markdown, nested disclosures and common HTML formatting while preserving literal code examples.
+- Keeps local review controls separate from GitHub automation and exposes reviewer errors with the model, effort and captured output.
+- Completes local review and commit rounds before pushing and gathering GitHub feedback, then verifies the final CI and review results before reporting success or continued failure.
+- Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.
+- Collapses resolved conversations and those marked for the next push, keeping contents expandable and copyable with a distinct pending icon.
 - Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
+- Preserves CI errors and their surrounding log lines in Checks, Copy all and autofix prompts, including failures in the middle of long logs.
 - Copies pull request URLs and branch names from context menus on pull request rows, headers and actions, including stacked pull requests.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
@@ -79,7 +99,7 @@ Settings (Cmd-,) controls:
 - **General**: Choose session defaults, commit signing requirements and the external browser.
 - **Schedules**: Manage each repository's recurring prompts, agent choices and next run.
 - **Sessions**: Inspect and stop running agent sessions and browser pages.
-- **Review**: Choose the reviewer and each agent's review model and effort.
+- **Review**: Choose the reviewer, model and effort and customise the local review, local fix, GitHub fix and commit follow-up prompts.
 - **Notifications**: Choose which events notify, badge the Dock or play a sound.
 - **Fonts**: Customise fonts and sizes throughout the app.
 - **Editor**: Choose the external editor opened with Cmd-click.

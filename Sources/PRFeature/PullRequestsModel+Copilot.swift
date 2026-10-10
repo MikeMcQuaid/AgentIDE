@@ -1,37 +1,65 @@
+import AgentIDEData
 import AgentIDEDomain
+import TerminalUI
 
-/// Asking Copilot for a review from the conversation's header.
-/// Split from the actions for length.
 extension PullRequestsModel {
-    /// Whether Copilot can be asked now: the pull request is open,
-    /// GitHub shows no request still waiting on it, and no ask made
-    /// from here is still unanswered, which is an ask with no Copilot
-    /// review newer than it. The ask's time lives in the metadata,
-    /// so a relaunch changes nothing, and a review the reader did not
-    /// carry (the poll's listing reads none) keeps the ask standing
-    /// until the pane's own read sees one.
-    func canRequestCopilotReview(_ summary: PullRequestSummary) -> Bool {
-        // Read so a recorded ask repaints whoever asked.
-        _ = copilotAsks
-        guard summary.state == "OPEN", summary.awaitsCopilotReview == false else {
-            return false
+    func selectedReviewBot(_ summary: PullRequestSummary) -> ReviewBot? {
+        _ = botAsks
+        let state = store.load().pullRequestAutomation[PullRequestAutomation.key(for: summary.url)]
+        if let requested = state?.requestedBot(on: summary.headCommit) {
+            return requested
         }
-        guard let asked = pullRequests.copilotAskedAt(repositoryPath: repository.path, number: summary.number) else {
-            return true
+        if ReviewBot.allCases.contains(where: { bot in
+            pullRequests.botReviewRequest(bot, repositoryPath: repository.path, summary: summary)?.date != nil
+        }) {
+            return state?.reviewBot ?? .copilot
         }
-
-        return summary.copilotReviewedAt.map { $0 > asked } ?? false
+        let conversation = pullRequests.cachedConversation(repositoryPath: repository.path, number: summary.number)
+        let bots = ReviewBot.allCases.filter { bot in
+            conversation.events.contains { $0.authorType == "Bot" && bot.matches($0.author) }
+                || conversation.threads.contains { thread in
+                    thread.comments.contains { $0.authorType == "Bot" && bot.matches($0.author) }
+                }
+        }
+        return bots.count == 1 ? bots.first : nil
     }
 
-    /// Asks Copilot to review the pull request, or to review it
-    /// again after a push, remembers when, then reads the summary
-    /// back.
-    func requestCopilotReview(_ summary: PullRequestSummary) async -> Bool {
-        let asked = await act { try await performCopilotRequest(summary.number) }
+    func canRequestBotReview(_ bot: ReviewBot, summary: PullRequestSummary) -> Bool {
+        _ = botAsks
+        guard summary.state == "OPEN", summary.headCommit?.isEmpty == false,
+              ReviewBot.allCases.filter({ $0 != bot }).allSatisfy({ other in
+                  guard let request = pullRequests.botReviewRequest(
+                      other, repositoryPath: repository.path, summary: summary,
+                  ) else {
+                      return true
+                  }
+
+                  return request.date == nil || request.head != summary.headCommit
+              })
+        else {
+            return false
+        }
+
+        return bot.isWaiting(
+            summary: summary,
+            request: pullRequests.botReviewRequest(bot, repositoryPath: repository.path, summary: summary),
+            events: pullRequests.cachedConversation(repositoryPath: repository.path, number: summary.number).events,
+        ) == false
+    }
+
+    func requestBotReview(_ bot: ReviewBot, summary: PullRequestSummary) async -> Bool {
+        guard canRequestBotReview(bot, summary: summary) else {
+            return false
+        }
+
+        let asked = await act {
+            try pullRequests.claimBotReview(bot, repositoryPath: repository.path, summary: summary)
+            botAsks += 1
+            UtilityTabTarget.pullRequestCacheChanged()
+            try await performBotRequest(bot, summary.number)
+        }
         if asked {
-            pullRequests.rememberCopilotAsk(repositoryPath: repository.path, number: summary.number)
-            copilotAsks += 1
-            note("Asked Copilot to review #" + String(summary.number) + ".")
+            note("Asked " + bot.displayName + " to review #" + String(summary.number) + ".")
         }
         await refreshSummary(summary.number)
         return asked

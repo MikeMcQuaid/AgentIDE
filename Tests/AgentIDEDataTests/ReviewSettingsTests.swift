@@ -33,11 +33,14 @@ struct ReviewSettingsTests {
         let directory = try TestSupport.temporaryDirectory("review-options")
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let executable = directory + "/reviewer"
-        try "#!/bin/sh\nprintf '%s\\n' \"$@\"\n"
+        try "#!/bin/sh\nprintf '%s\\n' \"$@\"\ncat > \"$0.input\"\n"
             .write(toFile: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable)
         let schema = directory + "/schema.json"
         try "{}".write(toFile: schema, atomically: true, encoding: .utf8)
+        let promptFile = directory + "/review.txt"
+        let prompt = "Separate review instructions\nCaptured diff only"
+        try prompt.write(toFile: promptFile, atomically: true, encoding: .utf8)
         let marker = directory + "/injected"
         let model = "model 'quoted' $(touch " + marker + ")"
         let effort = "high; touch " + marker
@@ -45,12 +48,14 @@ struct ReviewSettingsTests {
         let result = try await TestSupport.run([
             "/bin/zsh", "-c", runner.reviewCommand(
                 executable: executable,
-                promptFile: "/dev/null",
+                promptFile: promptFile,
                 schemaFile: schema,
                 options: AgentLaunchOptions(model: model, effort: effort),
             ),
         ])
         let arguments = result.standardOutput.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(Set(arguments).isDisjoint(with: ["resume", "--resume", "--continue"]))
+        #expect(try String(contentsOfFile: executable + ".input", encoding: .utf8) == prompt)
         let modelFlag = try #require(arguments.firstIndex(of: "--model"))
         #expect(arguments[modelFlag + 1] == model)
         if agent == .claudeCode {

@@ -63,7 +63,7 @@ struct LocalReviewStoreTests {
             LocalReviewModel(
                 review: saved[worktreePath],
                 reviewer: .codexCLI,
-                run: { [self] _, _, _ in
+                run: { [self] _, _, _, _ in
                     calls.append(worktreePath)
                     guard pending[worktreePath] == nil else {
                         throw CancellationError()

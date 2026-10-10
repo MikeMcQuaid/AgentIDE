@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -13,9 +12,15 @@ struct PullRequestConversationPane: View {
 
     let summary: PullRequestSummary
     let stackDepth: Int
+
+    let service: SessionService
+    let worktreePath: String?
     let github: GitHubClient
     let repositoryPath: String
     let store: MetadataStore
+    let localReview: LocalReview?
+    let localWorktreePath: String?
+    let onToggleLocalResolved: (String) -> Void
 
     /// See `PullRequestConversationView.reloadToken`.
     let reloadToken: Int
@@ -27,11 +32,13 @@ struct PullRequestConversationPane: View {
 
     /// See `PullRequestConversationView.onThreadsChanged`.
     let onThreadsChanged: @MainActor (Int) -> Void
+    let onReviewEventsChanged: @MainActor () -> Void
 
     /// Opens the title and body for editing.
     var onEdit: (@MainActor () -> Void)?
-    var onAskCopilot: (@MainActor () async -> Bool)?
-    var canAskCopilot = true
+    var onAskBot: (@MainActor (ReviewBot) async -> Bool)?
+    var requestableBots: Set = .init(ReviewBot.allCases)
+    var reviewBot: ReviewBot?
 
     /// Toggles one label against GitHub the moment a menu item is
     /// clicked; declared before the lists so the call site's
@@ -46,17 +53,14 @@ struct PullRequestConversationPane: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            if availableLabels.isEmpty == false || labels.isEmpty == false {
-                LabelsRow(
-                    picked: labels,
-                    available: availableLabels,
-                    isEnabled: true,
-                    help: "This pull request's labels; toggle one to add or remove it on GitHub",
-                ) { label in
-                    Task { await onToggleLabel(label) }
-                }
-                .padding(.horizontal, Self.labelsPadding)
-                .padding(.bottom, Self.labelsPadding)
+            FeedbackStatusView(
+                service: service, repositoryPath: repositoryPath, worktreePath: worktreePath, summary: summary,
+            )
+            if labels.isEmpty == false {
+                LabelChips(picked: labels)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Self.labelsPadding)
+                    .padding(.bottom, Self.labelsPadding)
             }
             Divider()
             PullRequestConversationView(
@@ -65,9 +69,13 @@ struct PullRequestConversationPane: View {
                 number: summary.number,
                 seededBody: summary.body,
                 store: store,
+                localReview: localReview,
+                localWorktreePath: localWorktreePath,
+                onToggleLocalResolved: onToggleLocalResolved,
                 reloadToken: reloadToken,
                 onResolvedChanged: onResolvedChanged,
                 onThreadsChanged: onThreadsChanged,
+                onReviewEventsChanged: onReviewEventsChanged,
             )
         }
     }
@@ -76,8 +84,17 @@ struct PullRequestConversationPane: View {
 
     private static let labelsPadding: CGFloat = 8
 
-    /// The header, drawn as the list draws a row, with the back
-    /// chevron live and the edit pencil beside the browser button.
+    private var feedback: some View {
+        FeedbackView(
+            service: service,
+            repositoryPath: repositoryPath,
+            worktreePath: worktreePath,
+            summary: summary,
+        )
+        .id(summary.url)
+    }
+
+    /// The shared header with navigation, labels and autofix controls.
     private var header: some View {
         PullRequestHeaderRow(
             summary: summary,
@@ -86,68 +103,20 @@ struct PullRequestConversationPane: View {
             onCopyComments: onCopyComments,
             onOpenChecks: onOpenChecks,
             onEdit: onEdit,
-            onAskCopilot: onAskCopilot,
-            canAskCopilot: canAskCopilot,
+            onAskBot: onAskBot,
+            requestableBots: requestableBots,
+            reviewBot: reviewBot,
+            toolbarActions: AnyView(HStack(spacing: Self.labelsPadding) {
+                LabelsRow(
+                    picked: labels,
+                    available: availableLabels,
+                    isEnabled: availableLabels.isEmpty == false,
+                    help: "Add or remove pull request labels",
+                ) { label in Task { await onToggleLabel(label) } }.menu
+                feedback
+            }),
         )
     }
-}
-
-// MARK: - PullRequestHeaderRow
-
-/// One pull request's header, drawn identically as a list row and
-/// as the open conversation's top: the same padding, the same fixed
-/// height however many icons the summary carries, the same browser
-/// button. The only difference is whether the back chevron can be
-/// clicked, and it takes its space either way so the title never
-/// shifts between the two.
-struct PullRequestHeaderRow: View {
-    // MARK: Internal
-
-    let summary: PullRequestSummary
-    let stackDepth: Int
-
-    /// Nil in the list, where there is nothing to go back to.
-    let onBack: (() -> Void)?
-
-    let onCopyComments: @MainActor () async -> Void
-    let onOpenChecks: @MainActor () async -> Void
-
-    /// Opens the title and body for editing, on the conversation's
-    /// header alone.
-    var onEdit: (@MainActor () -> Void)?
-    var onAskCopilot: (@MainActor () async -> Bool)?
-    var canAskCopilot = true
-
-    var body: some View {
-        HStack(spacing: Self.spacing) {
-            Button("Back to the list", systemImage: "chevron.backward") { onBack?() }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .disabled(onBack == nil)
-                .opacity(onBack == nil ? 0 : 1)
-                .hoverHelp("Back to the pull request list")
-            PullRequestRowView(
-                summary: summary,
-                stackDepth: stackDepth,
-                showsActions: true,
-                onCopyComments: onCopyComments,
-                onOpenChecks: onOpenChecks,
-                onEdit: onEdit,
-                onAskCopilot: onAskCopilot,
-                canAskCopilot: canAskCopilot,
-            )
-        }
-        .padding(.horizontal, Self.padding)
-        // The fixed height: a light row growing icons as the full
-        // fetch lands never moves the page under the reader.
-        .frame(height: Self.height)
-    }
-
-    // MARK: Private
-
-    private static let height: CGFloat = 46
-    private static let spacing: CGFloat = 4
-    private static let padding: CGFloat = 8
 }
 
 // MARK: - PullRequestConversationView
@@ -166,6 +135,9 @@ struct PullRequestConversationView: View {
     let seededBody: String?
 
     let store: MetadataStore
+    let localReview: LocalReview?
+    let localWorktreePath: String?
+    let onToggleLocalResolved: (String) -> Void
 
     /// Changed by a refresh asked for by hand, which is what tells
     /// this pane to read its threads and comments again: they are
@@ -181,11 +153,12 @@ struct PullRequestConversationView: View {
     /// threads change, which keeps the footer's copy button level
     /// with the timeline.
     let onThreadsChanged: @MainActor (Int) -> Void
+    let onReviewEventsChanged: @MainActor () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.eventSpacing) {
-                if isLoading, events.isEmpty, description.isEmpty {
+                if isLoading, events.isEmpty, description.isEmpty, localReview?.threads.isEmpty != false {
                     LaunchProgressView(
                         "Loading the conversation…",
                         waitingOn: "GitHub for the description, reviews and comments of #" + String(number),
@@ -204,7 +177,7 @@ struct PullRequestConversationView: View {
         // seeded body is fresh from the listing, so only the events
         // need fetching. Failures and cancelled fetches change and
         // cache nothing, keeping the last good conversation.
-        .task(id: [number, reloadToken]) {
+        .task(id: [number, reloadToken, automationGeneration]) {
             isLoading = true
             defer { isLoading = false }
             let cached = pullRequests.cachedConversation(
@@ -217,8 +190,10 @@ struct PullRequestConversationView: View {
             threads = cached.threads
             await refresh()
         }
+        .onChange(of: events) { onReviewEventsChanged() }
         .onChange(of: threads) { _, threads in
             onThreadsChanged(threads.count { $0.isResolved == false })
+            onReviewEventsChanged()
         }
     }
 
@@ -230,6 +205,9 @@ struct PullRequestConversationView: View {
     private static let railWidth: CGFloat = 2
     private static let railInset: CGFloat = 10
     private static let loadingHeight: CGFloat = 120
+
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    private var automationGeneration = 0
 
     @State private var description = ""
     @State private var events: [ReviewComment] = []
@@ -257,21 +235,12 @@ struct PullRequestConversationView: View {
         ForEach(events) { event in
             eventRow(event)
         }
-        if threads.isEmpty == false || isLoading {
+        if threads.isEmpty == false || localReview?.threads.isEmpty == false || isLoading {
             Divider()
             HStack {
                 Text("Conversations").interfaceFont(.headline)
                 Spacer()
-                if threads.contains(where: { $0.isResolved == false }) {
-                    Button {
-                        copyOpenThreads()
-                    } label: {
-                        Image(systemName: "doc.on.doc")
-                            .accessibilityLabel("Copy open conversations")
-                    }
-                    .buttonStyle(.borderless)
-                    .hoverHelp("Copy every open conversation, with its file and line, to the clipboard")
-                }
+                CopyReviewConversationsButton(threads: threads + (localReview?.threads ?? []))
             }
         }
         // The loading state paints instantly; threads can take a
@@ -286,9 +255,24 @@ struct PullRequestConversationView: View {
                     FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: repositoryPath)
                 },
                 onToggleResolved: { await toggleResolved(thread) },
+                onToggleResolveOnPush: { await toggleResolveOnPush(thread) },
+                isPendingResolution: pendingResolution(thread),
             )
         }
-        if events.isEmpty, description.isEmpty {
+        ForEach(localReview?.threads ?? []) { thread in
+            ReviewThreadRow(
+                thread: thread,
+                onEdit: localWorktreePath.map { path in
+                    { FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: path) }
+                },
+                localReviewer: localReview?.reviewer,
+                onToggleResolved: { onToggleLocalResolved(thread.id) },
+                showsCodeContext: true,
+            )
+        }
+        if events.isEmpty, description.isEmpty, threads.isEmpty,
+           localReview?.threads.isEmpty != false, isLoading == false
+        {
             Text("No description or feedback yet.")
                 .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
@@ -349,12 +333,24 @@ struct PullRequestConversationView: View {
         }
     }
 
-    /// Copies every open conversation as pasteable text.
-    private func copyOpenThreads() {
-        let open = threads.filter { $0.isResolved == false }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(open.map(\.asText).joined(separator: "\n\n"), forType: .string)
-        ErrorLog.shared.note("Copied \(open.count) open conversations.")
+    private func pendingResolution(_ thread: ReviewThread) -> Bool {
+        _ = automationGeneration
+        return pullRequests.pendingResolution(
+            repositoryPath: repositoryPath,
+            threadID: thread.resolveID,
+            number: number,
+        )
+    }
+
+    private func toggleResolveOnPush(_ thread: ReviewThread) async {
+        do {
+            try await pullRequests.toggleResolveOnPush(
+                repositoryPath: repositoryPath, number: number, threadID: thread.resolveID,
+            )
+            automationGeneration += 1
+        } catch {
+            ErrorLog.shared.report(error.localizedDescription)
+        }
     }
 
     /// Flips one conversation's resolve state on GitHub, then

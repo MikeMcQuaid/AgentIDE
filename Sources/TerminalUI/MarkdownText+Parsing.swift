@@ -10,6 +10,7 @@ extension MarkdownText {
     /// headings, rules, fenced code and pipe tables into markdown.
     enum ProseBlock {
         case heading(String)
+        case quote(String)
         case rule
         case code(String, SyntaxLanguage?)
         case table(header: [String], rows: [[String]])
@@ -42,6 +43,10 @@ extension MarkdownText {
                     code.code.trimmingCharacters(in: .newlines),
                     syntaxLanguage(for: code.language ?? ""),
                 ))
+
+            case let quote as BlockQuote:
+                // Detach the children so formatting removes the outer quote.
+                blocks.append(.quote(Document(quote.blockChildren).format()))
 
             case is ThematicBreak:
                 blocks.append(.rule)
@@ -213,32 +218,10 @@ extension MarkdownText {
         }
     }
 
-    /// Drops HTML comments, unwraps the details and summary tags
-    /// bots fold their reports into, and converts anchors and line
-    /// breaks to their markdown equivalents.
+    /// Maps common HTML formatting to Markdown, preserving code
+    /// examples and omitting comments and executable elements.
     static func strippingHTML(_ text: String) -> String {
-        var stripped = text.replacing(/<!--[\s\S]*?-->/, with: "")
-        stripped = stripped.replacing(/<a\s+[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/) { match in
-            "[" + String(match.output.2) + "](" + String(match.output.1) + ")"
-        }
-        stripped = stripped.replacing(/<br\s*\/?>/, with: "\n")
-        stripped = stripped.replacing(/<img[^>]*>/, with: "")
-        // Bots write HTML lists and code spans (dependabot's commit
-        // listings); they map straight onto markdown.
-        stripped = stripped.replacing(/<li>\s*/.ignoresCase(), with: "\n- ")
-        stripped = stripped.replacing(/<\/li>/.ignoresCase(), with: "")
-        stripped = stripped.replacing(/<\/?[uo]l>/.ignoresCase(), with: "\n")
-        stripped = stripped.replacing(/<\/?code>/.ignoresCase(), with: "`")
-        stripped = stripped.replacing(/<\/?p>/.ignoresCase(), with: "\n")
-        for tag in ["<details>", "</details>", "<summary>", "</summary>"] {
-            stripped = stripped.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        // `[//]: #` lines are markdown comments (dependabot's
-        // automerge markers) and render as nothing.
-        return stripped
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[//]: #") == false }
-            .joined(separator: "\n")
+        (try? MarkdownHTML(text).markdown) ?? text
     }
 
     static func inline(_ text: String) -> AttributedString {

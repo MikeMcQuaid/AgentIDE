@@ -43,12 +43,16 @@ final class ReviewModel {
     /// The repository this worktree belongs to, as the sidebar names
     /// it, so its messages say which repository they are about.
     let repositoryName: String
+    let draftMessage: () async -> String?
 
     /// The parsed diff files.
     private(set) var files: [DiffFile] = []
 
+    /// The immutable commit messages captured with the displayed diff.
+    private(set) var localReviewContext = ""
+
     /// Whether any scope has loaded yet; before, progress shows.
-    private(set) var hasLoaded = false
+    var hasLoaded = false
 
     /// Updated by the status extension when a failed read finds missing Git metadata.
     var isRepositoryAvailable = true
@@ -83,7 +87,7 @@ final class ReviewModel {
 
     /// The branch's open pull request conversations, shown inline
     /// under the files they anchor to.
-    private(set) var threads: [ReviewThread] = []
+    var threads: [ReviewThread] = []
 
     /// Whether the checked-out branch has its own origin ref, so
     /// the upstream scope has something to diff against; refreshed
@@ -103,6 +107,9 @@ final class ReviewModel {
 
     let worktreePath: String
 
+    var resolveOnPush: ((ReviewThread) async throws -> Void)?
+    var pendingResolution: (ReviewThread) -> Bool = { _ in false }
+
     /// Test seam: whether the worktree's directory still exists,
     /// which decides if a reload failure is worth reporting; the
     /// real file system by default.
@@ -110,6 +117,9 @@ final class ReviewModel {
 
     /// Internal, since the edits extension file resets files through it.
     let git: GitClient
+
+    let fetchThreads: () async -> [ReviewThread]
+    let setThreadResolved: (String, Bool) async throws -> Void
 
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
@@ -139,18 +149,6 @@ final class ReviewModel {
         didSet { updateFindTargets() }
     }
 
-    /// Flips one conversation's resolved state on GitHub, then
-    /// refreshes the inline listing.
-    func toggleResolved(_ thread: ReviewThread) async {
-        do {
-            try await setThreadResolved(thread.resolveID, thread.isResolved == false)
-            threads = await fetchThreads()
-        } catch {
-            report(error.localizedDescription)
-        }
-        hasLoaded = true
-    }
-
     /// Loads the scope's diff.
     func reload() async {
         selections = [:]
@@ -177,6 +175,7 @@ final class ReviewModel {
                 ))
                 showsUncommitted = true
                 files = uncommitted
+                localReviewContext = ""
 
             case .lastCommit:
                 try await loadLastCommit()
@@ -216,21 +215,6 @@ final class ReviewModel {
         hasLoaded = true
     }
 
-    /// Fills a blank commit message from the uncommitted diff using
-    /// the on-device model; false when it could not help.
-    func generateCommitMessage() async -> Bool {
-        guard commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return true
-        }
-        guard let drafted = await draftMessage() else {
-            report("The on-device model could not draft a commit message for these changes.")
-            return false
-        }
-
-        commitMessage = drafted
-        return true
-    }
-
     /// Reverse-applies every selected line and, when reviewing the
     /// last commit, amends it.
     func rejectSelected() async {
@@ -262,6 +246,7 @@ final class ReviewModel {
             ignoringWhitespace: hidesWhitespace,
         ))
         let message = try await git.commitMessage(worktreePath: worktreePath, commit: head ?? "HEAD")
+        localReviewContext = "commit " + (head ?? "HEAD") + "\n" + message
         showsUncommitted = false
         if lastCommitHash != head {
             excludedFromCommit = []
@@ -280,14 +265,11 @@ final class ReviewModel {
     /// editor differs from it.
     private var originalMessage = ""
 
-    private let draftMessage: () async -> String?
-    private let fetchThreads: () async -> [ReviewThread]
-    private let setThreadResolved: (String, Bool) async throws -> Void
-
     /// The upstream scope's commits and their own diff, empty with
     /// a message until the branch has been pushed.
     private func loadUpstream(currentBranch: String?) async throws {
         branchCommits = []
+        localReviewContext = ""
         guard let currentBranch, hasUpstream else {
             if currentBranch != nil {
                 setStatus("This branch has not been pushed yet.")
@@ -306,6 +288,10 @@ final class ReviewModel {
             upstreamRef: upstreamRef,
             baseRef: baseRef,
         )
+        localReviewContext = try await git.reviewCommitContext(
+            worktreePath: worktreePath,
+            revisions: branchCommits.dropLast().compactMap { $0.split(separator: " ").first.map(String.init) },
+        )
         files = try await DiffParser.parse(git.upstreamDiff(
             worktreePath: worktreePath,
             upstreamRef: upstreamRef,
@@ -322,6 +308,9 @@ final class ReviewModel {
         branchCommits = []
         showsUncommitted = false
         do {
+            localReviewContext = try await git.reviewCommitContext(
+                worktreePath: worktreePath, revisions: [parent + ".." + branch],
+            )
             files = try await DiffParser.parse(git.stackDiff(
                 worktreePath: worktreePath,
                 parent: parent,
@@ -367,6 +356,7 @@ final class ReviewModel {
                 ignoringWhitespace: hidesWhitespace,
             ))
             commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: commit)
+            localReviewContext = "commit " + commit + "\n" + commitMessage
             originalMessage = commitMessage
             await recordReload(nil)
         } catch {
@@ -376,6 +366,7 @@ final class ReviewModel {
 
     private func loadBranch() async throws {
         branchCommits = []
+        localReviewContext = ""
         guard let baseRef = await baseRefProvider() else {
             setStatus("No base branch to diff against.")
             files = []
@@ -383,6 +374,10 @@ final class ReviewModel {
         }
 
         branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
+        localReviewContext = try await git.reviewCommitContext(
+            worktreePath: worktreePath,
+            revisions: branchCommits.dropLast().compactMap { $0.split(separator: " ").first.map(String.init) },
+        )
         files = try await DiffParser.parse(git.branchDiff(
             worktreePath: worktreePath,
             baseRef: baseRef,

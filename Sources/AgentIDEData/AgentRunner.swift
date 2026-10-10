@@ -72,6 +72,9 @@ public protocol AgentRunner: Sendable {
         options: AgentLaunchOptions,
     ) -> String
 
+    /// Extracts a CLI error without exposing its transport envelope.
+    func reviewFailure(_ output: String) -> String
+
     /// Extracts the schema-constrained response from the CLI's envelope.
     func reviewOutput(_ output: String) throws -> String
 }

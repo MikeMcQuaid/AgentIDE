@@ -92,7 +92,7 @@ public struct GitHubClient: Sendable {
         number: Int,
         requiredChecks: RequiredChecksReader = { _ in [] },
     ) async throws -> PullRequestSummary? {
-        let fields = Self.coreFields + "," + Self.statusFields
+        let fields = Self.coreFields + "," + Self.statusFields + ",headRepository"
         let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
         return await Self.summaries(fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks).first
     }
@@ -369,6 +369,11 @@ public struct GitHubClient: Sendable {
                 .max(),
             labels: (row.labels ?? []).map(\.name).sorted(),
             optionalFailures: rollup.optionalFailures,
+            autofixChecks: AutofixChecks(
+                required: requiredChecks,
+                results: (row.statusCheckRollup ?? []).map(Self.autofixCheck),
+            ),
+            headRepository: row.headRepository?.nameWithOwner,
         )
     }
 }

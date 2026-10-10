@@ -23,6 +23,7 @@ public struct PullRequestsView: View {
         defaultBranch: String? = nil,
         isMainCheckout: Bool = false,
     ) {
+        self.service = service
         self.items = items
         self.isMainCheckout = isMainCheckout
         branchName = branch
@@ -57,6 +58,7 @@ public struct PullRequestsView: View {
                 PullRequestScopePicker(scope: $model.scope, worktreeTitle: worktreeScopeTitle)
                 Spacer()
                 RefreshButton { await model.refresh() }
+                    .controlSize(.small)
                     .hoverHelp("Read the pull requests and the branch again")
             }
             .padding(.trailing, Self.headerPadding)
@@ -145,6 +147,8 @@ public struct PullRequestsView: View {
     /// tab revisits with the same identity keep it.
     @State private var loadedIdentity = ""
 
+    private let service: SessionService
+
     private let isMainCheckout: Bool
 
     /// The branch the sidebar last named, watched rather than built
@@ -184,24 +188,37 @@ public struct PullRequestsView: View {
     }
 
     private func conversation(for summary: PullRequestSummary) -> some View {
-        PullRequestConversationPane(
+        let local = model.localReview(for: summary)
+        return PullRequestConversationPane(
             summary: summary,
             stackDepth: model.stackDepth(for: summary),
+            service: service,
+            worktreePath: model.worktreePath,
             github: model.github,
             repositoryPath: model.repository.path,
             store: model.store,
+            localReview: local?.review,
+            localWorktreePath: local?.path,
+            onToggleLocalResolved: { id in
+                if let local {
+                    model.toggleLocalResolved(id, review: local.review, path: local.path)
+                }
+            },
             reloadToken: model.conversationRefreshes,
             onBack: { model.selected = nil },
             onCopyComments: { await model.copyUnresolvedComments(summary) },
             onOpenChecks: { model.openFailingChecks(summary) },
             onResolvedChanged: { await model.refreshSummary(summary.number) },
             onThreadsChanged: { model.updateUnresolved($0, number: summary.number) },
+            onReviewEventsChanged: { model.botAsks += 1 },
             onEdit: { model.beginEditing() },
-            onAskCopilot: { await model.requestCopilotReview(summary) },
-            canAskCopilot: model.canRequestCopilotReview(summary),
+            onAskBot: { await model.requestBotReview($0, summary: summary) },
+            requestableBots: Set(ReviewBot.allCases.filter { model.canRequestBotReview($0, summary: summary) }),
+            reviewBot: model.selectedReviewBot(summary),
             onToggleLabel: { _ = await model.toggleLabel($0) },
             labels: model.selectedLabels,
             availableLabels: model.availableLabels,
         )
+        .task(id: summary.url) { await model.restoreLocalReview(for: summary) }
     }
 }

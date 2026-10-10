@@ -27,6 +27,7 @@ let package = Package(
         // Apple's GitHub-flavoured markdown parser; parsing by hand
         // kept misreading real review comments.
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.5.0"),
+        .package(url: "https://github.com/scinfu/SwiftSoup", from: "2.6.0"),
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter", exact: "0.25.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-bash", exact: "0.25.1"),
@@ -133,6 +134,7 @@ let package = Package(
                 "AgentIDEData",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Markdown", package: "swift-markdown"),
+                .product(name: "SwiftSoup", package: "SwiftSoup"),
                 .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
                 .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),
                 .product(name: "TreeSitterBash", package: "tree-sitter-bash"),
