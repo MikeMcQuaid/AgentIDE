@@ -31,16 +31,16 @@ public extension PullRequestStore {
     /// The status checks a pull request into a branch must pass,
     /// which is what colours its rollup: asked once a day per base
     /// branch, since rules change about as often as a repository's
-    /// settings do. Empty when nothing is required or nothing is
-    /// known, when every check counts; a GitHub that cannot be asked
-    /// keeps the last answer.
+    /// settings do. Empty when nothing is required, nil when unknown;
+    /// a GitHub that cannot be asked keeps the last answer.
     func requiredChecks(
         repositoryPath: String,
         branch: String,
         interval: TimeInterval = capabilityInterval,
-    ) async -> Set<String> {
+        // swiftlint:disable:next discouraged_optional_collection - Nil preserves an unreadable configuration.
+    ) async -> Set<String>? {
         let key = Self.requiredChecksKey(repositoryPath: repositoryPath, branch: branch)
-        let known = Set(store.load().requiredChecksCache[key] ?? [])
+        let known = store.load().requiredChecksCache[key].map { Set($0) }
         guard due(key, interval: interval),
               let rules = await github.branchRules(repositoryPath: repositoryPath, branch: branch)
         else {

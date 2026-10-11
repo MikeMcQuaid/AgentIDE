@@ -60,6 +60,11 @@ final class PullRequestsModel {
         fetchThreads = { number in
             await Self.threads(of: number, gate: gate, repository: repository)
         }
+        restoreLocalReviewIdentity = { path, summary in
+            await service.restoreLocalReviewIdentity(
+                worktreePath: path, repositoryPath: repository.path, summary: summary,
+            )
+        }
         performCreate = { worktree, title, body, labels, isDraft in
             try await service.createPullRequest(
                 worktree: worktree,
@@ -135,9 +140,9 @@ final class PullRequestsModel {
             defer { gate.invalidate(repositoryPath: repository.path, number: summary.number) }
             try await github.markDraft(repositoryPath: repository.path, number: summary.number)
         }
-        performCopilotRequest = { number in
+        performBotRequest = { bot, number in
             defer { gate.invalidate(repositoryPath: repository.path, number: number) }
-            try await github.requestCopilotReview(repositoryPath: repository.path, number: number)
+            try await github.requestBotReview(bot, repositoryPath: repository.path, number: number)
         }
         fetchCurrentBranch = { path in
             await service.currentBranch(worktreePath: path)
@@ -269,6 +274,7 @@ final class PullRequestsModel {
     var fetchAcceptsDefaultPushes: () async -> Bool
     var acceptsDefaultPushes = false
     var fetchThreads: (Int) async -> [ReviewThread]
+    var restoreLocalReviewIdentity: (String, PullRequestSummary) async -> Bool
     var performCreate: (Worktree, String, String, [String], Bool) async throws -> String
 
     /// The repository's labels, read once per model when the form
@@ -324,11 +330,11 @@ final class PullRequestsModel {
 
     /// Takes an open pull request back to a draft.
     var performDraftChange: (PullRequestSummary) async throws -> Void
-    var performCopilotRequest: (Int) async throws -> Void
+    var performBotRequest: (ReviewBot, Int) async throws -> Void
 
-    /// Bumped as each ask of Copilot is recorded, so the header's
+    /// Bumped as each remote review request is recorded, so the header's
     /// icon, which reads the record, repaints at once.
-    var copilotAsks = 0
+    var botAsks = 0
     var fetchCurrentBranch: (String) async -> String?
     var fetchRebaseNeed: (Worktree) async -> SessionService.RebaseNeed
 

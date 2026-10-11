@@ -74,6 +74,7 @@ struct DiffFileView: View {
     let isCollapsed: Bool
     let onToggleCollapse: () -> Void
     let onEdit: () -> Void
+    var conversations: (Int) -> AnyView = { _ in AnyView(EmptyView()) }
 
     /// The highlighter language for this file, judged by extension.
     var language: SyntaxLanguage? {
@@ -89,6 +90,7 @@ struct DiffFileView: View {
                     // lines are drawn as one block of text.
                     hunkView(hunkIndex: hunkIndex, hunk: hunk)
                         .id(ReviewModel.FindTarget(file: file.path, hunk: hunkIndex).id)
+                    conversations(hunkIndex)
                 }
             }
         }

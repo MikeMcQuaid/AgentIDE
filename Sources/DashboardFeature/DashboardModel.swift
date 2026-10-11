@@ -26,6 +26,7 @@ public final class DashboardModel {
         self.store = store
         self.github = github
         self.launchProgress = launchProgress
+        notifiedFeedback = store.load().pullRequestAutomation
         watcher = service.makeWorkspaceWatcher()
         watcher.start()
         restoreCachedSidebar()
@@ -277,6 +278,8 @@ public final class DashboardModel {
     // MARK: Internal
 
     static let selectedWorktreeKey = "selectedWorktreePath"
+
+    @ObservationIgnored var notifiedFeedback: [String: PullRequestAutomation]
 
     /// Internal rather than private so the repository extension file
     /// can reach the service too.

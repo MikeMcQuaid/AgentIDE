@@ -8,6 +8,7 @@ struct LocalReviewThreadRow: View {
 
     let diff: ReviewModel
     let thread: ReviewThread
+    var showsCodeContext = true
 
     var body: some View {
         ReviewThreadRow(
@@ -23,6 +24,7 @@ struct LocalReviewThreadRow: View {
             onToggleResolved: { model.toggleResolved(thread.id) },
             allowsActions: model.isBusy == false,
             allowsFix: model.canPrepare,
+            showsCodeContext: showsCodeContext,
         )
     }
 }

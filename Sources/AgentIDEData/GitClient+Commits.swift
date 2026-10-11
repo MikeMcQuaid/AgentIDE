@@ -3,6 +3,18 @@ import Foundation
 /// The commit listings the review pane shows under a diff, split
 /// from the branch inspection for length.
 public extension GitClient {
+    /// Full identities and messages for precisely the selected commits or range.
+    func reviewCommitContext(worktreePath: String, revisions: [String]) async throws -> String {
+        guard revisions.isEmpty == false else {
+            return ""
+        }
+
+        return try await git(
+            ["log", "--no-walk=unsorted", "--format=commit %H%n%B", "--end-of-options"] + revisions + ["--"],
+            in: worktreePath,
+        ).standardOutput
+    }
+
     /// The branch's commits beyond the base ref, newest first, one
     /// line each.
     func branchCommits(worktreePath: String, baseRef: String) async -> [String] {

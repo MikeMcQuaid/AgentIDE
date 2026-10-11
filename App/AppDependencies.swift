@@ -16,6 +16,7 @@ final class AppDependencies {
         let gitClient = GitClient(runner: runner)
         let githubClient = GitHubClient(runner: runner)
         let metadataStore = MetadataStore(file: paths.metadataFile)
+        metadataStore.resetFeedbackLoops()
         let launchProgress = LaunchProgress()
         let herdr = HerdrClient(
             runner: runner,

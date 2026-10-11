@@ -34,7 +34,7 @@ public struct MarkdownText: View {
             ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
                 if let summary = chunk.detailsSummary {
                     DisclosureGroup(
-                        content: { Self(chunk.text) },
+                        content: { Self(chunk.text, relativeTo: directory) },
                         label: { Text(Self.inline(summary)).fontWeight(.medium) },
                     )
                 } else {
@@ -111,8 +111,13 @@ public struct MarkdownText: View {
         return directory.map { URL(filePath: $0 + "/" + source) }
     }
 
+    static func parsedChunks(_ text: String) -> [Chunk] {
+        (try? MarkdownHTML(text).chunks) ?? [Chunk(text: text, detailsSummary: nil)]
+    }
+
     // MARK: Private
 
+    private static let quoteWidth: CGFloat = 3
     private static let spacing: CGFloat = 4
     private static let tableSpacing: CGFloat = 12
     private static let codePadding: CGFloat = 6
@@ -141,6 +146,12 @@ public struct MarkdownText: View {
             switch block {
             case let .heading(title):
                 Text(Self.inline(title)).fontWeight(.semibold).textSelection(.enabled)
+
+            case let .quote(text):
+                HStack(alignment: .top) {
+                    Rectangle().fill(.quaternary).frame(width: Self.quoteWidth)
+                    Self(text, relativeTo: directory)
+                }.fixedSize(horizontal: false, vertical: true)
 
             case .rule:
                 Divider()
@@ -222,28 +233,5 @@ public struct MarkdownText: View {
                 }
             }
         }
-    }
-
-    private static func parsedChunks(_ text: String) -> [Chunk] {
-        var results = [Chunk]()
-        var remainder = Substring(text)
-        while let match = remainder.firstMatch(of: /<details[^>]*>([\s\S]*?)<\/details>/.ignoresCase()) {
-            let before = String(remainder[..<match.range.lowerBound])
-            if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                results.append(Chunk(text: before, detailsSummary: nil))
-            }
-            var inner = String(match.output.1)
-            var summary = ""
-            if let heading = inner.firstMatch(of: /<summary>([\s\S]*?)<\/summary>/.ignoresCase()) {
-                summary = String(heading.output.1).trimmingCharacters(in: .whitespacesAndNewlines)
-                inner.removeSubrange(heading.range)
-            }
-            results.append(Chunk(text: inner, detailsSummary: summary.isEmpty ? "Details" : summary))
-            remainder = remainder[match.range.upperBound...]
-        }
-        if remainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            results.append(Chunk(text: String(remainder), detailsSummary: nil))
-        }
-        return results
     }
 }

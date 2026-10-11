@@ -18,7 +18,7 @@ final class LocalReviewModel {
         self.review = review
         error = review?.failure
         self.reviewer = reviewer
-        reviewInstructions = review?.instructions ?? LocalReviewInput.instructions
+        reviewInstructions = review?.instructions ?? FeedbackPrompt.localReview.text()
         self.run = run
         self.revision = revision
         self.save = save
@@ -32,19 +32,40 @@ final class LocalReviewModel {
         self.init(
             review: service.localReview(worktreePath: worktreePath),
             reviewer: service.localReviewer(worktreePath: worktreePath),
-            run: { files, reviewer, instructions in
+            run: { files, commitContext, reviewer, instructions in
                 try await service.runLocalReview(
-                    files: files, worktreePath: worktreePath, reviewer: reviewer, instructions: instructions,
+                    files: files,
+                    worktreePath: worktreePath,
+                    reviewer: reviewer,
+                    instructions: instructions,
+                    commitContext: commitContext,
                 )
             },
             revision: { try await service.localReviewRevision(worktreePath: worktreePath) },
             save: { service.saveLocalReview($0, worktreePath: worktreePath) },
         )
+        refreshAutomation = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            let saved = service.localReview(worktreePath: worktreePath)
+            guard saved != review else {
+                return
+            }
+
+            review = saved
+            error = saved?.failure
+        }
     }
 
     // MARK: Internal
 
-    typealias Run = ([DiffFile], AgentKind, String) async throws -> LocalReview
+    typealias Run = ([DiffFile], String, AgentKind, String) async throws -> LocalReview
+
+    var refreshAutomation: () -> Void = {
+        // Unwired models are used by tests.
+    }
 
     var reviewer: AgentKind
     private(set) var isRunning = false
@@ -85,7 +106,7 @@ final class LocalReviewModel {
             || review.snapshot != LocalReviewInput.fingerprint(LocalReviewInput.snapshot(files: files))
     }
 
-    func start(files: [DiffFile]) async {
+    func start(files: [DiffFile], commitContext: String = "") async {
         guard isBusy == false else {
             return
         }
@@ -95,7 +116,7 @@ final class LocalReviewModel {
         prompt = ""
         defer { isRunning = false }
         do {
-            review = try await run(files, reviewer, reviewInstructions)
+            review = try await run(files, commitContext, reviewer, reviewInstructions)
             error = review?.failure
             revisionChanged = try await review?.revision != revision()
             update(files: files)
@@ -140,15 +161,7 @@ final class LocalReviewModel {
             return
         }
 
-        let thread = review.threads[index]
-        review.threads[index] = ReviewThread(
-            id: thread.id,
-            path: thread.path,
-            line: thread.line,
-            isResolved: thread.isResolved == false,
-            comments: thread.comments,
-            resolveID: thread.resolveID,
-        )
+        review.threads[index].isResolved.toggle()
         self.review = review
     }
 

@@ -1,25 +1,30 @@
-/// Asking Copilot for a review. Split from the client body for
-/// length.
-public extension GitHubClient {
-    /// The reviewer Copilot is, as a review request names it.
-    static let copilotReviewer = "copilot-pull-request-reviewer[bot]"
+import AgentIDEDomain
 
-    /// Asks Copilot to review a pull request, or to review it again
-    /// after a push: a review request naming its bot, which is what
-    /// the button beside its name in the Reviewers list sends too.
-    func requestCopilotReview(repositoryPath: String, number: Int) async throws {
-        try await gh(
-            [
-                "api", "--method", "POST", "repos/{owner}/{repo}/pulls/" + String(number) + "/requested_reviewers",
-                "-f", "reviewers[]=" + Self.copilotReviewer,
-            ],
-            in: repositoryPath,
-        )
+public extension GitHubClient {
+    /// GitHub’s reviewer request login.
+    static let copilotReviewer = ReviewBot.copilot.login + "[bot]"
+
+    /// CodeRabbit accepts a PR comment; Copilot uses GitHub's reviewer request API.
+    func requestBotReview(_ bot: ReviewBot, repositoryPath: String, number: Int) async throws {
+        let arguments =
+            switch bot {
+            case .copilot:
+                [
+                    "api", "--method", "POST", "repos/{owner}/{repo}/pulls/" + String(number) + "/requested_reviewers",
+                    "-f", "reviewers[]=" + Self.copilotReviewer,
+                ]
+
+            case .codeRabbit:
+                [
+                    "api", "--method", "POST", "repos/{owner}/{repo}/issues/" + String(number) + "/comments",
+                    "-f", "body=@coderabbitai review",
+                ]
+            }
+        try await gh(arguments, in: repositoryPath)
     }
 
-    /// Whether a login is Copilot's: the reviewer's, with or without
-    /// the bot suffix gh's GraphQL fields drop, and nothing else.
+    /// Exact REST or GraphQL login, never a similar human account.
     static func isCopilot(_ login: String?) -> Bool {
-        login == copilotReviewer || login == copilotReviewer.replacing("[bot]", with: "")
+        ReviewBot.copilot.matches(login)
     }
 }

@@ -16,27 +16,28 @@ struct BranchSwitchPopover: View {
     let onDone: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
-            HStack(spacing: Self.spacing) {
-                Text("Switch").interfaceFont(.subheadline, weight: .semibold)
-                Text(item.worktree.branch).font(nameStyle.font)
-                Text("to").interfaceFont(.subheadline, weight: .semibold)
-            }
-            if let branches {
-                if branches.isEmpty {
-                    Text("Every other local branch is checked out elsewhere.")
-                        .interfaceFont(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    list(of: branches)
+        PopoverContent(width: Self.width) {
+            VStack(alignment: .leading, spacing: Self.spacing) {
+                HStack(spacing: Self.spacing) {
+                    Text("Switch").interfaceFont(.subheadline, weight: .semibold)
+                    Text(item.worktree.branch).font(nameStyle.font)
+                    Text("to").interfaceFont(.subheadline, weight: .semibold)
                 }
-            } else {
-                ProgressView("Listing branches…")
-                    .controlSize(.small)
+                if let branches {
+                    if branches.isEmpty {
+                        Text("Every other local branch is checked out elsewhere.")
+                            .interfaceFont(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        list(of: branches)
+                    }
+                } else {
+                    ProgressView("Listing branches…")
+                        .controlSize(.small)
+                }
             }
+            .padding(Self.padding)
         }
-        .padding(Self.padding)
-        .frame(minWidth: Self.minimumWidth)
         .task { branches = await model.availableBranches(for: item) }
     }
 
@@ -45,8 +46,7 @@ struct BranchSwitchPopover: View {
     private static let spacing: CGFloat = 6
     private static let rowHeight: CGFloat = 24
     private static let padding: CGFloat = 10
-    private static let minimumWidth: CGFloat = 220
-    private static let listHeight: CGFloat = 240
+    private static let width: CGFloat = 420
 
     // nil until the git read answers; empty means nothing to offer.
     // swiftlint:disable:next discouraged_optional_collection
@@ -57,31 +57,25 @@ struct BranchSwitchPopover: View {
     private var nameStyle: NameStyle = .init()
 
     private func list(of branches: [String]) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(branches, id: \.self) { branch in
-                    Button {
-                        isSwitching = true
-                        Task {
-                            await model.switchBranch(branch, for: item)
-                            onDone()
-                        }
-                    } label: {
-                        Label(branch, image: "octicon-git-branch")
-                            .font(nameStyle.font)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(branches, id: \.self) { branch in
+                Button {
+                    isSwitching = true
+                    Task {
+                        await model.switchBranch(branch, for: item)
+                        onDone()
                     }
-                    .buttonStyle(.plain)
-                    .frame(height: Self.rowHeight)
-                    .hoverHelp("git checkout " + branch + " in this worktree")
+                } label: {
+                    Label(branch, image: "octicon-git-branch")
+                        .font(nameStyle.font)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .frame(height: Self.rowHeight)
+                .hoverHelp("git checkout " + branch + " in this worktree")
             }
         }
-        // Sized to its rows exactly, capped at ten: a popover
-        // handed only a maximum height truncated the list to a row
-        // or two.
-        .frame(height: min(Self.listHeight, CGFloat(branches.count) * Self.rowHeight))
         .disabled(isSwitching)
     }
 }

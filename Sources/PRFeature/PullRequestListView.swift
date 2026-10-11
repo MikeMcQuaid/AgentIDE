@@ -129,6 +129,9 @@ struct PullRequestFooterView: View {
 
     @Bindable var model: PullRequestsModel
 
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    var reviewGeneration = 0
+
     /// The cross-module signal that switches the utility pane's tab.
     @AppStorage(UtilityTabTarget.key)
     var utilityTab = ""
@@ -196,6 +199,8 @@ struct PullRequestFooterView: View {
             if let selected = model.selected {
                 CopyPullRequestURLButton(selected.url)
                 CopyBranchNameButton(selected.headBranch)
+                Divider()
+                rawFeedbackMenu(for: selected)
             }
         }
     }

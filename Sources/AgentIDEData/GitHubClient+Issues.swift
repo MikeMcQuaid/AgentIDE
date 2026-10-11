@@ -62,40 +62,6 @@ public extension GitHubClient {
         try await gh(["pr", "checkout", String(number)], in: worktreePath)
     }
 
-    /// Every human comment on a pull request: review bodies with
-    /// their states, inline review comments and thread comments, in
-    /// fetched order. Bodyless reviews stay when their state says
-    /// something, so approvals appear in the timeline. Throws on
-    /// fetch failure so callers keep their last good cache rather
-    /// than mistaking a failure for no feedback.
-    /// Review summaries and top-level comments only: inline file
-    /// comments render as resolvable conversations with their
-    /// `path:line` anchors instead, so the timeline never repeats a
-    /// reviewer's name once per finding.
-    func reviewComments(repositoryPath: String, number: Int) async throws -> [ReviewComment] {
-        let result = try await gh(
-            ["pr", "view", String(number), "--json", "reviews,comments"],
-            in: repositoryPath,
-        )
-        var rows = [FeedbackEntry]()
-        let feedback = try? JSONDecoder().decode(Feedback.self, from: Data(result.standardOutput.utf8))
-        if let feedback {
-            rows += (feedback.reviews ?? [])
-                .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: $0.state ?? "") }
-            rows += (feedback.comments ?? [])
-                .map { FeedbackEntry(author: $0.author?.login, body: $0.body, kind: "") }
-        }
-
-        return rows.enumerated().compactMap { index, row in
-            let body = row.body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard body.isEmpty == false || (row.kind.isEmpty == false && row.kind != "COMMENTED") else {
-                return nil
-            }
-
-            return ReviewComment(id: index, author: row.author ?? "unknown", body: body, kind: row.kind)
-        }
-    }
-
     /// A pull request's body and full feedback timeline, for the
     /// conversation view; throws like ``reviewComments`` does.
     func conversation(repositoryPath: String, number: Int) async throws -> (body: String, events: [ReviewComment]) {
@@ -156,31 +122,5 @@ private extension GitHubClient {
     struct IssueRow: Decodable {
         let number: Int
         let title: String
-    }
-
-    struct Feedback: Decodable {
-        // Either list is absent when the pull request has none.
-        // swiftlint:disable discouraged_optional_collection
-        let reviews: [FeedbackRow]?
-        let comments: [FeedbackRow]?
-        // swiftlint:enable discouraged_optional_collection
-    }
-
-    struct FeedbackRow: Decodable {
-        let author: Author?
-        let body: String?
-        let state: String?
-    }
-
-    /// One collected feedback row before filtering, whichever source
-    /// it came from.
-    struct FeedbackEntry {
-        let author: String?
-        let body: String?
-        let kind: String
-    }
-
-    struct Author: Decodable {
-        let login: String?
     }
 }

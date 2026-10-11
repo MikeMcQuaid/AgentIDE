@@ -179,6 +179,7 @@ public struct DashboardView: View {
                 pullRequest: model.pullRequest(for: item),
                 standing: model.stackStanding(for: item),
                 load: model.paneLoads[item.worktree.path],
+                feedbackStatus: model.feedbackStatus(for: item),
             )
             // Deleting takes a moment; the row fades the instant the
             // click lands so the click visibly took.

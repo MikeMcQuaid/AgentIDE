@@ -1,3 +1,6 @@
+import AgentIDEDomain
+import Foundation
+
 /// What a pull request's checks add up to. Split from the client
 /// body for length.
 extension GitHubClient {
@@ -24,6 +27,24 @@ extension GitHubClient {
             checks: Self.aggregate(states),
             failingLinks: failing.compactMap(\.detailsUrl), // swiftformat:disable:this acronyms
             optionalFailures: rows.count { Self.isFailure(Self.state($0)) } - failing.count,
+        )
+    }
+
+    static func autofixCheck(_ row: CheckRow) -> AutofixCheck {
+        let link = row.detailsUrl ?? row.targetUrl ?? "" // swiftformat:disable:this acronyms
+        let parts = URL(string: link)?.pathComponents ?? []
+        let run = parts.firstIndex(of: "runs").flatMap { index in
+            parts.indices.contains(index + 1) ? parts[index + 1] : nil
+        }
+        let conclusion = (row.conclusion ?? row.state ?? "").uppercased()
+        let status = row.status ?? (row.context != nil && ["SUCCESS", "FAILURE", "ERROR"].contains(conclusion)
+            ? "COMPLETED" : "")
+        return AutofixCheck(
+            name: row.name ?? row.context ?? "",
+            status: status,
+            conclusion: conclusion,
+            runID: run.map { "run:" + $0 } ?? row.createdAt.map { "status:" + (row.context ?? "") + ":" + $0 } ?? "",
+            link: link,
         )
     }
 

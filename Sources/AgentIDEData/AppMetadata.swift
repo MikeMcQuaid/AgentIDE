@@ -1,38 +1,6 @@
 import AgentIDEDomain
 import Foundation
 
-// MARK: - CachedRepository
-
-/// A repository in the sidebar snapshot rendered before the first
-/// poll.
-public struct CachedRepository: Codable, Hashable, Sendable {
-    // MARK: Lifecycle
-
-    /// Creates an empty entry.
-    public init() {
-        // Every property has a default.
-    }
-
-    // MARK: Public
-
-    /// The repository's directory name.
-    public var name = ""
-
-    /// The GitHub `owner/name`, when known.
-    public var fullName: String?
-
-    /// The repository's default branch, when known.
-    public var defaultBranch: String?
-
-    /// The checkout path.
-    public var path = ""
-
-    /// The repository's worktrees.
-    public var worktrees: [CachedWorktree] = []
-}
-
-// MARK: - AppMetadata
-
 /// The app-owned metadata that cannot be derived from the system.
 /// Decoding tolerates missing keys so adding a field never discards
 /// an existing file.
@@ -102,6 +70,12 @@ public struct AppMetadata: Codable, Equatable, Sendable {
 
     /// Local findings and human decisions, inaccessible to sandboxed agents.
     public var localReviews: [String: LocalReview] = [:]
+
+    /// Feedback preferences, attempt claims and pending thread resolutions.
+    public var pullRequestAutomation: [String: PullRequestAutomation] = [:]
+
+    /// Local tool defaults for new feedback contexts, by repository path.
+    public var repositoryFeedbackDefaults: [String: RepositoryFeedbackDefaults] = [:]
 
     /// Repository schedules and their durable launch claims.
     public var scheduledPrompts: [ScheduledPrompt] = []
@@ -343,6 +317,11 @@ public struct AppMetadata: Codable, Equatable, Sendable {
             labelsCache = try container.decodeIfPresent([String: [String]].self, forKey: .labelsCache) ?? [:]
             stackFacts = try container.decodeIfPresent([String: CachedStackFacts].self, forKey: .stackFacts) ?? [:]
             scheduledPrompts = try container.decodeIfPresent([ScheduledPrompt].self, forKey: .scheduledPrompts) ?? []
+            pullRequestAutomation = (try? container
+                .decodeIfPresent([String: AutomationEntry].self, forKey: .pullRequestAutomation))?
+                            .compactMapValues(\.state) ?? [:]
+            repositoryFeedbackDefaults = try container
+                .decodeIfPresent([String: RepositoryFeedbackDefaults].self, forKey: .repositoryFeedbackDefaults) ?? [:]
         }
 
         // MARK: Internal
@@ -358,6 +337,20 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         var labelsCache: [String: [String]] = [:]
         var stackFacts: [String: CachedStackFacts] = [:]
         var scheduledPrompts: [ScheduledPrompt] = []
+        var pullRequestAutomation: [String: PullRequestAutomation] = [:]
+        var repositoryFeedbackDefaults: [String: RepositoryFeedbackDefaults] = [:]
+    }
+
+    private struct AutomationEntry: Decodable {
+        // MARK: Lifecycle
+
+        init(from decoder: any Decoder) {
+            state = try? PullRequestAutomation(from: decoder)
+        }
+
+        // MARK: Internal
+
+        let state: PullRequestAutomation?
     }
 
     /// How long a fetch stamp is worth keeping: longer than the
@@ -388,5 +381,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
         labelsCache = ledgers.labelsCache
         stackFacts = ledgers.stackFacts
         scheduledPrompts = ledgers.scheduledPrompts
+        pullRequestAutomation = ledgers.pullRequestAutomation
+        repositoryFeedbackDefaults = ledgers.repositoryFeedbackDefaults
     }
 }

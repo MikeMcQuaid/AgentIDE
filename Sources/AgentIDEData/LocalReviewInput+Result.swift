@@ -17,7 +17,11 @@ extension LocalReviewInput {
                 throw SessionServiceError("The reviewer exceeded the 256 KiB output limit and was stopped.")
             }
             guard result.succeeded else {
-                throw SessionServiceError("The reviewer exited with status " + String(result.status) + ". Try again.")
+                let diagnostic = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+                let reason = diagnostic.isEmpty ? adapter.reviewFailure(result.standardOutput) : diagnostic
+                throw SessionServiceError(adapter.kind.displayName + " exited with status " + String(result.status)
+                    + "." + (reason.isEmpty ? " Open the review log for details."
+                        : "\n" + String(reason.prefix(diagnosticLimit))))
             }
 
             findings = try threads(
@@ -38,6 +42,8 @@ extension LocalReviewInput {
         review.failure = failure
         return review
     }
+
+    private static let diagnosticLimit = 1_000
 
     private static func bounded(_ text: String) -> String {
         guard text.utf8.count > byteLimit else {
