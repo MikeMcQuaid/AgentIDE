@@ -5,7 +5,9 @@ public struct ReviewThreadComment: Codable, Hashable, Sendable {
     // MARK: Lifecycle
 
     /// Creates a comment.
-    public init(author: String, body: String) {
+    public init(author: String, body: String, id: String? = nil, authorType: String? = nil) {
+        self.id = id
+        self.authorType = authorType
         self.author = author
         self.body = body
     }
@@ -13,6 +15,9 @@ public struct ReviewThreadComment: Codable, Hashable, Sendable {
     // MARK: Public
 
     /// The commenting user's login.
+    public let id: String?
+    public let authorType: String?
+
     public let author: String
 
     /// The comment's markdown body.
@@ -35,6 +40,7 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
         isResolved: Bool,
         comments: [ReviewThreadComment],
         resolveID: String? = nil,
+        codeContext: String? = nil,
     ) {
         self.id = id
         self.path = path
@@ -42,6 +48,7 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
         self.isResolved = isResolved
         self.comments = comments
         self.resolveID = resolveID ?? id
+        self.codeContext = codeContext
     }
 
     // MARK: Public
@@ -61,7 +68,10 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
     public let line: Int?
 
     /// Whether the conversation is marked resolved.
-    public let isResolved: Bool
+    public var isResolved: Bool
+
+    /// The code captured by a local reviewer, independent of later edits.
+    public let codeContext: String?
 
     /// The thread's comments in order.
     public let comments: [ReviewThreadComment]

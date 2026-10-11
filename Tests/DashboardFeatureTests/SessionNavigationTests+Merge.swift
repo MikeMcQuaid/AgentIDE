@@ -28,7 +28,7 @@ extension SessionNavigationTests {
         model.queuedNumbers[repository.path] = state == "queued" ? [7] : []
         let listing = PullRequestStore.listingKey(repositoryPath: repository.path, scope: .branch("main"))
         let queue = "queue#" + repository.path
-        let before = Date().addingTimeInterval(-90)
+        let before = Date().addingTimeInterval(-RefreshCadence.slowed(90, onBattery: PowerSource.isOnBattery))
         model.store.update { metadata in
             metadata.fetchedAt[listing] = before
             metadata.fetchedAt[queue] = before

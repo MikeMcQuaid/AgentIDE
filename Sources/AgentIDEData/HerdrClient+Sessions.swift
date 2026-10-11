@@ -134,7 +134,7 @@ private struct ForegroundProcess: Decodable {
 
 /// What a pane's foreground holds: its own shell at the prompt, or
 /// the program it is running.
-private struct Foreground {
+struct Foreground {
     let isShell: Bool
     let command: String?
 }
@@ -143,7 +143,7 @@ private struct Foreground {
 
 /// One workspace's identity row out of the snapshot, before the
 /// finished enrichment that makes it a `HerdrPane`.
-private struct SnapshotRow {
+struct SnapshotRow {
     let sessionName: String
     let workspaceID: String
     let paneID: String
@@ -354,7 +354,7 @@ public extension HerdrClient {
     /// unanswerable server must never read as a server with nothing
     /// on it, which once let a liveness check declare a just-started
     /// agent dead and the retry kill it.
-    private func snapshotRows() async throws -> [SnapshotRow] {
+    internal func snapshotRows() async throws -> [SnapshotRow] {
         let result = try await herdr(["api", "snapshot"])
         guard let snapshot = decode(SnapshotEnvelope.self, from: result.standardOutput)?.result?.snapshot else {
             throw CommandError(command: "herdr api snapshot", result: result)
@@ -382,7 +382,7 @@ public extension HerdrClient {
     /// whatever ran in it has exited. An unanswerable pane reads as
     /// still running something, so a hiccup can never kill a live
     /// session.
-    private func foreground(paneID: String) async -> Foreground {
+    internal func foreground(paneID: String) async -> Foreground {
         let info = try? await herdr(["pane", "process-info", "--pane", paneID], allowFailure: true)
         guard let processes = decode(ProcessInfoEnvelope.self, from: info?.standardOutput ?? "")?
             .result?

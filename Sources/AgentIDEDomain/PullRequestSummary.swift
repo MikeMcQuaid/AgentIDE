@@ -31,6 +31,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         copilotReviewedAt: Date? = nil,
         labels: [String] = [],
         optionalFailures: Int = 0,
+        autofixChecks: AutofixChecks? = nil,
+        headRepository: String? = nil,
     ) {
         self.number = number
         self.title = title
@@ -54,6 +56,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.copilotReviewedAt = copilotReviewedAt
         self.labels = labels
         self.optionalFailures = optionalFailures
+        self.autofixChecks = autofixChecks
+        self.headRepository = headRepository
     }
 
     /// Decodes a summary a cache wrote, an older release's included:
@@ -84,6 +88,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         copilotReviewedAt = try container.decodeIfPresent(Date.self, forKey: .copilotReviewedAt)
         labels = try container.decodeIfPresent([String].self, forKey: .labels) ?? []
         optionalFailures = try container.decodeIfPresent(Int.self, forKey: .optionalFailures) ?? 0
+        autofixChecks = try container.decodeIfPresent(AutofixChecks.self, forKey: .autofixChecks)
+        headRepository = try container.decodeIfPresent(String.self, forKey: .headRepository)
     }
 
     // MARK: Public
@@ -175,6 +181,9 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// Failing checks the branch does not require, which the rollup
     /// leaves out: counted so the help can say why a green dot sits
     /// beside a red run on GitHub, never offered to open or copy.
+    public let autofixChecks: AutofixChecks?
+    public let headRepository: String?
+
     public let optionalFailures: Int
 
     /// Whether the checks rollup is red: a check the branch requires
@@ -249,6 +258,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             copilotReviewedAt: copilotReviewedAt,
             labels: labels,
             optionalFailures: optionalFailures,
+            autofixChecks: autofixChecks,
+            headRepository: headRepository,
         )
         edited.unresolvedComments = unresolvedComments
         return edited
@@ -282,41 +293,11 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             copilotReviewedAt: copilotReviewedAt,
             labels: labels,
             optionalFailures: 0,
+            headRepository: headRepository,
         )
         pending.unresolvedComments = unresolvedComments
         return pending
     }
-}
-
-// MARK: - ReviewComment
-
-/// One human comment on a pull request, from a review or the
-/// thread. Codable so conversations can cache between runs.
-public struct ReviewComment: Identifiable, Hashable, Sendable, Codable {
-    // MARK: Lifecycle
-
-    /// Creates a comment.
-    public init(id: Int, author: String, body: String, kind: String = "") {
-        self.id = id
-        self.author = author
-        self.body = body
-        self.kind = kind
-    }
-
-    // MARK: Public
-
-    /// The comment's position in the fetched list.
-    public let id: Int
-
-    /// The GitHub login of the author.
-    public let author: String
-
-    /// The comment text.
-    public let body: String
-
-    /// The review state that produced this entry, such as
-    /// `APPROVED`; empty for plain comments.
-    public let kind: String
 }
 
 // MARK: - SearchHit

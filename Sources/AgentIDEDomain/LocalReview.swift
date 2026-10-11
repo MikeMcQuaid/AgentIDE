@@ -13,9 +13,15 @@ public struct LocalReview: Codable, Equatable, Sendable {
 
     // MARK: Public
 
+    /// Identifies one review run, including repeated reviews of unchanged code.
+    public var runID: String? = UUID().uuidString
     public let reviewer: AgentKind
     public let snapshot: String
     public let revision: String
+    public var repositoryPath: String?
+    public var branch: String?
+    public var pullRequestURL: String?
+    public var headRepository: String?
     public var threads: [ReviewThread]
     /// Earlier human feedback is retained in fix prompts.
     public var feedback: [String: ReviewFeedback] = [:]
@@ -24,14 +30,13 @@ public struct LocalReview: Codable, Equatable, Sendable {
     /// The editable instructions used for this review, without the captured diff.
     public var instructions: String?
 
-    // periphery:ignore - persisted for troubleshooting outside the UI.
     /// The supplied prompt and captured streams; absent in older saved reviews.
     public var input: String?
-    // periphery:ignore - persisted for troubleshooting outside the UI.
     public var output: String?
-    // periphery:ignore - persisted for troubleshooting outside the UI.
     public var diagnostics: String?
     public var failure: String?
+    public var model: String?
+    public var effort: String?
 
     public var remaining: Int {
         threads.count { $0.isResolved == false }

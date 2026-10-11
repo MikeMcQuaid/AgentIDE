@@ -25,7 +25,11 @@ public extension GitClient {
     /// three processes however many there are; one `diff --no-index`
     /// per file ran thirteen thousand times in a minute on a
     /// worktree an agent had filled. The real index is never touched.
-    func uncommittedDiff(worktreePath: String, ignoringWhitespace: Bool = false) async throws -> String {
+    func uncommittedDiff(
+        worktreePath: String,
+        ignoringWhitespace: Bool = false,
+        comparedTo: String = "HEAD",
+    ) async throws -> String {
         let scratch = FileManager.default
             .temporaryDirectory
             .appendingPathComponent("agentide-diff-" + UUID().uuidString, isDirectory: true)
@@ -35,7 +39,7 @@ public extension GitClient {
         try await git(["read-tree", "HEAD"], in: worktreePath, environment: environment)
         try await git(["add", "--intent-to-add", "--all"], in: worktreePath, environment: environment)
         return try await git(
-            ["diff"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + ["HEAD"],
+            ["diff"] + diffOptions(ignoringWhitespace: ignoringWhitespace) + [comparedTo],
             in: worktreePath,
             environment: environment,
         ).standardOutput

@@ -54,13 +54,14 @@ public extension GitHubClient {
             throw ThreadDecodeError(message: "unexpected repository name shape: " + fullName)
         }
 
-        let query = "query($owner: String!, $name: String!, $number: Int!) "
+        let query = "query($owner: String!, $name: String!, $number: Int!, $endCursor: String) "
             + "{ repository(owner: $owner, name: $name) { pullRequest(number: $number) "
-            + "{ reviewThreads(first: 100) { nodes { id isResolved path line "
-            + "comments(first: 50) { nodes { author { login } body } } } } } } }"
+            + "{ reviewThreads(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } "
+            + "nodes { id isResolved path line "
+            + "comments(last: 100) { nodes { id author { login type: __typename } body } } } } } } }"
         let result = try await gh(
             [
-                "api", "graphql",
+                "api", "graphql", "--paginate", "--slurp",
                 "-f", "query=" + query,
                 "-f", "owner=" + String(owner),
                 "-f", "name=" + String(name),
@@ -68,7 +69,19 @@ public extension GitHubClient {
             ],
             in: repositoryPath,
         )
-        return try Self.threads(fromJSON: result.standardOutput)
+        var threads = try Self.threads(fromJSON: result.standardOutput)
+        for index in threads.indices where threads[index].comments.count == Self.threadCommentPageSize {
+            let thread = threads[index]
+            threads[index] = try await ReviewThread(
+                id: thread.id,
+                path: thread.path,
+                line: thread.line,
+                isResolved: thread.isResolved,
+                comments: reviewThreadComments(repositoryPath: repositoryPath, threadID: thread.id),
+                resolveID: thread.resolveID,
+            )
+        }
+        return threads
     }
 
     /// Marks one review thread resolved or unresolved.
@@ -118,20 +131,23 @@ public extension GitHubClient {
     /// names the mismatching field, the only way shape drift in the
     /// live answer ever gets diagnosed.
     internal static func threads(fromJSON json: String) throws -> [ReviewThread] {
-        let decoded: ThreadsResponse
+        let decoded: [ThreadsResponse]
         do {
-            decoded = try JSONDecoder().decode(ThreadsResponse.self, from: Data(json.utf8))
+            let data = Data(json.utf8)
+            decoded = try json.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[")
+                ? JSONDecoder().decode([ThreadsResponse].self, from: data)
+                : [JSONDecoder().decode(ThreadsResponse.self, from: data)]
         } catch {
             throw ThreadDecodeError(
                 message: "reviewThreads answer did not decode: "
                     + String(String(describing: error).prefix(ThreadDecodeError.detailLimit)),
             )
         }
-        guard let data = decoded.data else {
+        guard decoded.isEmpty == false, decoded.allSatisfy({ $0.data != nil }) else {
             throw ThreadDecodeError(message: "the reviewThreads answer carried no data")
         }
 
-        let nodes = data.repository?.pullRequest?.reviewThreads.nodes ?? []
+        let nodes = decoded.flatMap { $0.data?.repository?.pullRequest?.reviewThreads.nodes ?? [] }
         return nodes.compactMap { node in
             guard let node else {
                 return nil
@@ -142,9 +158,7 @@ public extension GitHubClient {
                 path: node.path,
                 line: node.line,
                 isResolved: node.isResolved,
-                comments: node.comments.nodes.compactMap { comment in
-                    comment.map { ReviewThreadComment(author: $0.author?.login ?? "unknown", body: $0.body) }
-                },
+                comments: node.comments.nodes.compactMap { $0?.comment },
             )
         }
     }
@@ -217,15 +231,21 @@ private struct RESTInlineComment: Decodable {
 /// The reviewThreads GraphQL answer's shape. Fields the schema
 /// declares non-null are non-optional; a null pull request (wrong
 /// number) or missing data decodes to an empty listing.
-private struct ThreadsResponse: Decodable {
+struct ThreadsResponse: Decodable {
     struct Author: Decodable {
+        let type: String?
         let login: String
     }
 
     struct CommentNode: Decodable {
+        let id: String?
         /// Null when the commenting account was deleted.
         let author: Author?
         let body: String
+
+        var comment: ReviewThreadComment {
+            ReviewThreadComment(author: author?.login ?? "unknown", body: body, id: id, authorType: author?.type)
+        }
     }
 
     struct CommentNodes: Decodable {

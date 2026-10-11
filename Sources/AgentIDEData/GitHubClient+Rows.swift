@@ -11,7 +11,12 @@ extension GitHubClient {
         let login: String?
     }
 
+    struct HeadRepository: Decodable {
+        let nameWithOwner: String?
+    }
+
     struct PullRequestRow: Decodable {
+        let headRepository: HeadRepository?
         let number: Int
         let title: String
         let url: String
@@ -58,6 +63,9 @@ extension GitHubClient {
         /// one a branch's rules name when they require it.
         let name: String?
         let context: String?
+        let status: String?
+        let createdAt: String?
+        let targetUrl: String? // swiftformat:disable:this acronyms
         let state: String?
         let conclusion: String?
         // The property must match gh's JSON key exactly.

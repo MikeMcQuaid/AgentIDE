@@ -18,6 +18,7 @@ struct WorktreeRowView: View {
     /// What this pane's process tree is costing, when it has cost it
     /// long enough to be worth showing; nil is the quiet case.
     let load: PaneLoad?
+    let feedbackStatus: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
@@ -125,6 +126,12 @@ struct WorktreeRowView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: Self.spacing)
+            if let feedbackStatus {
+                FeedbackLoopIcon(isRunning: true)
+                    .font(nameStyle.small)
+                    .accessibilityLabel("Autofix feedback loop: " + feedbackStatus)
+                    .hoverHelp("Autofix feedback loop: " + feedbackStatus)
+            }
             // A pane holding the machine down is news wherever it
             // is: the row names what is running and for how long, so
             // ten panes that all look hung say which one to look at.

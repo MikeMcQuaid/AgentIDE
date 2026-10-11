@@ -1,4 +1,4 @@
-import AgentIDEData
+@testable import AgentIDEData
 import AppKit
 import Foundation
 @testable import PRFeature
@@ -75,7 +75,7 @@ extension PullRequestsModelTests {
 
     /// The condensed log as one text.
     private static func text(of lines: [String]) -> String {
-        PullRequestsModel.condensed(log: lines.joined(separator: "\n")).flatMap(\.lines).joined(separator: "\n")
+        CheckLog.condensed(log: lines.joined(separator: "\n")).flatMap(\.lines).joined(separator: "\n")
     }
 
     @Test
@@ -109,14 +109,14 @@ extension PullRequestsModelTests {
         // A blob at the tail keeps only its last bytes; a blob at the
         // head keeps only its first; the line count still says what
         // was cut between.
-        let tailed = PullRequestsModel.condensed(log: (lines + [heading + blob]).joined(separator: "\n"))
+        let tailed = CheckLog.condensed(log: (lines + [heading + blob]).joined(separator: "\n"))
         let last = tailed.last?.lines.last ?? ""
         #expect(last.hasPrefix("\u{2026}"))
-        #expect(last.utf8.count <= PullRequestsModel.logTailBytes)
-        let headed = PullRequestsModel.condensed(log: ([heading + blob] + lines).joined(separator: "\n"))
+        #expect(last.utf8.count <= CheckLog.logTailBytes)
+        let headed = CheckLog.condensed(log: ([heading + blob] + lines).joined(separator: "\n"))
         let first = headed.first?.lines.first ?? ""
         #expect(first.hasSuffix("\u{2026}"))
-        #expect(first.utf8.count <= PullRequestsModel.logHeadBytes)
+        #expect(first.utf8.count <= CheckLog.logHeadBytes)
         #expect(headed.flatMap(\.lines).contains { $0.hasSuffix(" lines cut]") })
     }
 
@@ -177,11 +177,11 @@ extension PullRequestsModelTests {
             "tests (ubuntu-latest)\tCheck code styles\t" + stamp + "\u{1B}[36;1mbrew install shellcheck\u{1B}[0m",
             "tests (ubuntu-latest)\tCheck code styles\t" + stamp + "error: style",
         ].joined(separator: "\n")
-        let expected = PullRequestsModel.LogSection(
+        let expected = CheckLog.LogSection(
             heading: "tests (ubuntu-latest) · Check code styles",
             lines: ["##[group]Run brew install shellcheck", "brew install shellcheck", "error: style"],
         )
-        #expect(PullRequestsModel.condensed(log: log) == [expected])
+        #expect(CheckLog.condensed(log: log) == [expected])
 
         // One job and step fold into the run heading; two get their
         // own headings under it.

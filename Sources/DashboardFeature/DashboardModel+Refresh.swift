@@ -1,6 +1,7 @@
 import AgentIDEData
 import AgentIDEDomain
 import Foundation
+import TerminalUI
 import UserNotifications
 
 /// The poll and the one refresh path every action shares. Split from
@@ -193,6 +194,10 @@ public extension DashboardModel {
         await readPaneLoads()
         await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: forces)
+        if await service.refreshPullRequestAutomation(groups: groups) {
+            UtilityTabTarget.pullRequestCacheChanged()
+        }
+        notifyFeedbackChanges()
     }
 
     /// Asks about one repository now, however recently the poll last

@@ -10,7 +10,7 @@ public struct BusyButton: View {
     /// Creates the button; `busy` is the label shown while the
     /// action runs, such as Fixing for Fix. `keepsTitle` holds the
     /// label still and only dims, for surfaces whose status line
-    /// already narrates the work. With `systemImage` the
+    /// already narrates the work. With `systemImage` or `image` the
     /// icon leads and an empty title is fine, but VoiceOver then
     /// needs `accessibilityLabel`. `prominent` marks a surface's one
     /// primary action.
@@ -19,6 +19,7 @@ public struct BusyButton: View {
         _ title: String,
         busy: String,
         systemImage: String? = nil,
+        image: String? = nil,
         accessibilityLabel: String? = nil,
         prominent: Bool = false,
         disabled: Bool = false,
@@ -29,6 +30,7 @@ public struct BusyButton: View {
         richTitle = nil
         busyTitle = keepsTitle ? title : busy
         self.systemImage = systemImage
+        assetImage = image
         spokenLabel = accessibilityLabel
         isProminent = prominent
         isDisabled = disabled
@@ -52,6 +54,7 @@ public struct BusyButton: View {
         richTitle = label
         busyTitle = busy
         systemImage = nil
+        assetImage = nil
         spokenLabel = accessibilityLabel
         isProminent = prominent
         isDisabled = disabled
@@ -84,6 +87,7 @@ public struct BusyButton: View {
     private let richTitle: Text?
     private let busyTitle: String
     private let systemImage: String?
+    private let assetImage: String?
     private let spokenLabel: String?
     private let isProminent: Bool
     private let isDisabled: Bool
@@ -138,6 +142,12 @@ public struct BusyButton: View {
                 Image(systemName: systemImage)
                     .frame(width: Self.iconSlot, height: Self.iconSlot)
                     .accessibilityLabel(spokenTitle)
+            } else if let assetImage {
+                Image(assetImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Self.iconSlot, height: Self.iconSlot)
+                    .accessibilityHidden(true)
             }
             if let rich {
                 rich

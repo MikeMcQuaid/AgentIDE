@@ -9,6 +9,21 @@ import TerminalUI
 /// in, so a file the agent writes while the pane is open joins the
 /// commit instead of being silently dropped from it.
 extension ReviewModel {
+    /// Fills a blank commit message from the uncommitted diff using
+    /// the on-device model; false when it could not help.
+    func generateCommitMessage() async -> Bool {
+        guard commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return true
+        }
+        guard let drafted = await draftMessage() else {
+            report("The on-device model could not draft a commit message for these changes.")
+            return false
+        }
+
+        commitMessage = drafted
+        return true
+    }
+
     var isReadOnly: Bool {
         isRepositoryAvailable == false || stackTarget != nil || commitTarget != nil
     }

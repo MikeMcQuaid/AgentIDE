@@ -129,7 +129,11 @@ public struct ScheduledPromptsView: View {
     private func details(_ prompt: ScheduledPrompt) -> some View {
         VStack(alignment: .leading) {
             Text(prompt.name).interfaceFont(.headline)
-            Text(prompt.prompt).lineLimit(Self.previewLines).foregroundStyle(.secondary)
+            Text(prompt.prompt)
+                .lineLimit(Self.previewLines)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(prompt.schedule.frequency.rawValue.capitalized + " · " + prompt.agent.displayName)
                 .interfaceFont(.caption)
             if model.runningID == prompt.id {

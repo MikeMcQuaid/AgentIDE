@@ -32,11 +32,13 @@ public struct GitHubClient: Sendable {
         case open
     }
 
+    // swiftlint:disable discouraged_optional_collection - Nil means the rules are unknown.
     /// Which checks a pull request into a base branch must pass,
     /// answered by whoever remembers the answer (the store); empty
-    /// when nothing is required or GitHub cannot say, when every
-    /// check counts.
-    public typealias RequiredChecksReader = @Sendable (String) async -> Set<String>
+    /// when nothing is required and nil when GitHub cannot say.
+    public typealias RequiredChecksReader = @Sendable (String) async -> Set<String>?
+
+    // swiftlint:enable discouraged_optional_collection
 
     /// How many pull requests any one listing asks for. Kept small
     /// deliberately: a repository with thousands open (homebrew-core,
@@ -75,7 +77,7 @@ public struct GitHubClient: Sendable {
         repositoryPath: String,
         scope: ListScope = .open,
         limit: Int = Self.listLimit,
-        requiredChecks: RequiredChecksReader = { _ in [] },
+        requiredChecks: RequiredChecksReader = { _ in nil },
     ) async throws -> [PullRequestSummary] {
         let result = try await gh(Self.listArguments(scope: scope, limit: limit), in: repositoryPath)
         return await Self.summaries(
@@ -90,9 +92,9 @@ public struct GitHubClient: Sendable {
     public func pullRequestSummary(
         repositoryPath: String,
         number: Int,
-        requiredChecks: RequiredChecksReader = { _ in [] },
+        requiredChecks: RequiredChecksReader = { _ in nil },
     ) async throws -> PullRequestSummary? {
-        let fields = Self.coreFields + "," + Self.statusFields
+        let fields = Self.coreFields + "," + Self.statusFields + ",headRepository"
         let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
         return await Self.summaries(fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks).first
     }
@@ -288,7 +290,7 @@ public struct GitHubClient: Sendable {
             required[base] = await requiredChecks(base)
         }
         return rows.map { row in
-            summary(from: row, requiredChecks: required[row.baseRefName ?? ""] ?? [], askedForChecks: askedForChecks)
+            summary(from: row, requiredChecks: required[row.baseRefName ?? ""], askedForChecks: askedForChecks)
         }
     }
 
@@ -338,10 +340,11 @@ public struct GitHubClient: Sendable {
 
     private static func summary(
         from row: PullRequestRow,
-        requiredChecks: Set<String>,
+        // swiftlint:disable:next discouraged_optional_collection - Unknown rules must block autofix.
+        requiredChecks: Set<String>?,
         askedForChecks: Bool,
     ) -> PullRequestSummary {
-        let rollup = Self.rollup(row.statusCheckRollup ?? [], required: requiredChecks)
+        let rollup = Self.rollup(row.statusCheckRollup ?? [], required: requiredChecks ?? [])
         return PullRequestSummary(
             number: row.number,
             title: row.title,
@@ -369,6 +372,10 @@ public struct GitHubClient: Sendable {
                 .max(),
             labels: (row.labels ?? []).map(\.name).sorted(),
             optionalFailures: rollup.optionalFailures,
+            autofixChecks: requiredChecks.map { required in
+                AutofixChecks(required: required, results: (row.statusCheckRollup ?? []).map(Self.autofixCheck))
+            },
+            headRepository: row.headRepository?.nameWithOwner,
         )
     }
 }

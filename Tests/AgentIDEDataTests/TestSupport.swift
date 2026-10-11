@@ -49,12 +49,12 @@ enum TestSupport {
         return result
     }
 
-    /// Runs git with hooks and signing neutralised, so user-level
-    /// configuration cannot leak into tests.
+    /// Runs fixture git without hooks, signing or automatic maintenance.
     @discardableResult
     static func runGit(_ arguments: [String], in directory: String) async throws -> ProcessResult {
         try await run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false"] + arguments,
+            ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "maintenance.auto=false"]
+                + arguments,
             in: directory,
         )
     }
@@ -269,6 +269,19 @@ struct World {
             service: sessionService,
             herdr: herdrClient,
             configHome: home,
+        )
+    }
+
+    func service(herdr: HerdrClient, git: GitClient? = nil) -> SessionService {
+        SessionService(
+            paths: paths,
+            git: git ?? service.git,
+            herdr: herdr,
+            github: service.github,
+            transcripts: service.transcripts,
+            spool: service.spool,
+            store: service.store,
+            runners: [],
         )
     }
 

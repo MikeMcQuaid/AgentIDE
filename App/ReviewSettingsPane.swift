@@ -18,7 +18,7 @@ struct ReviewSettingsPane: View {
                 Picker("Default reviewer", selection: $reviewAgent) {
                     Text("Other agent").tag("")
                     ForEach(AgentKind.allCases, id: \.self) { agent in
-                        Text(agent.displayName).tag(agent.rawValue)
+                        ReviewerLabel(agent).tag(agent.rawValue)
                     }
                 }
                 Text("Review panes start with this agent; you can choose another before reviewing.")
@@ -31,6 +31,18 @@ struct ReviewSettingsPane: View {
             Text("Model and effort changes apply to the next review. New-session defaults stay separate.")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
+            Section("Feedback loop prompts") {
+                Picker("Prompt", selection: $prompt) {
+                    ForEach(FeedbackPrompt.allCases, id: \.self) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                FeedbackPromptEditor(kind: prompt).id(prompt)
+                Text("Applies to the next prompt. AgentIDE adds the captured feedback and result instructions "
+                    + "and handles pushing itself when enabled.")
+                    .interfaceFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -39,6 +51,7 @@ struct ReviewSettingsPane: View {
 
     @AppStorage(AppSettings.reviewAgentKey)
     private var reviewAgent = ""
+    @State private var prompt: FeedbackPrompt = .localReview
 }
 
 // MARK: - ReviewAgentSettings

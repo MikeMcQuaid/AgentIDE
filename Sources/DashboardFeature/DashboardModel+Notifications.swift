@@ -21,7 +21,9 @@ extension DashboardModel {
             let body = "\(item.worktree.repositoryName): \(item.worktree.branch)"
             let completedTurn = previous.session?.activity == .working && session.activity == .done
             if completedTurn {
-                post(.done, title: "Agent finished", body: body)
+                if feedbackStatus(for: item) == nil {
+                    post(.done, title: "Agent finished", body: body)
+                }
                 // The turn is assumed to have committed, so the
                 // branch's pull request stamps are forgotten here,
                 // just before this same reading's pull request pass:
@@ -39,6 +41,26 @@ extension DashboardModel {
             }
         }
         updateDockBadge(for: new)
+    }
+
+    func notifyFeedbackChanges() {
+        let current = store.load().pullRequestAutomation
+        defer { notifiedFeedback = current }
+        for (key, state) in current {
+            guard let notice = FeedbackNotice.change(from: notifiedFeedback[key], to: state) else {
+                continue
+            }
+
+            let name = URL(fileURLWithPath: state.repositoryPath).lastPathComponent
+                + (state.number > 0 ? " #" + String(state.number)
+                    : ": " + URL(fileURLWithPath: state.localWorktreePath ?? state.repositoryPath).lastPathComponent)
+            post(
+                notice == .finished ? .done : .blocked,
+                title: notice == .finished ? "Autofix finished" : "Autofix needs attention",
+                body: name + "\n" + (state.isLoopRunning
+                    ? state.activityStatus : state.lastResult),
+            )
+        }
     }
 
     // MARK: Private

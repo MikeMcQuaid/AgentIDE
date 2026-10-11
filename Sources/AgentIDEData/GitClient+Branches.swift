@@ -107,6 +107,7 @@ public extension GitClient {
         branch: String,
         remote: String = "origin",
         expectedTip: String? = nil,
+        sourceCommit: String? = nil,
     ) async throws {
         try await withRemoteOperation(worktreePath: worktreePath) {
             // A rewritten branch forces with a lease, and the includes
@@ -123,7 +124,13 @@ public extension GitClient {
                 force = ["--force-with-lease", "--force-if-includes"]
             }
             do {
-                try await git(["push"] + force + ["--set-upstream", remote, branch], in: worktreePath)
+                try await git(
+                    ["push"] + force + (sourceCommit == nil ? ["--set-upstream"] : []) + [
+                        remote,
+                        sourceCommit.map { $0 + ":refs/heads/" + branch } ?? branch,
+                    ],
+                    in: worktreePath,
+                )
             } catch let error as CommandError
                 where error.result.standardError.contains("remote ref updated since checkout")
             {
@@ -175,6 +182,15 @@ public extension GitClient {
             allowFailure: true,
         )
         return (result?.standardOutput ?? "").split(separator: "\n").map(String.init)
+    }
+
+    /// Whether two commits contain exactly the same files after signing or rebasing.
+    func sameTree(_ original: String, _ current: String, worktreePath: String) async -> Bool {
+        guard let tree = await commitHash(of: original + "^{tree}", worktreePath: worktreePath) else {
+            return false
+        }
+
+        return await commitHash(of: current + "^{tree}", worktreePath: worktreePath) == tree
     }
 
     /// Whether one ref is in another's history, which is what makes
