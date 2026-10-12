@@ -84,7 +84,7 @@ public extension SessionService {
     /// stack, bottom up, which is what makes them a stack there
     /// rather than pull requests that happen to chain. Read fresh
     /// rather than from the cache, which may be a minute behind the
-    /// pull request just opened. `gh stack link` adds to a stack it
+    /// pull request just opened. The REST API adds to a stack it
     /// already knows and never removes from one, so repeating it
     /// whenever a pull request opens is safe, and two is the fewest
     /// that make a stack.

@@ -39,7 +39,7 @@ extension PullRequestsModelTests {
     }
 
     @Test
-    func `a waiting stack explains why automerge is unavailable`() async {
+    func `a waiting stack explains which pull requests must be ready`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         model.fetchCurrentBranch = { _ in "upper" }
         model.stacking.facts = { _ in
@@ -50,7 +50,7 @@ extension PullRequestsModelTests {
         #expect(model.isInStack)
         #expect(model.mergeActionTitle == "Waiting")
         #expect(model.canMergeAction == false)
-        #expect(model.mergeActionHelp.contains("GitHub does not support automerge for stacked pull requests"))
+        #expect(model.mergeActionHelp.contains("every pull request below it to be ready to merge"))
         var submitted = false
         model.performMergeChange = { _ in submitted = true; return nil }
         model.performMergeStack = { _, _ in submitted = true; return .pending }

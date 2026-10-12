@@ -135,6 +135,7 @@ extension DashboardModel {
                             interval: interval(for: item, collapsed: collapsed),
                         )
                         summary = enriched ?? summary
+                        summary?.stackStanding = open.stackStanding
                     }
                     let previous = branchPullRequests[key].flatMap(\.self)
                     branchPullRequests[key] = summary
@@ -174,10 +175,8 @@ extension DashboardModel {
         return depth
     }
 
-    /// Where a worktree's branch sits in its stack and how tall that
-    /// stack is, so a row can say `2/3` rather than a bare count:
-    /// what is under a branch and what rides on it are different
-    /// questions, and both matter when deciding what to do next.
+    /// Where the branch stands, using GitHub's reported membership
+    /// or the cached pull request chain, including unpublished branches.
     public func stackStanding(for item: WorktreeItem) -> StackStanding {
         var byHead = [String: PullRequestSummary]()
         var byBase = [String: PullRequestSummary]()
@@ -205,7 +204,7 @@ extension DashboardModel {
         // entries all still target the default branch, measures
         // short or not at all. git sees the whole thing, so the
         // taller answer wins.
-        let chained = StackStanding(position: position, height: height, base: own.baseBranch)
+        let chained = own.stackStanding ?? StackStanding(position: position, height: height, base: own.baseBranch)
         guard let derived = derivedStanding(for: item), derived.height > chained.height else {
             return chained.isStacked
                 ? chained

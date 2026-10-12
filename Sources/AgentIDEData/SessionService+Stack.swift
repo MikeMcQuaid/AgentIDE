@@ -350,7 +350,7 @@ public extension SessionService {
 
     // MARK: Internal
 
-    /// The fewest pull requests `gh stack link` will link: a stack.
+    /// The fewest pull requests that make a stack.
     internal static let linkableCount = 2
 
     /// Refuses while the worktree holds uncommitted work: a stack

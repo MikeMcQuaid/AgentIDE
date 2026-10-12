@@ -33,6 +33,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         optionalFailures: Int = 0,
         autofixChecks: AutofixChecks? = nil,
         headRepository: String? = nil,
+        stackStanding: StackStanding? = nil,
     ) {
         self.number = number
         self.title = title
@@ -58,6 +59,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.optionalFailures = optionalFailures
         self.autofixChecks = autofixChecks
         self.headRepository = headRepository
+        self.stackStanding = stackStanding
     }
 
     /// Decodes a summary a cache wrote, an older release's included:
@@ -90,6 +92,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         optionalFailures = try container.decodeIfPresent(Int.self, forKey: .optionalFailures) ?? 0
         autofixChecks = try container.decodeIfPresent(AutofixChecks.self, forKey: .autofixChecks)
         headRepository = try container.decodeIfPresent(String.self, forKey: .headRepository)
+        stackStanding = try container.decodeIfPresent(StackStanding.self, forKey: .stackStanding)
     }
 
     // MARK: Public
@@ -184,6 +187,9 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     public let autofixChecks: AutofixChecks?
     public let headRepository: String?
 
+    /// GitHub's reported position, available from REST branch listings.
+    public var stackStanding: StackStanding?
+
     public let optionalFailures: Int
 
     /// Whether the checks rollup is red: a check the branch requires
@@ -260,6 +266,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             optionalFailures: optionalFailures,
             autofixChecks: autofixChecks,
             headRepository: headRepository,
+            stackStanding: stackStanding,
         )
         edited.unresolvedComments = unresolvedComments
         return edited
@@ -294,6 +301,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             labels: labels,
             optionalFailures: 0,
             headRepository: headRepository,
+            stackStanding: stackStanding,
         )
         pending.unresolvedComments = unresolvedComments
         return pending
