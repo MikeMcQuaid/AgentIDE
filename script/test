@@ -4,22 +4,35 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+bash Tests/ScriptTests.sh
+
 # SwiftPM otherwise signs resource-only bundles as executables and
 # warns about a missing build-graph node in Debug builds.
-swift_args=(--disable-get-task-allow-entitlement)
+swift_args=(--force-resolved-versions --disable-get-task-allow-entitlement
+  --experimental-maximum-parallelization-width 6 "$@")
 xcode_args=(-enableAddressSanitizer NO -enableThreadSanitizer NO)
-if [[ $# -gt 0 ]]; then
-  if [[ $# -ne 2 || "$1" != --sanitize || ("$2" != address && "$2" != thread) ]]; then
-    echo "usage: script/test [--sanitize address|thread]" >&2
-    exit 1
-  fi
-  swift_args+=(--sanitize "$2")
-  if [[ "$2" == address ]]; then
-    xcode_args[1]=YES
-  else
-    xcode_args[3]=YES
-  fi
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --sanitize)
+      sanitizer="${2:-}"
+      [[ $# -lt 2 ]] || shift
+      ;;
+    --sanitize=*) sanitizer="${1#*=}" ;;
+    *)
+      shift
+      continue
+      ;;
+  esac
+  case "${sanitizer}" in
+    address) xcode_args[1]=YES ;;
+    thread) xcode_args[3]=YES ;;
+    *)
+      echo "usage: script/test [--sanitize address|thread] [swift test options]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 # The tests run every process the app does, and with the performance
 # log switched on they wrote thousands of scratch-repository lines
@@ -93,7 +106,7 @@ if [[ "$(sw_vers -productVersion | cut -d. -f1)" -lt 27 ]]; then
 elif [[ -z "${AGENTIDE_DEVELOPMENT_TEAM:-}" ]]; then
   echo "AGENTIDE_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
 elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
-  xcodegen generate --use-cache
+  script/project
   # Quiet, so the build's noise stays out, but a failure's reasons
   # come back out of the result bundle: xcodebuild -quiet names the
   # failing tests and nothing else.
@@ -105,7 +118,10 @@ elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/nu
     -scheme AgentIDEApp \
     -only-testing:AgentIDEIntentTests \
     -skipPackagePluginValidation \
+    -onlyUsePackageVersionsFromResolvedFile \
+    -clonedSourcePackagesDirPath .build \
     -resultBundlePath "${results}" \
+    ARCHS=arm64 \
     CODE_SIGN_STYLE=Automatic \
     CODE_SIGN_IDENTITY="Apple Development" \
     DEVELOPMENT_TEAM="${AGENTIDE_DEVELOPMENT_TEAM}" \

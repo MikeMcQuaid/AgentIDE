@@ -2,7 +2,6 @@
 import AgentIDEDomain
 import AppKit
 @testable import PRFeature
-import TerminalUI
 import Testing
 
 extension PullRequestsModelTests {

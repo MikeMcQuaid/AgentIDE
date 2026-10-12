@@ -27,10 +27,8 @@ private final class CountingRunner: ProcessRunner, @unchecked Sendable {
     /// Whether the branch's listing reports its pull request merged.
     var isMerged = false
 
-    // periphery:ignore - read by the tests below.
     private(set) var calls = 0
 
-    // periphery:ignore - read by the tests below.
     private(set) var unchangedAnswers = 0
 
     func run(

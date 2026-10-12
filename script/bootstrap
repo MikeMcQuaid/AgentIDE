@@ -9,4 +9,4 @@ if ! brew bundle check &>/dev/null; then
 fi
 
 script/version --xcconfig .build/version.xcconfig
-xcodegen generate --quiet
+script/project --quiet

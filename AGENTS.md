@@ -21,10 +21,11 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 
 - `script/bootstrap`: install `Brewfile` dependencies and generate
   `AgentIDE.xcodeproj` with XcodeGen
+- `script/project`: generate Xcode's project and copy the package pins
 - `script/build`: regenerate the Xcode project when sources
-  changed, then build the app with xcodebuild
+  changed, then build Release (`XCODE_CONFIGURATION=Debug` overrides)
 - `script/install`: build, then copy the app into /Applications so
-  the running copy survives rebuilds
+  the running copy survives rebuilds, and relaunch it automatically
 - `script/zip`: zip the Release build as
   `.build/AgentIDE-<version>.zip`
 - `script/package`: sign the Release build with a Developer ID
@@ -36,8 +37,8 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
   real team id, since the framework refuses a runner signed differently
   from the app, and `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out
   regardless)
-- `script/analyze`: static analysis (SwiftLint analyzer and, on the
-  host or CI, periphery for dead code)
+- `script/analyze`: Periphery for dead code everywhere, plus
+  SwiftLint analysis on the host and in CI
 - `script/style`: run all linters; `--fix` also applies safe fixes
 - `script/performance-log [on|off|status]`: switch the installed
   app's performance log on or off (off by default; on, every process
@@ -291,12 +292,18 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   therefore uses `swift build --disable-sandbox` in the sandbox,
   which runs the same plugin unsandboxed and compiles every target,
   `App` included, through the `AgentIDEAppSources` target that
-  exists for that alone. The bundle itself, and both of
-  `script/analyze`'s passes, belong to the host and CI: SwiftLint's
-  analyser wants a full `xcodebuild` log and reads a `swift build`
-  one as a confident zero, and periphery cannot load the manifest
-  here either. `script/analyze` says so and stops rather than
-  passing on nothing.
+  exists for that alone. The bundle itself and SwiftLint analysis
+  belong to the host and CI: SwiftLint's analyser wants a full
+  `xcodebuild` log and reads a `swift build` one as a confident zero.
+  Sandbox Periphery uses a fresh native
+  SwiftPM index and an exported package description, avoiding its
+  own nested manifest sandbox. The native engine is deprecated;
+  recheck this workaround when the toolchain changes.
+- SwiftTerm 1.19's PTY callbacks raced main-thread process teardown.
+  SwiftTerm 1.99 includes the upstream lifecycle fix for both SwiftPM
+  and direct Xcode builds. Keep sanitizer tests enabled and use the
+  view's copied state and public input APIs rather than mutable
+  terminal or selection state.
 - `cannot execute tool 'metal' due to missing Metal Toolchain` breaks
   every build of SwiftTerm-dependent targets, which is the app and
   most tests. With Metal Toolchain 27A266a, install from the host:
@@ -475,12 +482,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   let CI run it instead rather than holding the commit
 - Run `script/analyze` on the host before opening or updating a
   pull request, and say plainly that you could not when you are in
-  the sandbox, where it compiles every target and stops: neither
-  its passes can run there (see the platform notes). Unused imports
-  and dead code otherwise surface in CI first (sandboxed
-  runs reuse the analyze build's index store, so
-  periphery's dead-code pass now runs everywhere). Both passes
-  always run and the script fails at the end if either did: the
+  the sandbox, where Periphery runs but SwiftLint analysis still
+  needs the host's Xcode log (see the platform notes). Both passes
+  always run on the host and the script fails if either did: the
   beta's macro plugin server trips SwiftLint's analyzer often
   enough that aborting on it hid the dead-code pass entirely
 - Reread changed documentation for UK English, working links and

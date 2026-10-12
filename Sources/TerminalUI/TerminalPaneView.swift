@@ -158,10 +158,13 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// Detaches the client and stops any local shell when its pane closes.
     static func dismantleNSView(_ view: PaneTerminalView, coordinator: Coordinator) {
         coordinator.tearDown()
-        if view.process.running {
+        if let process = view.process, process.running {
             // Interactive zsh ignores the SIGTERM SwiftTerm sends.
-            kill(view.process.shellPid, SIGHUP)
-            view.terminate()
+            let pid = process.shellPid
+            if pid > 0 {
+                kill(pid, SIGHUP)
+            }
+            process.terminate()
         }
     }
 
@@ -169,10 +172,8 @@ struct TerminalRepresentable: NSViewRepresentable {
     /// as soon as layout gives the view its real size.
     func makeNSView(context: Context) -> PaneTerminalView {
         let view = PaneTerminalView(frame: .zero)
+        view.terminalDelegate = context.coordinator
         if case .control = transport {
-            // The coordinator speaks the control protocol; a local
-            // shell keeps the view's own PTY wiring instead.
-            view.terminalDelegate = context.coordinator
             view.hideScroller()
             view.dropLocalScrollback()
             view.isHerdrBacked = true
@@ -185,8 +186,6 @@ struct TerminalRepresentable: NSViewRepresentable {
             // The owner's count outlives this view: a fresh
             // coordinator takes it as the baseline, not as a press.
             context.coordinator.seenReattachRequest = reattachRequest
-        } else {
-            view.processDelegate = context.coordinator
         }
         // Mouse reporting stays on (SwiftTerm's default): programs
         // that ask for the mouse, like Claude Code's own transcript

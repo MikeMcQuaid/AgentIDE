@@ -1,6 +1,5 @@
 import AgentIDEData
 import AgentIDEDomain
-import SwiftTerm
 
 // MARK: - Herdr stream conversation
 
@@ -13,7 +12,7 @@ extension TerminalRepresentable.Coordinator {
     /// full repaint that also restores the pane's terminal modes, so
     /// there is nothing to seed and pastes bracket themselves.
     func requestInitialState(of view: PaneTerminalView) {
-        let terminal = view.getTerminal()
+        let terminal = view.terminalDimensions
         sendResize(columns: terminal.cols, rows: terminal.rows)
         armFrameDeadline()
     }
@@ -57,15 +56,9 @@ extension TerminalRepresentable.Coordinator {
             // The first frame is recovery succeeding: whatever the
             // attempt before it did wrong is not news.
             heldFailure = nil
-            if let view {
-                // SwiftTerm otherwise clears selection even for a cursor blink.
-                let mouseReporting = view.allowMouseReporting
-                view.allowMouseReporting = false
-                view.feed(byteArray: bytes[...])
-                view.allowMouseReporting = mouseReporting
-            }
+            view?.feed(byteArray: bytes[...])
             blockSelector?.follow()
-            if isStalled, let view, Self.isScreenBlank(view.getTerminal()) == false {
+            if isStalled, let view, Self.isScreenBlank(view) == false {
                 setStalled(false)
             }
 
@@ -146,15 +139,10 @@ extension TerminalRepresentable.Coordinator {
         return reason.contains(" exited") || reason.contains("not found")
     }
 
-    /// Whether every visible row shows nothing: the blank pane with
-    /// a cursor is a frame that painted an empty screen, which a
-    /// frame count never saw. A cell never written is a NUL, which
-    /// is not whitespace to Swift but is nothing on screen.
-    static func isScreenBlank(_ terminal: Terminal) -> Bool {
-        (0 ..< terminal.rows).allSatisfy { row in
-            terminal.getLine(row: row)?
-                .translateToString(trimRight: true)
-                .allSatisfy { $0.isWhitespace || $0 == "\0" } ?? true
+    /// Whether every visible row shows nothing.
+    static func isScreenBlank(_ view: PaneTerminalView) -> Bool {
+        view.visibleRowsText(0 ..< view.terminalDimensions.rows).allSatisfy { row in
+            row.allSatisfy(\.isWhitespace)
         }
     }
 
@@ -166,7 +154,7 @@ extension TerminalRepresentable.Coordinator {
     /// that is reported, with enough state to name the failing
     /// layer, and then offers Reattach over itself.
     private func reportIfBlank() {
-        guard tornDown == false, let view, framesSeen == 0 || Self.isScreenBlank(view.getTerminal()) else {
+        guard tornDown == false, let view, framesSeen == 0 || Self.isScreenBlank(view) else {
             return
         }
 

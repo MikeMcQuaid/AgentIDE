@@ -17,8 +17,7 @@ struct BlockSelectorTests {
         let expected = lines.joined(separator: "\n")
         view.feed(text: lines.joined(separator: "\r\n"))
         // A stale native selection must not win over the rectangle.
-        view.selection.startSelection(row: 0, col: 0)
-        view.selection.dragExtend(row: 0, col: 5)
+        try TerminalMouse.select(in: view, row: 0, from: 0, to: 5)
         try fixture.select(rows: rows)
         #expect(view.copyPasteboard.string(forType: .string) == expected)
         #expect(fixture.window.firstResponder === view)
@@ -31,8 +30,7 @@ struct BlockSelectorTests {
         #expect(view.copyPasteboard.string(forType: .string) == expected)
 
         fixture.selector.clear()
-        view.selection.startSelection(row: 0, col: 0)
-        view.selection.dragExtend(row: 0, col: 5)
+        try TerminalMouse.select(in: view, row: 0, from: 0, to: 5)
         view.copy(NSMenuItem())
         #expect(view.copyPasteboard.string(forType: .string) == "print")
     }
@@ -53,7 +51,7 @@ struct BlockSelectorTests {
     }
 
     @Test(arguments: [true, false])
-    func `native selection permanently replaces an earlier rectangular copy`(selectAll: Bool) throws {
+    func `native selection permanently replaces an earlier rectangular copy`(selectAll: Bool) async throws {
         let fixture = Fixture()
         defer { fixture.close() }
         fixture.view.dropLocalScrollback()
@@ -64,8 +62,10 @@ struct BlockSelectorTests {
         if selectAll {
             fixture.view.selectAll(nil)
         } else {
-            fixture.view.selection.startSelection(row: 1, col: 0)
-            fixture.view.selection.dragExtend(row: 1, col: 17)
+            try TerminalMouse.select(in: fixture.view, row: 1, from: 0, to: 17)
+        }
+        for _ in 0 ..< 100 where fixture.view.subviews.count != subviewCount {
+            await Task.yield()
         }
         #expect(fixture.view.subviews.count == subviewCount)
         let selected = try #require(fixture.view.getSelection())
@@ -73,7 +73,7 @@ struct BlockSelectorTests {
         fixture.view.copy(NSMenuItem())
         #expect(fixture.view.copyPasteboard.string(forType: .string) == selected)
 
-        fixture.view.feed(text: "\u{1B}[\(fixture.view.getTerminal().rows)S")
+        fixture.view.feed(text: "\u{1B}[\(fixture.view.terminalDimensions.rows)S")
         fixture.selector.follow()
         #expect(fixture.view.selectionActive == false)
         #expect(fixture.view.getSelection() == nil)
@@ -92,6 +92,23 @@ struct BlockSelectorTests {
         fixture.view.copyPasteboard.setString("keep clipboard", forType: .string)
         try fixture.select(rows: 1)
         #expect(fixture.view.copyPasteboard.string(forType: .string) == "keep clipboard")
+    }
+
+    @Test(arguments: [
+        ("ab界cd", 2 ... 3, "界"),
+        ("ab界cd", 4 ... 5, "cd"),
+        ("a\u{301}b界cd", 0 ... 1, "a\u{301}b"),
+        ("👩‍💻text", 2 ... 5, "text"),
+        ("left\u{1B}[8Gright", 2 ... 10, "ft   righ"),
+    ])
+    func `rectangles slice display cells rather than string offsets`(
+        text: String, columns: ClosedRange<Int>, expected: String,
+    ) throws {
+        let fixture = Fixture()
+        defer { fixture.close() }
+        fixture.view.feed(text: text)
+        try fixture.select(rows: 1, columns: columns)
+        #expect(fixture.view.copyPasteboard.string(forType: .string) == expected)
     }
 
     // MARK: Private
@@ -120,12 +137,12 @@ struct BlockSelectorTests {
             window.close()
         }
 
-        func select(rows: Int) throws {
+        func select(rows: Int, columns: ClosedRange<Int>? = nil) throws {
             let cell = PaneTerminalView.cellSize(of: view)
             for (type, column, row) in [
-                (NSEvent.EventType.leftMouseDown, 0, 0),
-                (.leftMouseDragged, view.getTerminal().cols - 1, rows - 1),
-                (.leftMouseUp, view.getTerminal().cols - 1, rows - 1),
+                (NSEvent.EventType.leftMouseDown, columns?.lowerBound ?? 0, 0),
+                (.leftMouseDragged, columns?.upperBound ?? (view.terminalDimensions.cols - 1), rows - 1),
+                (.leftMouseUp, columns?.upperBound ?? (view.terminalDimensions.cols - 1), rows - 1),
             ] {
                 let point = NSPoint(
                     x: (CGFloat(column) + 0.5) * cell.width,

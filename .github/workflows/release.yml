@@ -14,9 +14,14 @@ on:
     paths:
       - .github/workflows/release.yml
       - App/AgentIDE.entitlements
+      - Package.swift
+      - Package.resolved
       - project.yml
+      - script/bootstrap
       - script/build
       - script/package
+      - script/project
+      - script/version
       - script/zip
 
 defaults:
@@ -99,12 +104,21 @@ jobs:
       - name: Download Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
 
+      - name: Cache Swift package dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .DerivedData/SourcePackages
+            .build/checkouts
+            .build/repositories
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-
+
       - name: Bootstrap
         run: script/bootstrap
 
       - name: Build
-        env:
-          XCODE_CONFIGURATION: Release
         run: script/build
 
       - name: Zip

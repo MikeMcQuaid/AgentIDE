@@ -1,1 +1,1 @@
-.DerivedData/Build/Products/Debug/AgentIDE.app
+.DerivedData/Build/Products/Release/AgentIDE.app

@@ -9,17 +9,17 @@ STYLE_FIX=""
 
 shell_style() {
   # The shipped shim in bin is a shell script like the rest.
-  shellcheck script/* bin/*
+  shellcheck script/* bin/* Tests/*.sh
   if [[ -n "${STYLE_FIX}" ]]; then
-    shfmt -i 2 -ci -w script/* bin/*
+    shfmt -i 2 -ci -w script/* bin/* Tests/*.sh
   else
-    shfmt -i 2 -ci -d script/* bin/*
+    shfmt -i 2 -ci -d script/* bin/* Tests/*.sh
   fi
 }
 
 github_actions_style() {
   actionlint
-  zizmor --offline .github/workflows
+  zizmor --offline --strict-collection .github/workflows
 
   # Only first-party (actions/*) and Homebrew (Homebrew/actions/*)
   # actions are allowed; anything else needs a human decision, so add
@@ -70,9 +70,8 @@ swift_style() {
   if [[ -n "${STYLE_FIX}" ]]; then
     "${swiftformat}" .
     swiftlint --fix --quiet
-  else
-    "${swiftformat}" --lint .
   fi
+  "${swiftformat}" --lint .
   swiftlint --strict --quiet
 }
 

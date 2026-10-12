@@ -94,12 +94,6 @@ struct FileListingTests {
     }
 }
 
-// MARK: - RepositoryPageIntegrationTests
-
-/// The repository page's conversation browser and unread state, which
-/// span worktrees rather than one session.
-struct RepositoryPageIntegrationTests {}
-
 // MARK: - SlowCountingRunner
 
 /// Answers fixed output slowly enough that concurrent callers

@@ -7,7 +7,7 @@ import SwiftTerm
 /// The SwiftTerm view with the pane's own copy behaviour. Agent
 /// panes feed it from a herdr terminal stream and never start a
 /// process; the shell pane starts a plain local shell on its PTY.
-final class PaneTerminalView: LocalProcessTerminalView {
+final class PaneTerminalView: TerminalView {
     // MARK: Lifecycle
 
     deinit {
@@ -16,6 +16,9 @@ final class PaneTerminalView: LocalProcessTerminalView {
     }
 
     // MARK: Internal
+
+    /// The local shell's PTY, absent from herdr-backed panes.
+    var process: LocalProcess?
 
     /// Reflows multi-line copies for pasting into prose tools.
     var reflowsCopies = false
@@ -51,57 +54,50 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// that stopped drawing; nil on a local shell, which has none.
     var onReattach: (() -> Void)?
 
-    /// Keeps a selection while output arrives. SwiftTerm drops the
-    /// selection on every line feed whenever mouse reporting is on,
-    /// which it always is here so that an agent's own scrolling and
-    /// pagers work, and an agent writing a long answer feeds a line
-    /// at a time: selecting anything while one was thinking was
-    /// therefore impossible. Nothing is lost by keeping it, since
-    /// SwiftTerm already moves a selection with the text it covers,
-    /// and that is exactly what it does when mouse reporting is off.
-    override func linefeed(source: Terminal) {
-        guard selectionActive else {
-            super.linefeed(source: source)
-            return
-        }
-    }
-
-    /// Rounds a drag's end to the boundary nearest the pointer.
-    /// SwiftTerm names the cell the pointer is inside and takes the
-    /// end as exclusive, so the character under the pointer was left
-    /// out of the highlight and the copy alike: every drag across a
-    /// word dropped its last letter unless it carried on into the
-    /// next one. A word or line drag (`clickCount` above one) picks
-    /// its own boundaries and is left alone.
+    /// Round native drags through the view's input API, without escaping
+    /// SwiftTerm's locked selection state.
     override func mouseDown(with event: NSEvent) {
-        pressPoint = convert(event.locationInWindow, from: nil)
+        selectionPress = event
         super.mouseDown(with: event)
+        if selectionActive {
+            onNativeSelection?()
+        }
     }
 
-    /// The first drag is where SwiftTerm anchors the selection, at
-    /// the cell the pointer went down in; the start moves to the
-    /// boundary nearest the press the way the end moves to the
-    /// boundary nearest the pointer, so a drag begun past the middle
-    /// of a character does not take that character with it.
     override func mouseDragged(with event: NSEvent) {
-        let wasActive = selection?.active ?? false
-        super.mouseDragged(with: event)
-        if wasActive == false {
-            roundSelectionStart()
+        if let press = selectionPress {
+            guard event.locationInWindow != press.locationInWindow else {
+                return
+            }
+
+            selectionPress = nil
+            let rounded = roundedSelectionEvent(press)
+            if rounded !== press {
+                super.mouseDown(with: rounded)
+            }
         }
-        roundSelectionEnd(at: event)
+        super.mouseDragged(with: roundedSelectionEvent(event))
+        if selectionActive {
+            onNativeSelection?()
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
+        selectionPress = nil
         super.mouseUp(with: event)
-        roundSelectionEnd(at: event)
-    }
-
-    override func selectionChanged(source: Terminal) {
-        if selection?.active == true {
+        if selectionActive {
             onNativeSelection?()
         }
+    }
+
+    override nonisolated func selectionChanged(source: Terminal) {
         super.selectionChanged(source: source)
+        // The callback holds SwiftTerm's lock; read selection after it returns.
+        Task { @MainActor [weak self] in
+            if self?.selectionActive == true {
+                self?.onNativeSelection?()
+            }
+        }
     }
 
     /// The right-click menu: Copy and Paste, which terminals
@@ -137,7 +133,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return
         }
 
-        if isHerdrBacked, getTerminal().bracketedPasteMode == false,
+        if isHerdrBacked, terminalStateSnapshot().bracketedPasteMode == false,
            let text = NSPasteboard.general.string(forType: .string)
         {
             // Three sends, gathered into one write by the coordinator,
@@ -177,7 +173,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// scroller it is showing; measuring against the full width put
     /// every column a cell right and copied blanks.
     static func cellSize(of view: PaneTerminalView) -> CGSize {
-        let terminal = view.getTerminal()
+        let terminal = view.terminalDimensions
         let rows = max(terminal.rows, 1)
         let columns = max(terminal.cols, 1)
         let optimal = view.getOptimalFrameSize().size
@@ -231,7 +227,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
             return event
         }
 
-        let rows = CGFloat(getTerminal().rows)
+        let rows = CGFloat(terminalDimensions.rows)
         let cellHeight = rows > 0 ? bounds.height / rows : 0
         var lines = 0
         if event.hasPreciseScrollingDeltas, cellHeight > 0 {
@@ -247,8 +243,8 @@ final class PaneTerminalView: LocalProcessTerminalView {
             onScroll(
                 lines > 0,
                 abs(lines),
-                min(max(Int(point.x / cell.width), 0), getTerminal().cols - 1),
-                min(max(Int((bounds.height - point.y) / cell.height), 0), getTerminal().rows - 1),
+                min(max(Int(point.x / cell.width), 0), terminalDimensions.cols - 1),
+                min(max(Int((bounds.height - point.y) / cell.height), 0), terminalDimensions.rows - 1),
             )
         }
         return nil
@@ -261,7 +257,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// times over. Nothing is lost, since scrolling asks herdr,
     /// which has the real thing.
     func dropLocalScrollback() {
-        getTerminal().changeScrollback(nil)
+        changeScrollback(nil)
     }
 
     /// Hides the scroll indicator. An agent pane's scrollback lives
@@ -285,8 +281,7 @@ final class PaneTerminalView: LocalProcessTerminalView {
     /// seeing the same event does nothing with it.
     private static var lastWheel: (timestamp: TimeInterval, window: Int)?
 
-    /// Where the mouse went down, for the selection's start.
-    private var pressPoint: CGPoint?
+    private var selectionPress: NSEvent?
 
     /// The wheel's fractional line carry between events.
     private var wheelRemainder: CGFloat = 0
@@ -307,44 +302,29 @@ final class PaneTerminalView: LocalProcessTerminalView {
         onReattach?()
     }
 
-    /// See `mouseDragged`: the start column SwiftTerm chose, moved
-    /// on to the boundary nearest the press. The soft start resets
-    /// the end with it, and the end rounding that follows puts the
-    /// end back under the pointer.
-    private func roundSelectionStart() {
-        guard let pressPoint, let selection, selection.active,
-              let column = TerminalSelection.endColumn(
-                  across: pressPoint.x,
-                  cellWidth: Self.cellSize(of: self).width,
-                  columns: getTerminal().cols,
-              ), column != selection.start.col
-        else {
-            return
-        }
-
-        selection.setSoftStart(bufferPosition: Position(col: column, row: selection.start.row))
-        selection.startSelection()
-    }
-
-    /// See `mouseDragged`: the end column SwiftTerm chose, moved on
-    /// to the nearer boundary when the pointer is past the middle of
-    /// its cell. Never moved backwards, so this can only ever add the
-    /// character the pointer is on.
-    private func roundSelectionEnd(at event: NSEvent) {
-        guard event.clickCount <= 1, let selection, selection.active else {
-            return
+    private func roundedSelectionEvent(_ event: NSEvent) -> NSEvent {
+        guard event.clickCount == 1, currentMouseMode == .off || allowMouseReporting == false else {
+            return event
         }
 
         let point = convert(event.locationInWindow, from: nil)
-        let terminal = getTerminal()
+        let cell = Self.cellSize(of: self)
         guard let column = TerminalSelection.endColumn(
-            across: point.x,
-            cellWidth: Self.cellSize(of: self).width,
-            columns: terminal.cols,
-        ), column > selection.end.col else {
-            return
+            across: point.x, cellWidth: cell.width, columns: terminalDimensions.cols,
+        ) else {
+            return event
         }
 
-        selection.dragExtend(bufferPosition: Position(col: column, row: selection.end.row))
+        return NSEvent.mouseEvent(
+            with: event.type,
+            location: convert(NSPoint(x: CGFloat(column) * cell.width, y: point.y), to: nil),
+            modifierFlags: event.modifierFlags,
+            timestamp: event.timestamp,
+            windowNumber: event.windowNumber,
+            context: nil,
+            eventNumber: event.eventNumber,
+            clickCount: event.clickCount,
+            pressure: event.pressure,
+        ) ?? event
     }
 }
