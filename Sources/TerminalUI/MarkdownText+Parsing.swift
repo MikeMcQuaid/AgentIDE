@@ -46,7 +46,7 @@ extension MarkdownText {
 
             case let quote as BlockQuote:
                 // Detach the children so formatting removes the outer quote.
-                blocks.append(.quote(Document(quote.blockChildren).format()))
+                blocks.append(.quote(alert(Document(quote.blockChildren).format())))
 
             case is ThematicBreak:
                 blocks.append(.rule)
@@ -70,6 +70,17 @@ extension MarkdownText {
             }
         }
         return blocks
+    }
+
+    private static func alert(_ source: String) -> String {
+        for title in ["Note", "Tip", "Important", "Warning", "Caution"] {
+            let marker = "[!" + title.uppercased() + "]"
+            if source == marker || source.hasPrefix(marker + "\n") || source.hasPrefix(marker + " ") {
+                return "**" + title + "**\n\n"
+                    + source.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return source
     }
 
     /// YAML front matter and what follows it, when the text opens

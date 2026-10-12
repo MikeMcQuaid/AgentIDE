@@ -19,5 +19,6 @@ struct PullRequestSummaryDecodingTests {
         #expect(summary.isQueued == false)
         #expect(summary.awaitsCopilotReview == false)
         #expect(summary.copilotReviewedAt == nil)
+        #expect(summary.stackStanding == nil)
     }
 }

@@ -1387,12 +1387,17 @@ steps.
   done, and Rebase dims with the reason, Push with it while the stack
   needs that rebase; it stops when that worktree has switched
   branches by the time its turn comes. Each pull request opens
-  against the branch below with both `--head` and `--base` named; `gh stack link` links what is open (idempotent, additive),
-  and stack merge uses the asynchronous merge API after linking,
+  against the branch below with both `--head` and `--base` named.
+  GitHub's REST Stacks API links what is open: query by pull request,
+  create a new stack or append only missing entries to an existing
+  stack. Repeating a link leaves existing members in place; conflicting
+  membership or order fails before mutation. No CLI extension is needed.
+  Stack merge uses the asynchronous merge API after linking,
   offered only when every pull request below is mergeable, green and
-  approved. Standing (`2/3`) comes from the pull request chain the
-  store has cached, falling back to the worktree's derived stack.
-  `gh stack view` knows only stacks it created; never read it.
+  approved. Standing (`2/3`) measures the remote stack from GitHub's
+  REST metadata when available, otherwise the cached pull request chain,
+  and includes unpublished branches when the local stack is taller.
+  Local rebase and push operations still use the worktree's derived stack.
 - **One merge button shows whether merging is scheduled.**
   Standalone pull requests and stacks share the same button. It says
   "Automerge" or "Queued" from GitHub's reported state,
@@ -1404,8 +1409,8 @@ steps.
   while waiting. Waiting standalone pull requests use `gh pr merge
   --auto`, omitting the merge method when a queue owns it. Requesting
   an asynchronous merge alone does not enable automerge.
-  GitHub does not support automerge for stacks: a waiting stack says
-  "Waiting" and explains why, while a ready stack
+  Stack automerge is rolling out without a documented API: a waiting
+  stack says "Waiting" and explains why, while a ready stack
   still merges or queues through the asynchronous API. Drafts say
   Ready, including in stacks. Cancellation remains available
   even when a stack is no longer ready. Labels stay one word,
@@ -1832,6 +1837,9 @@ it. Releases are full releases, never drafts or prereleases, which lets
 
 ## Pull request automation
 
+The shared Markdown renderer recognises GitHub's note, tip, important,
+warning and caution alerts in blockquotes, with a labelled callout and
+the body rendered as Markdown. Unknown markers and code remain literal.
 The shared Markdown renderer uses SwiftSoup for HTML fragments, retaining
 nested details as native disclosures and mapping emphasis, links, lists,
 quotes and HTML code into the existing Markdown views. Subscript and

@@ -214,7 +214,7 @@ extension PullRequestsModel {
             return "Queued for merging on GitHub. Click to remove it from the queue"
 
         case "Waiting":
-            return "GitHub does not support automerge for stacked pull requests; the stack must be ready to merge"
+            return "Wait for this pull request and every pull request below it to be ready to merge"
 
         case "Ready":
             return "Take this pull request out of draft"

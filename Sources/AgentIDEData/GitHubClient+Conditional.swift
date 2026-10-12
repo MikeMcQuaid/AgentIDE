@@ -109,6 +109,15 @@ public extension GitHubClient {
                 // while GitHub still showed the request waiting.
                 awaitsCopilotReview: (row.requestedReviewers ?? []).contains { Self.isCopilot($0.login) },
                 labels: (row.labels ?? []).map(\.name).sorted(),
+                stackStanding: row.stack.flatMap { stack in
+                    guard let position = stack.position, let size = stack.size,
+                          position > 0, size >= position
+                    else {
+                        return nil
+                    }
+
+                    return StackStanding(position: position, height: size, base: row.base.ref)
+                },
             )
         }
     }
@@ -130,6 +139,11 @@ public extension GitHubClient {
 // MARK: - RESTPullRow
 
 private struct RESTPullRow: Decodable {
+    struct Stack: Decodable {
+        let size: Int?
+        let position: Int?
+    }
+
     struct Ref: Decodable {
         let ref: String
         let sha: String?
@@ -148,6 +162,7 @@ private struct RESTPullRow: Decodable {
     }
 
     let number: Int
+    let stack: Stack?
     // swiftlint:disable:next discouraged_optional_collection
     let labels: [Label]?
     // Absent when nobody is asked.
