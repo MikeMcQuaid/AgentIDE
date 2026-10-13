@@ -36,6 +36,7 @@ struct SessionNavigationTests {
                 spool: EventSpool(directory: paths.eventsDirectory),
                 store: store,
                 runners: [],
+                processes: runner,
             )
             model = DashboardModel(service: service, store: store, github: github)
             repository = Repository(name: "repo", path: paths.repositoriesDirectory + "/repo")

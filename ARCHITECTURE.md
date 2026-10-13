@@ -513,11 +513,13 @@ each waited on the other until the app was restarted.
    (`LaunchFailure`, keyed by the placeholder's or the worktree's
    path): the row shows a warning, its pane shows the error, and
    nothing else on screen moves, so one launch's failure never lands
-   in another's form. The failure holds the `LaunchDraft`: the typed
-   text, the source with its issue, pull request or advisory, and the
-   base branch. Edit and retry hands it to the form that started it
-   (the new session form, or the worktree's own), which applies it the
-   moment it shows, and Dismiss drops a placeholder's row. Failures
+   in another's form. If a refresh replaced its placeholder while it
+   was launching, a failure restores that row without selecting it.
+   The failure holds the `LaunchDraft`: the typed text, source and
+   reference, base branch, agent, model and effort. Edit and retry
+   hands it to the form that started it (the new session form or the
+   worktree's own), which applies it the moment it shows, and Dismiss
+   drops a placeholder's row. Failures
    live in memory only, beside the Messages pane's copy, since the
    sidebar cache never keeps a placeholder.
 2. The branch name summarises the prompt through `FoundationModelClient`

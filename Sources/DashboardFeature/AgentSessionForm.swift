@@ -286,6 +286,10 @@ struct AgentSessionForm: View {
         number = retry.draft.number
         ghsaID = retry.draft.ghsaID
         prompt = retry.draft.text
+        agentKindName = retry.draft.agent.rawValue
+        let choices = model.launchChoices(for: retry.draft.agent)
+        agentModel = retry.draft.options.model ?? choices.defaultModel
+        agentEffort = retry.draft.options.effort ?? choices.defaultEffort
     }
 
     private func submit() {

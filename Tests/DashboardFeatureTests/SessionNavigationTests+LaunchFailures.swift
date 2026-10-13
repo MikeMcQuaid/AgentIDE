@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import AppKit
 @testable import DashboardFeature
@@ -29,7 +30,14 @@ extension SessionNavigationTests {
         )
         fixture.model.groups[0].items.append(item)
         fixture.model.selection = item
-        let draft = LaunchDraft(text: "Fix it", source: .issue, number: 12, base: "part_one")
+        let draft = LaunchDraft(
+            text: "Fix it",
+            source: .issue,
+            agent: .claudeCode,
+            options: AgentLaunchOptions(),
+            number: 12,
+            base: "part_one",
+        )
         fixture.model.launchFailures[placeholder.path] = LaunchFailure(message: "worktree add failed", draft: draft)
         #expect(fixture.model.launchFailure(for: item)?.message == "worktree add failed")
 
@@ -59,12 +67,21 @@ extension SessionNavigationTests {
             "agentEffort": "high",
         ])
         defer { restore() }
-        let worktreePath = fixture.repository.path + "/../worktrees/fix_it"
+        let worktree = fixture.model.groups[0].items[0].worktree
+        fixture.model.discoveredModels[.codexCLI] = ["test-model"]
+        await fixture.model.launchAgent(
+            fromIssue: 12,
+            in: worktree,
+            context: "Fix it",
+            agent: .codexCLI,
+            options: AgentLaunchOptions(model: "test-model", effort: "low"),
+        )
+        let failure = try #require(fixture.model.launchFailures[worktree.path])
         var submitted: AgentSessionForm.Submission?
         let form = AgentSessionForm(
             model: fixture.model,
             repository: fixture.repository,
-            worktreePath: isOwnForm ? worktreePath : fixture.repository.path,
+            worktreePath: isOwnForm ? worktree.path : fixture.root,
             submitTitle: "Start agent",
             submitHelp: "Start",
         ) { submission in submitted = submission }
@@ -73,15 +90,10 @@ extension SessionNavigationTests {
         defer { window.close() }
         try await Task.sleep(for: .milliseconds(100))
 
-        let retry = LaunchRetry(
-            repositoryPath: fixture.repository.path,
-            worktreePath: worktreePath,
-            draft: LaunchDraft(text: "Fix it", source: .issue, number: 12),
-        )
-        fixture.model.launchRetry = retry
+        fixture.model.retryLaunch(for: worktree)
         try await Task.sleep(for: .milliseconds(100))
 
-        #expect(fixture.model.launchRetry == (isOwnForm ? nil : retry))
+        #expect(fixture.model.launchRetry?.draft == (isOwnForm ? nil : failure.draft))
         // Submitting proves the form took the issue, not just the text.
         if isOwnForm {
             try fixture.typeAndSubmit(in: host, windowNumber: window.windowNumber)
@@ -92,6 +104,8 @@ extension SessionNavigationTests {
             #expect(submission.source == .issue)
             #expect(submission.number == 12)
             #expect(submission.context == "Fix it prompt")
+            #expect(submission.agent == .codexCLI)
+            #expect(submission.options == AgentLaunchOptions(model: "test-model", effort: "low"))
         }
     }
 }

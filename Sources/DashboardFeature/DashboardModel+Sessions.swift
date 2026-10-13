@@ -34,7 +34,7 @@ public extension DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
     ) async -> LaunchFailure? {
-        let draft = LaunchDraft(text: prompt, source: .prompt, base: baseBranch)
+        let draft = LaunchDraft(text: prompt, source: .prompt, agent: agent, options: options, base: baseBranch)
         return await run(draft, in: repository, placeholder: Self.placeholderName(from: prompt)) { service in
             try await service.createSession(
                 repository: repository,
@@ -55,7 +55,9 @@ public extension DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
     ) async {
-        let draft = LaunchDraft(text: context, source: .issue, number: number, base: baseBranch)
+        let draft = LaunchDraft(
+            text: context, source: .issue, agent: agent, options: options, number: number, base: baseBranch,
+        )
         await run(draft, in: repository, placeholder: "issue-\(number)") { service in
             try await service.createSession(
                 fromIssue: number,
@@ -76,7 +78,7 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        let draft = LaunchDraft(text: context, source: .pullRequest, number: number)
+        let draft = LaunchDraft(text: context, source: .pullRequest, agent: agent, options: options, number: number)
         await run(draft, in: repository, placeholder: "pr-\(number)") { service in
             try await service.createSession(
                 fromPullRequest: number,
@@ -98,7 +100,9 @@ public extension DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
     ) async {
-        let draft = LaunchDraft(text: context, source: .advisory, ghsaID: ghsaID, base: baseBranch)
+        let draft = LaunchDraft(
+            text: context, source: .advisory, agent: agent, options: options, ghsaID: ghsaID, base: baseBranch,
+        )
         await run(draft, in: repository, placeholder: SessionService.advisoryBranch) { service in
             try await service.createSession(
                 fromAdvisory: ghsaID,
@@ -118,7 +122,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run(LaunchDraft(text: prompt, source: .prompt), at: worktree.path) { service in
+        let draft = LaunchDraft(text: prompt, source: .prompt, agent: agent, options: options)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
         }
     }
@@ -131,7 +136,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run(LaunchDraft(text: context, source: .issue, number: number), at: worktree.path) { service in
+        let draft = LaunchDraft(text: context, source: .issue, agent: agent, options: options, number: number)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(
                 fromIssue: number,
                 in: worktree,
@@ -150,7 +156,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run(LaunchDraft(text: context, source: .advisory, ghsaID: ghsaID), at: worktree.path) { service in
+        let draft = LaunchDraft(text: context, source: .advisory, agent: agent, options: options, ghsaID: ghsaID)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(
                 fromAdvisory: ghsaID,
                 in: worktree,
@@ -230,15 +237,23 @@ public extension DashboardModel {
             }
             return nil
         } catch {
-            return fail(with: error, draft: draft, rowPath: rowPath)
+            return fail(with: error, draft: draft, rowPath: rowPath, pending: pending)
         }
     }
 
     /// Leaves a failed launch on its row, which becomes selectable:
     /// its pane is where the failure is read.
-    private func fail(with error: any Error, draft: LaunchDraft, rowPath: String?) -> LaunchFailure {
+    private func fail(
+        with error: any Error, draft: LaunchDraft, rowPath: String?, pending: WorktreeItem?,
+    ) -> LaunchFailure {
         ErrorLog.shared.report(error.localizedDescription)
         let failure = LaunchFailure(message: error.localizedDescription, draft: draft)
+        if let pending,
+           let index = groups.firstIndex(where: { $0.repository.path == pending.worktree.repositoryPath }),
+           groups[index].items.contains(where: { $0.id == pending.id }) == false
+        {
+            groups[index].items.insert(pending, at: min(1, groups[index].items.count))
+        }
         if let rowPath {
             launchFailures[rowPath] = failure
             // Only a placeholder was greyed for the launch; a worktree

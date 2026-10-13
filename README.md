@@ -16,6 +16,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 ## ✨ Features
 
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
+- Starts sessions while others are launching and keeps failed launches available to retry with their original choices.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
 - Starts a session on top of another branch's work, so a large change splits into stacked pull requests.
 - Schedules repository prompts daily, weekly or monthly while AgentIDE is open, catching up once after reopening or waking.

@@ -1,3 +1,4 @@
+import AgentIDEData
 import AgentIDEDomain
 import SwiftUI
 import TerminalUI
@@ -8,6 +9,8 @@ import TerminalUI
 struct LaunchDraft: Equatable {
     let text: String
     let source: AgentSessionForm.PromptSource
+    let agent: AgentKind
+    let options: AgentLaunchOptions
     var number: Int?
     var ghsaID: String?
     var base: String?
