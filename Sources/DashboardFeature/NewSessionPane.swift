@@ -33,12 +33,6 @@ public struct NewSessionPane: View {
                 onSourceChange: { source = $0 },
                 onSubmit: { submission in await start(submission) },
             )
-            if let failure = model.screenError {
-                Text(failure)
-                    .interfaceFont(.callout)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
             Spacer()
         }
         .padding([.horizontal, .bottom])

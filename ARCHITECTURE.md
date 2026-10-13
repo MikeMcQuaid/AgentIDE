@@ -330,7 +330,8 @@ new session draws (a `.pending` path, never a directory) is the one
 exception: it is kept until its repository gains a listed row, since
 the creation names the branch itself and the two never share a name,
 and keeping it any longer sat it beside its own worktree for the whole
-of the agent's launch. This is a display rule,
+of the agent's launch. A placeholder whose launch failed stays until
+it is dismissed or retried. This is a display rule,
 not a cache. It matters because a row holds its worktree's panes open,
 and a pane holds a running shell. The same tolerance applies the other
 way round: a mounted pane whose worktree vanished mid-read (a branch
@@ -485,21 +486,40 @@ each waited on the other until the app was restarted.
    requests paint from their caches first.
    Prompt, issue and advisory sessions can pick a base branch: the
    default, then worktree branches (from memory), then other local
-   branches. A worktree's context menu presets it. The model holds
-   it, so a failed launch comes back with it, and every opener
-   clears it, so nothing stacks by accident.
+   branches. A worktree's context menu presets it. A failed launch
+   keeps it for its retry, and every opener clears it, so nothing
+   stacks by accident.
    What was picked is remembered per agent in
    `agentide/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
    surface starts a session. Submitting inserts a placeholder row
-   instantly and narrates creation through `LaunchProgress` until herdr
-   detects the agent's interface (`awaitReady`, bounded at a minute).
+   instantly and narrates creation until herdr detects the agent's
+   interface (`awaitReady`, bounded at a minute). Each launch narrates
+   into a `LaunchProgress` of its own, keyed by its row's path, through
+   a copy of the service (`SessionService.reporting(to:)`, as scheduled
+   prompts go silent), so two launches in flight never write into each
+   other's log; resumes keep the shared one. A placeholder's path ends
+   in a unique suffix, so two launches under one provisional name (the
+   same issue twice) keep separate rows.
    Selecting a worktree or starting a session expands its repository,
    including a repeated request for the current selection. Background
-   refreshes leave repository disclosure alone. A completed launch
-   clears only the draft it submitted, preserving newer typing in
-   another form while the launch was in flight. It compares the current
-   defaults value: a disappeared form's `AppStorage` no longer updates.
+   refreshes leave repository disclosure alone. Submitting clears the
+   draft at once, so a form opened while the launch is in flight starts
+   empty and can start a second session beside it. A launch that
+   finishes opens its pane only while its own row is still selected and
+   no page covers the pane: anything chosen since, another launch's
+   placeholder included, keeps the sidebar where it is.
+   A failed launch stays on the row it was for
+   (`LaunchFailure`, keyed by the placeholder's or the worktree's
+   path): the row shows a warning, its pane shows the error, and
+   nothing else on screen moves, so one launch's failure never lands
+   in another's form. The failure holds the `LaunchDraft`: the typed
+   text, the source with its issue, pull request or advisory, and the
+   base branch. Edit and retry hands it to the form that started it
+   (the new session form, or the worktree's own), which applies it the
+   moment it shows, and Dismiss drops a placeholder's row. Failures
+   live in memory only, beside the Messages pane's copy, since the
+   sidebar cache never keeps a placeholder.
 2. The branch name summarises the prompt through `FoundationModelClient`
    (underscore-separated, no prefix), or the prompt's first words when
    the model is unavailable. An advisory session is the exception: its
@@ -576,7 +596,9 @@ when already inside herdr
 (`HERDR_PANE_ID`), which refuses a nested client. App Intents
 (`App/AgentIDEShortcuts.swift`) resolve entities from the dashboard's
 in-memory groups and reach the app through `AppDependencies.shared`,
-since the system invokes them outside any view; they are tested from
+since the system invokes them outside any view. Start Agent Session
+answers with the launch's failure when there is one rather than
+claiming it started; they are tested from
 the `AgentIDEIntentTests` UI bundle through `AppIntentsTesting`, with
 Start Agent Session checked to exist rather than run. The repository
 page resumes any past conversation into a fresh worktree.

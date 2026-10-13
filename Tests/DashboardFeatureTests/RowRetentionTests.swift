@@ -50,6 +50,23 @@ struct RowRetentionTests {
     }
 
     @Test
+    func `a failed launch's row outlasts another worktree landing beside it`() throws {
+        let root = try makeDirectory()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let repositoryPath = try makeDirectory(in: root, named: "repo")
+        let created = try makeDirectory(in: root, named: "fix_cache_homebrew")
+        let placeholder = repositoryPath + DashboardModel.placeholderMarker + "fix_this_in_this"
+
+        // Its error is read on the row, so a second session landing
+        // in the same repository must not take the row with it.
+        let previous = [group(repositoryPath: repositoryPath, paths: [repositoryPath, placeholder])]
+        let next = [group(repositoryPath: repositoryPath, paths: [repositoryPath, created])]
+
+        let merged = DashboardModel.retainingLostRows(of: previous, in: next, failed: [placeholder])
+        #expect(merged.flatMap(\.items).map(\.worktree.path) == [repositoryPath, placeholder, created])
+    }
+
+    @Test
     func `the pending row stays while the creation is still working`() throws {
         let root = try makeDirectory()
         defer { try? FileManager.default.removeItem(atPath: root) }

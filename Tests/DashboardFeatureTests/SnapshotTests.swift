@@ -46,6 +46,7 @@ struct SnapshotTests {
             standing: StackStanding(position: 1, height: 1),
             load: nil,
             feedbackStatus: "Running · Waiting for required CI",
+            failure: nil,
         )
         .frame(width: width)
         .padding()

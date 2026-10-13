@@ -27,8 +27,9 @@ public extension DashboardModel {
     /// Takes a placeholder row out of the sidebar and out of the
     /// snapshot the next launch paints from, so a creation that
     /// failed leaves nothing behind to click.
-    func forgetPlaceholder(_ item: WorktreeItem) {
-        groups = Self.forgetting(item.worktree.path, in: groups)
+    func forgetPlaceholder(_ worktree: Worktree) {
+        launchFailures[worktree.path] = nil
+        groups = Self.forgetting(worktree.path, in: groups)
         cacheSidebar(groups)
     }
 

@@ -21,38 +21,21 @@ struct AgentSessionForm: View {
         let options: AgentLaunchOptions
     }
 
-    enum PromptSource: CaseIterable {
-        case prompt
-        case issue
-        case pullRequest
-        case advisory
-
-        // MARK: Internal
-
-        var title: String {
-            switch self {
-            case .prompt:
-                "Prompt"
-
-            case .issue:
-                "Issue"
-
-            case .pullRequest:
-                "PR"
-
-            case .advisory:
-                "Advisory"
-            }
-        }
-    }
+    /// Where the draft is kept between forms and launches.
+    static let promptKey = "newSessionPrompt"
 
     let model: DashboardModel
 
     /// The repository the session targets, nil until picked.
     let repository: Repository?
 
+    /// The worktree this form starts an agent in, nil on the new
+    /// session form; a failed launch's retry finds its form by it.
+    var worktreePath: String?
+
     let submitTitle: String
     let submitHelp: String
+
     var onSourceChange: (@MainActor (PromptSource) -> Void)?
     let onSubmit: @MainActor (Submission) async -> Void
 
@@ -87,6 +70,8 @@ struct AgentSessionForm: View {
         }
         .task(id: repository?.id ?? "") { await reloadSources() }
         .onChange(of: source) { onSourceChange?(source) }
+        // A worktree's form is already on screen when its retry asks.
+        .onChange(of: model.launchRetry) { applyRetry() }
     }
 
     // MARK: Private
@@ -123,7 +108,7 @@ struct AgentSessionForm: View {
     /// to say about one when there is. Two fields meant choosing an
     /// issue after typing looked exactly like the app throwing the
     /// typing away.
-    @AppStorage("newSessionPrompt")
+    @AppStorage(Self.promptKey)
     private var prompt = ""
     @AppStorage("agentModel")
     private var agentModel = ""
@@ -241,6 +226,7 @@ struct AgentSessionForm: View {
         number = nil
         ghsaID = nil
         advisories = []
+        applyRetry()
         guard let repository else {
             issues = []
             pullRequests = []
@@ -286,33 +272,48 @@ struct AgentSessionForm: View {
         isLoadingAdvisories = false
     }
 
+    /// Takes back a failed launch's draft meant for this form: its
+    /// text, source and pick.
+    private func applyRetry() {
+        guard let retry = model.launchRetry, retry.worktreePath == worktreePath,
+              retry.repositoryPath == repository?.path
+        else {
+            return
+        }
+
+        model.launchRetry = nil
+        source = retry.draft.source
+        number = retry.draft.number
+        ghsaID = retry.draft.ghsaID
+        prompt = retry.draft.text
+    }
+
     private func submit() {
         guard isStarting == false else {
             return
         }
 
         isStarting = true
-        let draft = prompt
         let submission = Submission(
             source: source,
             number: number,
             ghsaID: ghsaID,
-            prompt: source == .prompt ? draft : "",
-            context: source == .prompt ? "" : draft,
+            prompt: source == .prompt ? prompt : "",
+            context: source == .prompt ? "" : prompt,
             agent: agent.wrappedValue,
             options: AgentLaunchOptions(
                 model: agentModel.isEmpty ? nil : agentModel,
                 effort: agentEffort.isEmpty ? nil : agentEffort,
             ),
         )
+        // Cleared now, not once the launch lands: the next form
+        // opened while this launch runs must not start from the
+        // draft it is starting. A failure keeps the draft for its
+        // retry (`LaunchRetry`).
+        prompt = ""
         Task {
             await onSubmit(submission)
             isStarting = false
-            // A disappeared form's AppStorage stays stale while the
-            // next form types, so compare against the store itself.
-            if UserDefaults.standard.string(forKey: "newSessionPrompt") == draft {
-                prompt = ""
-            }
         }
     }
 }

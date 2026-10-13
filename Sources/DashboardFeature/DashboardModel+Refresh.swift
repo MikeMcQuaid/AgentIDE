@@ -173,7 +173,7 @@ public extension DashboardModel {
             kept: groups,
             readingPanes: readsPanes,
         )
-        let listed = Self.retainingLostRows(of: groups, in: overview.groups)
+        let listed = Self.retainingLostRows(of: groups, in: overview.groups, failed: Set(launchFailures.keys))
         notifyChanges(from: groups, to: listed)
         groups = listed
         watchAgentStates(listed)

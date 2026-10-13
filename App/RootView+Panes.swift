@@ -10,6 +10,11 @@ import TerminalUI
 /// split from the view for length; the shells have a file of their
 /// own.
 extension RootView {
+    /// The failed launch's block matches `LaunchProgressView`'s, whose
+    /// place it takes.
+    private static let failureWidth: CGFloat = 560
+    private static let failureTopInset: CGFloat = 40
+
     /// Only a worktree with conversations to go back to shows the way
     /// back. A method rather than a ternary at the call: the literal
     /// takes the pane's Sendable closure type from the return type
@@ -33,11 +38,24 @@ extension RootView {
             // The editor takes the pane an agent would have: a
             // directory of your own is pinned to the centre slot.
             editorPane(for: item, role: .centre)
+        } else if let failure = dependencies.dashboard.launchFailure(for: item), item.isPlaceholder {
+            // Laid out as the progress it replaces: pinned near the
+            // top, the width of its step log.
+            LaunchFailureView(
+                worktree: item.worktree,
+                failure: failure,
+                model: dependencies.dashboard,
+                retryIsPrimary: true,
+            )
+            .frame(maxWidth: Self.failureWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding()
+            .padding(.top, Self.failureTopInset)
         } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
                 "Creating the worktree and starting the agent…",
-                progress: dependencies.dashboard.launchProgress,
+                progress: dependencies.dashboard.launchProgress(for: item),
             )
         } else if resumingWorktree == item.worktree.path {
             // Before the terminal: a finished session's pane is what
