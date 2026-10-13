@@ -10,7 +10,7 @@ extension TerminalRepresentable {
     /// terminal stream: feeding rendered frames into the view and
     /// forwarding keystrokes, pastes, resizes and the wheel back to
     /// herdr. For the shell pane it just watches the local process.
-    final class Coordinator: NSObject, TerminalViewDelegate, LocalProcessTerminalViewDelegate {
+    final class Coordinator: NSObject, TerminalViewDelegate, LocalProcessDelegate {
         // MARK: Lifecycle
 
         init(onProcessTerminated: (@MainActor () -> Void)?) {
@@ -202,6 +202,10 @@ extension TerminalRepresentable {
         }
 
         func sizeChanged(source _: TerminalView, newCols: Int, newRows: Int) {
+            if let process = view?.process {
+                var size = getWindowSize()
+                _ = process.updateWindowSize(&size)
+            }
             guard channel != nil, newCols > 0, newRows > 0 else {
                 return
             }
@@ -220,6 +224,10 @@ extension TerminalRepresentable {
                 return
             }
 
+            if let process = view?.process {
+                process.send(data: data)
+                return
+            }
             outgoing.append(contentsOf: data)
             guard flushScheduled == false else {
                 return
@@ -254,21 +262,6 @@ extension TerminalRepresentable {
 
         func rangeChanged(source _: TerminalView, startY _: Int, endY _: Int) {
             // Rendering is owned by SwiftTerm.
-        }
-
-        func sizeChanged(source _: LocalProcessTerminalView, newCols _: Int, newRows _: Int) {
-            // The local shell's PTY resize is handled by the view.
-        }
-
-        func setTerminalTitle(source _: LocalProcessTerminalView, title _: String) {
-            // Titles are not surfaced.
-        }
-
-        /// The local shell exited; owners show a restart affordance.
-        func processTerminated(source _: TerminalView, exitCode _: Int32?) {
-            let callback = onProcessTerminated
-            onProcessTerminated = nil
-            callback?()
         }
 
         // MARK: Private
@@ -339,7 +332,9 @@ extension TerminalRepresentable {
                 // it, which is the whole design. The extras join what
                 // a terminal always sets, so passing them cannot cost
                 // the shell its own variables.
-                view.startProcess(
+                let process = LocalProcess(delegate: self, dispatchQueue: .main)
+                view.process = process
+                process.startProcess(
                     executable: "/bin/zsh",
                     args: ["-il"],
                     environment: Terminal.getEnvironmentVariables()

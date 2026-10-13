@@ -10,9 +10,10 @@ struct ErrorLogRetryTests {
 
     @Test
     func `a second try that succeeds reports nothing`() async {
+        let log = ErrorLog()
         let what = "Trying " + UUID().uuidString
         var tries = 0
-        let succeeded = await ErrorLog.shared.attemptingTwice(what) {
+        let succeeded = await log.attemptingTwice(what) {
             tries += 1
             if tries == 1 {
                 throw Failure(errorDescription: "first")
@@ -20,20 +21,21 @@ struct ErrorLogRetryTests {
         }
         #expect(succeeded)
         #expect(tries == 2)
-        #expect(ErrorLog.shared.entries.contains { $0.message.contains(what) } == false)
+        #expect(log.entries.contains { $0.message.contains(what) } == false)
     }
 
     @Test
     func `two failures report once, naming both`() async {
+        let log = ErrorLog()
         let what = "Trying " + UUID().uuidString
         var tries = 0
-        let succeeded = await ErrorLog.shared.attemptingTwice(what) {
+        let succeeded = await log.attemptingTwice(what) {
             tries += 1
             throw Failure(errorDescription: "try " + String(tries))
         }
         #expect(succeeded == false)
         #expect(tries == 2)
-        let about = ErrorLog.shared.entries.filter { $0.message.contains(what) }
+        let about = log.entries.filter { $0.message.contains(what) }
         #expect(about.count == 1)
         #expect(about.first?.message.contains("try 1") == true)
         #expect(about.first?.message.contains("try 2") == true)

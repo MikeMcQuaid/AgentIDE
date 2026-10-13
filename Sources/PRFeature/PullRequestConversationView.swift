@@ -263,7 +263,9 @@ struct PullRequestConversationView: View {
             ReviewThreadRow(
                 thread: thread,
                 onEdit: localWorktreePath.map { path in
-                    { FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: path) }
+                    { @MainActor @Sendable in
+                        FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: path)
+                    }
                 },
                 localReviewer: localReview?.reviewer,
                 onToggleResolved: { onToggleLocalResolved(thread.id) },

@@ -23,7 +23,7 @@ let package = Package(
         .library(name: "TerminalUI", targets: ["TerminalUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.19.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.99.0"),
         // Apple's GitHub-flavoured markdown parser; parsing by hand
         // kept misreading real review comments.
         .package(url: "https://github.com/swiftlang/swift-markdown", from: "0.5.0"),

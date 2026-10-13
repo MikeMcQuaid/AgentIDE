@@ -263,9 +263,9 @@ Rules that follow from that shape:
   prose reflow. Starting a native selection clears both the held block
   and its marquee, so scrolling cannot restore an older copy.
   Processing a herdr frame preserves the selection, including cursor-only
-  updates: mouse reporting is suspended for the synchronous feed and
-  restored before handling input. SwiftTerm still moves or clears the
-  selection when the selected text scrolls.
+  updates: SwiftTerm preserves unchanged selected text during output
+  processing. It still moves or clears the selection when the selected
+  text scrolls.
 
 The **host terminal** is a plain login shell on the pane's own PTY as
 the host user: no sudo, no sandbox, full `gh` credentials, editor
@@ -1704,9 +1704,9 @@ and `brew upgrade` is the updater.
 
 Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
 every rule enabled (per-line disables with a reason). Scripts:
-`bootstrap`, `build`, `install`, `zip`, `package`, `test`, `analyze`,
-`style [--fix]`, `performance-log` and `attach [workspace]`; see
-AGENTS.md. Sandboxed builds gate on `SV_SESSION_ID` and disable
+`bootstrap`, `project`, `build`, `install`, `zip`, `package`, `test`,
+`analyze`, `style [--fix]`, `performance-log` and `attach [workspace]`;
+see AGENTS.md. Sandboxed builds gate on `SV_SESSION_ID` and disable
 SwiftPM's sandbox. Metal Toolchain 27A266a must be installed from the
 host using `xcodebuild -downloadComponent MetalToolchain`; its system
 cryptex mount is readable inside the sandbox. If `xcrun metal --version`
@@ -1718,6 +1718,14 @@ debugger-attach entitlement:
 Swift 6.4 otherwise tries to sign SwiftTerm's resource-only bundle as
 an executable and warns about a missing build-graph node. Interactive
 Xcode builds retain their debugging entitlements.
+Project generation copies the committed `Package.resolved` into Xcode's
+workspace only when it changes, preserving incremental builds.
+Builds, tests and analysis require those pinned versions,
+so pull requests and main use the same dependencies with warm or cold
+caches.
+Scripted Xcode builds pass `ARCHS=arm64` for the whole build graph:
+the app project's setting alone leaves package dependencies building
+unused Intel slices in Release.
 
 Every first-party Swift target, including tests, treats warnings as
 errors and enables strict memory safety alongside Swift 6's complete
@@ -1728,6 +1736,19 @@ match their fixed format strings. Xcode enables compiler, linker and
 supported Clang analyser diagnostics, runs the analyser during builds
 and fails on its findings. Dependencies keep their own compiler settings.
 Style checks fail when any step fails, including a missing tool.
+After applying fixes, both Swift linters check the resulting files.
+Workflow linting uses zizmor's strict collection, so an unreadable or
+invalid workflow cannot silently escape the checks.
+
+`script/analyze` keeps SwiftLint analysis and Periphery on the host,
+sharing one clean Xcode build's log and index instead of building twice.
+The clean build keeps SwiftLint's analysis complete on every run.
+In the sandbox it builds app and test targets into a fresh
+`.build/analyze` index, exports the package description unsandboxed and
+passes both to Periphery without another build. SwiftPM's native build
+engine supplies that index; it is deprecated but works with this
+toolchain. SwiftLint analysis still needs the host's Xcode build log.
+Build or analyser failures fail the script; no findings are baselined.
 
 Tests are two tiers. Unit tests cover Domain's pure functions, Data
 decoders over fixtures and the feature models, whose fetch and
@@ -1741,20 +1762,54 @@ server. Fixture git commands disable automatic maintenance so a
 background maintenance lock cannot disappear during a local clone.
 The editor-spool event test delays safety sweeps beyond its
 deadline, so scheduling delays do not count as missed directory events.
+The fork-remote concurrency test awaits unrelated work while cleanup
+holds the repository lock, including deliberately delayed commands;
+a whole-test timeout releases the paused cleanup if work deadlocks.
+Message-log tests own isolated logs so clearing or trimming entries
+cannot erase a service-status report another test is awaiting.
 CI (`.github/workflows/tests.yml`) runs style on every push and pull
 request, and build-and-test and analyze in parallel on the `xcode-27`
-image, each asserting Xcode 27 rather than skipping. The test job also
-runs `script/test --sanitize address`, failing on memory errors.
-`script/test --sanitize thread` checks for data races
-locally. Both instrument package tests and, when signing is configured,
-the App Intents tests. The App Intents bundle requires macOS 27 for
+image, each asserting Xcode 27 rather than skipping. The test job runs
+the full suite once with `script/test --sanitize thread`, then
+`script/test --sanitize address --test-product TerminalUITests` for
+terminal lifecycle, rendering and native parser coverage. Selecting the
+test product also avoids compiling unrelated tests and feature targets;
+`--filter` alone would still build them. This replaces three full test
+builds with two, without dropping any test from the full suite or adding
+compiled-output caches. `script/test` still runs unsanitised tests locally.
+Swift Testing runs at most six test cases concurrently, keeping real
+process launches and main-actor UI work from overwhelming CI under TSan.
+Concurrency within each test is unchanged, as are its assertions and
+deadlines. The limit uses Swift 6.4's experimental parallelisation option;
+`--jobs` only limits compilation and does not limit running tests.
+Memory errors and data races fail CI. Each uses its own build directory
+under `.build` and stops on its first finding. Extra `swift test`
+options such as `--scratch-path` affect only package tests.
+Both sanitizers instrument package tests and, when signing is configured,
+the App Intents tests. These require macOS 27 for
 AppIntentsTesting; `script/test` skips it on older systems.
-Thread Sanitizer currently catches SwiftTerm 1.19's PTY reader racing
-process termination in `ShellLifetimeTests`. Its
+Thread Sanitizer caught SwiftTerm 1.19's PTY reader racing
+process termination in `ShellLifetimeTests`. SwiftTerm 1.99 includes the
 [upstream lifecycle fix](https://github.com/migueldeicaza/SwiftTerm/commit/a7260892a5cfcd510f635e30ed0993d9397e3d16)
-uses byte-loading APIs incompatible with the current Xcode 27 beta, so
-the thread CI gate awaits a compatible dependency release. The race is
-not suppressed or excluded from local runs.
+and is pinned for both SwiftPM and Xcode, including direct IDE builds.
+Terminal integration uses copied state and the view's public input APIs,
+never an escaped mutable terminal or selection. `PaneTerminalView` uses
+`TerminalView` for both transports; only shell panes own a `LocalProcess`,
+whose callbacks arrive on the coordinator's main queue. This keeps herdr
+input on its delegate. The shell lifetime test remains enabled under
+both sanitizers; findings fail CI.
+
+`script/test` also checks build configuration, installation failure
+handling and missing packaging credentials with stub tools, without
+touching the installed app or the keychain.
+Normal CI builds and uploads a Release zip. The certificate secret alone
+decides whether to sign and notarise: unavailable secrets leave an
+ad hoc build, while a certificate with missing companion credentials
+fails in `script/package`. Every job that versions a build fetches full
+Git history.
+Tests, analysis and releases cache SwiftPM dependencies, including the
+Xcode package cache. Dependabot groups Actions and Swift updates weekly
+on Friday at 08:00 UTC, with a seven-day cooldown.
 
 ### Releases
 
@@ -1777,8 +1832,15 @@ so that only the last needs credentials:
   continues rather than claiming `0.0.0`, which is left for a
   repository with no tags at all. `CURRENT_PROJECT_VERSION` remains
   the build number and counts the default branch's commits, which is
-  what tells two builds of one version apart. The release workflow
-  selects the Release configuration; other builds stay Debug.
+  what tells two builds of one version apart. Builds default to Release,
+  including the sandbox's SwiftPM build; `XCODE_CONFIGURATION=Debug`
+  selects Debug explicitly. A successful host build verifies the app,
+  updates the repository-root symlink and prints the app's path.
+  Installation quits the running app after a successful build, copies
+  that output into /Applications and relaunches it. It ignores SIGHUP
+  so closing an AgentIDE shell pane cannot interrupt installation.
+  Zipping and distribution signing always use Release. Sandboxed builds
+  only compile, so they cannot install an app bundle.
 - `script/zip` verifies the built app's signature, then zips it with
   `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the
   built `Info.plist`, with `AgentIDE.app` as the only top-level entry.
@@ -1809,9 +1871,9 @@ ARM64 `macos-26` and `xcode-27` images. Each job checks the actual OS and
 architecture and fails if the app exits within ten seconds. This
 catches startup crashes and linking failures without needing Xcode 27
 on Tahoe; it does not exercise sessions or UI interactions. Only after
-both checks pass does a separate publishing job recreate the tag at
-the original commit, push it and create a release with generated notes
-and that exact zip attached.
+both checks pass does a separate publishing job automatically recreate
+the tag at the original commit, push it and create a release with
+generated notes and that exact zip attached.
 
 A push that touches the workflow, packaging scripts or metadata uses
 `9999.0.0` as a reserved local-only version and repeats the build,

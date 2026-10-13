@@ -5,8 +5,8 @@ import Testing
 // MARK: - ForkRemoteConcurrencyTests
 
 struct ForkRemoteConcurrencyTests {
-    @Test
-    func `adoption cannot race cleanup through another client or linked worktree`() async throws {
+    @Test(.timeLimit(.minutes(2)), arguments: [Duration.zero, .seconds(6)])
+    func `adoption cannot race cleanup through another client or linked worktree`(delay: Duration) async throws {
         let root = try TestSupport.temporaryDirectory("remote-race")
         defer { try? FileManager.default.removeItem(atPath: root) }
         let path = root + "/repo"
@@ -24,7 +24,7 @@ struct ForkRemoteConcurrencyTests {
         try await git.adoptRemote(named: "contributor", url: fork, branch: "main", worktreePath: path)
         try await TestSupport.runGit(["config", "--remove-section", "branch.main"], in: path)
 
-        let paused = PausedRemoteRunner()
+        let paused = PausedRemoteRunner(adoptionDelay: delay)
         let cleanup = Task {
             try await GitClient(runner: paused).removeUnusedForkRemotes(repositoryPath: path)
         }
@@ -40,14 +40,17 @@ struct ForkRemoteConcurrencyTests {
                 named: "contributor", url: fork, branch: "main", worktreePath: unrelated,
             )
         }
-        let progressed = await TestSupport.poll(timeout: 5) { await paused.adoptedPaths.contains(unrelated) }
-        #expect(progressed)
+        let independentResult = await withTaskCancellationHandler {
+            await independent.result
+        } onCancel: {
+            Task { await paused.resume() }
+        }
         let overlapped = await TestSupport.poll(timeout: 1) { await paused.adoptedPaths.contains(alias) }
         #expect(overlapped == false)
         await paused.resume()
         try await cleanup.value
         try await adoption.value
-        try await independent.value
+        try independentResult.get()
         #expect(await git.remoteURL(named: "contributor", worktreePath: path) == fork)
         #expect(await git.branchRemote(worktreePath: linked, branch: "topic") == "contributor")
     }
@@ -69,6 +72,12 @@ struct ForkRemoteConcurrencyTests {
 // MARK: - PausedRemoteRunner
 
 private actor PausedRemoteRunner: ProcessRunner {
+    // MARK: Lifecycle
+
+    init(adoptionDelay: Duration) {
+        self.adoptionDelay = adoptionDelay
+    }
+
     // MARK: Internal
 
     private(set) var adoptedPaths: Set<String> = []
@@ -92,6 +101,9 @@ private actor PausedRemoteRunner: ProcessRunner {
         if arguments.contains(where: { $0.hasSuffix(".pushremote") }), arguments.last == "contributor",
            let workingDirectory
         {
+            if adoptedPaths.isEmpty {
+                try await Task.sleep(for: adoptionDelay)
+            }
             adoptedPaths.insert(workingDirectory)
         }
         return result
@@ -105,4 +117,5 @@ private actor PausedRemoteRunner: ProcessRunner {
     // MARK: Private
 
     private var continuation: CheckedContinuation<Void, Never>?
+    private let adoptionDelay: Duration
 }

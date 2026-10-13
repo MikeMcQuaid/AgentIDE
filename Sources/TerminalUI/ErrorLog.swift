@@ -11,8 +11,8 @@ import Observation
 public final class ErrorLog {
     // MARK: Lifecycle
 
-    private init() {
-        // One shared log for the whole app.
+    init() {
+        // The app uses shared; tests can own isolated logs.
     }
 
     deinit {

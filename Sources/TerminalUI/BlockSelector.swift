@@ -1,6 +1,5 @@
 import AgentIDEDomain
 import AppKit
-import SwiftTerm
 
 // MARK: - BlockSelector
 
@@ -75,15 +74,15 @@ final class BlockSelector {
             return
         }
 
-        let terminal = view.getTerminal()
-        let top = terminal.getTopVisibleRow()
+        let terminal = view.terminalStateSnapshot()
+        let top = terminal.viewportRow
         let rows = (heldRows.lowerBound - top) ... (heldRows.upperBound - top)
-        guard rows.upperBound >= 0, rows.lowerBound < terminal.rows else {
+        guard rows.upperBound >= 0, rows.lowerBound < terminal.dimensions.rows else {
             clear()
             return
         }
 
-        let visible = max(rows.lowerBound, 0) ... min(rows.upperBound, terminal.rows - 1)
+        let visible = max(rows.lowerBound, 0) ... min(rows.upperBound, terminal.dimensions.rows - 1)
         overlay.frame = rectangle(of: (rows: visible, columns: heldColumns), in: view)
     }
 
@@ -142,7 +141,7 @@ final class BlockSelector {
         to end: CGPoint,
         in view: PaneTerminalView,
     ) -> (rows: ClosedRange<Int>, columns: ClosedRange<Int>)? {
-        let terminal = view.getTerminal()
+        let terminal = view.terminalDimensions
         guard terminal.rows > 0, terminal.cols > 0, view.frame.width > 0, view.frame.height > 0 else {
             return nil
         }
@@ -200,30 +199,26 @@ final class BlockSelector {
         copy(cells: cells, in: view)
         // Held in the buffer's rows, so it can be followed as the
         // text under it scrolls.
-        let top = view.getTerminal().getTopVisibleRow()
+        let top = view.terminalStateSnapshot().viewportRow
         heldRows = (cells.rows.lowerBound + top) ... (cells.rows.upperBound + top)
         heldColumns = cells.columns
     }
 
     /// Copies the rectangle's rows, each sliced to its columns.
     private func copy(cells: (rows: ClosedRange<Int>, columns: ClosedRange<Int>), in view: PaneTerminalView) {
-        let terminal = view.getTerminal()
         var lines = [String]()
-        for row in cells.rows {
-            guard let line = terminal.getLine(row: row) else {
-                continue
-            }
+        for row in view.terminalStateSnapshot().visibleRows where cells.rows.contains(row.row) {
+            var characters = row.text.makeIterator()
+            var text = ""
+            for (column, width) in row.cellWidths.enumerated() where width > 0 {
+                guard let character = characters.next() else {
+                    break
+                }
 
-            // Cells never written hold NUL; the pasteboard must carry
-            // spaces there, as SwiftTerm's own copy does, or a pasted
-            // script arrives peppered with ^@ where its indentation
-            // and word gaps were.
-            let text = line.translateToString(
-                trimRight: true,
-                startCol: cells.columns.lowerBound,
-                endCol: cells.columns.upperBound + 1,
-            )
-            .replacing("\u{0}", with: " ")
+                if cells.columns.contains(column) {
+                    text.append(character)
+                }
+            }
             lines.append(PasteableText.strippingGutter(text))
         }
         let joined = lines.joined(separator: "\n")

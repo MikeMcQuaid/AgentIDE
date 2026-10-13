@@ -19,7 +19,7 @@ extension PaneTerminalView {
     func routeKey(_ event: NSEvent) -> NSEvent? {
         guard isHerdrBacked == false,
               unsafe window?.firstResponder === self,
-              getTerminal().keyboardEnhancementFlags.isEmpty,
+              keyboardEnhancementFlags.isEmpty,
               event.modifierFlags.isDisjoint(with: [.command, .control])
         else {
             return event
@@ -30,7 +30,19 @@ extension PaneTerminalView {
                 return event
             }
 
-            send(TerminalKeys.optionArrow(arrow, applicationCursor: getTerminal().applicationCursor))
+            switch arrow {
+            case .left,
+                 .right:
+                send(TerminalKeys.optionArrow(arrow, applicationCursor: false))
+
+            case .upward:
+                send(txt: "\u{1B}")
+                sendKeyUp()
+
+            case .downward:
+                send(txt: "\u{1B}")
+                sendKeyDown()
+            }
             return nil
         }
 

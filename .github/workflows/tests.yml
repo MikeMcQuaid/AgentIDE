@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # 2026.09.28.1
@@ -42,11 +43,16 @@ jobs:
   tests:
     runs-on: xcode-27
     timeout-minutes: 30
+    env:
+      # Forks and Dependabot have no secrets. Check only the certificate
+      # so script/package fails if the remaining credentials are missing.
+      HAS_SIGNING_SECRETS: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE != '' }}
     steps:
       - name: Set up Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # 2026.09.28.1
@@ -74,6 +80,7 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
             .DerivedData/SourcePackages
             .build/checkouts
+            .build/repositories
           key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
           restore-keys: ${{ runner.os }}-swiftpm-
 
@@ -83,11 +90,37 @@ jobs:
       - name: Build
         run: script/build
 
-      - name: Test
-        run: script/test
+      - name: Zip
+        run: script/zip
 
-      - name: Test with Address Sanitizer
-        run: script/test --sanitize address
+      - name: Sign and notarise
+        if: env.HAS_SIGNING_SECRETS == 'true'
+        env:
+          DEVELOPER_ID_APPLICATION_CERTIFICATE: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE }}
+          DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD }}
+          NOTARIZATION_KEY: ${{ secrets.NOTARIZATION_KEY }}
+          NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
+          NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
+        run: script/package
+
+      - name: Upload the app
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: AgentIDE
+          path: .build/AgentIDE-*.zip
+          # The zip lives in a hidden directory, skipped by default.
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Test with Thread Sanitizer
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: script/test --sanitize thread --scratch-path .build/thread-sanitizer
+
+      - name: Test terminal and parser integrations with Address Sanitizer
+        env:
+          ASAN_OPTIONS: halt_on_error=1
+        run: script/test --sanitize address --scratch-path .build/address-sanitizer --test-product TerminalUITests
 
   analyze:
     runs-on: xcode-27
@@ -97,6 +130,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@e99025eb970cfa124b8284a35463d87426917478 # 2026.09.28.1
@@ -124,6 +158,7 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
             .DerivedData/SourcePackages
             .build/checkouts
+            .build/repositories
           key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
           restore-keys: ${{ runner.os }}-swiftpm-
 

@@ -5,9 +5,7 @@ import Testing
 struct ErrorLogUnreadTests {
     @Test
     func `reading errors clears the badge without clearing messages`() {
-        let log = ErrorLog.shared
-        log.clear()
-        defer { log.clear() }
+        let log = ErrorLog()
 
         log.note("A status note")
         log.report("First failure")
@@ -31,9 +29,7 @@ struct ErrorLogUnreadTests {
 
     @Test
     func `clearing and trimming the log preserve unread counts`() {
-        let log = ErrorLog.shared
-        log.clear()
-        defer { log.clear() }
+        let log = ErrorLog()
 
         log.report("Read failure")
         log.markRead()

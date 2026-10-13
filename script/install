@@ -1,14 +1,22 @@
 #!/bin/bash
-# Build AgentIDE and install a copy into /Applications, so the app
+# Build AgentIDE, install a copy into /Applications and relaunch, so the app
 # you run daily is never the build output the next rebuild
 # overwrites in place.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-script/build
+app="$(script/build | tail -1)"
+[[ -d "${app}" ]] || {
+  echo "No app bundle to install; run script/install on the host." >&2
+  exit 1
+}
 
+# Quitting AgentIDE also hangs up commands in its shell panes.
+trap '' HUP
+osascript -e 'quit app "AgentIDE"' &>/dev/null || true
 rm -rf /Applications/AgentIDE.app
-ditto AgentIDE.app /Applications/AgentIDE.app
+ditto "${app}" /Applications/AgentIDE.app
+open /Applications/AgentIDE.app
 
-echo "Installed /Applications/AgentIDE.app; quit and relaunch to update."
+echo "Installed and relaunched /Applications/AgentIDE.app."

@@ -124,6 +124,15 @@ struct TerminalKeyRoutingTests {
         #expect(pane.capture.bytes.isEmpty)
     }
 
+    @Test
+    func `a click beside a link does not move onto it`() throws {
+        let pane = try Self.focusedPane(herdrBacked: true)
+        defer { pane.window.close() }
+        pane.view.feed(text: "https://first.test https://second.test")
+        try TerminalMouse.select(in: pane.view, row: 0, from: 18.8, to: 18.8, modifiers: .command)
+        #expect(pane.capture.links.isEmpty)
+    }
+
     // MARK: Private
 
     /// A pane, its window and the bytes it sends.
@@ -143,6 +152,11 @@ struct TerminalKeyRoutingTests {
         // MARK: Internal
 
         var bytes: [UInt8] = []
+        var links: [String] = []
+
+        func requestOpenLink(source _: TerminalView, link: String, params _: [String: String]) {
+            links.append(link)
+        }
 
         func send(source _: TerminalView, data: ArraySlice<UInt8>) {
             bytes.append(contentsOf: data)
@@ -180,7 +194,7 @@ struct TerminalKeyRoutingTests {
         window.isReleasedWhenClosed = false
         window.contentView = view
         try #require(window.makeFirstResponder(view))
-        #expect(view.getTerminal().keyboardEnhancementFlags.isEmpty)
+        #expect(view.keyboardEnhancementFlags.isEmpty)
         return Pane(view: view, window: window, capture: capture)
     }
 }

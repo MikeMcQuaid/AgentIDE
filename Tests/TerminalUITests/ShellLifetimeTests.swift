@@ -43,7 +43,6 @@ struct ShellLifetimeTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(".test-scratch/shell-lifetime-" + UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let state = State(paths: [directory.path, directory.appendingPathComponent("other").path])
         state.tabs.open(in: directory.path)
@@ -59,11 +58,10 @@ struct ShellLifetimeTests {
         window.contentView = host
         var spawnedPIDs = [pid_t]()
         defer { close(window, shellPIDs: spawnedPIDs) }
-        await wait(in: host) { terminals(in: host).count == 3 && terminals(in: host).allSatisfy(\.process.running) }
-        let original = terminals(in: host).map(\.process.shellPid).sorted()
+        await wait(in: host) { runningPIDs(in: host).count == 3 }
+        let original = runningPIDs(in: host)
         spawnedPIDs = original
-        try #require(original.count == 3)
-        #expect(original.allSatisfy { $0 > 0 })
+        try #require(original.count == 3 && original.allSatisfy { $0 > 0 })
 
         for (expanded, selected, shellTab) in [
             (true, state.paths.last, true),
@@ -77,20 +75,22 @@ struct ShellLifetimeTests {
             state.showsShell = shellTab
             let visibleCount = expanded && selected != nil && shellTab ? 1 : 0
             await wait(in: host) { visibleCount == terminals(in: host).count { $0.isHidden == false } }
-            #expect(terminals(in: host).map(\.process.shellPid).sorted() == original)
-            #expect(terminals(in: host).allSatisfy { $0.frame.width == 400 && $0.process.running })
+            #expect(runningPIDs(in: host) == original)
+            #expect(terminals(in: host).allSatisfy { $0.frame.width == 400 })
         }
 
         let closed = try #require(terminals(in: host).first { $0.isHidden == false })
+        let closedPID = try #require(closed.process?.shellPid)
         try state.tabs.close(#require(state.tabs.selected(in: directory.path)))
-        await wait(in: host) { terminals(in: host).count == 2 && waitpid(closed.process.shellPid, nil, WNOHANG) != 0 }
-        #expect(terminals(in: host).allSatisfy { original.contains($0.process.shellPid) && $0.process.running })
+        await wait(in: host) { terminals(in: host).count == 2 && waitpid(closedPID, nil, WNOHANG) != 0 }
+        #expect(runningPIDs(in: host) == original.filter { $0 != closedPID })
 
         let remaining = terminals(in: host)
         for shell in state.tabs.all {
             state.tabs.close(shell.id)
         }
-        await wait(in: host) { remaining.allSatisfy { waitpid($0.process.shellPid, nil, WNOHANG) != 0 } }
+        await wait(in: host) { remaining.allSatisfy { $0.process?.running == false } }
+        #expect(original.allSatisfy { waitpid($0, nil, WNOHANG) != 0 })
     }
 
     // MARK: Private
@@ -124,13 +124,19 @@ struct ShellLifetimeTests {
         return view.subviews.flatMap { terminals(in: $0) }
     }
 
+    private func runningPIDs(in view: NSView) -> [pid_t] {
+        terminals(in: view).compactMap(\.process).filter(\.running).map(\.shellPid).sorted()
+    }
+
     private func close(_ window: NSWindow, shellPIDs: [pid_t]) {
         let views = window.contentView.map { terminals(in: $0) } ?? []
         for view in views {
-            view.terminate()
+            view.process?.terminate()
         }
         window.close()
-        for pid in Set(shellPIDs + views.map(\.process.shellPid)) where pid > 0 && waitpid(pid, nil, WNOHANG) == 0 {
+        for pid in Set(shellPIDs + views.compactMap(\.process?.shellPid))
+            where pid > 0 && waitpid(pid, nil, WNOHANG) == 0
+        {
             kill(pid, SIGKILL)
             waitpid(pid, nil, 0)
         }

@@ -10,6 +10,8 @@ struct TestScriptTests {
         let manager = FileManager.default
         try manager.createDirectory(atPath: root + "/script", withIntermediateDirectories: true)
         try manager.createDirectory(atPath: root + "/mocks", withIntermediateDirectories: true)
+        try manager.createDirectory(atPath: root + "/Tests", withIntermediateDirectories: true)
+        try "exit 0\n".write(toFile: root + "/Tests/ScriptTests.sh", atomically: true, encoding: .utf8)
         let source = URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()

@@ -161,10 +161,10 @@ A session steered from the phone is the same session the Mac shows.
 ## 🛠️ Development
 
 - `script/bootstrap`: install `Brewfile` dependencies and generate the Xcode project with XcodeGen
-- `script/build`: build the app; `AgentIDE.app` in the repository root symlinks its output
+- `script/build`: build the app in Release, or Debug with `XCODE_CONFIGURATION=Debug`; `AgentIDE.app` in the repository root symlinks its output
 - `script/version`: print the version and build number git says, which scripted and Xcode builds both use
-- `script/install`: build, then copy the app to /Applications
-- `script/test [--sanitize address|thread]`: unit, integration and App Intents tests, optionally checking memory accesses or data races
+- `script/install`: build, copy the app to /Applications and relaunch it automatically
+- `script/test [--sanitize address|thread] [swift test options]`: unit, integration and App Intents tests, optionally checking memory accesses or data races
 - `script/style [--fix]`: SwiftLint and SwiftFormat, every rule on
 - `script/analyze`: static analysis and dead code
 - `script/zip` and `script/package`: zip, sign and notarise a release
@@ -172,12 +172,12 @@ A session steered from the phone is the same session the Mac shows.
 
 Project code treats compiler and linker warnings as errors, with Swift's strict concurrency and memory safety checks enabled.
 Xcode also runs Apple's static analyser during builds.
-`script/analyze` adds SwiftLint's analysis and dead-code detection on the host and CI.
-CI runs the test suite with Address Sanitizer on macOS 27.
-Thread Sanitizer is available locally; its CI gate awaits a compatible SwiftTerm release fixing a shell-exit race.
+`script/analyze` checks for dead code on the host, in the sandbox and in CI, with SwiftLint's additional analysis on the host and in CI.
+CI runs the full test suite once with Thread Sanitizer, then checks terminal, rendering and parser tests with Address Sanitizer on macOS 27.
+CI uploads a Release app, signed and notarised when signing secrets are available.
 
 Releases run the **Release** workflow from the Actions tab on `main` with a bare `MAJOR.MINOR.PATCH` version.
-Releases publish only after the packaged app passes startup checks on macOS Tahoe and macOS 27.
+Manual releases publish automatically after the packaged app passes startup checks on macOS Tahoe and macOS 27; release-related pushes only run the checks and upload a test artefact.
 
 ## 🚧 Status
 
