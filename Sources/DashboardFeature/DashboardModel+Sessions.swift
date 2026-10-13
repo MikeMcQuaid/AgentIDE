@@ -1,5 +1,6 @@
 import AgentIDEData
 import AgentIDEDomain
+import Foundation
 import TerminalUI
 
 /// Session creation: every entry point funnels through one runner
@@ -23,15 +24,18 @@ public extension DashboardModel {
     }
 
     /// Creates a session from a typed prompt; public for the App
-    /// Intents, which start work from Shortcuts and Siri.
+    /// Intents, which start work from Shortcuts and Siri, and answer
+    /// with the failure when there is one.
+    @discardableResult
     func createSession(
         repository: Repository,
         prompt: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
-    ) async {
-        await run(in: repository, placeholder: Self.placeholderName(from: prompt)) {
+    ) async -> LaunchFailure? {
+        let draft = LaunchDraft(text: prompt, source: .prompt, agent: agent, options: options, base: baseBranch)
+        return await run(draft, in: repository, placeholder: Self.placeholderName(from: prompt)) { service in
             try await service.createSession(
                 repository: repository,
                 prompt: prompt,
@@ -51,7 +55,10 @@ public extension DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
     ) async {
-        await run(in: repository, placeholder: "issue-\(number)") {
+        let draft = LaunchDraft(
+            text: context, source: .issue, agent: agent, options: options, number: number, base: baseBranch,
+        )
+        await run(draft, in: repository, placeholder: "issue-\(number)") { service in
             try await service.createSession(
                 fromIssue: number,
                 repository: repository,
@@ -71,7 +78,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run(in: repository, placeholder: "pr-\(number)") {
+        let draft = LaunchDraft(text: context, source: .pullRequest, agent: agent, options: options, number: number)
+        await run(draft, in: repository, placeholder: "pr-\(number)") { service in
             try await service.createSession(
                 fromPullRequest: number,
                 repository: repository,
@@ -92,7 +100,10 @@ public extension DashboardModel {
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
     ) async {
-        await run(in: repository, placeholder: SessionService.advisoryBranch) {
+        let draft = LaunchDraft(
+            text: context, source: .advisory, agent: agent, options: options, ghsaID: ghsaID, base: baseBranch,
+        )
+        await run(draft, in: repository, placeholder: SessionService.advisoryBranch) { service in
             try await service.createSession(
                 fromAdvisory: ghsaID,
                 repository: repository,
@@ -111,7 +122,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run {
+        let draft = LaunchDraft(text: prompt, source: .prompt, agent: agent, options: options)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(in: worktree, prompt: prompt, agent: agent, options: options)
         }
     }
@@ -124,7 +136,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run {
+        let draft = LaunchDraft(text: context, source: .issue, agent: agent, options: options, number: number)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(
                 fromIssue: number,
                 in: worktree,
@@ -143,7 +156,8 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
     ) async {
-        await run {
+        let draft = LaunchDraft(text: context, source: .advisory, agent: agent, options: options, ghsaID: ghsaID)
+        await run(draft, at: worktree.path) { service in
             try await service.launchAgent(
                 fromAdvisory: ghsaID,
                 in: worktree,
@@ -161,72 +175,113 @@ public extension DashboardModel {
     /// greyed placeholder row under a provisional name appears in
     /// the repository the instant the click lands and is selected;
     /// the real worktree replaces it on the refresh that follows.
+    /// The launch narrates into a log of its own and stays on its own
+    /// row, the placeholder or the worktree at `worktreePath`: it
+    /// opens its pane only while that row is still selected, and a
+    /// failure waits there with its draft for a retry, since another
+    /// form or launch may have taken the screen since.
+    @discardableResult
     private func run(
+        _ draft: LaunchDraft,
         in repository: Repository? = nil,
         placeholder: String? = nil,
-        _ work: () async throws -> String,
-    ) async {
+        at worktreePath: String? = nil,
+        _ work: (SessionService) async throws -> String,
+    ) async -> LaunchFailure? {
         // Only creation shows a placeholder: launching an agent in an
         // existing worktree has a real row already.
         let pending = repository.flatMap { repository in
             placeholder.map { insertPlaceholder(in: repository, branch: $0) }
         }
-        launchProgress.begin("Starting")
+        let rowPath = pending?.worktree.path ?? worktreePath
+        let progress = LaunchProgress()
+        if let rowPath {
+            launchFailures[rowPath] = nil
+            launchProgresses[rowPath] = progress
+        }
+        defer {
+            if let rowPath {
+                launchProgresses[rowPath] = nil
+            }
+        }
+        progress.begin("Starting")
         showsNewSession = false
         if let pending {
             reveal(pending)
         }
-        defer {
-            if let pending {
-                removePlaceholder(pending)
-            }
-        }
         do {
-            screenError = nil
             // Told once per run, and never acted on: the steps are
             // the user's to take.
             if let advice = await service.sandboxKeychainAdvice() {
                 ErrorLog.shared.report(advice)
             }
-            let sessionName = try await work()
+            let sessionName = try await work(service.reporting(to: progress.reporter))
             rememberLaunch(sessionName: sessionName)
             // herdr says when the agent settles, so the listing loop
             // below usually succeeds on its first reading.
-            launchProgress.report("Waiting for herdr to see the agent settle")
+            progress.report("Waiting for herdr to see the agent settle")
             await service.waitForAgentReady(sessionName: sessionName)
-            await refreshUntil { items in items.contains { $0.session?.name == sessionName } }
+            await refreshUntil(narrating: progress) { items in items.contains { $0.session?.name == sessionName } }
             if let created = groups.flatMap(\.items).first(where: { $0.session?.name == sessionName }) {
-                launchProgress.report("Listed; opening the pane of `" + sessionName + "`")
-                reveal(created)
+                if selection.map({ $0.worktree.path == rowPath }) ?? true,
+                   showsNewSession == false, showsRepositoryFinder == false
+                {
+                    progress.report("Listed; opening the pane of `" + sessionName + "`")
+                    reveal(created)
+                }
             } else {
-                launchProgress.report("`" + sessionName + "` never appeared in a listing; select it by hand")
+                progress.report("`" + sessionName + "` never appeared in a listing; select it by hand")
             }
+            if let pending {
+                removePlaceholder(pending)
+            }
+            return nil
         } catch {
-            // Back to the form with the failure inline: it cannot
-            // show the Errors tab from there.
-            showsNewSession = true
-            selection = nil
-            screenError = error.localizedDescription
-            ErrorLog.shared.report(error.localizedDescription)
+            return fail(with: error, draft: draft, rowPath: rowPath, pending: pending)
         }
     }
 
+    /// Leaves a failed launch on its row, which becomes selectable:
+    /// its pane is where the failure is read.
+    private func fail(
+        with error: any Error, draft: LaunchDraft, rowPath: String?, pending: WorktreeItem?,
+    ) -> LaunchFailure {
+        ErrorLog.shared.report(error.localizedDescription)
+        let failure = LaunchFailure(message: error.localizedDescription, draft: draft)
+        if let pending,
+           let index = groups.firstIndex(where: { $0.repository.path == pending.worktree.repositoryPath }),
+           groups[index].items.contains(where: { $0.id == pending.id }) == false
+        {
+            groups[index].items.insert(pending, at: min(1, groups[index].items.count))
+        }
+        if let rowPath {
+            launchFailures[rowPath] = failure
+            // Only a placeholder was greyed for the launch; a worktree
+            // greyed by a deletion stays so.
+            if rowPath.contains(Self.placeholderMarker) {
+                deletingPaths.remove(rowPath)
+            }
+        }
+        return failure
+    }
+
     /// Re-reads the system until the listing satisfies a condition,
-    /// narrating the wait: a reading takes seconds (git in every
-    /// worktree, the herdr snapshot) and one the poll's own reading
-    /// supersedes is discarded, so the first reading after a launch
-    /// did not always list the new session, and nothing switched to
-    /// it. Bounded, so a session that truly never lists cannot hold
-    /// the page forever.
-    func refreshUntil(_ isListed: ([WorktreeItem]) -> Bool) async {
-        launchProgress.report("Reading every worktree and session again to list it")
+    /// narrating the wait into the launch's log, or the shared one: a
+    /// reading takes seconds (git in every worktree, the herdr
+    /// snapshot) and one the poll's own reading supersedes is
+    /// discarded, so the first reading after a launch did not always
+    /// list the new session, and nothing switched to it. Bounded, so
+    /// a session that truly never lists cannot hold the page forever.
+    func refreshUntil(narrating launch: LaunchProgress? = nil, _ isListed: ([WorktreeItem]) -> Bool) async {
+        let progress = launch ?? launchProgress
+        progress.report("Reading every worktree and session again to list it")
         for attempt in 0 ..< Self.listingAttempts {
             await refresh()
             if isListed(groups.flatMap(\.items)) {
                 return
             }
             if attempt == 0 {
-                launchProgress.report("Not listed yet; reading again every half second")
+                progress.report("Not listed yet; reading again every half second")
             }
             // A cancelled sleep ends the wait: swallowing the
             // cancellation would spin the readings back to back.
@@ -258,7 +313,9 @@ public extension DashboardModel {
     /// and marks it pending so the sidebar dims it and refuses
     /// re-selection while the real worktree is created.
     private func insertPlaceholder(in repository: Repository, branch: String) -> WorktreeItem {
-        let path = repository.path + Self.placeholderMarker + branch
+        // Unique, since two launches can share a provisional name
+        // (the same issue twice) and a row is known by its path.
+        let path = repository.path + Self.placeholderMarker + branch + "-" + UUID().uuidString
         let item = WorktreeItem(
             worktree: Worktree(
                 repositoryName: repository.name,
@@ -280,8 +337,8 @@ public extension DashboardModel {
         return item
     }
 
-    /// Drops the placeholder; a refresh has usually replaced the
-    /// whole group by then, so this only cleans up after a failure.
+    /// Drops the placeholder once its launch has started; a refresh
+    /// has usually replaced the whole group by then already.
     private func removePlaceholder(_ item: WorktreeItem) {
         deletingPaths.remove(item.worktree.path)
         for index in groups.indices {
@@ -290,11 +347,18 @@ public extension DashboardModel {
     }
 }
 
-public extension WorktreeItem {
+public extension Worktree {
     /// Whether this is the greyed provisional row a new session
     /// shows while its real worktree is created; the app's primary
     /// pane shows creation progress for it instead of a worktree.
     var isPlaceholder: Bool {
-        worktree.path.contains(DashboardModel.placeholderMarker)
+        path.contains(DashboardModel.placeholderMarker)
+    }
+}
+
+public extension WorktreeItem {
+    /// See `Worktree.isPlaceholder`.
+    var isPlaceholder: Bool {
+        worktree.isPlaceholder
     }
 }

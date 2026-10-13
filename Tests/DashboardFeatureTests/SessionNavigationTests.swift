@@ -36,6 +36,7 @@ struct SessionNavigationTests {
                 spool: EventSpool(directory: paths.eventsDirectory),
                 store: store,
                 runners: [],
+                processes: runner,
             )
             model = DashboardModel(service: service, store: store, github: github)
             repository = Repository(name: "repo", path: paths.repositoriesDirectory + "/repo")
@@ -59,6 +60,35 @@ struct SessionNavigationTests {
         let root = FileManager.default.currentDirectoryPath + "/.test-scratch/navigation-" + UUID().uuidString
         let model: DashboardModel
         let repository: Repository
+
+        /// A window for a form to lay out and take keystrokes in.
+        static func window(hosting host: NSView) -> NSWindow {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
+                styleMask: [.titled],
+                backing: .buffered,
+                defer: false,
+            )
+            window.isReleasedWhenClosed = false
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            return window
+        }
+
+        /// Sets defaults for one test, answering what puts the
+        /// previous values back.
+        static func overriding(_ values: [String: String]) -> () -> Void {
+            let defaults = UserDefaults.standard
+            let previous = values.keys.map { ($0, defaults.object(forKey: $0)) }
+            for (key, value) in values {
+                defaults.set(value, forKey: key)
+            }
+            return {
+                for (key, value) in previous {
+                    defaults.set(value, forKey: key)
+                }
+            }
+        }
 
         func typeAndSubmit(in host: NSView, windowNumber: Int) throws {
             let editor = try #require(textView(in: host))
@@ -113,22 +143,18 @@ struct SessionNavigationTests {
         #expect(runner.calls.withLock { $0 } == 1)
     }
 
-    @Test(arguments: ["First prompt", "The next prompt, typed while the first starts"])
-    func `a completed launch clears only its own prompt`(nextPrompt: String) async throws {
+    @Test(arguments: ["", "The next prompt, typed while the first starts"])
+    func `submitting clears the prompt for the next form at once`(nextPrompt: String) async throws {
         let fixture = Fixture()
         defer { fixture.close() }
+        let restore = Fixture.overriding([
+            AgentSessionForm.promptKey: "First",
+            "agentKind": "claude",
+            "agentModel": "sonnet",
+            "agentEffort": "high",
+        ])
+        defer { restore() }
         let defaults = UserDefaults.standard
-        let keys = ["newSessionPrompt", "agentKind", "agentModel", "agentEffort"]
-        let previous = keys.map { defaults.object(forKey: $0) }
-        defer {
-            for (key, value) in zip(keys, previous) {
-                defaults.set(value, forKey: key)
-            }
-        }
-        defaults.set("First", forKey: "newSessionPrompt")
-        defaults.set("claude", forKey: "agentKind")
-        defaults.set("sonnet", forKey: "agentModel")
-        defaults.set("high", forKey: "agentEffort")
         var submitted: String?
         var finish: CheckedContinuation<Void, Never>?
         let form = AgentSessionForm(
@@ -141,14 +167,7 @@ struct SessionNavigationTests {
             await withCheckedContinuation { finish = $0 }
         }
         let host = NSHostingView(rootView: AnyView(form))
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false,
-        )
-        window.isReleasedWhenClosed = false
-        window.contentView = host
+        let window = Fixture.window(hosting: host)
         defer { finish?.resume(); window.close() }
         host.layoutSubtreeIfNeeded()
         try await Task.sleep(for: .milliseconds(100))
@@ -157,15 +176,16 @@ struct SessionNavigationTests {
             try await Task.sleep(for: .milliseconds(10))
         }
         try #require(submitted == "First prompt")
+        #expect(defaults.string(forKey: AgentSessionForm.promptKey)?.isEmpty == true)
 
         host.rootView = AnyView(EmptyView())
         host.layoutSubtreeIfNeeded()
-        defaults.set(nextPrompt, forKey: "newSessionPrompt")
+        defaults.set(nextPrompt, forKey: AgentSessionForm.promptKey)
         try await Task.sleep(for: .milliseconds(50))
         finish?.resume()
         finish = nil
         try await Task.sleep(for: .milliseconds(100))
-        #expect(defaults.string(forKey: "newSessionPrompt") == (nextPrompt == "First prompt" ? "" : nextPrompt))
+        #expect(defaults.string(forKey: AgentSessionForm.promptKey) == nextPrompt)
     }
 
     @Test

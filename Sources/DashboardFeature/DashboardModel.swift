@@ -76,10 +76,19 @@ public final class DashboardModel {
     /// extension also reports through it.
     public internal(set) var status: String?
 
-    /// A failure shown inline on the middle-pane screens: the finder
-    /// and new-session pages render before the split view exists, so
-    /// the Errors tab is not visible from them.
+    /// A failure shown inline on the finder page, which renders
+    /// before the split view exists, so the Errors tab is not
+    /// visible from it.
     public internal(set) var screenError: String?
+
+    /// Launches that failed, keyed by the path of the row they were
+    /// for: a creation's placeholder or the worktree an agent was
+    /// started in.
+    public internal(set) var launchFailures: [String: LaunchFailure] = [:]
+
+    /// Each launch in flight narrates into its own log, keyed like
+    /// `launchFailures`, so two side by side never mix their steps.
+    public internal(set) var launchProgresses: [String: LaunchProgress] = [:]
 
     /// Worktrees mid-deletion, so their rows grey out instantly.
     public internal(set) var deletingPaths: Set<String> = []
@@ -229,7 +238,7 @@ public final class DashboardModel {
             // a drawing of work that failed to start, and asking git
             // to remove it reported a missing file and a missing
             // branch, neither of which meant anything.
-            forgetPlaceholder(item)
+            forgetPlaceholder(item.worktree)
             return
         }
 
@@ -278,6 +287,9 @@ public final class DashboardModel {
     // MARK: Internal
 
     static let selectedWorktreeKey = "selectedWorktreePath"
+
+    /// A failed launch's draft waiting for its form to show.
+    var launchRetry: LaunchRetry?
 
     @ObservationIgnored var notifiedFeedback: [String: PullRequestAutomation]
 

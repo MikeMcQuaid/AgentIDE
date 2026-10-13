@@ -19,6 +19,7 @@ public extension DashboardModel {
     static func retainingLostRows(
         of previous: [RepositoryGroup],
         in next: [RepositoryGroup],
+        failed: Set<String> = [],
     ) -> [RepositoryGroup] {
         var merged = next.map { fresh -> RepositoryGroup in
             guard let old = previous.first(where: { $0.repository.path == fresh.repository.path }) else {
@@ -43,7 +44,9 @@ public extension DashboardModel {
                     return stillExists(row.element.worktree.path)
                 }
 
-                return landed == false
+                // A failed launch's row waits to be dismissed or
+                // retried, whatever else lands beside it.
+                return landed == false || failed.contains(row.element.worktree.path)
             }
             for (index, item) in lost {
                 // Back where it was, so a row the reading lost does

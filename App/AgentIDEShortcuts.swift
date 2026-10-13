@@ -240,12 +240,14 @@ struct StartSessionIntent: AppIntent {
             model: Self.nonEmpty(defaults.string(forKey: "agentModel")),
             effort: Self.nonEmpty(defaults.string(forKey: "agentEffort")),
         )
-        await dependencies.dashboard.createSession(
+        if let failure = await dependencies.dashboard.createSession(
             repository: repository.repository,
             prompt: prompt,
             agent: agent.kind,
             options: options,
-        )
+        ) {
+            return .result(dialog: "\(agent.kind.displayName) did not start on \(repository.name): \(failure.message)")
+        }
         return .result(dialog: "Started \(agent.kind.displayName) on \(repository.name).")
     }
 

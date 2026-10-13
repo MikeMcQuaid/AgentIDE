@@ -41,9 +41,13 @@ public struct CreateSessionPane: View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             header
                 .padding(.top, Self.headerTopPadding)
+            if let failure = model.launchFailures[worktree.path] {
+                LaunchFailureView(worktree: worktree, failure: failure, model: model, retryIsPrimary: false)
+            }
             AgentSessionForm(
                 model: model,
                 repository: repository,
+                worktreePath: worktree.path,
                 submitTitle: "Start agent",
                 submitHelp: "Launch the agent in this worktree (Cmd-Return); "
                     + "a pull request pick checks out its own worktree",
@@ -163,6 +167,9 @@ public struct CreateSessionPane: View {
                 options: submission.options,
             )
         }
-        await onStarted()
+        // A failure stays in this pane, beside the form it came from.
+        if model.launchFailures[worktree.path] == nil {
+            await onStarted()
+        }
     }
 }

@@ -20,6 +20,9 @@ struct WorktreeRowView: View {
     let load: PaneLoad?
     let feedbackStatus: String?
 
+    /// A launch that failed here, which outranks every other state.
+    let failure: LaunchFailure?
+
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
             leadingIcon
@@ -201,6 +204,9 @@ struct WorktreeRowView: View {
             // so every row's text starts at the same place.
             Octicon("laptopcomputer", colour: .green)
                 .hoverHelp("On your Mac, outside the sandbox")
+        } else if let failure {
+            Octicon("exclamationmark.triangle.fill", colour: .red)
+                .hoverHelp("The agent did not start: " + failure.message)
         } else if let pullRequest {
             Octicon(
                 ChecksStyle.stateOcticonName(

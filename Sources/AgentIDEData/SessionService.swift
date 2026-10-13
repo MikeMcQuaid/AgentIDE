@@ -75,6 +75,15 @@ public struct SessionService: Sendable {
         git.repositories(under: paths.repositoriesDirectory)
     }
 
+    /// A copy narrating into another log, herdr's steps included, so
+    /// launches running side by side each keep their own.
+    public func reporting(to reporter: @escaping LaunchReporter) -> Self {
+        var service = self
+        service.progress = reporter
+        service.herdr.progress = reporter
+        return service
+    }
+
     /// A watcher over the workspace roots whose file-system events
     /// decide when a repository's git is worth reading again.
     public func makeWorkspaceWatcher() -> WorkspaceWatcher {

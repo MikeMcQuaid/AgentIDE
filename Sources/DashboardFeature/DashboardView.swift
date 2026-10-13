@@ -168,11 +168,9 @@ public struct DashboardView: View {
         return Button {
             // A worktree mid-deletion cannot be re-entered; the row
             // only becomes selectable again if the deletion fails.
-            guard isDeleting == false else {
-                return
+            if isDeleting == false {
+                model.select(item)
             }
-
-            model.select(item)
         } label: {
             WorktreeRowView(
                 item: item,
@@ -180,6 +178,7 @@ public struct DashboardView: View {
                 standing: model.stackStanding(for: item),
                 load: model.paneLoads[item.worktree.path],
                 feedbackStatus: model.feedbackStatus(for: item),
+                failure: model.launchFailure(for: item),
             )
             // Deleting takes a moment; the row fades the instant the
             // click lands so the click visibly took.
