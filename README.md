@@ -29,6 +29,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Requests reviews from another agent or your choice of Copilot or CodeRabbit.
 - Reviews committed changes with their full commit messages without a diff size limit, while uncommitted review snapshots remain limited to 256 KiB.
 - Gathers local findings, required CI failures, both bots’ comments, GitHub Code Quality and security comments and verified private reviewers’ comments, including nitpicks, for Copy all and autofix.
+- Omits CodeRabbit’s labels, tracking comments and review information from copied feedback and autofix prompts to save agent context.
 - Remembers local and remote reviewer choices for new pull requests and worktrees in each repository.
 - Addresses existing local findings, ready GitHub feedback and unfinished local changes before requesting fresh reviews, preserving unrelated edits and the automatic-push opt-in.
 - Offers an explicit Start loop action that completes local review rounds before shared GitHub CI and review rounds, with separate limits of one to three and automatic pushing off by default for each PR.

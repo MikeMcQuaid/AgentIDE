@@ -1,3 +1,5 @@
+import Foundation
+
 // MARK: - ReviewThreadComment
 
 /// One comment inside a pull request review conversation.
@@ -22,6 +24,22 @@ public struct ReviewThreadComment: Codable, Hashable, Sendable {
 
     /// The comment's markdown body.
     public let body: String
+
+    /// Pasteable feedback without CodeRabbit's surrounding metadata.
+    public var asText: String {
+        var text = body
+        if ReviewBot.codeRabbit.matches(author) {
+            for pattern in [
+                #"\A(\*\*|_)[^*\r\n]+\1[ \t]*\|[ \t]*\1[^*\r\n]+ (?:Critical|Major|Minor|Trivial)\1"#
+                    + #"(?:[ \t]*\|[ \t]*\1[^*\r\n]+\1)?(?:[ \t]*\r?\n)+"#,
+                #"(?:[ \t]*(?:\r?\n)+<!--\s*(?:fingerprinting:|cr-indicator-types:|cr-comment:"#
+                    + #"|This is an auto-generated comment by CodeRabbit)[^<>]*-->)+[ \t\r\n]*\z"#,
+            ] {
+                text = text.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+            }
+        }
+        return author + ": " + text
+    }
 }
 
 // MARK: - ReviewThread
@@ -79,7 +97,7 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
     /// The thread as pasteable text: anchor, then each comment.
     public var asText: String {
         let anchor = path + (line.map { ":" + String($0) } ?? "")
-        let body = comments.lazy.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+        let body = comments.lazy.map(\.asText).joined(separator: "\n")
         return anchor + "\n" + body
     }
 
@@ -99,7 +117,7 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
             .map { path in
                 let body = (byPath[path] ?? []).map { thread in
                     let anchor = thread.line.map { ":" + String($0) + " " } ?? ""
-                    return anchor + thread.comments.lazy.map { $0.author + ": " + $0.body }.joined(separator: "\n")
+                    return anchor + thread.comments.lazy.map(\.asText).joined(separator: "\n")
                 }
                 return path + "\n" + body.joined(separator: "\n")
             }

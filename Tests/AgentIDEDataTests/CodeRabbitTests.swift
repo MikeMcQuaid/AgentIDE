@@ -17,6 +17,33 @@ struct CodeRabbitTests {
     """
 
     @Test
+    func `copy all and autofix candidates omit inline comment boilerplate`() throws {
+        var state = PullRequestAutomation(repositoryPath: "/repo", number: 1, url: "pr")
+        state.autofixBots = true
+        let thread = ReviewThread(id: "thread", path: "audit.rb", line: 687, isResolved: false, comments: [
+            ReviewThreadComment(
+                author: "coderabbitai",
+                body: """
+                **🎯 Functional Correctness** | **🟠 Major** | **⚡ Quick win**
+
+                **Scan nested apps separately.**
+
+                <!-- cr-comment:v1:tracking -->
+                <!-- This is an auto-generated comment by CodeRabbit -->
+                """,
+                id: "comment",
+                authorType: "Bot",
+            ),
+        ])
+        let candidate = try #require(AutofixCandidate.reviews(
+            threads: [thread], head: "head", writers: [], state: state,
+        ))
+        #expect(candidate.text == "Thread thread in audit.rb:687\ncoderabbitai: **Scan nested apps separately.**")
+        #expect(candidate.events == ["comment:comment"])
+        #expect(candidate.threads["thread"]?.commentID == "comment")
+    }
+
+    @Test
     func `selecting Copilot also collects CodeRabbit findings without trusting lookalikes`() throws {
         var state = PullRequestAutomation(repositoryPath: "/repo", number: 1, url: "pr")
         state.autofixCopilot = true
@@ -52,7 +79,9 @@ struct CodeRabbitTests {
         let candidate = try #require(AutofixCandidate.reviewSummaries([review], head: "head", state: state))
         #expect(candidate.events == ["review:review"])
         #expect(candidate.text.contains("Assert the matrix output"))
-        #expect(candidate.text == "CodeRabbit review summary:\n" + Self.finding)
+        #expect(candidate.text.contains("test.rb:274"))
+        #expect(candidate.text.contains("Review info") == false)
+        #expect(candidate.text.contains("optional check skipped") == false)
         #expect(candidate.threads.isEmpty)
         #expect(AutofixCandidate.reviewSummaries([review], head: "changed", state: state) == nil)
         state.handledEvents = candidate.events
