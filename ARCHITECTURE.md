@@ -2180,7 +2180,13 @@ round budget, prompt delivery and push setting.
 CodeRabbit findings in submitted review summaries, such as nitpicks and
 comments outside the diff, join inline threads in Copy all and autofix. Only
 summaries for the current head qualify; review information, skipped checks
-and praise do not trigger fixes. Summary findings have durable review IDs
+and praise do not trigger fixes. Summary prompts include the extracted
+findings rather than the full review. Individual and bulk conversation
+copies and autofix share the same CodeRabbit body cleanup: omit leading
+classification badges and trailing tracking and attribution comments,
+preserving finding text, code examples, anchors and replies. Raw bodies
+remain available for display and completion detection.
+Summary findings have durable review IDs
 but no thread resolution action. Completion can be a submitted review or
 a new run with no findings for the current head in CodeRabbit's overview
 comment. An overview edit with the same run identifier does not answer a

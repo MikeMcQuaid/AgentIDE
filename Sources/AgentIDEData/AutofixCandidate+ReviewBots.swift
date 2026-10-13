@@ -28,7 +28,7 @@ extension AutofixCandidate {
 
         return combine(reviews.compactMap { review in
             guard let id = review.nodeID, state.handledEvents.contains("review:" + id) == false,
-                  CodeRabbitFeedback.findings(review, head: head) != nil
+                  let findings = CodeRabbitFeedback.findings(review, head: head)
             else {
                 return nil
             }
@@ -37,7 +37,7 @@ extension AutofixCandidate {
                 counts: [.codeRabbit: 1],
                 sources: [.codeRabbit],
                 events: ["review:" + id],
-                text: "CodeRabbit review summary:\n" + review.body,
+                text: "CodeRabbit review summary:\n" + findings,
                 threads: [:],
             )
         })
