@@ -1472,8 +1472,9 @@ steps.
   failing run's `gh run view --log-failed` (forty lines of what was
   run and in what environment, a hundred and sixty of the failure,
   the progress between cut and counted, except every cut line naming
-  an error or a failure, each with the three lines either side a
-  diff shows, whatever the budget, and lines naming a warning while
+  an error or a failure, each with three lines either side
+  within its job and step, extending through diagnostic blocks,
+  and lines naming a warning while
   the tail's budget allows, since a periphery warning or a failed
   test's own line sits in the middle of a long run and both ends
   said only that something failed; each end bounded in bytes too,
@@ -2136,10 +2137,28 @@ same GitHub client and log formatter as Checks, reading the complete
 job output from the REST job-log endpoint before condensing it. The
 failed-step view can omit diagnostics not assigned to a step, so autofix
 waits for the complete job log rather than accepting that partial view.
-The shared formatter retains head, tail and failure context, then caps
-each formatted log at 64 KiB with an explicit omission notice. Autofix
-divides a 256 KiB log budget across failed required jobs, including for
-Copy all; exceptionally large diagnostics retain their beginning and end.
+The shared formatter recognises case-insensitive severity words, including
+`[ERR]`, `[FAIL]` and `[WARN]`, compiler diagnostics, fatal and critical
+messages, panics, exception names and failure symbols such as `❌`.
+Word boundaries avoid matching severity fragments inside identifiers;
+suffix matches require conventional capitalised diagnostic type names.
+Warnings, including `⚠`, share the existing warning budget; failures
+take priority. Each warning is kept before its nearest context lines,
+so oversized context cannot discard a marker that fits the budget.
+Matching follows timestamp and ANSI colour stripping.
+Three context lines on each side expand through contiguous indented
+details, traceback and Go goroutine and frame headings, chained causes,
+source gutters and diff lines, up to forty lines per side.
+Ordinary progress breaks expansion, and context never crosses a job or
+step boundary. Overlapping contexts appear once, and expanded warning
+context counts towards its byte budget.
+It retains head, tail and failure context, then caps
+each formatted log at 64 KiB with an explicit omission notice. If that
+cap is exceeded, errors and their context take precedence over warnings
+and progress; error lines alone take precedence if their context also
+exceeds the cap. Autofix divides a 256 KiB log budget across failed
+required jobs, including for Copy all; exceptionally large diagnostics
+retain their beginning and end.
 Job links are appended only after repository visibility is verified as
 public; private or unknown repositories supply captured
 output without generated resource links. Optional jobs' logs are never

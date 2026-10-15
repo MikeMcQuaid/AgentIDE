@@ -27,7 +27,7 @@ struct AutofixLogTests {
         #expect(prompt.contains("Analyzing file 300") == false)
         #expect(prompt.contains("lines cut"))
         #expect(prompt.contains("https://github.com/o/r/actions") == (visibility == "public"))
-        #expect(prompt.contains("Analyzing file 201"))
+        #expect(prompt.contains("Analyzing file 201") == false)
         #expect(prompt.contains("2026-10-10T") == false)
         #expect(prompt.contains("optional") == false)
         #expect(await runner.commands == [
