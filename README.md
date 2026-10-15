@@ -51,8 +51,8 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.
 - Collapses resolved conversations and those marked for the next push, keeping contents expandable and copyable with a distinct pending icon.
 - Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
-- Preserves CI errors and their surrounding log lines in Checks, Copy all and autofix prompts, including failures in the middle of long logs.
-- Reads complete failed required job logs and condenses them into bounded autofix and clipboard output, including diagnostics outside GitHub's recognised steps.
+- Preserves CI errors, warnings and failure markers such as ❌ with surrounding diagnostics and stack traces in Checks, Copy all and autofix prompts, including failures in the middle of long logs.
+- Reads complete failed required job logs and condenses them into bounded autofix and clipboard output, prioritising errors over warnings and including diagnostics outside GitHub's recognised steps.
 - Copies pull request URLs and branch names from context menus on pull request rows, headers and actions, including stacked pull requests.
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.

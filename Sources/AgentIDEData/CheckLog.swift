@@ -26,23 +26,23 @@ public enum CheckLog {
     /// Condenses complete logs before bounding unusually large diagnostics.
     public static func format(log: String, heading: String, byteLimit: Int = logByteLimit) -> String {
         let sections = condensed(log: log)
-        let headed = sections.filter { $0.heading.isEmpty == false }
-        let output: String
-        if headed.count == 1, headed.count == sections.count, let only = sections.first {
-            output = "## " + heading + " · " + only.heading + "\n" + only.lines.joined(separator: "\n")
-        } else {
-            let body = sections.map { section in
-                let title = section.heading.isEmpty ? "" : "### " + section.heading + "\n"
-                return title + section.lines.joined(separator: "\n")
-            }
-            output = "## " + heading + "\n" + body.joined(separator: "\n")
-        }
+        var output = formatted(sections: sections, heading: heading)
         guard output.utf8.count > byteLimit else {
             return output
         }
 
         let notice = "\n[CI log shortened to fit the feedback budget; some diagnostics omitted]\n"
         let room = max(0, byteLimit - notice.utf8.count)
+        let failureSections = failures(in: sections, includingContext: true)
+        if failureSections.isEmpty == false {
+            output = formatted(sections: failureSections, heading: heading)
+            if output.utf8.count > room {
+                output = formatted(sections: failures(in: sections, includingContext: false), heading: heading)
+            }
+        }
+        if output.utf8.count <= room {
+            return output + notice
+        }
         // swiftlint:disable:next no_magic_numbers - Divide the space equally between both ends.
         let headRoom = room / 2
         return utf8Cut(output, bytes: headRoom, fromEnd: false)
@@ -134,31 +134,34 @@ public enum CheckLog {
 
     /// The lines of the cut middle worth keeping, what was cut
     /// between them counted in their place: every line naming an
-    /// error or a failure, each with the lines either side a diff
-    /// shows, whatever the budget, since those are the point of the
+    /// error or a failure, each with surrounding diagnostic context,
+    /// whatever the budget, since those are the point of the
     /// copy; then lines naming a warning, the last first, while the
     /// tail's budget allows, since a build can print thousands.
     static func verdicts(in middle: [LogLine]) -> [LogLine] {
         var keep = Set<Int>()
-        func context(of index: Int) -> ClosedRange<Int> {
-            max(0, index - logContextLines) ... min(middle.count - 1, index + logContextLines)
-        }
         for (index, line) in middle.enumerated() where Self.names(Self.failurePattern, line.text) {
-            keep.formUnion(context(of: index))
+            keep.formUnion(Self.context(of: index, in: middle))
         }
         var budget = logTailBytes
         for (index, line) in middle.enumerated().reversed()
             where Self.names(Self.warningPattern, line.text) && keep.contains(index) == false
         {
-            let cost = context(of: index)
-                .filter { keep.contains($0) == false }
-                .reduce(0) { $0 + middle[$1].text.utf8.count + 1 }
-            guard cost <= budget else {
+            guard line.text.utf8.count + 1 <= budget else {
                 continue
             }
 
-            budget -= cost
-            keep.formUnion(context(of: index))
+            for candidate in Self.context(of: index, in: middle).sorted(by: { abs($0 - index) < abs($1 - index) })
+                where keep.contains(candidate) == false
+            {
+                let cost = middle[candidate].text.utf8.count + 1
+                guard cost <= budget else {
+                    continue
+                }
+
+                budget -= cost
+                keep.insert(candidate)
+            }
         }
         var verdicts = [LogLine]()
         var cut = 0
@@ -192,14 +195,66 @@ public enum CheckLog {
     /// Job, step and text: the columns `gh` tabs apart.
     private static let logColumns = 3
 
-    private static let failurePattern = "error|fail"
-    private static let warningPattern = "warning"
+    private static let failurePattern = #"\b(?:err(?:or)?s?|fail(?:s|ed|ing|ures?)?|fatal|critical|panic(?:ked)?)\b"#
+        + #"|(?-i:\b(?:[A-Z][A-Za-z0-9]*)?(?:Error|Exception))(?::|$)|[❌✘✖]"#
+    private static let warningPattern = #"\bwarn(?:ing)?s?\b|(?-i:\b[A-Z][A-Za-z0-9]*Warning):|⚠"#
+    private static let contextPattern = #"^(?:\s|$|Traceback\b|Caused by:|Suppressed:|stack (?:trace|backtrace):"#
+        + #"|goroutine \d+ \[[^\]\r\n]+\]:$|[\w./-]+\.(?:\(\*?\w+\)\.)?[\w.]+\([^()\r\n]*\)$"#
+        + #"|\d+\s*\||[~^+-]|@@)"#
+    private static let diagnosticContextLines = 40
 
     /// Where a line was cut.
     private static let ellipsis = "\u{2026}"
 
+    private static func formatted(sections: [LogSection], heading: String) -> String {
+        if sections.count == 1, let only = sections.first, only.heading.isEmpty == false {
+            return "## " + heading + " · " + only.heading + "\n" + only.lines.joined(separator: "\n")
+        }
+        let body = sections.map { section in
+            let title = section.heading.isEmpty ? "" : "### " + section.heading + "\n"
+            return title + section.lines.joined(separator: "\n")
+        }
+        return "## " + heading + "\n" + body.joined(separator: "\n")
+    }
+
+    private static func failures(in sections: [LogSection], includingContext: Bool) -> [LogSection] {
+        sections.compactMap { section in
+            let lines = section.lines.map { (heading: section.heading, text: $0) }
+            let indices = lines.indices.filter { Self.names(Self.failurePattern, lines[$0].text) }
+            guard indices.isEmpty == false else {
+                return nil
+            }
+
+            let kept = includingContext ? Set(indices.flatMap { Self.context(of: $0, in: lines) }).sorted() : indices
+            return LogSection(heading: section.heading, lines: kept.map { lines[$0].text })
+        }
+    }
+
+    private static func context(of index: Int, in lines: [LogLine]) -> ClosedRange<Int> {
+        func bound(towards direction: Int) -> Int {
+            var result = index
+            var continues = true
+            for distance in 1 ... diagnosticContextLines {
+                let next = index + distance * direction
+                guard lines.indices.contains(next), lines[next].heading == lines[index].heading else {
+                    break
+                }
+
+                continues = continues && Self.names(Self.contextPattern, lines[next].text)
+                guard distance <= logContextLines || continues else {
+                    break
+                }
+
+                result = next
+            }
+            return result
+        }
+        return bound(towards: -1) ... bound(towards: 1)
+    }
+
     private static func names(_ pattern: String, _ text: String) -> Bool {
-        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        // swiftlint:disable:next legacy_objc_type - ICU matches emoji scalars with presentation selectors.
+        (text as NSString).range(of: pattern, options: [.regularExpression, .caseInsensitive]).location != NSNotFound
     }
 
     /// At most so many bytes of a line from one end, backed off to
