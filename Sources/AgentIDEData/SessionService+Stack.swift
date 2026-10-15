@@ -39,6 +39,7 @@ public extension SessionService {
         let fingerprint = await git.refFingerprint(worktreePath: path)
             + checkedOut + (baseRef ?? "") + excluded.sorted().joined(separator: ",")
             + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
+            + "#remote-base" // Invalidate facts derived against the local base.
         return StackReading(
             path: path,
             checkedOut: checkedOut,
@@ -217,13 +218,14 @@ public extension SessionService {
     /// `busyWorktrees`.
     func restack(worktree: Worktree, busyWorktrees: Set<String> = []) async throws -> [String] {
         let path = worktree.path
-        let stack = try await requireStackable(stack(for: worktree))
+        _ = try await requireStackable(stack(for: worktree))
         try await requireQuiet(worktree: worktree, action: "restack")
-        let holders = try await quietHolders(of: stack, in: worktree, busyWorktrees: busyWorktrees)
         // The bottom entry rebases onto the default branch, which is
         // only worth rebasing onto if the remote is current.
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
-        guard let base = stack.base else {
+        let stack = try await requireStackable(stack(for: worktree))
+        let holders = try await quietHolders(of: stack, in: worktree, busyWorktrees: busyWorktrees)
+        guard let base = await stackBaseRef(in: stack, worktreePath: path) else {
             throw stackError("No default branch to stack on", in: path)
         }
 
@@ -238,7 +240,7 @@ public extension SessionService {
         var moved = [String]()
         do {
             for branch in stack.branches {
-                let parent = stack.parent(of: branch) ?? base
+                let parent = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
                 // Already on its parent: leave every commit's name
                 // alone rather than rewriting them to say so —
                 // unless its tip is unsigned while signing is
@@ -264,10 +266,11 @@ public extension SessionService {
 
                 await progress("Rebasing `" + branch + "` onto `" + parent + "`")
                 try await requireStillHeld(branch, holders: holders, worktreePath: path)
-                try await git.rebaseSigned(
+                try await rebaseStackBranch(
                     branch: branch,
                     onto: parent,
                     from: forkedFrom,
+                    fallback: parent == base && base.hasPrefix("refs/remotes/") ? base : nil,
                     worktreePath: holders[branch] ?? path,
                 )
                 moved.append(branch)

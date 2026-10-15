@@ -1401,17 +1401,30 @@ steps.
   included; an agent editing sources moves nothing), or the app moved
   it, and otherwise only at a long backstop, an hour for a lone
   branch. The Stack popover drops branches by name (remembered
-  per worktree) and cuts new ones. Restacking records every tip, then
-  rebases bottom up with `--onto <parent> <recorded tip>`, signed,
-  skipping a branch already in place and signed, from whichever entry
-  asked. A stack can span worktrees: git will not check out a branch
+  per worktree) and cuts new ones. Restacking derives the stack after
+  fetching, so changed remote refs invalidate earlier readings, then
+  records every tip and rebases bottom up with
+  `--onto <parent> <recorded tip>`, signed. The bottom layer uses
+  `origin/<default>` from the first attempt, falling back to the
+  local default only when the remote ref is absent. The rebase button
+  judges the stack against the same refs. Restacking skips a branch
+  already in place and signed, from whichever entry asked. A stack
+  can span worktrees: git will not check out a branch
   another worktree holds, so that branch is rebased (and rolled back),
   named, in its own worktree. Before anything moves, the restack
   refuses while such a worktree is dirty or its agent is not idle or
   done, and Rebase dims with the reason, Push with it while the stack
   needs that rebase; it stops when that worktree has switched
-  branches by the time its turn comes. Each pull request opens
-  against the branch below with both `--head` and `--base` named.
+  branches by the time its turn comes. A failed bottom rebase retries
+  once against a freshly fetched `origin/<default>` only when that
+  ref has advanced from the recorded remote tip, the branch is unchanged
+  and the aborted worktree is clean. Both replay bounds use the new remote
+  tip, avoiding replay of upstream merge history from a stale base.
+  Local default branches stay untouched, including unpushed commits.
+  Upper layers keep their recorded parent tips. Recovery stays
+  in the performance log; a failed retry reports both attempts and
+  rolls the stack back. Each pull request opens against the branch
+  below with both `--head` and `--base` named.
   GitHub's REST Stacks API links what is open: query by pull request,
   create a new stack or append only missing entries to an existing
   stack. Repeating a link leaves existing members in place; conflicting

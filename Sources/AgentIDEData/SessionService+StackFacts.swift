@@ -54,13 +54,13 @@ public extension SessionService {
     /// already sitting on the one below them. Empty means the stack
     /// is in order and the button has nothing to do.
     private func outOfPlace(in stack: BranchStack, path: String) async -> [String] {
-        guard let base = stack.base else {
+        guard let base = await stackBaseRef(in: stack, worktreePath: path) else {
             return []
         }
 
         var pending = [String]()
         for branch in stack.branches {
-            let parent = stack.parent(of: branch) ?? base
+            let parent = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
             if await git.isAncestor(parent, of: branch, worktreePath: path) == false {
                 pending.append(branch)
             }
