@@ -312,7 +312,7 @@ public extension DashboardModel {
     /// Inserts a greyed placeholder row into the repository's group
     /// and marks it pending so the sidebar dims it and refuses
     /// re-selection while the real worktree is created.
-    private func insertPlaceholder(in repository: Repository, branch: String) -> WorktreeItem {
+    internal func insertPlaceholder(in repository: Repository, branch: String) -> WorktreeItem {
         // Unique, since two launches can share a provisional name
         // (the same issue twice) and a row is known by its path.
         let path = repository.path + Self.placeholderMarker + branch + "-" + UUID().uuidString
@@ -339,7 +339,7 @@ public extension DashboardModel {
 
     /// Drops the placeholder once its launch has started; a refresh
     /// has usually replaced the whole group by then already.
-    private func removePlaceholder(_ item: WorktreeItem) {
+    internal func removePlaceholder(_ item: WorktreeItem) {
         deletingPaths.remove(item.worktree.path)
         for index in groups.indices {
             groups[index].items.removeAll { $0.worktree.path == item.worktree.path }

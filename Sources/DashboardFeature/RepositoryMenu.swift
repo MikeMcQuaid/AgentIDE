@@ -3,8 +3,9 @@ import AppKit
 import SwiftUI
 import TerminalUI
 
-/// A repository header's context menu and the confirmation its
-/// delete item opens; a modifier so the header stays one expression.
+/// A repository header's context menu, the branch picker its open
+/// item shows and the confirmation its delete item opens; a modifier
+/// so the header stays one expression.
 struct RepositoryMenu: ViewModifier {
     // MARK: Internal
 
@@ -23,6 +24,9 @@ struct RepositoryMenu: ViewModifier {
                 }
                 .hoverHelp("Copy this repository's full path")
                 Divider()
+                Button("Open branch in new worktree…") { isOpeningBranch = true }
+                    .hoverHelp("Check out a branch from origin as a new worktree, without starting an agent")
+                Divider()
                 Button("Add local directory…", systemImage: "laptopcomputer") { addDirectory() }
                     .hoverHelp(
                         "List a directory of your own here for a shell, an editor and a diff; "
@@ -35,6 +39,11 @@ struct RepositoryMenu: ViewModifier {
                         group.deletionBlocker.map { "Cannot delete: " + $0 }
                             ?? "Delete the checkout from disk; conversations stay readable",
                     )
+            }
+            // A menu cannot hold a popover, and the list is a git
+            // read a menu's content could not wait for.
+            .popover(isPresented: $isOpeningBranch, arrowEdge: .trailing) {
+                OpenBranchPopover(repository: group.repository, model: model) { isOpeningBranch = false }
             }
             .confirmationDialog(
                 "Delete the checkout of " + group.repository.name + "?",
@@ -60,6 +69,9 @@ struct RepositoryMenu: ViewModifier {
     /// confirmation; owned here because nothing outside the menu
     /// reads it.
     @State private var isConfirming = false
+
+    /// Whether the branch picker is up; owned here for the same reason.
+    @State private var isOpeningBranch = false
 
     /// Asks for the directory, then lists it under this
     /// repository. Nothing is copied or changed on disk.

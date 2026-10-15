@@ -90,6 +90,9 @@ public final class DashboardModel {
     /// `launchFailures`, so two side by side never mix their steps.
     public internal(set) var launchProgresses: [String: LaunchProgress] = [:]
 
+    /// Placeholders checking out a branch rather than starting an agent.
+    public internal(set) var openingBranchPaths: Set<String> = []
+
     /// Worktrees mid-deletion, so their rows grey out instantly.
     public internal(set) var deletingPaths: Set<String> = []
 
