@@ -7,6 +7,8 @@ This repository is readme-driven: documentation leads, code follows.
 
 Keep `README.md` focused on capabilities users care about, with one
 concise sentence per feature and one sentence per Settings pane.
+Keep it slim: add only actual new features, never bug-fix notes or
+regression histories.
 In `README.md`, put each sentence on its own line without wrapping.
 Describe user benefits there; keep implementation details and regression
 histories in `ARCHITECTURE.md` or the relevant platform notes.
@@ -525,8 +527,9 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    temporary directory instead, `DARWIN_USER_TEMP_DIR` and never
    `TMPDIR`, which a tool running the tests may have pointed deep.
 10. Keep diffs minimal and follow existing structure.
-11. One branch per session: every change made in a session goes on
-    that session's one branch, cut from `origin/main` and named for
-    the work, so it opens as one pull request; a further change joins
-    that branch rather than starting another. Delete a branch once
-    its pull request is merged.
+11. After changes, branch and commit without waiting to be asked.
+    Prefer one branch and one commit per pull request, cut from
+    `origin/main` and named for the work. Amend that commit for
+    further changes and update its message to describe the result.
+    Stack branches or split commits only when specifically asked.
+    Delete a branch once its pull request is merged.
