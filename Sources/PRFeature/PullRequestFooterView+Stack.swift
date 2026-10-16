@@ -15,10 +15,8 @@ extension PullRequestFooterView {
         } else {
             rebaseButton
         }
-        // No Push beside a live Rebase and Push: two buttons for one
-        // job, and the second pressed first pushed branches about to
-        // be moved.
-        if model.isInStack, model.canRestack {
+        // Rebase and Push replaces Push only while the listed prefix needs it.
+        if model.isInStack, model.canRestack, model.needsRestackBeforePush, model.unpushedBelow == nil {
             EmptyView()
         } else if model.isStackedEntry {
             pushStackButton
@@ -34,7 +32,7 @@ extension PullRequestFooterView {
     private var restackButton: some View {
         BusyButton(
             restackTitle,
-            busy: (stackSignsOnly ? "Signing" : "Rebasing") + " and Pushing",
+            busy: (stackSignsOnly ? "Signing" : "Rebasing") + (model.unpushedBelow == nil ? " and Pushing" : ""),
             disabled: model.canRestack == false,
         ) {
             if await model.restack() == false {
@@ -44,9 +42,11 @@ extension PullRequestFooterView {
         .hoverHelp(
             model.canRestack
                 ? "Fetch, then rebase every branch onto the one below it, signing every commit it "
-                + "replays and leaving alone any branch already in place and signed, then push the whole "
-                + "stack bottom first, publishing any branch nobody has pushed yet; a conflict aborts and "
-                + "reports to Messages"
+                + "replays and leaving alone any branch already in place and signed"
+                + (model.unpushedBelow == nil
+                    ? ", then push the listed branch and those below it, bottom first"
+                    : "; pushing waits until the lower branches are pushed")
+                + "; a conflict aborts and reports to Messages"
                 : model.stack.stackingBlocker ?? model.restackBlocker
                 ?? "Every branch is already on the one below it, with its tip signed",
             shortcut: "⌥⌘R",
@@ -69,7 +69,7 @@ extension PullRequestFooterView {
             active: model.canRestack,
             done: model.rebaseDoneTitle,
         )
-        guard model.canRestack else {
+        guard model.canRestack, model.unpushedBelow == nil else {
             return title
         }
 
@@ -95,10 +95,9 @@ extension PullRequestFooterView {
         .hoverHelp(model.pushStackHelp)
     }
 
-    /// The same, for a stack: how many of its branches the remote
-    /// lacks, since a stack pushes by branch rather than by commit.
+    /// How many branches through the listed entry the remote lacks.
     private var stackPushCount: String {
-        let branches = model.stacking.unpushedBranches.count
+        let branches = model.unpushedStackBranches.count
         return branches > 0 ? String(branches) : ""
     }
 }

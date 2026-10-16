@@ -319,10 +319,9 @@ public extension SessionService {
     /// commits rebases them on top so nothing is thrown away.
     private func catchUp(worktreePath: String, branch: String, into report: inout MergeCleanupReport) async {
         let upstream = "origin/" + branch
-        guard let counts = await git.aheadBehind(worktreePath: worktreePath, baseRef: upstream) else {
-            return
-        }
-        guard counts.behind > 0 || counts.ahead > 0 else {
+        guard let counts = await git.aheadBehind(worktreePath: worktreePath, baseRef: upstream),
+              counts.behind > 0 || counts.ahead > 0
+        else {
             return
         }
 

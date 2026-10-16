@@ -61,13 +61,13 @@ extension PullRequestsModel {
         let lines = template.split(whereSeparator: \.isNewline).map(String.init).filter { isBlank($0) == false }
         guard let marker = lines.first,
               let start = body.ranges(of: marker)
-              .filter({ range in
-                  (range.lowerBound == body.startIndex || body[body.index(before: range.lowerBound)].isNewline)
-                      && (range.upperBound == body.endIndex || body[range.upperBound].isNewline)
-              })
-              .dropLast(lines.count(where: { $0 == marker }) - 1)
-              .last?
-              .lowerBound
+                  .filter({ range in
+                      (range.lowerBound == body.startIndex || body[body.index(before: range.lowerBound)].isNewline)
+                          && (range.upperBound == body.endIndex || body[range.upperBound].isNewline)
+                  })
+                  .dropLast(lines.count(where: { $0 == marker }) - 1)
+                  .last?
+                  .lowerBound
         else {
             return nil
         }

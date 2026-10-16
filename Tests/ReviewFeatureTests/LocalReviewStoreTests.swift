@@ -14,11 +14,15 @@ struct LocalReviewStoreTests {
         var arrivals = runner.started.stream.makeAsyncIterator()
         var displayed = store.model(worktreePath: "/first")
         displayed.reviewInstructions = "Check the first worktree's security changes."
-        let first = Task { [model = displayed] in await model.start(files: []) }
+        let first = Task { [model = displayed] in
+            await model.start(files: [])
+        }
         #expect(await arrivals.next() == "/first")
         displayed = store.model(worktreePath: "/second")
         #expect(displayed.isRunning == false)
-        let second = Task { [model = displayed] in await model.start(files: []) }
+        let second = Task { [model = displayed] in
+            await model.start(files: [])
+        }
         #expect(await arrivals.next() == "/second")
         displayed = store.model(worktreePath: "/first")
         #expect(displayed.isRunning)

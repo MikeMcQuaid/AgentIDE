@@ -34,7 +34,7 @@ public extension PullRequestStore {
         guard let summary = try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number),
               summary.state == "OPEN", let head = summary.headCommit,
               let thread = try await github.reviewThreads(repositoryPath: repositoryPath, number: number)
-              .first(where: { $0.resolveID == threadID }),
+                  .first(where: { $0.resolveID == threadID }),
               thread.isResolved == false, let latest = thread.comments.last?.id,
               try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number)?.headCommit == head
         else {

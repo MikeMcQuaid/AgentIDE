@@ -58,6 +58,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.
 - Pushes, automatically fetching and rebasing remote changes, and manages pull requests, including forks and stacked branches.
+- Browses and drafts every local stack entry, publishing branches and opening pull requests in order.
 - Creates and extends GitHub stacks directly and shows their reported positions even when other branches are not available locally.
 - Merges pull requests and stacks, enables automerge for waiting standalone pull requests with or without a merge queue and shows when automerge is enabled or a pull request is queued.
 - Can automatically remove clean, fully merged worktrees and branches when it observes a merge, leaving the selected worktree and main checkout in place.

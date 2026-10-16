@@ -6,6 +6,7 @@ import TerminalUI
 struct ReviewFindBar: View {
     // MARK: Internal
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: ReviewModel
 
     /// Raised whenever Cmd-F is pressed, so the field takes focus

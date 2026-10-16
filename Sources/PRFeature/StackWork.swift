@@ -15,10 +15,8 @@ struct StackWork {
     /// entry standing for it is a different name entirely.
     var selected: String?
 
-    /// What each of the stack's two actions would actually do, so
-    /// a button with nothing to do says so by dimming.
-    var needsRestack = false
-    var needsPush = false
+    /// The branches needing rebasing onto their parents.
+    var outOfPlaceBranches: [String] = []
 
     /// The branches with commits the remote lacks, bottom first.
     var unpushedBranches: [String] = []
@@ -46,4 +44,8 @@ struct StackWork {
     /// Restacks the worktree, given the busy worktrees to leave alone.
     var restack: (Worktree, Set<String>) async throws -> [String] = { _, _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
+
+    var needsRestack: Bool {
+        outOfPlaceBranches.isEmpty == false
+    }
 }

@@ -6,9 +6,9 @@ import Testing
 
 /// The worktree facts (signing, rebase need) must land even when a
 /// stack read overlaps them; split from the model tests for length.
+@MainActor
 extension PullRequestsModelTests {
     @Test
-    @MainActor
     func `a stack read overlapping the facts does not discard them`() async {
         let worktreeItem = item(branch: "feature", ahead: 1)
         let model = makeModel(items: [worktreeItem])

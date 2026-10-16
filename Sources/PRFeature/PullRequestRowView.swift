@@ -51,8 +51,16 @@ struct PullRequestRowView: View {
             CopyPullRequestURLButton(summary.url)
             CopyBranchNameButton(summary.headBranch)
             Divider()
-            Button("Copy Unresolved Comments") { Task { await onCopyComments() } }
-            Button("Open Failing Checks") { Task { await onOpenChecks() } }
+            Button("Copy Unresolved Comments") {
+                Task {
+                    await onCopyComments()
+                }
+            }
+            Button("Open Failing Checks") {
+                Task {
+                    await onOpenChecks()
+                }
+            }
             Divider()
             Button("Open in Browser") { LinkOpener.open(summary.url) }
         }

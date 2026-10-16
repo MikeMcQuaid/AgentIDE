@@ -108,7 +108,9 @@ extension PullRequestsModel {
         // The pull request's labels arrive with its summary; only the
         // repository's own are a question of their own.
         selectedLabels = (cached ?? summary).labels
-        Task { await loadAvailableLabels() }
+        Task {
+            await loadAvailableLabels()
+        }
         Task {
             let full = try? await fetchSummary(summary.number)
             if let full {

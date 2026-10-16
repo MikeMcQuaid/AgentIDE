@@ -89,7 +89,7 @@ extension SessionService {
     /// until one is still running, and killing whatever holds the
     /// name before each attempt. Throws when none of them stayed up.
     func start(sessionName: String, directory: String, trying commands: [String]) async throws {
-        var failure: (any Error)?
+        var failure: any Error?
         for command in commands {
             await progress("Trying `" + command.prefix(Self.commandPreview) + "`")
             do {
@@ -247,9 +247,9 @@ extension SessionService {
     private static let livenessPollMilliseconds = 350
 
     /// Whether the session is still there with its agent running
-    /// shortly after starting. Only an answered listing can fail the
-    /// check: a herdr hiccup answers nothing, and declaring a live
-    /// agent dead over one had the retry killing it mid-start.
+    /// shortly after starting. Only a matching, finished pane fails
+    /// the check; a missing pane or failed listing cannot justify
+    /// replacing an agent that is still starting.
     private func isRunning(sessionName: String) async -> Bool {
         for _ in 0 ..< Self.livenessPolls {
             // Cancellation leaves the answer as it stands: a live
@@ -261,10 +261,8 @@ extension SessionService {
             guard let panes = try? await herdr.panes() else {
                 continue
             }
-            guard let pane = panes.first(where: { $0.sessionName == sessionName }) else {
-                return false
-            }
-            guard pane.isFinished == false else {
+
+            if let pane = panes.first(where: { $0.sessionName == sessionName }), pane.isFinished {
                 return false
             }
         }

@@ -262,7 +262,9 @@ public struct EditorPane: View {
     private func finish(_ edit: ExternalEdit, saved: Bool) {
         finishedEdit = edit.id
         onFinishedWaiting?()
-        Task { await service.finishEdit(edit, saved: saved) }
+        Task {
+            await service.finishEdit(edit, saved: saved)
+        }
     }
 
     private func consumeFocusRequest() {

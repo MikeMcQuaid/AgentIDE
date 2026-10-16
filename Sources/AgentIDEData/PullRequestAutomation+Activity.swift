@@ -18,11 +18,9 @@ extension PullRequestAutomation {
         }
 
         var messages = [String]()
-        if isAutomatic != (previous?.isAutomatic ?? false) {
-            if isAutomatic {
-                loopResult = nil
-                messages.append("Started " + (isLocalStage ? "local" : "GitHub") + " feedback loop")
-            }
+        if isAutomatic != (previous?.isAutomatic ?? false), isAutomatic {
+            loopResult = nil
+            messages.append("Started " + (isLocalStage ? "local" : "GitHub") + " feedback loop")
         }
         if isLoopRunning == false, loopStatus != (previous?.loopStatus ?? "Not started") {
             messages.append(loopStatus + " feedback loop")

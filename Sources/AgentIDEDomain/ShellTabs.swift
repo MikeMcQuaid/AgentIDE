@@ -96,10 +96,7 @@ public struct ShellTabs: Sendable {
 
         let siblings = shells(in: shell.worktreePath)
         all.removeAll { $0.id == identifier }
-        guard selection[shell.worktreePath] == identifier else {
-            return
-        }
-        guard let index = siblings.firstIndex(of: shell) else {
+        guard selection[shell.worktreePath] == identifier, let index = siblings.firstIndex(of: shell) else {
             return
         }
 

@@ -331,6 +331,8 @@ struct FileEditorView: View {
             return
         }
 
-        Task { markedLines = await changedLines() }
+        Task {
+            markedLines = await changedLines()
+        }
     }
 }

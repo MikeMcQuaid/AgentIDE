@@ -57,10 +57,6 @@ public struct AgentOptionPickers: View {
 
     // MARK: Internal
 
-    @Binding var agent: AgentKind
-    @Binding var model: String
-    @Binding var effort: String
-
     let choices: (AgentKind) -> AgentChoices
     let showsAgent: Bool
 
@@ -68,6 +64,10 @@ public struct AgentOptionPickers: View {
 
     private static let spacing: CGFloat = 6
     private static let agentIconSize: CGFloat = 8
+
+    @Binding private var agent: AgentKind
+    @Binding private var model: String
+    @Binding private var effort: String
 
     private var agentPicker: some View {
         Picker("Agent", selection: $agent) {

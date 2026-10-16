@@ -161,7 +161,9 @@ public final class ScheduledPromptsModel {
         }
 
         let alarm = Timer(fire: next, interval: 0, repeats: false) { [weak self] _ in
-            Task { @MainActor in await self?.runDue() }
+            Task { @MainActor in
+                await self?.runDue()
+            }
         }
         timer = alarm
         RunLoop.main.add(alarm, forMode: .common)

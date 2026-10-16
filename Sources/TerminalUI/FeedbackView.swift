@@ -175,11 +175,9 @@ public struct FeedbackView: View {
             try service.updateFeedback(state, change: change)
             message = ""
             generation += 1
-        } catch { message = error.localizedDescription }
-    }
-
-    func binding<Value>(_ path: WritableKeyPath<PullRequestAutomation, Value>) -> Binding<Value> {
-        Binding(get: { state[keyPath: path] }, set: { value in update { $0[keyPath: path] = value } })
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     func review() async {
@@ -190,7 +188,9 @@ public struct FeedbackView: View {
             try await service.reviewLocalFeedback(state)
             showsFindings = true
             message = ""
-        } catch { message = error.localizedDescription }
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     func openManualReview() {
@@ -203,7 +203,9 @@ public struct FeedbackView: View {
         defer { isStarting = false; generation += 1 }
         do {
             try await service.startFeedbackLoop(state)
-        } catch { message = error.localizedDescription }
+        } catch {
+            message = error.localizedDescription
+        }
     }
 
     // MARK: Private
@@ -231,14 +233,6 @@ public struct FeedbackView: View {
             + "#" + String(generation) + "#" + String(isPresented)
     }
 
-    private var currentActivity: String {
-        if reviewIsBusy {
-            "Review in progress"
-        } else {
-            state.statusSummary
-        }
-    }
-
     private func copy() async {
         NSPasteboard.general.clearContents()
         isCopying = true
@@ -246,7 +240,9 @@ public struct FeedbackView: View {
         do {
             try await NSPasteboard.general.setString(service.copyFeedback(state), forType: .string)
             message = "Copied all available feedback"
-        } catch { message = error.localizedDescription; available = nil }
+        } catch {
+            message = error.localizedDescription; available = nil
+        }
     }
 
     private func reload() async {

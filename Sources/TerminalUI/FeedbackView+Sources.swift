@@ -3,6 +3,10 @@ import AgentIDEDomain
 import SwiftUI
 
 extension FeedbackView {
+    func binding<Value>(_ path: WritableKeyPath<PullRequestAutomation, Value>) -> Binding<Value> {
+        Binding(get: { state[keyPath: path] }, set: { value in update { $0[keyPath: path] = value } })
+    }
+
     @ViewBuilder
     func sourceControls(
         available: FeedbackAvailability?,

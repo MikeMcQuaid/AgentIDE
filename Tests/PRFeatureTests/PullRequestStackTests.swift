@@ -20,8 +20,8 @@ struct PullRequestStackTests {
         model.fetchCurrentBranch = { _ in "upper" }
         model.stacking.facts = { _ in
             StackFacts(
-                stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"),
-                unpushed: ["lower"],
+                stack: BranchStack(base: "main", branches: ["lower", "middle", "upper"], checkedOut: "upper"),
+                unpushed: ["lower", "middle", "upper"],
             )
         }
         let ranges = Mutex([String?]())
@@ -43,9 +43,11 @@ struct PullRequestStackTests {
         model.clearDraft()
         model.show(branch: "upper")
         try? await Task.sleep(for: .milliseconds(200))
-        #expect(model.listedRange == "lower..upper")
+        #expect(model.listedRange == "middle..upper")
         #expect(model.prTitle == "Upper work")
         #expect(model.unpushedBelow == "lower")
+        #expect(model.unopenedBelow == "lower")
+        #expect(model.needsCreateForm)
         #expect(ranges.withLock { $0 }.contains("origin/HEAD..lower"))
     }
 
@@ -58,7 +60,7 @@ struct PullRequestStackTests {
         // an entry checks nothing out.
         model.fetchCurrentBranch = { _ in "upper" }
         model.stacking.facts = { _ in
-            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
+            StackFacts(stack: BranchStack(base: "main", branches: ["lower", "middle", "upper"], checkedOut: "upper"))
         }
         let opened = Mutex([String]())
         model.performCreate = { worktree, _, _, _, _ in
@@ -87,7 +89,7 @@ struct PullRequestStackTests {
 
         model.show(branch: "upper")
         try? await Task.sleep(for: .milliseconds(200))
-        #expect(model.listedParent == "lower")
+        #expect(model.listedParent == "middle")
         #expect(model.isStackedEntry)
     }
 
@@ -277,7 +279,7 @@ struct PullRequestStackTests {
     }
 
     @Test
-    func `a rebase anywhere in a stack pushes the stack back`() async {
+    func `a rebase anywhere in a stack pushes through the listed entry`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
@@ -297,26 +299,24 @@ struct PullRequestStackTests {
             done.withLock { $0.append("restack") }
             return ["upper"]
         }
-        model.stacking.push = { _ in
+        model.stacking.push = { worktree in
+            #expect(worktree.branch == "lower")
             done.withLock { $0.append("push") }
-            return ["lower", "upper"]
+            return ["lower"]
         }
         await model.reload()
 
         #expect(await model.rebaseSigned())
 
-        // A branch the restack moved is behind what the remote has,
-        // and GitHub reads a stack whose parents moved as no stack
-        // at all until the remote copies catch up; the whole stack
-        // goes, a branch nobody has pushed included, as the button
-        // says. Both buttons say what happened to the entry in view.
+        // Both buttons report the listed entry's work; higher
+        // branches were rebased locally without being published.
         #expect(done.withLock { $0 } == ["restack", "push"])
         #expect(model.rebaseDoneTitle == "Rebased")
         #expect(model.pushDoneTitle == "Pushed")
     }
 
     @Test
-    func `a push from inside a stack pushes the stack`() async {
+    func `a push from inside a stack pushes through the listed entry`() async {
         let fixtures = PullRequestsModelTests()
         let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
         model.fetchCurrentBranch = { _ in "upper" }
@@ -324,9 +324,9 @@ struct PullRequestStackTests {
             StackFacts(stack: BranchStack(base: "main", branches: ["lower", "upper"], checkedOut: "upper"))
         }
         let pushed = Mutex([String]())
-        model.stacking.push = { _ in
-            pushed.withLock { $0.append("stack") }
-            return ["lower", "upper"]
+        model.stacking.push = { worktree in
+            pushed.withLock { $0.append(worktree.branch) }
+            return ["lower"]
         }
         model.performPush = { _ in
             pushed.withLock { $0.append("one branch") }
@@ -336,9 +336,7 @@ struct PullRequestStackTests {
 
         #expect(await model.push())
 
-        // One branch of a stack never goes up alone: the ones above
-        // it are built on this tip.
-        #expect(pushed.withLock { $0 } == ["stack"])
+        #expect(pushed.withLock { $0 } == ["lower"])
     }
 
     // MARK: Private

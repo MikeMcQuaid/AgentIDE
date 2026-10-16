@@ -4,6 +4,7 @@ import TerminalUI
 
 /// The same local finding actions beneath the diff and inside the popover.
 struct LocalReviewThreadRow: View {
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: LocalReviewModel
 
     let diff: ReviewModel

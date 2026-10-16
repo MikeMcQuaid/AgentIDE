@@ -41,7 +41,11 @@ extension ReviewModel {
     /// cleanup after a merge), which is the workspace changing, not
     /// a failure, and the sidebar drops the row on its own. A directory
     /// left behind with broken Git metadata shows an unavailable state.
-    func recordReload(_ error: (any Error)?) async {
+    func recordReload(_ error: any Error?, generation: Int) async {
+        guard generation == reloadGeneration, Task.isCancelled == false else {
+            return
+        }
+
         let what = "Review of " + repositoryName
         guard let error else {
             isRepositoryAvailable = true
@@ -49,10 +53,15 @@ extension ReviewModel {
             return
         }
 
-        isRepositoryAvailable = worktreeExists(worktreePath)
-        if isRepositoryAvailable, let available = try? await git.isWorktree(worktreePath: worktreePath) {
-            isRepositoryAvailable = available
+        var available = worktreeExists(worktreePath)
+        if available, let isWorktree = try? await git.isWorktree(worktreePath: worktreePath) {
+            available = isWorktree
         }
+        guard generation == reloadGeneration, Task.isCancelled == false else {
+            return
+        }
+
+        isRepositoryAvailable = available
         if isRepositoryAvailable {
             ServiceStatus.shared.record(failure: error, doing: what)
         } else {

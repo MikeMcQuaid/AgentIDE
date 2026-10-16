@@ -103,14 +103,18 @@ public struct ReviewView: View {
             // storage bus.
             .onChange(of: commitRequest) {
                 if localReview.isBusy == false {
-                    Task { await commitOutstanding(model: model) }
+                    Task {
+                        await commitOutstanding(model: model)
+                    }
                 }
             }
             .onChange(of: automationGeneration) {
                 if localReview.isBusy == false {
                     localReview.refreshAutomation()
                 }
-                Task { [model] in model.threads = await model.fetchThreads() }
+                Task { [model] in
+                    model.threads = await model.fetchThreads()
+                }
             }
             .onChange(of: model.files) { localReview.update(files: model.files) }
             .onChange(of: localReview.review) {
@@ -122,6 +126,11 @@ public struct ReviewView: View {
     }
 
     // MARK: Internal
+
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Shared with cross-file extensions.
+    @State var model: ReviewModel // swiftlint:disable:this private_swiftui_state
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Shared with cross-file extensions.
+    @State var collapseOverrides: [String: Bool] = [:] // swiftlint:disable:this private_swiftui_state
 
     /// Internal, since the commit extension file reads them.
     let worktreePath: String
@@ -136,7 +145,6 @@ public struct ReviewView: View {
     private static let spacing: CGFloat = 8
     private static let captionSpacing: CGFloat = 2
 
-    @State private var model: ReviewModel
     @State private var localReview: LocalReviewModel
     @State private var showsLocalReview = false
     @AppStorage(UtilityTabTarget.pullRequestCacheKey)
@@ -152,7 +160,6 @@ public struct ReviewView: View {
     /// The menu bar's commit signal.
     @AppStorage("commitRequest")
     private var commitRequest = 0
-    @State private var collapseOverrides: [String: Bool] = [:]
 
     /// Whether the find bar is showing; the menu's Find opens it
     /// and Escape or its own button closes it.
@@ -261,41 +268,13 @@ public struct ReviewView: View {
                 isOn: model.hidesWhitespace,
             ) {
                 model.hidesWhitespace.toggle()
-                Task { await model.reload() }
+                Task {
+                    await model.reload()
+                }
             }
         }
         .padding(Self.captionSpacing)
         .background(.thinMaterial, in: Capsule())
-    }
-
-    @ViewBuilder private var scopeButtons: some View {
-        scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
-        scopeButton(.lastCommit, systemImage: "clock", help: "Review the last commit")
-        scopeButton(
-            .upstream,
-            systemImage: "icloud.and.arrow.up",
-            help: "Review the commits not yet on this branch's own origin ref; dimmed until the branch has been pushed",
-            disabled: model.hasUpstream == false,
-        )
-        scopeButton(
-            .branch,
-            systemImage: "arrow.triangle.branch",
-            help: "Review every commit on the branch against its merge base",
-        )
-    }
-
-    private func scopeButton(
-        _ scope: ReviewModel.Scope,
-        systemImage: String,
-        help: String,
-        disabled: Bool = false,
-    ) -> some View {
-        iconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
-            model.scope = scope
-            model.commitTarget = nil
-            collapseOverrides = [:]
-            Task { await model.reload() }
-        }
     }
 
     /// Retargets the pane at a stack entry: the checked-out branch
@@ -309,7 +288,9 @@ public struct ReviewView: View {
         model.stackTarget = branch == stack.checkedOut
             ? nil
             : stack.parent(of: branch).map { (parent: $0, branch: branch) }
-        Task { await model.reload() }
+        Task {
+            await model.reload()
+        }
     }
 
     /// The collapsible file list; the uncommitted scope embeds the

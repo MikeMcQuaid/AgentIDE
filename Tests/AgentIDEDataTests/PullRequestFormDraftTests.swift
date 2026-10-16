@@ -9,8 +9,17 @@ struct PullRequestFormDraftTests {
         let old = Data(#"{"title":"t","body":"b","template":""}"#.utf8)
         let draft = try JSONDecoder().decode(PullRequestFormDraft.self, from: old)
         #expect(draft.labels.isEmpty)
-        let labelled = PullRequestFormDraft(title: "t", body: "b", template: "", labels: ["ci"])
+        #expect(draft.defaultTitle == nil)
+        #expect(draft.defaultBody == nil)
+        let labelled = PullRequestFormDraft(
+            title: "t",
+            body: "b",
+            template: "",
+            labels: ["ci"],
+            defaultTitle: "Original title",
+            defaultBody: "Original body",
+        )
         let encoded = try JSONEncoder().encode(labelled)
-        #expect(try JSONDecoder().decode(PullRequestFormDraft.self, from: encoded).labels == ["ci"])
+        #expect(try JSONDecoder().decode(PullRequestFormDraft.self, from: encoded) == labelled)
     }
 }

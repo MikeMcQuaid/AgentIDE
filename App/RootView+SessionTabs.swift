@@ -351,7 +351,9 @@ extension RootView {
     /// At the pane's far edge, clear of the name it closes.
     private func closeSessionButton(_ session: AgentSession, in item: WorktreeItem) -> some View {
         Button {
-            Task { await close(session, in: item) }
+            Task {
+                await close(session, in: item)
+            }
         } label: {
             Image(systemName: "xmark.circle")
                 .foregroundStyle(.secondary)

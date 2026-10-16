@@ -28,11 +28,12 @@ extension PullRequestsModel {
     /// Lists a branch of the stack, without checking anything out:
     /// reading up and down a stack is navigation, and moving the
     /// worktree to another branch is a deliberate act of its own.
-    func show(branch: String) {
+    @discardableResult
+    func show(branch: String) -> Task<Void, Never>? {
         // Clearing below is for arriving somewhere new; re-listing
         // the entry already in view wiped typed text.
         guard branch != stacking.selected else {
-            return
+            return nil
         }
 
         stacking.selected = branch
@@ -50,7 +51,9 @@ extension PullRequestsModel {
         loadingDraft = false
         // Every entry of a stack is one worktree, so nothing git
         // would be asked has changed: the move is a listing swap.
-        Task { await reload(keepingSelection: false, refreshingFacts: false) }
+        return Task {
+            await reload(keepingSelection: false, refreshingFacts: false)
+        }
     }
 
     /// Whether restacking would change anything: a branch not
@@ -66,7 +69,11 @@ extension PullRequestsModel {
     /// Why a branch held by another worktree cannot be rebased yet:
     /// its agent is busy or it has uncommitted changes.
     var restackBlocker: String? {
-        for branch in stack.branches {
+        restackBlocker(in: stack.branches)
+    }
+
+    private func restackBlocker(in branches: [String]) -> String? {
+        for branch in branches {
             guard let holder = items.first(where: { $0.worktree.branch == branch && $0.worktree.path != worktreePath })
             else {
                 continue
@@ -95,15 +102,33 @@ extension PullRequestsModel {
         )
     }
 
-    /// Whether any branch of the stack has commits the remote does
-    /// not carry. A stack that needs the rebase a busy or dirty
-    /// worktree is holding up does not push either: Push would send
-    /// branches still sitting on stale parents, the busy agent's
-    /// among them.
+    /// The branches needed to publish the listed entry, bottom first.
+    private var stackPushBranches: [String] {
+        guard let listed = listedBranch, let index = stack.branches.firstIndex(of: listed) else {
+            return []
+        }
+
+        return Array(stack.branches[...index])
+    }
+
+    var unpushedStackBranches: [String] {
+        stackPushBranches.filter { stacking.unpushedBranches.contains($0) }
+    }
+
+    var needsRestackBeforePush: Bool {
+        stackPushBranches.contains { branch in
+            stacking.outOfPlaceBranches.contains(branch) || stacking.unsignedBranches.contains(branch)
+        }
+    }
+
+    /// Whether the listed prefix has work to push, waiting for any
+    /// busy or dirty worktrees in that prefix when it needs rebasing.
     var canPushStack: Bool {
         stack.stackingBlocker == nil && isBranchActionRunning == false
-            && stacking.needsPush && stacking.unsignedBranches.isEmpty
-            && (stacking.needsRestack == false || restackBlocker == nil)
+            && unpushedBelow == nil
+            && unpushedStackBranches.isEmpty == false
+            && stackPushBranches.contains(where: stacking.unsignedBranches.contains) == false
+            && (needsRestackBeforePush == false || restackBlocker(in: stackPushBranches) == nil)
     }
 
     /// Why the stack's push is in its current state, said the way a
@@ -112,14 +137,17 @@ extension PullRequestsModel {
         if let blocker = stack.stackingBlocker {
             return blocker
         }
-        if stacking.needsRestack, let blocker = restackBlocker {
+        if let below = unpushedBelow {
+            return "Push `" + below + "` below this branch first"
+        }
+        if needsRestackBeforePush, let blocker = restackBlocker(in: stackPushBranches) {
             return blocker
         }
-        guard stacking.needsPush else {
-            return "Every branch of the stack is already pushed"
+        guard unpushedStackBranches.isEmpty == false else {
+            return "The listed branch and those below it are already pushed"
         }
-        guard let unsigned = stacking.unsignedBranches.first else {
-            return "Push every branch of the stack, bottom first"
+        guard let unsigned = stackPushBranches.first(where: stacking.unsignedBranches.contains) else {
+            return "Push the listed branch and those below it, bottom first"
         }
 
         return unsigned + "'s tip commit is not GPG signed; Rebase signs the stack before pushing"
@@ -177,16 +205,14 @@ extension PullRequestsModel {
         }
 
         stacking.stack = facts.stack
-        stacking.needsRestack = facts.outOfPlace.isEmpty == false
+        stacking.outOfPlaceBranches = facts.outOfPlace
         stacking.unpushedBranches = facts.unpushed
         stacking.unsignedBranches = facts.unsigned
-        stacking.needsPush = facts.unpushed.isEmpty == false
         // The entry in view: the one remembered for this worktree,
-        // else the first that could have a pull request opened (the
-        // top of a stack often cannot yet), else the checked-out
+        // else the first without an open pull request, else the checked-out
         // branch. A selection naming no branch of this stack goes.
         let remembered = StackSelection.branch(for: worktree.path)
-        let chosen = [remembered, firstOpenable, stacking.stack.checkedOut]
+        let chosen = [remembered, stack.branches.first { hasOpenPullRequest($0) == false }, stack.checkedOut]
             .compactMap(\.self)
             .first { stacking.stack.branches.contains($0) }
         stacking.selected = chosen
@@ -299,39 +325,6 @@ extension PullRequestsModel {
         return (listedParent ?? "origin/HEAD") + ".." + listed
     }
 
-    /// The lowest entry that can be listed and has no open pull
-    /// request yet: the one whose form is worth opening on.
-    private var firstOpenable: String? {
-        stacking.stack.branches.first { branch in
-            guard canList(branch) else {
-                return false
-            }
-
-            return hasOpenPullRequest(branch) == false
-        }
-    }
-
-    /// Whether a stack entry can be listed at all: not while any
-    /// branch below it is unpushed, since a pull request above one
-    /// cannot exist yet and its form would only be greyed out. The
-    /// first unpushed entry itself lists, so it can be pushed and
-    /// opened from its own form.
-    func canList(_ branch: String) -> Bool {
-        guard stacking.stack.isStacked, let index = stacking.stack.branches.firstIndex(of: branch) else {
-            return true
-        }
-
-        // A branch whose own pull request is already open is always
-        // there to be read, whatever sits below it: a lower branch
-        // whose pull request was closed under it must not hide one
-        // that GitHub is showing.
-        guard hasOpenPullRequest(branch) == false else {
-            return true
-        }
-
-        return stacking.stack.branches[..<index].contains { isBlocking($0) } == false
-    }
-
     /// Whether the store's cached listing shows an open pull request
     /// for a branch; the stack's prefetch is what fills it.
     func hasOpenPullRequest(_ branch: String) -> Bool {
@@ -339,29 +332,13 @@ extension PullRequestsModel {
         return listed.contains { $0.state == "OPEN" }
     }
 
-    /// Whether a branch below stops the entries above it: not on the
-    /// remote, or on it without an open pull request, since a pull
-    /// request above it would target a base GitHub has no pull
-    /// request for. The pull request state is the store's cached
-    /// listing for that branch, which the stack prefetch fills.
-    private func isBlocking(_ branch: String) -> Bool {
-        if stacking.unpushedBranches.contains(branch) {
-            return true
-        }
-
-        return hasOpenPullRequest(branch) == false
+    /// The first lower branch that must be pushed before this entry.
+    var unpushedBelow: String? {
+        stackPushBranches.dropLast().first(where: stacking.unpushedBranches.contains)
     }
 
-    /// The nearest branch below the listed one that the remote
-    /// lacks: a pull request opened above it would target a base
-    /// GitHub has never seen, so the form waits for that push.
-    var unpushedBelow: String? {
-        guard stacking.stack.isStacked, let listed = listedBranch,
-              let index = stacking.stack.branches.firstIndex(of: listed)
-        else {
-            return nil
-        }
-
-        return stacking.stack.branches[..<index].last { isBlocking($0) }
+    /// The first lower branch that needs an open pull request.
+    var unopenedBelow: String? {
+        stackPushBranches.dropLast().first { hasOpenPullRequest($0) == false }
     }
 }

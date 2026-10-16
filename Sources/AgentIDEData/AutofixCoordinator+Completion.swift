@@ -21,16 +21,11 @@ extension AutofixCoordinator {
                 value.pullRequestAutomation[key]?.attempt?.hasObservedTurn = true
             }
         }
-        guard [.done, .idle].contains(target.session.activity) else {
-            return
-        }
-        guard let result = try await completedResult(attempt, target: target, context: context) else {
-            return
-        }
-        guard await ready(target, head: result.commit, context: context) else {
-            return
-        }
-        guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id else {
+        guard [.done, .idle].contains(target.session.activity),
+              let result = try await completedResult(attempt, target: target, context: context),
+              await ready(target, head: result.commit, context: context),
+              let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id
+        else {
             return
         }
 
@@ -52,10 +47,8 @@ extension AutofixCoordinator {
         let key = context.key
         let store = context.store
         let driver = context.driver
-        guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id else {
-            return
-        }
-        guard let fresh = try await driver.summary(state, true), state.matches(fresh),
+        guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id,
+              let fresh = try await driver.summary(state, true), state.matches(fresh),
               fresh.state == "OPEN", let markedHead = fresh.headCommit
         else {
             return

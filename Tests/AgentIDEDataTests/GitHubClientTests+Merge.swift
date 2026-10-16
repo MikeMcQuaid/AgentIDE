@@ -154,7 +154,7 @@ extension GitHubClientTests {
 private final class AsyncMergeRunner: ProcessRunner, Sendable {
     // MARK: Lifecycle
 
-    init(responses: [(Int, String)], firstFailure: (any Error)? = nil) {
+    init(responses: [(Int, String)], firstFailure: any Error? = nil) {
         self.responses = Mutex(responses)
         self.firstFailure = Mutex(firstFailure)
     }
@@ -200,5 +200,5 @@ private final class AsyncMergeRunner: ProcessRunner, Sendable {
     // MARK: Private
 
     private let responses: Mutex<[(Int, String)]>
-    private let firstFailure: Mutex<(any Error)?>
+    private let firstFailure: Mutex<any Error?>
 }

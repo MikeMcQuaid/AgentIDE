@@ -28,8 +28,12 @@ struct WorktreeActions: View {
     @Binding var pendingBranchSwitch: WorktreeItem?
 
     var body: some View {
-        Button("Refresh") { Task { await model.refreshRepository(path: item.worktree.repositoryPath) } }
-            .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
+        Button("Refresh") {
+            Task {
+                await model.refreshRepository(path: item.worktree.repositoryPath)
+            }
+        }
+        .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
         Divider()
         CopyBranchNameButton(item.worktree.branch)
             .hoverHelp("Copy this worktree's branch name")
@@ -43,13 +47,21 @@ struct WorktreeActions: View {
                 .hoverHelp("Copy the URL of pull request #" + String(pullRequest.number))
         }
         Divider()
-        Button("Fetch") { Task { await model.fetch(item: item) } }
-            .hoverHelp("git fetch all remotes of this repository")
+        Button("Fetch") {
+            Task {
+                await model.fetch(item: item)
+            }
+        }
+        .hoverHelp("git fetch all remotes of this repository")
         if item.worktree.path == item.worktree.repositoryPath {
-            Button("Fetch and Reset") { Task { await model.fetchAndReset(item: item) } }
-                .hoverHelp(
-                    "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
-                )
+            Button("Fetch and Reset") {
+                Task {
+                    await model.fetchAndReset(item: item)
+                }
+            }
+            .hoverHelp(
+                "git fetch origin, then hard-reset to origin's default branch; local changes are lost",
+            )
         }
         Button("Stack…") { pendingStack = item }
             .hoverHelp("Show which branches are stacked in this worktree, drop any that are not, or cut a new one")
@@ -68,20 +80,28 @@ struct WorktreeActions: View {
             .hoverHelp("Start another agent in a new worktree whose branch is cut from this one, stacking on its work")
         }
         Divider()
-        Button("Mark as unread") { Task { await model.markUnread(item: item) } }
-            .hoverHelp("Show the unread dot until this worktree is next viewed")
+        Button("Mark as unread") {
+            Task {
+                await model.markUnread(item: item)
+            }
+        }
+        .hoverHelp("Show the unread dot until this worktree is next viewed")
         // Cleanup is the merge-time tidy, offered by hand for merges
         // the poll has not noticed yet or made outside GitHub; on the
         // main checkout it only makes sense off the default branch.
         if item.worktree.path != item.worktree.repositoryPath || model.isOffDefaultBranch(item) {
-            Button("Clean up after merge") { Task { await onCleanUp() } }
-                .hoverHelp(
-                    item.worktree.path == item.worktree.repositoryPath
-                        ? "Return to the default branch and safely delete this merged branch; "
-                        + "dirty checkouts are left alone"
-                        : "Remove this worktree once its branch is merged and clean; "
-                        + "anything that would lose work asks first",
-                )
+            Button("Clean up after merge") {
+                Task {
+                    await onCleanUp()
+                }
+            }
+            .hoverHelp(
+                item.worktree.path == item.worktree.repositoryPath
+                    ? "Return to the default branch and safely delete this merged branch; "
+                    + "dirty checkouts are left alone"
+                    : "Remove this worktree once its branch is merged and clean; "
+                    + "anything that would lose work asks first",
+            )
         }
         if item.worktree.path != item.worktree.repositoryPath {
             Divider()

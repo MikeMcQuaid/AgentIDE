@@ -18,36 +18,30 @@ struct RootView: View {
     /// titlebar band and that toggle.
     static let toggleRowHeight: CGFloat = 30
 
-    // Slim enough for icon-and-truncated-text rows while staying
-    // wider than the traffic lights band.
-
     let dependencies: AppDependencies
 
-    /// Persisted as the tab's name rather than an index, so
-    /// reordering the tabs can never repoint a saved selection;
-    /// internal so the extension file can read it.
-    @AppStorage("utilityTab")
+    /// Persisted by name; shared with the pane and routing extensions.
+    @AppStorage("utilityTab") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var utilityTabName = UtilityTab.review.rawValue
 
-    /// Internal so the extension file's toggle button can drive it.
-    @AppStorage("showsUtilityPane")
+    @AppStorage("showsUtilityPane") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var showsUtilityPane = true
 
     /// Pane widths, persisted so the layout restores on relaunch.
-    @AppStorage("sidebarWidth")
+    @AppStorage("sidebarWidth") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var sidebarWidth = 300.0
-    @AppStorage("utilityPaneWidth")
+    @AppStorage("utilityPaneWidth") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var utilityPaneWidth = 480.0
 
     /// Focus requests from the finder menu items, cleared at launch
     /// so a request from the previous run cannot fire; internal so
     /// the routing extension can read the counter it consumes.
-    @AppStorage("finderFocusRequest")
+    @AppStorage("finderFocusRequest") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var finderFocusRequest = 0
 
     /// Open-file requests from the openers, routed to an editor slot
     /// by the extension file; internal for the same reason.
-    @AppStorage("editorFileRequest")
+    @AppStorage("editorFileRequest") // swiftformat:disable:next privateSwiftUIDynamicProperties -- Cross-file access.
     var editorFileRequest = 0
 
     /// The worktree whose conversation is being resumed, so its pane
@@ -215,7 +209,9 @@ struct RootView: View {
             CompletionSound.endSleeping()
             let snapshot = sessionsBeforeSleep
             sessionsBeforeSleep = []
-            Task { await resumeKilled(sleepSnapshot: snapshot) }
+            Task {
+                await resumeKilled(sleepSnapshot: snapshot)
+            }
         }
         // Idle sleep is blocked while any agent or shell runs, since
         // the machine sleeping mid-response cuts them off.
@@ -226,7 +222,9 @@ struct RootView: View {
         // their counts show in the sidebar immediately rather than on
         // the next poll.
         .onChange(of: dashboardRefreshRequest) {
-            Task { await dependencies.dashboard.refreshSelected() }
+            Task {
+                await dependencies.dashboard.refreshSelected()
+            }
         }
         // The pull request pane cached a changed state: the rows read
         // the same cache and repaint on this bump, no reading needed.
@@ -282,7 +280,9 @@ struct RootView: View {
             // The pane fills with progress before the resume starts,
             // so the conversation list never flashes first.
             resumingWorktree = item.worktree.path
-            Task { await resumeLatest(in: item) }
+            Task {
+                await resumeLatest(in: item)
+            }
         }
     }
 

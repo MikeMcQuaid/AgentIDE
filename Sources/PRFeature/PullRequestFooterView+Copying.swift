@@ -64,8 +64,12 @@ extension PullRequestFooterView {
     /// Explicit manual copies retain their broader scope beside filtered feedback.
     func rawFeedbackMenu(for selected: PullRequestSummary) -> some View {
         Menu("Copy unfiltered feedback") {
-            Button("All unresolved reviews") { Task { await model.copyUnresolvedComments(selected) } }
-                .disabled(reviewCount(for: selected) == 0)
+            Button("All unresolved reviews") {
+                Task {
+                    await model.copyUnresolvedComments(selected)
+                }
+            }
+            .disabled(reviewCount(for: selected) == 0)
             Button("Failing CI logs") {
                 Task {
                     if await model.copyFailingLogs(selected) == false {

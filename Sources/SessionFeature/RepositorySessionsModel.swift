@@ -123,7 +123,9 @@ final class RepositorySessionsModel {
         let work: () async throws -> Void = { [service, repository] in
             _ = try await service.resumeInNewWorktree(selected, repository: repository)
         }
-        Task { await resume(Self.name(of: selected), work, onResumed: onResumed) }
+        Task {
+            await resume(Self.name(of: selected), work, onResumed: onResumed)
+        }
     }
 
     /// Resumes the selected conversation in the worktree it ran in;
@@ -140,7 +142,9 @@ final class RepositorySessionsModel {
         let work: () async throws -> Void = { [service] in
             _ = try await service.resumePast(selected, worktree: worktree)
         }
-        Task { await resume(Self.name(of: selected), work, onResumed: onResumed) }
+        Task {
+            await resume(Self.name(of: selected), work, onResumed: onResumed)
+        }
     }
 
     /// The worktree shape a here-resume launches into: the path's

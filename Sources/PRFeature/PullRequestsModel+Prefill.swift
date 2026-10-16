@@ -3,42 +3,51 @@ import AgentIDEDomain
 /// Filling the creation form from a branch's own commits, split from
 /// the actions for length.
 extension PullRequestsModel {
-    /// A one-commit branch is its own description: the form
-    /// defaults to that commit, no model involved. Blank is blank
-    /// however it got that way, whitespace included, so a saved
-    /// draft holding nothing is no reason to leave the form empty.
-    /// Throws away the title and body and fills them from the
-    /// branch's commits again; the caller has asked, so nothing
-    /// typed is spared. The template stays, since it is the
-    /// repository's rather than the commits'.
+    /// Explicitly resets the description to the commits, keeping the template.
     func resetToCommits() async {
         guard let worktree = actionWorktree else {
             return
         }
 
-        loadingDraft = true
-        prTitle = ""
-        prBody = ""
-        loadingDraft = false
-        await prefillFromSingleCommit(worktree)
-        saveDraft()
+        await prefillFromSingleCommit(worktree, replacing: true)
     }
 
-    func prefillFromSingleCommit(_ worktree: Worktree) async {
-        guard Self.isBlank(prTitle), Self.isBlank(prBody) else {
+    /// Refreshes automatic defaults until the description has meaningful edits.
+    func prefillFromSingleCommit(_ worktree: Worktree, replacing: Bool = false) async {
+        guard replacing || canRefreshDescription else {
             return
         }
 
+        let key = draftKey
+        let title = prTitle
+        let body = prBody
         let commits = await fetchCommitMessages(worktree, listedRange)
-        if commits.count == 1, let only = commits.first {
-            apply(description: Self.description(splitFromMessage: only))
-        } else if let first = commits.first {
-            // Several commits: the first one's subject titles the
-            // pull request and the rest list the body, which is what
-            // Submit stack writes for a stack entry.
-            let subjects = commits.map { Self.description(splitFromMessage: $0).title }
-            let rest = subjects.dropFirst().lazy.map { "- " + $0 }.joined(separator: "\n")
-            apply(description: (Self.description(splitFromMessage: first).title, rest))
+        guard key == draftKey, title == prTitle, body == prBody,
+              replacing || canRefreshDescription, let first = commits.first
+        else {
+            return
+        }
+
+        var description = Self.description(splitFromMessage: first)
+        if commits.count > 1 {
+            description.body = commits.dropFirst()
+                .map { "- " + Self.description(splitFromMessage: $0).title }
+                .joined(separator: "\n")
+        }
+        loadingDraft = true
+        apply(description: description, replacing: true)
+        loadingDraft = false
+        saveDraft(defaults: description)
+    }
+
+    private var canRefreshDescription: Bool {
+        guard editingNumber == nil, let branch = listedBranch, hasOpenPullRequest(branch) == false else {
+            return false
+        }
+
+        let draft = draftKey.flatMap { store.load().pullRequestDrafts[$0] }
+        return zip([prTitle, prBody], [draft?.defaultTitle ?? "", draft?.defaultBody ?? ""]).allSatisfy { text, saved in
+            text.filter { $0.isWhitespace == false } == saved.filter { $0.isWhitespace == false }
         }
     }
 

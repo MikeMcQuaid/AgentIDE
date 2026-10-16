@@ -241,10 +241,9 @@ struct WindowConfigurator: NSViewRepresentable {
             recordGeneration += 1
             let generation = recordGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.recordSeconds) { [weak self] in
-                guard let self, generation == recordGeneration, let currentWindow = unsafe self.window else {
-                    return
-                }
-                guard currentWindow.styleMask.contains(.fullScreen) == false else {
+                guard let self, generation == recordGeneration, let currentWindow = unsafe self.window,
+                      currentWindow.styleMask.contains(.fullScreen) == false
+                else {
                     return
                 }
 

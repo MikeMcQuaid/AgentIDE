@@ -70,7 +70,7 @@ extension ReviewModel {
                         isError: false,
                     )
                     retrying = true
-                    try await loadLastCommit()
+                    try await loadLastCommit(generation: reloadGeneration)
                     excludedFromCommit = excluded.intersection(files.map(\.path))
                     if let message {
                         commitMessage = message

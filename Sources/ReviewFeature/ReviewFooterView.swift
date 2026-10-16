@@ -10,6 +10,7 @@ struct ReviewFooterView: View {
     /// Internal so the commit listing's own file shares it.
     static let footerPadding: CGFloat = 8
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: ReviewModel
 
     /// Commits everything the agent left uncommitted.

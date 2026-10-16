@@ -3,6 +3,38 @@ import SwiftUI
 import TerminalUI
 
 extension ReviewView {
+    @ViewBuilder var scopeButtons: some View {
+        scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
+        scopeButton(.lastCommit, systemImage: "clock", help: "Review the last commit")
+        scopeButton(
+            .upstream,
+            systemImage: "icloud.and.arrow.up",
+            help: "Review the commits not yet on this branch's own origin ref; dimmed until the branch has been pushed",
+            disabled: model.hasUpstream == false,
+        )
+        scopeButton(
+            .branch,
+            systemImage: "arrow.triangle.branch",
+            help: "Review every commit on the branch against its merge base",
+        )
+    }
+
+    private func scopeButton(
+        _ scope: ReviewModel.Scope,
+        systemImage: String,
+        help: String,
+        disabled: Bool = false,
+    ) -> some View {
+        iconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
+            model.scope = scope
+            model.commitTarget = nil
+            collapseOverrides = [:]
+            Task {
+                await model.reload()
+            }
+        }
+    }
+
     func feedback(
         model: ReviewModel, localReview: LocalReviewModel, onReview: @escaping (AgentKind) -> Void,
     ) -> some View {
@@ -57,12 +89,16 @@ extension ReviewView {
                 collapseOverrides: collapseOverrides,
             )
             .contextMenu {
-                Button("Reject Selected Lines") { Task { await model.rejectSelected() } }
-                    .disabled(
-                        model.selections.values.allSatisfy(\.isEmpty)
-                            || model.scope == .branch || model.scope == .upstream
-                            || model.isReadOnly || localReview.isBusy,
-                    )
+                Button("Reject Selected Lines") {
+                    Task {
+                        await model.rejectSelected()
+                    }
+                }
+                .disabled(
+                    model.selections.values.allSatisfy(\.isEmpty)
+                        || model.scope == .branch || model.scope == .upstream
+                        || model.isReadOnly || localReview.isBusy,
+                )
             }
             .disabled(localReview.isBusy)
         }

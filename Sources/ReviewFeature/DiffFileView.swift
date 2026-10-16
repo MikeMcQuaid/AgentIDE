@@ -242,7 +242,11 @@ struct DiffFileView: View {
             isPresented: $isConfirmingReset,
             titleVisibility: .visible,
         ) {
-            Button("Reset", role: .destructive) { Task { await model.resetFile(file) } }
+            Button("Reset", role: .destructive) {
+                Task {
+                    await model.resetFile(file)
+                }
+            }
             Button("Cancel", role: .cancel) { isConfirmingReset = false }
         } message: {
             Text("Every uncommitted change to the file is thrown away, and nothing holds a copy.")
@@ -266,7 +270,11 @@ struct DiffFileView: View {
             isPresented: $isConfirmingDelete,
             titleVisibility: .visible,
         ) {
-            Button("Delete", role: .destructive) { Task { await model.deleteFile(file) } }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await model.deleteFile(file)
+                }
+            }
             Button("Cancel", role: .cancel) { isConfirmingDelete = false }
         } message: {
             Text("The file was never committed, so this is the end of it.")

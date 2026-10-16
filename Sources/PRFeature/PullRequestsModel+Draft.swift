@@ -88,7 +88,7 @@ extension PullRequestsModel {
     /// Saves the drafted title, body and template for this branch as
     /// they change; the model itself is rebuilt whenever the branch
     /// changes, which is what used to lose the writing.
-    func saveDraft() {
+    func saveDraft(defaults: (title: String, body: String)? = nil) {
         guard loadingDraft == false, let key = draftKey else {
             return
         }
@@ -100,6 +100,8 @@ extension PullRequestsModel {
                 template: prTemplate,
                 labels: prLabels,
                 isDraft: prIsDraft,
+                defaultTitle: defaults?.title ?? metadata.pullRequestDrafts[key]?.defaultTitle,
+                defaultBody: defaults?.body ?? metadata.pullRequestDrafts[key]?.defaultBody,
             )
         }
     }
