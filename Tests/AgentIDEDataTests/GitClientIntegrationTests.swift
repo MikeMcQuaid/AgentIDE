@@ -313,7 +313,7 @@ struct GitClientIntegrationTests {
         // leases instead, so the work still lands.
         try await git.push(worktreePath: repoPath, branch: "main")
         try await TestSupport.runGit(["commit", "-q", "--amend", "-m", "More, amended"], in: repoPath)
-        #expect(await git.rewritesRemoteHistory(worktreePath: repoPath, branch: "main", remote: "origin"))
+        #expect(await git.isAncestor("origin/main", of: "main", worktreePath: repoPath) == false)
         try await git.push(worktreePath: repoPath, branch: "main")
         #expect(await git.aheadOfUpstream(worktreePath: repoPath) == 0)
         #expect(try await git.commitMessage(worktreePath: repoPath, commit: "HEAD") == "More, amended")

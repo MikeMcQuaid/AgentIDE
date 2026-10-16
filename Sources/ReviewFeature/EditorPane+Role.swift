@@ -1,4 +1,5 @@
 import Foundation
+import TerminalUI
 
 public extension EditorPane {
     /// The slot an editor pane fills. Each slot keeps its own finder
@@ -39,6 +40,28 @@ public extension EditorPane {
             defaults.string(forKey: key("editorFilePath", worktreePath: worktreePath))
                 ?? (defaults.string(forKey: key("editorFileWorktree")) == worktreePath
                     ? defaults.string(forKey: key("editorFilePath")) : nil)
+        }
+
+        /// Reveals the selected slot while keeping the worktree's saved tab in sync.
+        public func reveal(
+            worktreePath: String?,
+            tabs: inout [String: String],
+            defaults: UserDefaults = .standard,
+            revealGlobally: Bool = true,
+        ) {
+            guard self == .utility else {
+                return
+            }
+
+            if let worktreePath {
+                tabs[worktreePath] = UtilityTabTarget.editor
+            }
+            defaults.set(true, forKey: UtilityTabTarget.visibilityKey)
+            guard revealGlobally else {
+                return
+            }
+
+            defaults.set(UtilityTabTarget.editor, forKey: UtilityTabTarget.key)
         }
     }
 }

@@ -43,8 +43,7 @@ public extension SessionService {
             worktreePath: worktree.path,
             branch: worktree.branch,
             remote: destination.remote,
-            // An overwrite the user set aside after a lease refusal
-            // is theirs wherever the branch goes.
+            // Explicit Rebase may have set a conflicting remote tip aside.
             expectedTip: overwriteTips.tip(worktreePath: worktree.path, branch: worktree.branch),
         )
         overwriteTips.forget(worktreePath: worktree.path, branch: worktree.branch)

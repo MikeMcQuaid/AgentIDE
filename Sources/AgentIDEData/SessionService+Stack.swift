@@ -286,11 +286,12 @@ public extension SessionService {
 
     /// Pushes every branch of a stack, bottom up, so each pull
     /// request's base is on the remote before the branch that points
-    /// at it. Each push carries the lease and the includes check the
-    /// single-branch push does.
+    /// at it. Each push integrates remote work and pins its lease
+    /// just like the single-branch push.
     func pushStack(worktree: Worktree) async throws -> [String] {
         let stack = try await requireStackable(stack(for: worktree))
         var pushed = [String]()
+        var parent: (branch: String, previousTip: String)?
         for branch in stack.branches {
             // A branch checked out from a fork's pull request belongs
             // to that fork, and pushing it to origin would open a
@@ -313,7 +314,9 @@ public extension SessionService {
             }
 
             await progress("Pushing `" + branch + "`")
-            try await git.push(worktreePath: worktree.path, branch: branch, remote: remote)
+            let previousTip = await git.tip(of: branch, worktreePath: worktree.path)
+            try await git.push(worktreePath: worktree.path, branch: branch, remote: remote, parent: parent)
+            parent = previousTip.map { (branch, $0) }
             pushed.append(branch)
         }
         return pushed

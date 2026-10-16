@@ -77,7 +77,11 @@ extension RootView {
             forKey: role.key("editorFileLine", worktreePath: worktree),
         )
         bump(role.key("editorFileRequest"))
-        revealEditor(role)
+        role.reveal(
+            worktreePath: worktree,
+            tabs: &tabMemory,
+            revealGlobally: dependencies.dashboard.selection?.worktree.path == worktree,
+        )
     }
 
     /// A finder menu item asked for focus: point the preferred
@@ -92,7 +96,7 @@ extension RootView {
         let role = preferredEditorRole(file: nil, worktreePath: nil)
         defaults.set(defaults.bool(forKey: "finderSearchesContents"), forKey: role.key("finderSearchesContents"))
         bump(role.key("finderFocusRequest"))
-        revealEditor(role)
+        role.reveal(worktreePath: dependencies.dashboard.selection?.worktree.path, tabs: &tabMemory)
     }
 
     /// Lands a file moved from one editor slot in the other,
@@ -105,7 +109,11 @@ extension RootView {
         if role == .centre {
             setCentreEditor(true, at: worktreePath)
         } else {
-            revealEditor(.utility)
+            role.reveal(
+                worktreePath: worktreePath,
+                tabs: &tabMemory,
+                revealGlobally: dependencies.dashboard.selection?.worktree.path == worktreePath,
+            )
         }
     }
 
@@ -154,18 +162,6 @@ extension RootView {
             }
         }
         return centreVisible ? .centre : .utility
-    }
-
-    /// Shows the slot a request routed to: the utility pane and its
-    /// Editor tab for the side slot; the centre slot is only ever
-    /// preferred while already on screen.
-    private func revealEditor(_ role: EditorPane.Role) {
-        guard role == .utility else {
-            return
-        }
-
-        showsUtilityPane = true
-        utilityTabName = UtilityTab.editor.rawValue
     }
 
     /// Increments a storage-bus counter the slot's pane observes.

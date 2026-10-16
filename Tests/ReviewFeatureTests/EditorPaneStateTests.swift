@@ -2,6 +2,7 @@ import AgentIDEData
 import AppKit
 @testable import ReviewFeature
 import SwiftUI
+import TerminalUI
 import Testing
 
 @MainActor
@@ -50,6 +51,45 @@ struct EditorPaneStateTests {
         #expect(restored.enclosingScrollView?.contentView.bounds.origin == origin)
         fixture.show("second")
         _ = try await fixture.editor(in: "second")
+    }
+
+    @Test(arguments: EditorPane.Role.allCases)
+    func `opening a file wins over restoration of the worktree's previous tab`(role: EditorPane.Role) throws {
+        let suite = "EditorPaneStateTests-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var tabs = ["/first": "shell", "/second": "review"]
+        defaults.set(false, forKey: UtilityTabTarget.visibilityKey)
+        defaults.set("shell", forKey: UtilityTabTarget.key)
+
+        role.reveal(worktreePath: "/second", tabs: &tabs, defaults: defaults)
+        // The newly selected worktree restores its tab after routing the file.
+        defaults.set(tabs["/second"], forKey: UtilityTabTarget.key)
+        #expect(defaults.string(forKey: UtilityTabTarget.key) == (role == .utility ? "editor" : "review"))
+        #expect(defaults.bool(forKey: UtilityTabTarget.visibilityKey) == (role == .utility))
+        #expect(tabs["/first"] == "shell")
+    }
+
+    @Test
+    func `off-screen file requests preserve the selected worktree's tab`() throws {
+        let suite = "EditorPaneStateTests-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var tabs = ["/first": "shell", "/second": "review"]
+        defaults.set("shell", forKey: UtilityTabTarget.key)
+
+        EditorPane.Role.utility.reveal(
+            worktreePath: "/second", tabs: &tabs, defaults: defaults, revealGlobally: false,
+        )
+        // The selected worktree remembers the shared tab when it changes.
+        tabs["/first"] = defaults.string(forKey: UtilityTabTarget.key)
+        #expect(defaults.string(forKey: UtilityTabTarget.key) == "shell")
+        #expect(tabs["/first"] == "shell")
+        #expect(tabs["/second"] == "editor")
+
+        defaults.set(tabs["/second"], forKey: UtilityTabTarget.key)
+        #expect(defaults.string(forKey: UtilityTabTarget.key) == "editor")
+        #expect(defaults.bool(forKey: UtilityTabTarget.visibilityKey))
     }
 
     // MARK: Private

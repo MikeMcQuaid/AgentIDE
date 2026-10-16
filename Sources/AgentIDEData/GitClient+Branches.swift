@@ -100,42 +100,37 @@ public extension GitClient {
         return output.split(separator: "\n").allSatisfy { Self.signedStates.contains(String($0)) }
     }
 
-    /// Pushes the branch to a remote and tracks it there, leasing
-    /// the push when the branch's history has been rewritten.
+    /// Integrates remote work and pushes with a lease pinned before any rebase.
     func push(
         worktreePath: String,
         branch: String,
         remote: String = "origin",
         expectedTip: String? = nil,
         sourceCommit: String? = nil,
+        parent: (branch: String, previousTip: String)? = nil,
     ) async throws {
         try await withRemoteOperation(worktreePath: worktreePath) {
-            // A rewritten branch forces with a lease, and the includes
-            // check refuses a remote tip never integrated here: the
-            // difference between rewriting your own work and overwriting
-            // someone else's. leaseRefusal carries the full story.
-            var force = [String]()
-            if let expectedTip {
-                // Naming the tip is the confirmation the includes check
-                // exists to demand: the refusal was seen, the remote
-                // fetched and its version set aside, all in the app.
-                force = ["--force-with-lease=" + branch + ":" + expectedTip]
-            } else if await rewritesRemoteHistory(worktreePath: worktreePath, branch: branch, remote: remote) {
-                force = ["--force-with-lease", "--force-if-includes"]
+            let tip: String =
+                if let expectedTip {
+                    expectedTip
+                } else {
+                    try await preparePush(worktreePath: worktreePath, branch: branch, remote: remote)
+                }
+            if let parent, await commitHash(of: parent.branch, worktreePath: worktreePath) != parent.previousTip,
+               await isAncestor(parent.branch, of: branch, worktreePath: worktreePath) == false
+            {
+                try await rebaseForPush(
+                    worktreePath: worktreePath, branch: branch, onto: parent.branch, from: parent.previousTip,
+                )
             }
-            do {
-                try await git(
-                    ["push"] + force + (sourceCommit == nil ? ["--set-upstream"] : []) + [
+            try await git(
+                ["push", "--force-with-lease=refs/heads/" + branch + ":" + tip]
+                    + (sourceCommit == nil ? ["--set-upstream"] : []) + [
                         remote,
                         sourceCommit.map { $0 + ":refs/heads/" + branch } ?? branch,
                     ],
-                    in: worktreePath,
-                )
-            } catch let error as CommandError
-                where error.result.standardError.contains("remote ref updated since checkout")
-            {
-                throw leaseRefusal(error, branch: branch, remote: remote)
-            }
+                in: worktreePath,
+            )
         }
     }
 
@@ -282,18 +277,6 @@ public extension GitClient {
             allowFailure: true,
         )
         return result?.succeeded ?? false
-    }
-
-    /// Whether pushing this branch would rewrite what the remote
-    /// already has: its ref exists and is no longer an ancestor,
-    /// which is what an amend or a rebase leaves behind.
-    func rewritesRemoteHistory(worktreePath: String, branch: String, remote: String) async -> Bool {
-        let ref = "refs/remotes/" + remote + "/" + branch
-        guard await refExists(worktreePath: worktreePath, ref: ref) else {
-            return false
-        }
-
-        return await isAncestor(ref, of: "HEAD", worktreePath: worktreePath) == false
     }
 
     /// How many commits a range spans, nil when unreadable.

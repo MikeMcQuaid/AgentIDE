@@ -116,9 +116,7 @@ public extension SessionService {
     /// commits, so pushed history keeps its hashes. Anything else
     /// falls back to origin/HEAD, re-signing the whole branch, with
     /// one exception: a remote that moved to a tip this branch
-    /// never had is rebased on rather than around, since the leased
-    /// push refuses to overwrite commits that were never integrated
-    /// and nothing else would ever integrate them.
+    /// never had is integrated first, as it is before pushing.
     ///
     /// The branch's reflog is what tells that apart from an amend.
     /// Amending a pushed commit leaves the pushed one behind as a
