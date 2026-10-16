@@ -1,5 +1,5 @@
 {
-  "originHash" : "4cc0a70aa193feed6f9295c20bd5136c83361f6aae0335db0ad76f1fcb6c47ab",
+  "originHash" : "293f6f7250d9c54534bfaab5ee5104cd5fa8af733b497077be0c56899b5b555a",
   "pins" : [
     {
       "identity" : "h",
@@ -167,8 +167,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tree-sitter/tree-sitter-php",
       "state" : {
-        "revision" : "92b5271b60bec77fb65b5e5bc41561e8dac81299",
-        "version" : "0.25.0"
+        "revision" : "58d5643086ae60e93a3746cca648363ee97c8761",
+        "version" : "0.25.1"
       }
     },
     {
