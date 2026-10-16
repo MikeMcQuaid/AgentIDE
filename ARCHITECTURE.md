@@ -1000,7 +1000,10 @@ Open-file and finder-focus requests
 travel the shared keys and the window routes each to the preferred
 slot: the side editor unless the centre editor is on screen, and
 always the slot already holding the requested file, so one file never
-opens in both. A move button on the open file sends it to the other
+opens in both. Revealing the side editor also remembers that tab for
+the requested worktree before its saved tab can be restored. Off-screen
+requests leave the shared tab unchanged until their worktree is selected.
+A move button on the open file sends it to the other
 slot, and a session appearing in a worktree whose centre held the
 editor (`agentide new`, a phone, a resume) moves the open file to the
 side editor. Buffers survive every such displacement because an editor
@@ -1277,15 +1280,15 @@ steps.
   decides: write access pushes to the repository, anything less to the
   viewer's fork (`gh repo fork` on first use).
   Either fork names the pull request's head `owner:branch`. Rewritten
-  history pushes with `--force-with-lease --force-if-includes`. The bare
-  lease protects nothing under constant background fetches;
-  `--force-if-includes` is the real gate, refusing a remote tip never
-  integrated locally (judged by the branch's reflog, which tells such a
-  tip from an amend's stale twin). That refusal is resolved in-app,
-  never with a terminal step: Rebase integrates the remote's commits,
-  and when they conflict it sets the remote's version aside
-  (`OverwriteTips`, rebasing onto origin/HEAD) so the next Push carries
-  an explicit `--force-with-lease=<branch>:<tip>`. Never add `--force`.
+  history pushes with `--force-with-lease=<branch>:<tip>`, pinning the
+  fetched tip so background fetches cannot weaken the lease. Push
+  fetches its destination and rebases onto remote work never integrated
+  locally; the branch's reflog distinguishes it from an amend's stale
+  twin. An automatic rebase conflict aborts and leaves the branch and
+  remote unchanged. An explicit Rebase can still set a conflicting
+  version aside (`OverwriteTips`), with Push leasing that exact tip.
+  Autofix keeps its captured remote head and reviewed source commit.
+  Never add `--force` or `--force-if-includes`.
 - **Pushed is a tip, not a flag.** A push records the branch and the
   commit it sent, and Push stays dimmed with Open PR lit until that
   branch's tip moves, read with the other branch facts. The mark used
@@ -1409,7 +1412,9 @@ steps.
   local default only when the remote ref is absent. The rebase button
   judges the stack against the same refs. Restacking skips a branch
   already in place and signed, from whichever entry asked. A stack
-  can span worktrees: git will not check out a branch
+  push that integrates remote changes also replays each child onto
+  its moved parent, bounded by the parent's tip before the push.
+  A stack can span worktrees: git will not check out a branch
   another worktree holds, so that branch is rebased (and rolled back),
   named, in its own worktree. Before anything moves, the restack
   refuses while such a worktree is dirty or its agent is not idle or
