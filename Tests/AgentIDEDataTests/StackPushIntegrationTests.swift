@@ -4,8 +4,8 @@ import Foundation
 import Testing
 
 struct StackPushIntegrationTests {
-    @Test
-    func `integrating a stack parent keeps its children on top`() async throws {
+    @Test(arguments: ["lower", "upper"])
+    func `integrating a stack parent keeps its children on top`(selected: String) async throws {
         let world = try await World.make()
         defer { world.tearDown() }
         let path = world.repository.path
@@ -18,7 +18,7 @@ struct StackPushIntegrationTests {
         try await TestSupport.runGit(["remote", "add", "origin", origin], in: path)
         try await TestSupport.runGit(["fetch", "origin"], in: path)
         try await TestSupport.runGit(["remote", "set-head", "origin", "main"], in: path)
-        for branch in ["lower", "upper"] {
+        for branch in ["lower", "middle", "upper"] {
             try await TestSupport.runGit(["checkout", "-b", branch], in: path)
             try branch.write(toFile: path + "/" + branch + ".txt", atomically: true, encoding: .utf8)
             try await TestSupport.runGit(["add", branch + ".txt"], in: path)
@@ -36,10 +36,12 @@ struct StackPushIntegrationTests {
         try await TestSupport.runGit(["push", "origin", "lower"], in: elsewhere)
         let git = GitClient(runner: FoundationProcessRunner())
         #expect(await git.isCommitSigned(worktreePath: path, ref: "lower"))
-        let worktree = Worktree(repositoryName: "repo", repositoryPath: path, branch: "upper", path: path)
-        #expect(try await world.service.pushStack(worktree: worktree) == ["lower", "upper"])
-        #expect(await git.isAncestor("lower", of: "upper", worktreePath: path))
-        #expect(await git.isAncestor("lower", of: "upper", worktreePath: origin))
+        let worktree = Worktree(repositoryName: "repo", repositoryPath: path, branch: selected, path: path)
+        #expect(try await world.service.pushStack(worktree: worktree) == ["lower", "middle", "upper"])
+        for location in [path, origin] {
+            #expect(await git.isAncestor("lower", of: "middle", worktreePath: location))
+            #expect(await git.isAncestor("middle", of: "upper", worktreePath: location))
+        }
         #expect(await git.currentBranch(worktreePath: path) == "upper")
         #expect(try String(contentsOfFile: path + "/remote", encoding: .utf8) == "remote work")
     }

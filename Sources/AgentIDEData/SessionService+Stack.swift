@@ -39,7 +39,7 @@ public extension SessionService {
         let fingerprint = await git.refFingerprint(worktreePath: path)
             + checkedOut + (baseRef ?? "") + excluded.sorted().joined(separator: ",")
             + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
-            + "#remote-base" // Invalidate facts derived against the local base.
+            + "#published-branches" // Invalidate stacks without remote branch state.
         return StackReading(
             path: path,
             checkedOut: checkedOut,
@@ -81,7 +81,7 @@ public extension SessionService {
         // and the order they must be rebased in.
         // Two branches at the same commit are one branch renamed or
         // one cut by mistake, not two entries: see `collapsingTwins`.
-        let branches = await collapsingTwins(related, checkedOut: checkedOut, worktreePath: path)
+        let (branches, published) = await collapsingTwins(related, checkedOut: checkedOut, worktreePath: path)
         // A worktree sitting on the default branch has no stack of
         // its own, and listing the base as its only entry showed the
         // same branch twice wherever both were named.
@@ -96,6 +96,7 @@ public extension SessionService {
             branches: branches.isEmpty ? fallback : branches,
             checkedOut: standingIn ?? checkedOut,
             stackingBlocker: stackingBlocker(branches: related.map(\.branch) + [checkedOut], worktreePath: path),
+            published: published,
         )
         await StackCache.shared.remember(derived, for: path, derivedFrom: reading.fingerprint)
         return derived
@@ -155,7 +156,7 @@ public extension SessionService {
         _ related: [StackCandidate],
         checkedOut: String,
         worktreePath: String,
-    ) async -> [String] {
+    ) async -> (branches: [String], published: [String]) {
         var tips = [String: String]()
         var pushed = Set<String>()
         for entry in related {
@@ -174,7 +175,7 @@ public extension SessionService {
             return unsafe known + here + String(format: "%06d", created[candidate.branch] ?? 0) + candidate.branch
         }
         var seenTips = Set<String>()
-        return related
+        let branches = related
             .sorted { first, second in
                 if (first.fork, first.tip) != (second.fork, second.tip) {
                     return (first.fork, first.tip) < (second.fork, second.tip)
@@ -189,6 +190,7 @@ public extension SessionService {
                 return seenTips.insert(tip).inserted
             }
             .map(\.branch)
+        return (branches, branches.filter { pushed.contains($0) })
     }
 
     /// The entry standing in for the checked-out branch when that
@@ -284,46 +286,12 @@ public extension SessionService {
         return moved
     }
 
-    /// Pushes through the requested branch, bottom up, so each pull
-    /// request's base is on the remote before the branch that points
-    /// at it. Each push integrates remote work and pins its lease
-    /// just like the single-branch push.
+    /// Pushes through the requested branch and published branches above it,
+    /// bottom up, so each pull request's base is on the remote first.
+    /// Each push integrates remote work and pins its lease just like
+    /// the single-branch push.
     func pushStack(worktree: Worktree) async throws -> [String] {
-        let stack = try await requireStackable(stack(for: worktree))
-        guard let index = stack.branches.firstIndex(of: worktree.branch) else {
-            throw stackError("The selected branch is no longer in the stack", in: worktree.path)
-        }
-
-        var pushed = [String]()
-        var parent: (branch: String, previousTip: String)?
-        for branch in stack.branches[...index] {
-            // A branch checked out from a fork's pull request belongs
-            // to that fork, and pushing it to origin would open a
-            // branch in the repository the pull request is against.
-            let remote = await forkRemote(worktreePath: worktree.path, branch: branch)?.remote ?? "origin"
-            // What the single-branch push refuses, this refuses:
-            // unsigned commits are turned away by the hook, and the
-            // stack must not be left half pushed to learn that;
-            // Settings can waive signing for hookless remotes.
-            let signed =
-                if AppSettings.requiresSignedCommits {
-                    await git.isCommitSigned(worktreePath: worktree.path, ref: branch)
-                } else {
-                    true
-                }
-            guard signed else {
-                throw SessionServiceError(
-                    branch + "'s tip commit is not GPG signed; Rebase signs the stack before pushing.",
-                )
-            }
-
-            await progress("Pushing `" + branch + "`")
-            let previousTip = await git.tip(of: branch, worktreePath: worktree.path)
-            try await git.push(worktreePath: worktree.path, branch: branch, remote: remote, parent: parent)
-            parent = previousTip.map { (branch, $0) }
-            pushed.append(branch)
-        }
-        return pushed
+        try await pushStack(worktree: worktree, stack: stack(for: worktree))
     }
 
     /// The branches this worktree's stack has been told to leave

@@ -2,7 +2,7 @@ import AgentIDEDomain
 import Foundation
 
 extension SessionService {
-    /// Both CI and review fixes push only the reported commit to the existing PR.
+    /// Pushes the verified fix and updates its published stack branches.
     func pushAutofix(target: AutofixDriver.Target, summary: PullRequestSummary, commit: String) async throws -> String {
         let worktree = target.worktree
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
@@ -17,6 +17,10 @@ extension SessionService {
         }
 
         let remote = try await autofixPushRemote(worktree: worktree, headRepository: headRepository)
+        let stack = await stack(for: worktree)
+        if stack.isStacked {
+            try requireStackable(stack)
+        }
 
         if AppSettings.requiresSignedCommits,
            await git.allCommitsSigned(worktreePath: worktree.path, range: head + ".." + commit) == false
@@ -38,12 +42,10 @@ extension SessionService {
             throw SessionServiceError("Autofix signing failed; inspect the changes before pushing")
         }
         do {
-            try await git.push(
-                worktreePath: worktree.path,
-                branch: worktree.branch,
-                remote: remote,
-                expectedTip: head,
-                sourceCommit: pushed,
+            _ = try await pushStack(
+                worktree: worktree,
+                stack: stack,
+                pinned: PinnedBranchPush(remote: remote, expectedTip: head, commit: pushed, previousTip: commit),
             )
         } catch {
             throw AutofixPushError(commit: pushed, errorDescription: error.localizedDescription)

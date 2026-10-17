@@ -77,7 +77,6 @@ struct PullRequestStackTests {
         // layers above.
         #expect(model.listedBranch == "lower")
         #expect(model.listedParent == nil)
-        #expect(model.isStackedEntry == false)
         #expect(model.isInStack)
 
         model.prTitle = "Lower work"
@@ -90,7 +89,6 @@ struct PullRequestStackTests {
         model.show(branch: "upper")
         try? await Task.sleep(for: .milliseconds(200))
         #expect(model.listedParent == "middle")
-        #expect(model.isStackedEntry)
     }
 
     @Test
@@ -107,7 +105,7 @@ struct PullRequestStackTests {
 
         // Nothing is open yet, so there is no stack on GitHub to
         // merge, whatever the branches say locally.
-        #expect(model.isStackedEntry)
+        #expect(model.listedParent == "lower")
         #expect(model.isStackLinked == false)
 
         // The entry's own pull request is not enough: merging a

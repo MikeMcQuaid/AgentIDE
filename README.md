@@ -35,7 +35,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Addresses existing local findings, ready GitHub feedback and unfinished local changes before requesting fresh reviews, preserving unrelated edits and the automatic-push opt-in.
 - Offers an explicit Start loop action that completes local review rounds before shared GitHub CI and review rounds, with separate limits of one to three and automatic pushing off by default for each PR.
 - Applies autofixes through the branch's existing agent session, including when local reviewing is disabled or uncommitted work is present, and explains any wait preventing delivery.
-- Asks the fixing agent to commit unfinished autofix changes, then uses AgentIDE to push verified commits when automatic pushing is enabled.
+- Asks the fixing agent to commit unfinished autofix changes, then pushes verified commits and updates published branches above them when automatic pushing is enabled.
 - Reconciles manual commits, signing and confirmed pushes with autofix progress without repeating handled feedback.
 - Wakes the configured commit signer when starting autofix and opens a Push retry popover if automatic signing or pushing fails.
 - Keeps the sidebar and agent notifications responsive while autofix waits for GitHub or commit signing.

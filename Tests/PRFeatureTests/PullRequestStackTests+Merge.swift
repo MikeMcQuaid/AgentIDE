@@ -30,7 +30,7 @@ extension PullRequestStackTests {
         // request's merge: on a merge queue gh joins the queue
         // through automerge, which GitHub refuses for a stacked
         // pull request, so queueing the bottom failed.
-        #expect(model.isStackedEntry == false)
+        #expect(model.listedParent == nil)
         #expect(model.isInStack)
         #expect(model.canMergeStack)
 

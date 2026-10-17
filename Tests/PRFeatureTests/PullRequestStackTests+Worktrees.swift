@@ -5,11 +5,13 @@ import Testing
 
 /// A stack whose lower branch another worktree holds.
 extension PullRequestStackTests {
-    @Test(arguments: ["lower", "upper", "both"], ["idle", "busy", "dirty"])
-    func `push readiness considers restack work only through the listed branch`(
-        restack: String,
+    @Test(arguments: [("lower", false), ("upper", false), ("both", false), ("upper", true), ("both", true)],
+          ["idle", "busy", "dirty"])
+    func `push readiness considers restack work in selected and published branches`(
+        scenario: (String, Bool),
         state: String,
     ) async {
+        let (restack, published) = scenario
         let fixtures = PullRequestsModelTests()
         let branch = restack == "lower" ? "lower" : "upper"
         let holder = WorktreeItem(
@@ -31,7 +33,12 @@ extension PullRequestStackTests {
         model.fetchCurrentBranch = { _ in "middle" }
         model.stacking.facts = { _ in
             StackFacts(
-                stack: BranchStack(base: "main", branches: ["lower", "middle", "upper"], checkedOut: "middle"),
+                stack: BranchStack(
+                    base: "main",
+                    branches: ["lower", "middle", "upper"],
+                    checkedOut: "middle",
+                    published: published ? ["upper"] : [],
+                ),
                 outOfPlace: restack == "both" ? ["lower", "upper"] : [restack],
                 unpushed: ["middle"],
             )
@@ -41,12 +48,13 @@ extension PullRequestStackTests {
 
         #expect(model.canRestack == (state == "idle"))
         #expect((model.restackBlocker == nil) == (state == "idle"))
-        #expect(model.needsRestackBeforePush == (restack != "upper"))
-        #expect(model.canPushStack == (branch == "upper" || state == "idle"))
-        if branch == "lower", state != "idle" {
+        #expect(model.needsRestackBeforePush == (restack != "upper" || published))
+        #expect(model.canPushStack == ((branch == "upper" && published == false) || state == "idle"))
+        if branch == "lower" || published, state != "idle" {
             #expect(model.pushStackHelp == model.restackBlocker)
         } else {
-            #expect(model.pushStackHelp == "Push the listed branch and those below it, bottom first")
+            #expect(model.pushStackHelp == "Push the listed branch, those below it "
+                + "and published branches above it, bottom first")
         }
     }
 
