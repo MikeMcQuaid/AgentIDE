@@ -5,10 +5,7 @@ import TerminalUI
 // MARK: - ReferencedItemPicker
 
 /// A pop-up for an open issue, pull request or security advisory
-/// that searches as you type: opening it focuses a field over the
-/// list, digits jump to a number and anything else matches a GHSA
-/// id or a title. Arrows move the highlight, return or a click picks
-/// and Escape closes it.
+/// that searches as you type through `ReferencedItemSearchList`.
 struct ReferencedItemPicker<Item: ReferencedItem>: View {
     // MARK: Lifecycle
 
@@ -64,26 +61,52 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
             .frame(maxWidth: .infinity)
         }
         .accessibilityLabel(label)
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) { search }
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            ReferencedItemSearchList(
+                items: items,
+                selection: selection,
+                searchPrompt: searchPrompt,
+                loadingTitle: loadingTitle,
+                emptyTitle: emptyTitle,
+                isLoading: isLoading,
+                onPick: { item in
+                    selection = item.id
+                    isPresented = false
+                },
+                onClose: { isPresented = false },
+            )
+        }
     }
 
     // MARK: Private
 
     @State private var isPresented = false
-    @State private var query = ""
-    @State private var highlighted = 0
-    @FocusState private var fieldFocused: Bool
 
     private var selectedLabel: String? {
         items.first { $0.id == selection }.map { $0.reference + " " + $0.title }
     }
+}
 
-    /// Ranked once per render, since the body reads it several times.
-    private var results: [Item] {
-        ReferencedItemSearch.rank(items, query: query)
-    }
+// MARK: - ReferencedItemSearchList
 
-    private var search: some View {
+/// A popover's searchable list of referenced items: opening it
+/// focuses a field over the list, digits jump to a number and
+/// anything else matches a GHSA id, a branch name or a title. Arrows
+/// move the highlight, return or a click picks and Escape closes it.
+struct ReferencedItemSearchList<Item: ReferencedItem>: View {
+    // MARK: Internal
+
+    let items: [Item]
+    /// The current pick, checked and highlighted on opening.
+    let selection: Item.ID?
+    let searchPrompt: String
+    let loadingTitle: String
+    let emptyTitle: String
+    let isLoading: Bool
+    let onPick: (Item) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
         let ranked = results
         return ScrollViewReader { proxy in
             PopoverContent(width: Layout.width) {
@@ -112,7 +135,7 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
             }
             .onChange(of: highlighted) { proxy.scrollTo(highlighted) }
         }
-        .onExitCommand { isPresented = false }
+        .onExitCommand { onClose() }
         .onAppear {
             highlighted = ranked.firstIndex { $0.id == selection } ?? 0
             fieldFocused = true
@@ -122,6 +145,19 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
         .onDisappear { query = "" }
     }
 
+    // MARK: Private
+
+    @State private var query = ""
+    @State private var highlighted = 0
+    @FocusState private var fieldFocused: Bool
+
+    private var nameStyle: NameStyle = .init()
+
+    /// Ranked once per render, since the body reads it several times.
+    private var results: [Item] {
+        ReferencedItemSearch.rank(items, query: query)
+    }
+
     private func resultsList(_ results: [Item]) -> some View {
         HighlightedResultsList(
             results,
@@ -129,17 +165,24 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
             highlighted: highlighted,
             help: "Arrows move the highlight; return or a click picks",
             scrolls: false,
-            onPick: { pick($0) },
+            onPick: { onPick($0) },
             row: { row($0) },
         )
     }
 
     private func row(_ item: Item) -> some View {
         HStack(spacing: Layout.spacing) {
-            Text(item.reference)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-            Text(item.title).lineLimit(1)
+            if Item.isGitName {
+                Text(item.reference)
+                    .font(nameStyle.font)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else {
+                Text(item.reference)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Text(item.title).lineLimit(1)
+            }
             Spacer(minLength: 0)
             if item.id == selection {
                 Image(systemName: "checkmark")
@@ -153,13 +196,8 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
 
     private func pick(_ results: [Item], at index: Int) {
         if results.indices.contains(index) {
-            pick(results[index])
+            onPick(results[index])
         }
-    }
-
-    private func pick(_ item: Item) {
-        selection = item.id
-        isPresented = false
     }
 }
 

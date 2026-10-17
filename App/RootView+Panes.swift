@@ -54,7 +54,9 @@ extension RootView {
         } else if item.isPlaceholder {
             // The row exists before the worktree does.
             LaunchProgressView(
-                "Creating the worktree and starting the agent…",
+                dependencies.dashboard.openingBranchPaths.contains(item.worktree.path)
+                    ? "Checking out the branch…"
+                    : "Creating the worktree and starting the agent…",
                 progress: dependencies.dashboard.launchProgress(for: item),
             )
         } else if resumingWorktree == item.worktree.path {

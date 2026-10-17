@@ -605,6 +605,26 @@ the `AgentIDEIntentTests` UI bundle through `AppIntentsTesting`, with
 Start Agent Session checked to exist rather than run. The repository
 page resumes any past conversation into a fresh worktree.
 
+Open branch in new worktree… in a repository header's context menu
+opens a branch on origin as a worktree with no agent, whose pane then
+offers the per-worktree form. Like Switch branch… on a worktree row,
+it shows a popover the menu's owner holds (`RepositoryMenu`), since a
+menu cannot hold one: the pickers' search list
+(`ReferencedItemSearchList`, `OpenBranchPopover`) over origin's
+remote-tracking refs, most recently committed first, without `HEAD`,
+the default branch or any branch a worktree already holds (git
+refuses a second checkout of one), searched by name. It paints from
+the refs already fetched, then again after a fetch at most a minute
+old. A pick inserts the same
+placeholder row a launch does, narrating the fetch and
+`git worktree add --track` from the remote-tracking ref at the path
+a new branch of that name would get, numbered when that is taken
+(`a/b` and `a-b` flatten to one name). A local branch of that name is
+checked out instead, fast-forwarded to origin's when it is behind and
+otherwise left exactly as it stands, so no local commit is lost, and
+set to track origin's. A failure goes to the Messages pane and drops
+the row.
+
 ### Watch and steer
 
 Scheduled prompts belong to the host metadata, with a repository path,
