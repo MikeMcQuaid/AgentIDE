@@ -155,12 +155,12 @@ final class PaneTerminalView: TerminalView {
 
     /// A block stays rectangular; native selection reflows in prose panes.
     override func copy(_: Any) {
-        let text = getSelection() ?? selectedBlockText ?? ""
+        var text = getSelection() ?? selectedBlockText ?? ""
+        if reflowsCopies || isHerdrBacked {
+            text = selectionActive && reflowsCopies ? PasteableText.reflow(text) : PasteableText.cleanTerminalCopy(text)
+        }
         copyPasteboard.clearContents()
-        copyPasteboard.setString(
-            selectionActive && reflowsCopies && text.contains("\n") ? PasteableText.reflow(text) : text,
-            forType: .string,
-        )
+        copyPasteboard.setString(text, forType: .string)
     }
 
     /// One character cell, the size the terminal itself draws it.
@@ -199,9 +199,10 @@ final class PaneTerminalView: TerminalView {
                 return
             }
 
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(reflowsCopies ? PasteableText.reflow(text) : text, forType: .string)
+            copyPasteboard.clearContents()
+            copyPasteboard.setString(
+                reflowsCopies ? PasteableText.reflow(text) : PasteableText.cleanTerminalCopy(text), forType: .string,
+            )
         }
     }
 

@@ -258,9 +258,16 @@ Rules that follow from that shape:
   so a clear can never wipe the next shell or worktree shown.
 - Copies from an agent pane reflow block by block for prose
   (`PasteableText`): paragraphs lose hard wraps, command-shaped runs
-  keep every line. Option-drag copies a rectangle on the character
-  grid; the held block also supplies Cmd-C and the Copy menu, without
-  prose reflow. Starting a native selection clears both the held block
+  keep every line. Clipboard cleanup replaces unwritten NUL cells with
+  spaces, normalises line endings and removes C0/C1 controls (except
+  tabs and line breaks), bidirectional formatting controls, zero-width
+  spaces, byte-order marks and trailing row padding before reflow,
+  even for single-line selections.
+  Zero-width joiners and variation selectors remain intact for Unicode
+  text and emoji. Rectangles and Copy All Output use the same cleanup.
+  Option-drag copies a rectangle on the character grid; the held block
+  also supplies Cmd-C and the Copy menu, without prose reflow.
+  Starting a native selection clears both the held block
   and its marquee, so scrolling cannot restore an older copy.
   Processing a herdr frame preserves the selection, including cursor-only
   updates: SwiftTerm preserves unchanged selected text during output

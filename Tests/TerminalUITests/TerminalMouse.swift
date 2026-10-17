@@ -12,17 +12,18 @@ enum TerminalMouse {
         row: Int,
         from start: Double,
         to end: Double,
+        endRow: Int? = nil,
         modifiers: NSEvent.ModifierFlags = [],
     ) throws {
         let cell = PaneTerminalView.cellSize(of: view)
-        for (type, column) in [
-            (NSEvent.EventType.leftMouseDown, start),
-            (.leftMouseDragged, end),
-            (.leftMouseUp, end),
+        for (type, column, eventRow) in [
+            (NSEvent.EventType.leftMouseDown, start, row),
+            (.leftMouseDragged, end, endRow ?? row),
+            (.leftMouseUp, end, endRow ?? row),
         ] {
             let point = NSPoint(
                 x: column * cell.width,
-                y: view.bounds.height - (CGFloat(row) + Self.cellCentre) * cell.height,
+                y: view.bounds.height - (CGFloat(eventRow) + Self.cellCentre) * cell.height,
             )
             let event = try #require(NSEvent.mouseEvent(
                 with: type,

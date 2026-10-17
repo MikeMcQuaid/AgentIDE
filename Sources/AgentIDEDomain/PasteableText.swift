@@ -5,10 +5,33 @@
 public enum PasteableText {
     // MARK: Public
 
+    /// Cleans rendered terminal text without changing indentation,
+    /// word spacing or the Unicode joiners used in text and emoji.
+    public static func cleanTerminalCopy(_ text: String) -> String {
+        let normalised = text.replacing("\r\n", with: "\n").replacing("\r", with: "\n")
+        var content = ""
+        for scalar in normalised.unicodeScalars {
+            if scalar.value == 0 {
+                content.append(" ")
+            } else if scalar == "\n" || scalar == "\t"
+                || scalar.properties.generalCategory != .control && scalar != "\u{200B}" && scalar != "\u{FEFF}"
+                && scalar.properties.isBidiControl == false
+            {
+                content.unicodeScalars.append(scalar)
+            }
+        }
+        return content.split(separator: "\n", omittingEmptySubsequences: false)
+            .lazy
+            .map { line in
+                String(line.reversed().drop { $0 == " " || $0 == "\t" }.reversed())
+            }
+            .joined(separator: "\n")
+    }
+
     /// The reflowed text; single lines just lose surrounding
     /// whitespace and gutter marks.
     public static func reflow(_ text: String) -> String {
-        let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = cleanTerminalCopy(text).trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.contains("\n") else {
             return strippingGutter(content)
         }

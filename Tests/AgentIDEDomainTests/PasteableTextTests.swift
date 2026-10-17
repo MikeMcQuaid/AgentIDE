@@ -4,6 +4,36 @@ import Testing
 /// Exercises the copy reflow that makes terminal yanks paste
 /// cleanly into prose tools.
 struct PasteableTextTests {
+    @Test(arguments: [
+        "\u{061C}", "\u{200E}", "\u{200F}",
+        "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}",
+        "\u{2066}", "\u{2067}", "\u{2068}", "\u{2069}",
+    ])
+    func `terminal copies remove bidirectional formatting controls`(control: String) {
+        let text = "echo left" + control + "right"
+        #expect(PasteableText.cleanTerminalCopy(text) == "echo leftright")
+        #expect(PasteableText.reflow(text) == "echo leftright")
+    }
+
+    @Test
+    func `terminal cleanup removes hidden controls and row padding`() {
+        let text = "\u{FEFF}  first\u{0}word\u{07}\u{7F}\u{85}  \r\n\tsecond\u{200B}\t \rthird  "
+        #expect(PasteableText.cleanTerminalCopy(text) == "  first word\n\tsecond\nthird")
+    }
+
+    @Test
+    func `terminal cleanup preserves meaningful spacing and Unicode`() {
+        let text = "\tlet café = \"👩‍💻 ❤️ می\u{200C}روم\"\n    left    right\n\n"
+        #expect(PasteableText.cleanTerminalCopy(text) == text)
+    }
+
+    @Test
+    func `hidden cells cannot defeat prose and gutter cleanup`() {
+        #expect(PasteableText.reflow("\u{0}\u{0}▎\u{0}Hello\u{0}world\u{07}  ") == "Hello world")
+        let wrapped = "  Hello\u{0}world  \r\n\u{0}wrapped\u{200B} text  "
+        #expect(PasteableText.reflow(wrapped) == "Hello world wrapped text")
+    }
+
     @Test
     func `joins hard-wrapped lines and keeps paragraphs apart`() {
         let wrapped = """
