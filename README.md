@@ -16,6 +16,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 ## ✨ Features
 
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
+- Checks local prerequisites at launch and guides you through a setup wizard with copyable commands before opening a repository or prompt.
 - Starts sessions while others are launching and keeps failed launches available to retry with their original choices.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
 - Starts a session on top of another branch's work, so a large change splits into stacked pull requests.
@@ -77,10 +78,10 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 ## 📋 Requirements
 
 - An Apple silicon Mac running macOS Tahoe (26) or later.
-- [Homebrew](https://brew.sh), which installs the rest.
+- [Homebrew](https://brew.sh), with Git, [`gh`](https://cli.github.com), [`herdr`](https://herdr.dev) and [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
 - [sandvault](https://github.com/webcoyote/sandvault), which creates the sandbox user and the shared workspace.
 - [`gh`](https://cli.github.com) authenticated as you; it stays with your user and agents never see it.
-- [`herdr`](https://herdr.dev) and [`mosh`](https://mosh.org), installed by `script/bootstrap`; `mosh` only matters from a phone.
+- Claude Code or Codex CLI installed and signed in inside sandvault; [`mosh`](https://mosh.org) is optional for phone access.
 - Xcode 27 or later, only to build from source.
 
 ## 📦 Installation
@@ -92,7 +93,7 @@ brew install --cask agentide
 The [`agentide` cask](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/a/agentide.rb) installs the latest release, and `brew upgrade` updates it.
 Releases are signed with a Developer ID certificate and notarised by Apple.
 
-Without Homebrew, download `AgentIDE-<version>.zip` from the [releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip it and move `AgentIDE.app` to /Applications.
+You can also download `AgentIDE-<version>.zip` from the [releases page](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip it and move `AgentIDE.app` to /Applications.
 
 To run the current source instead:
 

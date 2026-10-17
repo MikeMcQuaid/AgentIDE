@@ -86,6 +86,7 @@ public struct AgentOptionPickers: View {
                         .frame(width: Self.agentIconSize, height: Self.agentIconSize)
                 }
                 .tag(kind)
+                .disabled(choices(kind).isAvailable == false)
             }
         }
         .hoverHelp("The agent CLI to run")
@@ -97,6 +98,11 @@ public struct AgentOptionPickers: View {
     /// agent itself would run, so there is always something chosen to
     /// start with.
     private func resetUnavailableChoices() {
+        if showsAgent, choices(agent).isAvailable == false,
+           let available = AgentKind.allCases.first(where: { choices($0).isAvailable })
+        {
+            agent = available
+        }
         let available = choices(agent)
         if available.models.contains(model) == false {
             model = available.defaultModel

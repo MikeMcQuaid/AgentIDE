@@ -6,6 +6,20 @@ import Testing
 /// advises.
 struct KeychainHealthTests {
     @Test
+    func `a locked dedicated keychain never triggers a credential lookup`() async throws {
+        let root = try TestSupport.temporaryDirectory("keychain")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        try FileManager.default.createDirectory(atPath: root + "/Library/Keychains", withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: root + "/Library/Keychains/login.keychain-db", contents: nil)
+        let script = "security() { [[ \"${1}\" == find-generic-password ]] && touch "
+            + (root + "/looked-up").shellQuoted + "; return 1; }; "
+            + KeychainHealth.probe.replacing("${HOME}", with: root)
+        let result = try await TestSupport.run(TestSupport.sudoLoginArguments(["/bin/zsh", "-fc", script]))
+        #expect(result.standardOutput.contains("legacy-locked"))
+        #expect(FileManager.default.fileExists(atPath: root + "/looked-up") == false)
+    }
+
+    @Test
     func `only a shut legacy keychain still holding credentials earns advice`() {
         let advice = KeychainHealth.advice(
             from: "legacy-locked\n",
@@ -31,8 +45,8 @@ struct KeychainHealthTests {
         // dialog the check exists to warn about.
         let lookups = KeychainHealth.probe.components(separatedBy: "find-generic-password")
         #expect(lookups.count == 2)
-        #expect(lookups[1].contains("$own"))
-        #expect(lookups[1].contains("$legacy") == false)
-        #expect(KeychainHealth.probe.contains("unlock-keychain -p '' \"$legacy\""))
+        #expect(lookups[1].contains("${own}"))
+        #expect(lookups[1].contains("${legacy}") == false)
+        #expect(KeychainHealth.probe.contains("unlock-keychain -p '' \"${legacy}\""))
     }
 }

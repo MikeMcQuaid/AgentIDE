@@ -35,13 +35,14 @@ struct AgentRunnerTests {
         // so a quote in the path cannot break out of the quoting;
         // `--` keeps a prompt that opens with a dash from being read
         // as an option.
-        #expect(command == "claude --model fable -- \"$(cat '/tmp/it'\\''s a prompt.md')\"")
+        #expect(command.hasSuffix("claude --model fable -- \"$(cat '/tmp/it'\\''s a prompt.md')\""))
     }
 
     @Test
     func `launch commands without a prompt or arguments stay bare`() {
         #expect(CodexRunner().launchCommand(extraArguments: "  ", promptFile: nil) == "codex")
-        #expect(ClaudeCodeRunner().resumeCommand(resumeID: "abc", extraArguments: "") == "claude --resume 'abc'")
+        let resumed = ClaudeCodeRunner().resumeCommand(resumeID: "abc", extraArguments: "")
+        #expect(resumed.hasSuffix("claude --resume 'abc'"))
     }
 
     @Test

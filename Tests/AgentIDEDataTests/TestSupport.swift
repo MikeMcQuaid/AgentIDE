@@ -49,6 +49,22 @@ enum TestSupport {
         return result
     }
 
+    /// Reproduces sudo's login-shell escaping without sudo or a nested sandbox.
+    /// https://github.com/sudo-project/sudo/blob/main/src/parse_args.c
+    static func sudoLoginArguments(_ arguments: [String]) -> [String] {
+        [
+            "/bin/zsh", "-fc", arguments.lazy
+                .map { argument in
+                    argument.map { character in
+                        character.isASCII && (character.isLetter || character.isNumber || "_-$".contains(character))
+                            ? String(character) : "\\" + String(character)
+                    }
+                    .joined()
+                }
+                .joined(separator: " "),
+        ]
+    }
+
     /// Runs fixture git without hooks, signing or automatic maintenance.
     @discardableResult
     static func runGit(_ arguments: [String], in directory: String) async throws -> ProcessResult {

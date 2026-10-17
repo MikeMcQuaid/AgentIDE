@@ -43,7 +43,7 @@ public struct SandvaultLauncher: Sendable {
         sessionName: String,
     ) -> [String] {
         [
-            "sudo", "--login", "--set-home", "--user=" + sandboxUser,
+            "sudo", "--non-interactive", "--login", "--set-home", "--user=" + sandboxUser,
             "/usr/bin/env", "-i",
             "HOME=" + sandboxHome,
             "USER=" + sandboxUser,

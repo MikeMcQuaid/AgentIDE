@@ -50,6 +50,8 @@ public struct RepositoryFinderPane: View {
     @State private var owners: [String] = []
     @State private var repositories: [String] = []
     @State private var highlighted = 0
+    @State private var isLoadingOwners = true
+    @State private var isLoadingRepositories = false
 
     private let model: DashboardModel
 
@@ -83,8 +85,14 @@ public struct RepositoryFinderPane: View {
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
             }
-            if results.isEmpty, query.isEmpty {
-                ProgressView(owner == nil ? "Listing organisations…" : "Listing repositories…")
+            if results.isEmpty, owner == nil ? isLoadingOwners : isLoadingRepositories {
+                LaunchProgressView(spinner: owner == nil ? "Listing organisations…" : "Listing repositories…")
+                    .frame(maxWidth: .infinity, minHeight: Self.listHeight)
+            } else if results.isEmpty {
+                Text(owner == nil
+                    ? "No organisations found. Type a GitHub user or organisation."
+                    : "No repositories found.")
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: Self.listHeight)
             } else {
                 resultsList
@@ -100,6 +108,7 @@ public struct RepositoryFinderPane: View {
             fieldFocused = true
             owners = model.cachedOrganisations()
             owners = await model.organisations()
+            isLoadingOwners = false
         }
         .task(id: owner) {
             guard let owner else {
@@ -115,6 +124,7 @@ public struct RepositoryFinderPane: View {
             }
 
             repositories = fresh
+            isLoadingRepositories = false
         }
     }
 
@@ -200,6 +210,7 @@ public struct RepositoryFinderPane: View {
         }
 
         owner = result
+        isLoadingRepositories = true
         repositories = []
         query = ""
         highlighted = 0

@@ -72,6 +72,9 @@ public final class DashboardModel {
     /// opener, so no session stacks by accident.
     public var newSessionBase: String?
 
+    /// The agents setup found usable in the sandbox.
+    public var availableAgents: [AgentKind] = AgentKind.allCases
+
     /// The last background error, for display; the repository
     /// extension also reports through it.
     public internal(set) var status: String?
@@ -218,6 +221,7 @@ public final class DashboardModel {
             defaultEffort: defaults.effort,
             names: modelNames[agent] ?? [:],
             version: installedVersions[agent],
+            isAvailable: availableAgents.contains(agent),
         )
     }
 
@@ -343,9 +347,7 @@ public final class DashboardModel {
     /// picker draws from memory rather than a file.
     var modelNames: [AgentKind: [String: String]] = [:]
 
-    /// Each CLI's version as probed once at launch with the models,
-    /// shown beside the agent's name in the pickers; never probed
-    /// again for a render.
+    /// Each CLI's version, read at launch and shown in the pickers.
     var installedVersions: [AgentKind: String] = [:]
 
     /// The newest reading (running or queued), the queued follow-up

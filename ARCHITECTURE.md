@@ -87,6 +87,41 @@ the sandbox user's herdr server, surviving app restarts, updates and
 host logout but not reboot. Reboot recovery is worktree plus transcript
 plus resume.
 
+### First-launch setup
+
+The startup gate checks local prerequisites asynchronously on every
+launch, before mounting the dashboard, schedules or terminals. Independent
+checks run concurrently, with a spinner only after half a second.
+Instructions appear only after a check reports missing prerequisites.
+Missing tools, sandbox access, Git identity, workspace permissions or an
+authenticated agent fill the window with a five-step wizard: tools, Git
+identity, GitHub, sandvault and agent sign-in. Only the first unfinished
+step appears, with copy buttons for each command group, Exit and Recheck
+to advance after repair. Homebrew is required; setup links to brew.sh
+for its installation and provides Homebrew commands for the other tools.
+Setup links always open in the default system browser; embedded browser
+routing starts only when the completed setup gives way to the dashboard.
+Standalone jq and optional phone or development tools are not required.
+The app creates its own directories and installs its hooks in an existing
+workspace, without creating accounts, changing sudoers or signing anyone
+in.
+
+GitHub authentication and API access are verified until setup first
+succeeds, recorded in UserDefaults; later launches need no network for
+setup. GitHub's login command selects HTTPS; accepting its default Git
+authentication choice configures credentials without a separate command.
+Git identity and signing configuration are checked locally. An unavailable
+signer disables AgentIDE's signed-commit requirement without changing
+global Git configuration or blocking setup. No signature is attempted
+during setup. Agent quarantine is cleared through the existing launch
+repair before sign-in probes, which run from the sandbox home with its
+user's temporary directory and surface diagnostics on failure.
+Checks never start herdr or an interactive
+agent. Menu actions, Settings and App Intents cannot bypass the gate.
+With no restored selection, the first repository reading opens the
+repository finder when empty or the new-session form with an editable
+repository picker.
+
 ### Launching into the sandbox
 
 sandvault's sudoers rules let the host user run exactly `/bin/zsh`,
@@ -95,7 +130,8 @@ password, so every sandbox interaction uses one launch shape, assembled
 in exactly one place (`SandvaultLauncher`):
 
 ```bash
-sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
+sudo --non-interactive --login --set-home --user="sandvault-${USER}" \
+  /usr/bin/env -i \
   HOME="/Users/sandvault-${USER}" USER="sandvault-${USER}" SHELL=/bin/zsh \
   TERM=xterm-256color COLORTERM=truecolor \
   INITIAL_DIR="${WORKTREE}" SHARED_WORKSPACE="/Users/Shared/sv-${USER}" \
@@ -109,13 +145,23 @@ sudo --login --set-home --user="sandvault-${USER}" /usr/bin/env -i \
 ```
 
 This is byte-compatible with sandvault's own session launch; AgentIDE
-only substitutes the payload. `env -i` gives a clean environment,
-`GIT_CONFIG_*` injects `safe.directory` (shared repositories are owned by
-the other user) and `sandbox-exec` confines everything downstream,
-including the herdr server. Every launch passes through one function
-that refuses a path outside the shared workspace: the sandbox user can
-often read a host directory and must never be given a reason to write
-to one.
+substitutes the payload and refuses interactive password prompts.
+Payload variables use `${name}` so sudo's login shell leaves their
+expansion to the sandbox shell; bare `$name` expands before the payload
+runs.
+`env -i` gives a clean environment, `GIT_CONFIG_*` injects `safe.directory`
+(shared repositories are owned by the other user) and `sandbox-exec`
+confines everything downstream, including the herdr server. Claude
+launches select an existing native
+install through sandvault's `SV_NATIVE_INSTALL` flag; setup probes the
+same binaries directly, without invoking installing wrappers. Each
+probe checks the first installed binary in sandvault's selection order;
+a failed sign-in must not fall through to a different installation.
+Before starting herdr, AgentIDE loads sandvault's shell profile, which
+adds native and staged agent paths and its launch wrappers.
+Every launch passes through one function that refuses a path outside the
+shared workspace: the sandbox user can often read a host directory and
+must never be given a reason to write to one.
 
 ### herdr
 

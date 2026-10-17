@@ -18,12 +18,12 @@ enum KeychainHealth {
     /// keychain, unlocked first, to see whether the credentials
     /// already moved and the old keychain is merely left behind.
     static let probe = """
-    legacy="$HOME/Library/Keychains/login.keychain-db"; \
-    own="$HOME/Library/Keychains/sandvault.keychain-db"; \
-    [[ -f "$legacy" ]] || { echo no-legacy; exit 0; }; \
-    security unlock-keychain -p '' "$legacy" &>/dev/null && { echo legacy-opens; exit 0; }; \
-    security unlock-keychain -p '' "$own" &>/dev/null; \
-    security find-generic-password -a "$USER" -s 'Claude Code-credentials' "$own" &>/dev/null \
+    legacy="${HOME}/Library/Keychains/login.keychain-db"; \
+    own="${HOME}/Library/Keychains/sandvault.keychain-db"; \
+    [[ -f "${legacy}" ]] || { echo no-legacy; exit 0; }; \
+    security unlock-keychain -p '' "${legacy}" &>/dev/null && { echo legacy-opens; exit 0; }; \
+    security unlock-keychain -p '' "${own}" &>/dev/null && \
+    security find-generic-password -a "${USER}" -s 'Claude Code-credentials' "${own}" &>/dev/null \
     && { echo migrated; exit 0; }; \
     echo legacy-locked
     """

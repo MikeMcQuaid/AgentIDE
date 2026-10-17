@@ -12,6 +12,9 @@ public protocol AgentRunner: Sendable {
     /// The agent this runner drives.
     var kind: AgentKind { get }
 
+    /// Reads local sign-in state without starting an interactive session.
+    func authenticationCommand(paths: WorkspacePaths) -> String?
+
     /// The shell command that starts the agent interactively, with
     /// caller-supplied extra arguments appended verbatim and the
     /// prompt file's content as the initial message when given.
@@ -254,12 +257,12 @@ public struct ClaudeCodeRunner: AgentRunner {
     /// Starts Claude Code interactively; the sandbox's wrapper adds
     /// its permission flag.
     public func launchCommand(extraArguments: String, promptFile: String?) -> String {
-        command("claude", extraArguments, promptFile: promptFile)
+        command(executable, extraArguments, promptFile: promptFile)
     }
 
     /// Resumes a conversation by its session id.
     public func resumeCommand(resumeID: String, extraArguments: String) -> String {
-        command("claude --resume '" + resumeID + "'", extraArguments)
+        command(executable + " --resume '" + resumeID + "'", extraArguments)
     }
 
     /// Claude Code keys transcript directories by the working
