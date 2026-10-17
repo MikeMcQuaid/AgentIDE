@@ -4,6 +4,35 @@ import AgentIDEDomain
 import Testing
 
 extension PullRequestStackTests {
+    @Test(arguments: [false, true])
+    func `published higher branches count towards push readiness without blocking publication`(unsigned: Bool) async {
+        let fixtures = PullRequestsModelTests()
+        let model = fixtures.makeModel(items: [fixtures.item(branch: "feature", ahead: 1)])
+        model.stacking.facts = { _ in
+            StackFacts(
+                stack: BranchStack(
+                    base: "main",
+                    branches: ["lower", "middle", "upper"],
+                    checkedOut: "upper",
+                    published: ["lower", "middle"],
+                ),
+                unpushed: ["middle", "upper"],
+                unsigned: unsigned ? ["middle", "upper"] : ["upper"],
+            )
+        }
+        await model.reload()
+        model.stacking.selected = "lower"
+
+        #expect(model.unpushedBelow == nil)
+        #expect(model.unopenedBelow == nil)
+        #expect(model.unpushedStackBranches == ["middle"])
+        #expect(model.needsRestackBeforePush == unsigned)
+        #expect(model.canPushStack == !unsigned)
+        #expect(model.canPush == !unsigned)
+        #expect(model.pushHelp == model.pushStackHelp)
+        #expect(model.pushStackHelp.contains("not GPG signed") == unsigned)
+    }
+
     @Test(arguments: ["push", "stack", "rebase"], ["lower", "middle"])
     func `stack actions push through the listed branch rather than the checked-out top`(
         action: String,

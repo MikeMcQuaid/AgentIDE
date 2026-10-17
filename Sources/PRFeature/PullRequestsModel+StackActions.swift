@@ -3,7 +3,7 @@ import AgentIDEDomain
 import TerminalUI
 
 /// Rebase every branch onto the one below it and push through the
-/// selected entry, bottom first. Split from `+Stack` for length.
+/// selected entry and published branches above it, bottom first.
 extension PullRequestsModel {
     /// Puts every branch back on the one below it, from whichever
     /// layer asked, and says what moved; a branch already there is
@@ -77,7 +77,7 @@ extension PullRequestsModel {
         return (moved, pushed)
     }
 
-    /// Restacks locally, then pushes through the entry that asked.
+    /// Restacks locally, then pushes the selected and published branches.
     private func restackAndPush(_ worktree: Worktree, shouldPush: Bool) async throws
         -> (moved: [String], pushed: [String])
     {

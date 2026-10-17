@@ -159,7 +159,7 @@ extension PullRequestsModel {
         }
 
         do {
-            // Publish the listed entry with its bases, leaving later work local.
+            // Publish the listed entry with its bases and update published branches above it.
             guard stacking.stack.isStacked == false else {
                 return await pushSelectedStack(worktree)
             }

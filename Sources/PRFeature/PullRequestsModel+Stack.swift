@@ -103,12 +103,16 @@ extension PullRequestsModel {
     }
 
     /// The branches needed to publish the listed entry, bottom first.
-    private var stackPushBranches: [String] {
+    private var stackThroughListed: [String] {
         guard let listed = listedBranch, let index = stack.branches.firstIndex(of: listed) else {
             return []
         }
 
         return Array(stack.branches[...index])
+    }
+
+    private var stackPushBranches: [String] {
+        listedBranch.map { stack.branchesToPush(through: $0) } ?? []
     }
 
     var unpushedStackBranches: [String] {
@@ -121,8 +125,8 @@ extension PullRequestsModel {
         }
     }
 
-    /// Whether the listed prefix has work to push, waiting for any
-    /// busy or dirty worktrees in that prefix when it needs rebasing.
+    /// Whether the selected branches have work to push, waiting for any
+    /// busy or dirty worktrees among them when they need rebasing.
     var canPushStack: Bool {
         stack.stackingBlocker == nil && isBranchActionRunning == false
             && unpushedBelow == nil
@@ -144,10 +148,10 @@ extension PullRequestsModel {
             return blocker
         }
         guard unpushedStackBranches.isEmpty == false else {
-            return "The listed branch and those below it are already pushed"
+            return "The selected branches are already pushed"
         }
         guard let unsigned = stackPushBranches.first(where: stacking.unsignedBranches.contains) else {
-            return "Push the listed branch and those below it, bottom first"
+            return "Push the listed branch, those below it and published branches above it, bottom first"
         }
 
         return unsigned + "'s tip commit is not GPG signed; Rebase signs the stack before pushing"
@@ -232,15 +236,6 @@ extension PullRequestsModel {
         }
 
         return parent
-    }
-
-    /// Whether the entry on screen is stacked work: only a branch
-    /// opening against another branch is. At the bottom of a stack
-    /// the tab is the ordinary one branch tab for its form and its
-    /// push, however many branches sit above it; its rebase and its
-    /// merge are the stack's, see `isInStack`.
-    var isStackedEntry: Bool {
-        listedParent != nil
     }
 
     /// Whether the entry on screen belongs to a stack at all, its
@@ -334,11 +329,11 @@ extension PullRequestsModel {
 
     /// The first lower branch that must be pushed before this entry.
     var unpushedBelow: String? {
-        stackPushBranches.dropLast().first(where: stacking.unpushedBranches.contains)
+        stackThroughListed.dropLast().first(where: stacking.unpushedBranches.contains)
     }
 
     /// The first lower branch that needs an open pull request.
     var unopenedBelow: String? {
-        stackPushBranches.dropLast().first { hasOpenPullRequest($0) == false }
+        stackThroughListed.dropLast().first { hasOpenPullRequest($0) == false }
     }
 }

@@ -8,11 +8,23 @@ public struct BranchStack: Hashable, Sendable, Codable {
     // MARK: Lifecycle
 
     /// Creates a stack, bottom first.
-    public init(base: String?, branches: [String], checkedOut: String, stackingBlocker: String? = nil) {
+    public init(
+        base: String?, branches: [String], checkedOut: String, stackingBlocker: String? = nil, published: [String] = [],
+    ) {
         self.base = base
         self.branches = branches
         self.checkedOut = checkedOut
         self.stackingBlocker = stackingBlocker
+        self.published = published
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        base = try container.decodeIfPresent(String.self, forKey: .base)
+        branches = try container.decode([String].self, forKey: .branches)
+        checkedOut = try container.decode(String.self, forKey: .checkedOut)
+        stackingBlocker = try container.decodeIfPresent(String.self, forKey: .stackingBlocker)
+        published = try container.decodeIfPresent([String].self, forKey: .published) ?? []
     }
 
     // MARK: Public
@@ -30,10 +42,22 @@ public struct BranchStack: Hashable, Sendable, Codable {
     /// Why stack actions are unavailable, while ancestry remains browsable.
     public let stackingBlocker: String?
 
+    /// Branches with a remote ref.
+    public let published: [String]
+
     /// Whether this is a stack at all: one branch on the default
     /// branch is just a branch, and the app shows it as it always did.
     public var isStacked: Bool {
         branches.count > 1
+    }
+
+    /// Publishes through the selected branch and updates published branches above it.
+    public func branchesToPush(through branch: String) -> [String] {
+        guard let index = branches.firstIndex(of: branch) else {
+            return []
+        }
+
+        return Array(branches[...index]) + branches.dropFirst(index + 1).filter { published.contains($0) }
     }
 
     /// What a branch is built on: the branch below it, or the

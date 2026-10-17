@@ -15,10 +15,10 @@ extension PullRequestFooterView {
         } else {
             rebaseButton
         }
-        // Rebase and Push replaces Push only while the listed prefix needs it.
+        // Rebase and Push replaces Push only while a branch being pushed needs it.
         if model.isInStack, model.canRestack, model.needsRestackBeforePush, model.unpushedBelow == nil {
             EmptyView()
-        } else if model.isStackedEntry {
+        } else if model.isInStack {
             pushStackButton
         } else {
             pushButton
@@ -44,7 +44,7 @@ extension PullRequestFooterView {
                 ? "Fetch, then rebase every branch onto the one below it, signing every commit it "
                 + "replays and leaving alone any branch already in place and signed"
                 + (model.unpushedBelow == nil
-                    ? ", then push the listed branch and those below it, bottom first"
+                    ? ", then push the listed branch, those below it and published branches above it, bottom first"
                     : "; pushing waits until the lower branches are pushed")
                 + "; a conflict aborts and reports to Messages"
                 : model.stack.stackingBlocker ?? model.restackBlocker
@@ -95,7 +95,7 @@ extension PullRequestFooterView {
         .hoverHelp(model.pushStackHelp)
     }
 
-    /// How many branches through the listed entry the remote lacks.
+    /// How many branches being pushed have commits the remote lacks.
     private var stackPushCount: String {
         let branches = model.unpushedStackBranches.count
         return branches > 0 ? String(branches) : ""

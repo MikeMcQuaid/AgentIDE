@@ -1412,14 +1412,15 @@ steps.
   that returns unrelated content.
 - **A stack rebases as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
-  then pushes through the selected entry, bottom first, if every
-  lower branch was pushed before the rebase; otherwise it only
-  rebases locally. When pushing is allowed, the button
+  then pushes through the selected entry and any higher branches
+  already on the remote, bottom first, if every lower branch was
+  pushed before the rebase; otherwise it only rebases locally.
+  When pushing is allowed, the button
   reads Rebase and Push (or Sign and Push) with what comes down and
   what goes up, its help says why, the note names what was pushed,
   and Push then reads Pushed. Push is hidden beside a live Rebase
-  and Push only when the selected branch or one below it needs
-  rebasing or signing. Work above it cannot hide a ready Push.
+  and Push only when a branch being pushed needs rebasing or signing.
+  Unpublished work above it cannot hide a ready Push.
   Only one branch action runs at a time: while one does, Rebase and
   Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and
@@ -1427,9 +1428,9 @@ steps.
   queues a lone pull request. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
   stack derived afterwards no longer reached them. Push and Rebase
-  and Push publish only the selected branch and those below it.
-  Higher branches are not pushed, so unpublished work stays local
-  while the first pull request is opened and updated independently.
+  and Push publish the selected branch, those below it and higher
+  branches with a remote branch. Higher branches without a remote
+  branch stay local while earlier pull requests are opened and updated.
   Push counts, signature checks and restack blockers cover only
   those selected branches. Opening a pull request creates only the
   selected entry's pull request.
@@ -1487,8 +1488,8 @@ steps.
   named, in its own worktree. Before anything moves, the restack
   refuses while such a worktree is dirty or its agent is not idle or
   done, and Rebase dims with the reason. Push dims for those blockers
-  only when its prefix needs rebasing or signing and contains the
-  blocked worktree. Restacking stops when that worktree has switched
+  only when branches being pushed need rebasing or signing and include
+  the blocked worktree. Restacking stops when that worktree has switched
   branches by the time its turn comes. A failed bottom rebase retries
   once against a freshly fetched `origin/<default>` only when that
   ref has advanced from the recorded remote tip, the branch is unchanged
@@ -2340,10 +2341,17 @@ the clean checked-out tip. Every feedback source uses the same guarded push
 path. When signatures are required, the existing signed rebase replays
 only commits above the captured remote head, without changing the base.
 The app rechecks the clean tip, signatures and unchanged code tree before
-pushing, then tracks the signed commit for GitHub confirmation. Signing
-failures stop the loop without asking the agent to push. A failure opens
-the existing autofix popover with the diagnostic and a Push action. Only
-that explicit retry can repeat the push, preserving its round and thread
+pushing, then tracks the signed commit for GitHub confirmation. Autofix
+uses the same stack push path as manual pushes, updating published
+branches above the fixing branch while leaving unpublished branches local.
+The stack is captured before signing, and children replay from their
+parent's pre-signing tip. The fixing branch keeps its verified source
+commit and captured remote lease instead of integrating unreviewed work.
+Autofix leaves lower branches untouched and checks that the fixing
+branch contains its parent's tip before pushing any branch.
+Signing failures stop the loop without asking the agent to push. A failure
+opens the existing autofix popover with the diagnostic and a Push action.
+Only that explicit retry can repeat the push, preserving its round and thread
 marks and rechecking the PR, branch, session and committed tip. A push
 that failed after signing remembers the signed tip. Manual pushes are
 noticed without clicking Retry, including signed rewrites and pushes

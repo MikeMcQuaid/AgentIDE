@@ -287,13 +287,11 @@ extension PullRequestsModel {
     /// already pushed and a tip proven GPG signed; an unread tip
     /// dims the button rather than trusting the last answer, since
     /// a click on unverified commits could only end in a refusal.
-    /// Nil upstream means nothing was ever pushed. In a stack it is
-    /// the listed entry's own commits that are counted, since the
-    /// worktree's counts describe whichever branch it has checked
-    /// out.
+    /// Nil upstream means nothing was ever pushed. A stack counts the
+    /// selected branch, its bases and published branches above it.
     var canPush: Bool {
-        if isInStack, stack.stackingBlocker != nil || unpushedBelow != nil {
-            return false
+        if isInStack {
+            return canPushStack
         }
         // One branch action at a time: a push pressed while a rebase
         // still runs failed against the branch mid-move.
@@ -335,7 +333,7 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
-        if isInStack, stack.stackingBlocker != nil || unpushedBelow != nil {
+        if isInStack {
             return pushStackHelp
         }
         guard isGuardedDefaultBranch == false else {
