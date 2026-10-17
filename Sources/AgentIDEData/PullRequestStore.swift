@@ -177,8 +177,9 @@ public struct PullRequestStore: Sendable {
         interval: TimeInterval = minimumInterval,
     ) async throws -> PullRequestSummary? {
         let key = Self.summaryKey(repositoryPath: repositoryPath, number: number)
-        guard due(key, interval: interval, floor: Self.inFlightFloor) else {
-            return store.load().enrichedSummaryCache[key]?.summary
+        let cached = store.load().enrichedSummaryCache[key]?.summary
+        guard due(key, interval: interval, floor: Self.inFlightFloor) || cached?.checkDetails == nil else {
+            return cached
         }
 
         var fetched = try await github.pullRequestSummary(

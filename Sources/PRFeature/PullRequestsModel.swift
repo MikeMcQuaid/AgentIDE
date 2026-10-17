@@ -77,6 +77,9 @@ final class PullRequestsModel {
         fetchLabels = {
             await gate.labels(repositoryPath: repository.path)
         }
+        fetchCheckLog = { jobID in
+            try await github.jobLog(repositoryPath: repository.path, jobID: jobID)
+        }
         fetchFailedRunLog = { runID in
             try await github.failedRunLog(repositoryPath: repository.path, runID: runID)
         }
@@ -281,7 +284,8 @@ final class PullRequestsModel {
     /// first needs them.
     var fetchLabels: () async -> [String] = { [] }
 
-    /// One failing Actions run's failed-step log.
+    /// One job's complete log and one run's failed-step log.
+    var fetchCheckLog: (Int) async throws -> String = { _ in "" }
     var fetchFailedRunLog: (Int) async throws -> String = { _ in "" }
 
     /// Adds and removes labels on a pull request.
@@ -384,11 +388,7 @@ final class PullRequestsModel {
         didSet { saveDraft() }
     }
 
-    /// The repository's worktree items, refreshed by the view as the
-    /// dashboard polls. The pushed mark outlives a refresh: it is
-    /// the branch's tip moving that clears it, read with the other
-    /// branch facts, never the arrival of counts that may have been
-    /// gathered before the push.
+    /// Worktree items supplied by the sidebar's polling.
     var items: [WorktreeItem] {
         didSet {
             // The sidebar's poll may have fetched a fresher summary

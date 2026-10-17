@@ -48,6 +48,29 @@ extension GitHubClient {
         )
     }
 
+    static func checkDetails(
+        _ rows: [CheckRow],
+        // swiftlint:disable:next discouraged_optional_collection - Unknown rules are distinct from no requirements.
+        required: Set<String>?,
+    ) -> [PullRequestCheck] {
+        let checks = rows.map { row in
+            let check = Self.autofixCheck(row)
+            return PullRequestCheck(
+                name: check.name,
+                status: check.status.isEmpty ? "PENDING" : check.status,
+                conclusion: check.conclusion,
+                requirement: required.map { $0.contains(check.name) ? .required : .optional } ?? .unknown,
+                link: check.link,
+                startedAt: row.startedAt,
+                completedAt: row.completedAt,
+            )
+        }
+        let missing = (required ?? []).subtracting(checks.map(\.name)).sorted().map { name in
+            PullRequestCheck(name: name, status: "EXPECTED", conclusion: "", requirement: .required)
+        }
+        return (checks + missing).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private static func state(_ row: CheckRow) -> String {
         (row.conclusion ?? row.state ?? "").uppercased()
     }

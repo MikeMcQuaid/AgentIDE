@@ -1,4 +1,3 @@
-import AgentIDEData
 import AgentIDEDomain
 import AppKit
 import SwiftUI
@@ -35,18 +34,12 @@ extension PullRequestFooterView {
         }
         .hoverHelp("Copy unresolved local AI and GitHub conversations; Cmd-click opens GitHub reviews "
             + "in your browser, Shift-click in the Browser tab; dimmed while none is unresolved")
-        // One button for the failing checks: a click copies their
-        // logs, and a modifier opens them instead, since the
-        // modifier is read at the click and `LinkOpener` already
-        // sends Cmd to the browser and anything else to the tab.
-        // Dimmed until the rollup is red with runs to read: pending
-        // and green have no failed log, and a red rollup whose
-        // failures are not Actions runs has none either.
+        let checks = PullRequestsModel.copyableFailingChecks(in: selected)
         BusyButton(
-            label: copyLabel("Checks", count: selected.failingCheckLinks.count),
-            accessibilityLabel: Self.copyTitle("Checks", count: selected.failingCheckLinks.count),
-            busy: "Copying",
-            disabled: selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty,
+            label: copyLabel("Checks", count: checks.count),
+            accessibilityLabel: Self.copyTitle("Checks", count: checks.count),
+            busy: "Copying " + String(checks.count),
+            disabled: checks.isEmpty,
         ) {
             if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
                 model.openFailingChecks(selected)
@@ -54,11 +47,10 @@ extension PullRequestFooterView {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp("Copy the head and tail of every failing Actions run's log, the first "
-            + String(CheckLog.logHeadLines) + " lines and the last "
-            + String(CheckLog.logTailLines) + " with the bytes of each end capped, a run still "
-            + "in progress answering with its already-failed jobs; Cmd-click opens the failing check in "
-            + "your browser, Shift-click in the Browser tab; dimmed until a check fails")
+        .hoverHelp("Copy logs from " + String(checks.count) + " finished failing Actions checks, "
+            + "including diagnostics from long logs; unfinished checks are excluded, "
+            + "as are optional checks when checks are required. "
+            + "Cmd-click opens failing checks in your browser, Shift-click in the Browser tab")
     }
 
     /// Explicit manual copies retain their broader scope beside filtered feedback.
