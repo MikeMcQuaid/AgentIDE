@@ -10,6 +10,9 @@ import TerminalUI
 struct PullRequestConversationPane: View {
     // MARK: Internal
 
+    static let labelsPadding: CGFloat = 8
+
+    let model: PullRequestsModel
     let summary: PullRequestSummary
     let stackDepth: Int
 
@@ -63,26 +66,14 @@ struct PullRequestConversationPane: View {
                     .padding(.bottom, Self.labelsPadding)
             }
             Divider()
-            PullRequestConversationView(
-                github: github,
-                repositoryPath: repositoryPath,
-                number: summary.number,
-                seededBody: summary.body,
-                store: store,
-                localReview: localReview,
-                localWorktreePath: localWorktreePath,
-                onToggleLocalResolved: onToggleLocalResolved,
-                reloadToken: reloadToken,
-                onResolvedChanged: onResolvedChanged,
-                onThreadsChanged: onThreadsChanged,
-                onReviewEventsChanged: onReviewEventsChanged,
-            )
+            checksAndConversation(showsChecks: $showsChecks)
         }
+        .onChange(of: summary.url) { showsChecks = false }
     }
 
     // MARK: Private
 
-    private static let labelsPadding: CGFloat = 8
+    @State private var showsChecks = false
 
     private var feedback: some View {
         FeedbackView(

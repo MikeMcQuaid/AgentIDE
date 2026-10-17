@@ -100,6 +100,19 @@ extension GitHubClient {
         }
     }
 
+    /// Reads one complete job independently of its workflow run's state.
+    public func jobLog(repositoryPath: String, jobID: Int) async throws -> String {
+        let raw = try await gh(
+            ["api", "repos/{owner}/{repo}/actions/jobs/" + String(jobID) + "/logs"],
+            in: repositoryPath,
+        )
+        guard Self.isText(raw.standardOutput) else {
+            throw SessionServiceError("GitHub has not published a text log for this job yet.")
+        }
+
+        return raw.standardOutput
+    }
+
     /// The run's own address, which every one of its jobs hangs
     /// off; separated for tests.
     static func runURL(fromJSON json: String) -> String? {
@@ -186,16 +199,14 @@ extension GitHubClient {
         {
             return viewed.standardOutput.trimmingCharacters(in: .newlines)
         }
-        guard let raw = try? await gh(
-            ["api", "repos/{owner}/{repo}/actions/jobs/" + jobID + "/logs"],
-            in: repositoryPath,
-        ), Self.isText(raw.standardOutput) else {
+        // swiftformat:disable:next acronyms
+        guard let raw = try? await jobLog(repositoryPath: repositoryPath, jobID: job.databaseId) else {
             return nil
         }
 
         // The REST log has no job or step columns, so the job is
         // named once in front of its tail.
         return "[job " + (job.name ?? jobID) + "]\n"
-            + raw.standardOutput.trimmingCharacters(in: .newlines)
+            + raw.trimmingCharacters(in: .newlines)
     }
 }

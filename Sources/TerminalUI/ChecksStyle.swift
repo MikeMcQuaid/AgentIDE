@@ -68,8 +68,17 @@ public nonisolated enum ChecksStyle {
         case "SUCCESS":
             .green
 
-        case "FAILURE":
+        case "ACTION_REQUIRED",
+             "ERROR",
+             "FAILURE",
+             "STARTUP_FAILURE",
+             "TIMED_OUT":
             .red
+
+        case "CANCELLED",
+             "NEUTRAL",
+             "SKIPPED":
+            .secondary
 
         default:
             .orange

@@ -1281,9 +1281,19 @@ steps.
   required check GitHub has yet to hear from keeps it orange, which
   is what GitHub's own merge box says. A branch requiring nothing
   counts every check, as does a branch whose rules could not be read.
-  The dot's click and the Checks copy button take only the failures
-  that count: a failing check the branch does not require is counted
-  for the help and never opened or copied.
+  The Checks copy button takes only failures that count. The PR pane's
+  checks view lists every check, including optional checks and required
+  checks that have not reported, with requirement, status and timing.
+  Unknown rules remain labelled unknown. Check details travel with the
+  enriched summary, using the existing refresh cadence; lightweight
+  listings do not claim that checks are empty. A cached summary without
+  check details is enriched even within the refresh interval; a confirmed
+  empty check list remains cacheable. Running timers use
+  SwiftUI's date text without publishing model ticks. Each check opens
+  a log view through the shared selectable text component. Finished
+  Actions jobs fetch their full log through the REST job endpoint,
+  independently of the rest of the run; running and external checks
+  link to their live log. Logs load only on demand.
 - **Row and pane never disagree**: both read the same two caches
   through `PullRequestStore`, the per-branch summary (which pull
   request a branch has) and the enriched summary (what state it is
@@ -1555,9 +1565,11 @@ steps.
   carries it), with Cmd-click opening the pull request's files page,
   where a review comment is anchored and answered, and Shift-click
   opening it in the Browser tab; Checks is one button for the
-  failing checks, dimmed
-  until the rollup is red, that copies the head and tail of every
-  failing run's `gh run view --log-failed` (forty lines of what was
+  finished failing Actions checks, counting the jobs it will copy,
+  independently of unfinished jobs in the same run. Each job uses the
+  same log reader as the checks view; cached summaries without check
+  details fall back to `gh run view --log-failed`. Bulk copies keep
+  the head and tail (forty lines of what was
   run and in what environment, a hundred and sixty of the failure,
   the progress between cut and counted, except every cut line naming
   an error or a failure, each with three lines either side
@@ -1571,7 +1583,7 @@ steps.
   once in a heading, timestamps and colour stripped), Cmd opening the check in the
   browser and Shift in the Browser tab. Copying clears the clipboard
   before fetching logs and fills it when they arrive; a failed fetch
-  leaves it empty. A run still in progress has
+  leaves it empty. In the fallback, a run still in progress has
   no whole-run log, so its already-failed jobs answer with their own
   (`--json jobs`, then `--job <id> --log-failed` each) rather than
   failing while the rest of the run decides; gh gates even a

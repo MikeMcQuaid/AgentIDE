@@ -22,9 +22,36 @@ extension PullRequestsModel {
         .filter { seen.insert($0).inserted }
     }
 
+    static func copyableFailingChecks(in summary: PullRequestSummary) -> [PullRequestCheck] {
+        (summary.checkDetails ?? []).filter { $0.canReadLog && summary.failingCheckLinks.contains($0.link) }
+    }
+
     /// Every failing run's condensed log under a heading naming the
     /// run and, when it has only one job and step, those too.
     func failingLogs(for summary: PullRequestSummary) async throws -> String {
+        if summary.checkDetails != nil {
+            var logs = [String]()
+            var unreadable: any Error?
+            for check in Self.copyableFailingChecks(in: summary) {
+                guard let jobID = check.jobID else {
+                    continue
+                }
+
+                do {
+                    try await logs.append(CheckLog.format(log: fetchCheckLog(jobID), heading: check.name))
+                } catch {
+                    unreadable = unreadable ?? error
+                }
+            }
+            guard logs.isEmpty == false else {
+                throw unreadable ?? GitHubClient.RunLogsUnavailable(
+                    failedJobs: summary.failingCheckLinks.count,
+                    links: summary.failingCheckLinks,
+                )
+            }
+
+            return logs.joined(separator: "\n\n")
+        }
         var runs = [String]()
         var unreadable: any Error?
         for runID in Self.runIDs(in: summary.failingCheckLinks) {
@@ -62,7 +89,7 @@ extension PullRequestsModel {
         do {
             let text = try await failingLogs(for: summary)
             pasteboard.setString(text, forType: .string)
-            note("Copied the failing logs of " + String(runs.count) + " runs from #" + String(summary.number) + ".")
+            note("Copied the available failing check logs from #" + String(summary.number) + ".")
             return true
         } catch let error as GitHubClient.RunLogsUnavailable {
             // Only a run GitHub has yet to publish is a "yet".

@@ -376,6 +376,8 @@ public struct GitHubClient: Sendable {
                 AutofixChecks(required: required, results: (row.statusCheckRollup ?? []).map(Self.autofixCheck))
             },
             headRepository: row.headRepository?.nameWithOwner,
+            checkDetails: askedForChecks || row.statusCheckRollup != nil
+                ? Self.checkDetails(row.statusCheckRollup ?? [], required: requiredChecks) : nil,
         )
     }
 }
