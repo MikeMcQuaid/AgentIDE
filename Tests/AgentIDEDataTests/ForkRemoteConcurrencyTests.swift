@@ -43,7 +43,9 @@ struct ForkRemoteConcurrencyTests {
         let independentResult = await withTaskCancellationHandler {
             await independent.result
         } onCancel: {
-            Task { await paused.resume() }
+            Task {
+                await paused.resume()
+            }
         }
         let overlapped = await TestSupport.poll(timeout: 1) { await paused.adoptedPaths.contains(alias) }
         #expect(overlapped == false)

@@ -70,7 +70,9 @@ extension PullRequestsModel {
         }
 
         tipSignature = .unread
-        Task { await refreshWorktreeFacts(current.worktree) }
+        Task {
+            await refreshWorktreeFacts(current.worktree)
+        }
     }
 
     /// The rebase button's label names exactly what it would do.
@@ -290,7 +292,7 @@ extension PullRequestsModel {
     /// worktree's counts describe whichever branch it has checked
     /// out.
     var canPush: Bool {
-        if isInStack, stack.stackingBlocker != nil {
+        if isInStack, stack.stackingBlocker != nil || unpushedBelow != nil {
             return false
         }
         // One branch action at a time: a push pressed while a rebase
@@ -333,8 +335,8 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
-        if isInStack, let blocker = stack.stackingBlocker {
-            return blocker
+        if isInStack, stack.stackingBlocker != nil || unpushedBelow != nil {
+            return pushStackHelp
         }
         guard isGuardedDefaultBranch == false else {
             return "This repository guards its default branch: put the work on a branch of its own "
@@ -388,10 +390,7 @@ extension PullRequestsModel {
         )
     }
 
-    /// Whether one pull request could be merged as it stands: no
-    /// draft, no conflict, checks green, and no review outstanding
-    /// or refused. An empty review decision is a repository that
-    /// asks for none.
+    /// Whether a pull request is ready; an empty decision means no review is required.
     static func isReadyToMerge(_ summary: PullRequestSummary) -> Bool {
         summary.state == "OPEN" && summary.isDraft == false
             && summary.mergeable == "MERGEABLE" && summary.checks == "SUCCESS"

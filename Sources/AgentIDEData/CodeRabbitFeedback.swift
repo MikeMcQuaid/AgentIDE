@@ -30,8 +30,8 @@ enum CodeRabbitFeedback {
             guard event.kind.isEmpty,
                   let start = event.body.range(of: "<!-- recent_review_start -->")?.upperBound,
                   let end = event.body
-                  .range(of: "<!-- recent_review_end -->", range: start ..< event.body.endIndex)?
-                  .lowerBound
+                      .range(of: "<!-- recent_review_end -->", range: start ..< event.body.endIndex)?
+                      .lowerBound
             else {
                 return nil
             }
@@ -40,10 +40,10 @@ enum CodeRabbitFeedback {
             guard recent.contains("No actionable comments were generated in the recent review."),
                   recent.contains(" and " + head + "."),
                   let run = recent.components(separatedBy: "**Run ID**: `")
-                  .dropFirst()
-                  .first?
-                  .split(separator: "`")
-                  .first, run.isEmpty == false
+                      .dropFirst()
+                      .first?
+                      .split(separator: "`")
+                      .first, run.isEmpty == false
             else {
                 return nil
             }

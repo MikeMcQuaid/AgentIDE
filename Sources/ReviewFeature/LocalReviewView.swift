@@ -6,6 +6,7 @@ import TerminalUI
 struct LocalReviewView: View {
     // MARK: Internal
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: LocalReviewModel
 
     let diff: ReviewModel

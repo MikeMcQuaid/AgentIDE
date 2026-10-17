@@ -67,7 +67,11 @@ struct StackPopover: View {
             TextField("Stack a new branch on top", text: $newBranch)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isCreating || stack == nil || stack?.stackingBlocker != nil)
-                .onSubmit { Task { await create() } }
+                .onSubmit {
+                    Task {
+                        await create()
+                    }
+                }
             BusyButton(
                 "Create",
                 busy: "Creating",
@@ -133,7 +137,9 @@ struct StackPopover: View {
                 Text("checked out").interfaceFont(.caption).foregroundStyle(.secondary)
             } else if isBase == false {
                 Button {
-                    Task { await exclude(branch) }
+                    Task {
+                        await exclude(branch)
+                    }
                 } label: {
                     Image(systemName: "minus.circle")
                         .accessibilityLabel("Leave " + branch + " out of this stack")
@@ -153,7 +159,9 @@ struct StackPopover: View {
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             Button {
-                Task { await include(branch) }
+                Task {
+                    await include(branch)
+                }
             } label: {
                 Image(systemName: "plus.circle")
                     .accessibilityLabel("Count " + branch + " as part of this stack again")

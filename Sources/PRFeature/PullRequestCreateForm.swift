@@ -12,6 +12,7 @@ import TerminalUI
 struct PullRequestCreateForm: View {
     // MARK: Internal
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: PullRequestsModel
 
     /// The open pull request being edited, nil when opening one.
@@ -73,12 +74,11 @@ struct PullRequestCreateForm: View {
 
     private var nameStyle: NameStyle = .init()
 
-    /// Whether a branch below this one is not on the remote yet, a
-    /// pull request is opening, or a push or rebase is running:
+    /// Whether a pull request is opening or a push or rebase is running:
     /// the fields grey out rather than racing a reload that could
     /// replace what is being typed.
     private var isBlocked: Bool {
-        (editing == nil && model.unpushedBelow != nil) || model.isOpening || model.isBranchActionRunning
+        model.isOpening || model.isBranchActionRunning
     }
 
     /// The title, with the drafting and reset buttons inside its
@@ -105,7 +105,9 @@ struct PullRequestCreateForm: View {
             if Self.hasText(model.prTitle) || Self.hasText(model.prBody) {
                 isConfirmingReset = true
             } else {
-                Task { await model.resetToCommits() }
+                Task {
+                    await model.resetToCommits()
+                }
             }
         } label: {
             Image(systemName: "arrow.counterclockwise")
@@ -120,7 +122,11 @@ struct PullRequestCreateForm: View {
             isPresented: $isConfirmingReset,
             titleVisibility: .visible,
         ) {
-            Button("Reset", role: .destructive) { Task { await model.resetToCommits() } }
+            Button("Reset", role: .destructive) {
+                Task {
+                    await model.resetToCommits()
+                }
+            }
             Button("Cancel", role: .cancel) { isConfirmingReset = false }
         }
     }
@@ -219,8 +225,8 @@ struct PullRequestCreateForm: View {
     /// are markup where a message is parsed, and two stray
     /// characters where it is not.
     @ViewBuilder private var waitingLine: some View {
-        if editing == nil, let below = model.unpushedBelow {
-            Text("Waiting on \(Text(below).font(nameStyle.small)) below it to be pushed and opened first")
+        if editing == nil, let below = model.unopenedBelow {
+            Text("Open a pull request for \(Text(below).font(nameStyle.small)) below this branch first")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }

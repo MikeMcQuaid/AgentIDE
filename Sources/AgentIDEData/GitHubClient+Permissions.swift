@@ -23,18 +23,14 @@ public extension GitHubClient {
     /// Author association is not permission: unknown and failed reads stay ineligible.
     func hasWriteAccess(login: String, repositoryPath: String, fresh: Bool = true) async -> Bool {
         guard login.isEmpty == false,
-              login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" })
-        else {
-            return false
-        }
-        guard let result = try? await gh(
-            ["api", "repos/{owner}/{repo}/collaborators/" + login + "/permission"]
-                + (fresh ? [] : ["--cache", "60s"]),
-            in: repositoryPath,
-        ), let permission = try? JSONDecoder().decode(
-            CollaboratorPermission.self,
-            from: Data(result.standardOutput.utf8),
-        )
+              login.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }), let result = try? await gh(
+                  ["api", "repos/{owner}/{repo}/collaborators/" + login + "/permission"]
+                      + (fresh ? [] : ["--cache", "60s"]),
+                  in: repositoryPath,
+              ), let permission = try? JSONDecoder().decode(
+                  CollaboratorPermission.self,
+                  from: Data(result.standardOutput.utf8),
+              )
         else {
             return false
         }

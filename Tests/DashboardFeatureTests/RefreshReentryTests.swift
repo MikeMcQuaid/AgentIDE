@@ -13,7 +13,9 @@ struct RefreshReentryTests {
     func `a refresh asked for from inside the reading does not wait on it`() async {
         let model = makeModel()
         // A reading is in flight and will be for a while.
-        let reading = Task { _ = try? await Task.sleep(for: .seconds(30)) }
+        let reading = Task {
+            _ = try? await Task.sleep(for: .seconds(30))
+        }
         model.refreshTask = reading
         defer { reading.cancel() }
 

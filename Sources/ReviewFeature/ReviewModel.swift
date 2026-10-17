@@ -46,10 +46,10 @@ final class ReviewModel {
     let draftMessage: () async -> String?
 
     /// The parsed diff files.
-    private(set) var files: [DiffFile] = []
+    var files: [DiffFile] = []
 
     /// The immutable commit messages captured with the displayed diff.
-    private(set) var localReviewContext = ""
+    var localReviewContext = ""
 
     /// Whether any scope has loaded yet; before, progress shows.
     var hasLoaded = false
@@ -58,12 +58,12 @@ final class ReviewModel {
     var isRepositoryAvailable = true
 
     /// Whether the diff shows uncommitted changes.
-    private(set) var showsUncommitted = false
+    var showsUncommitted = false
 
     /// See `ReviewModel+Committing`.
     var excludedFromCommit: Set<String> = []
 
-    private(set) var lastCommitHash: String?
+    var lastCommitHash: String?
     var isAmending = false
 
     /// Set only by the find extension, which recounts them.
@@ -73,9 +73,6 @@ final class ReviewModel {
     /// The commit message being edited.
     var commitMessage = ""
 
-    /// Whether whitespace-only changes are hidden from the diff.
-    var hidesWhitespace = false
-
     /// The selected lines per file path.
     var selections: [String: Set<DiffSelection>] = [:]
 
@@ -83,7 +80,7 @@ final class ReviewModel {
     var status: String?
 
     /// The branch scope's commits, newest first, one line each.
-    private(set) var branchCommits: [String] = []
+    var branchCommits: [String] = []
 
     /// The branch's open pull request conversations, shown inline
     /// under the files they anchor to.
@@ -92,18 +89,7 @@ final class ReviewModel {
     /// Whether the checked-out branch has its own origin ref, so
     /// the upstream scope has something to diff against; refreshed
     /// on every reload.
-    private(set) var hasUpstream = false
-
-    /// A stack entry this pane is showing instead of the worktree's
-    /// own diff: the branch and what it is built on. Nil is the
-    /// ordinary case, where the pane shows the branch that is
-    /// checked out and can be written to.
-    var stackTarget: (parent: String, branch: String)?
-
-    /// One commit from the listing, shown on its own: the same view
-    /// the last-commit scope gives, with its message read-only
-    /// because amending reaches the tip and nothing else.
-    var commitTarget: String?
+    var hasUpstream = false
 
     let worktreePath: String
 
@@ -121,11 +107,40 @@ final class ReviewModel {
     let fetchThreads: () async -> [ReviewThread]
     let setThreadResolved: (String, Bool) async throws -> Void
 
+    /// Shared with the reload and status extensions; not display state.
+    @ObservationIgnored var reloadGeneration = 0
+
+    let baseRefProvider: () async -> String?
+
+    /// The commit's actual message, shared with the reload extension.
+    var originalMessage = ""
+
+    /// Whether whitespace-only changes are hidden from the diff.
+    var hidesWhitespace = false {
+        didSet { reloadGeneration += 1 }
+    }
+
+    /// A stack entry this pane is showing instead of the worktree's
+    /// own diff: the branch and what it is built on. Nil is the
+    /// ordinary case, where the pane shows the branch that is
+    /// checked out and can be written to.
+    var stackTarget: (parent: String, branch: String)? {
+        didSet { reloadGeneration += 1 }
+    }
+
+    /// One commit from the listing, shown on its own: the same view
+    /// the last-commit scope gives, with its message read-only
+    /// because amending reaches the tip and nothing else.
+    var commitTarget: String? {
+        didSet { reloadGeneration += 1 }
+    }
+
     /// The review scope; per-line rejection and message amendment
     /// only apply to the last commit.
     var scope: Scope = .lastCommit {
         didSet {
             if oldValue != scope {
+                reloadGeneration += 1
                 excludedFromCommit = []
             }
             remember(scope)
@@ -149,72 +164,6 @@ final class ReviewModel {
         didSet { updateFindTargets() }
     }
 
-    /// Loads the scope's diff.
-    func reload() async {
-        selections = [:]
-        if await loadedTarget() {
-            hasLoaded = true
-            return
-        }
-
-        let currentBranch = await git.currentBranch(worktreePath: worktreePath)
-        hasUpstream =
-            if let currentBranch {
-                await git.remoteBranchExists(worktreePath: worktreePath, branch: currentBranch)
-            } else {
-                false
-            }
-        do {
-            switch scope {
-            case .uncommitted:
-                // Both at once: the flag alone ticked rows the
-                // last scope had left on screen.
-                let uncommitted = try await DiffParser.parse(git.uncommittedDiff(
-                    worktreePath: worktreePath,
-                    ignoringWhitespace: hidesWhitespace,
-                ))
-                showsUncommitted = true
-                files = uncommitted
-                localReviewContext = ""
-
-            case .lastCommit:
-                try await loadLastCommit()
-
-            case .upstream:
-                showsUncommitted = false
-                try await loadUpstream(currentBranch: currentBranch)
-
-            case .branch:
-                showsUncommitted = false
-                try await loadBranch()
-            }
-            // Uncommitted work has no message yet: prefilling the
-            // last commit's invited amending it by accident, so the
-            // field stays as typed and the sparkles button drafts one.
-            if showsUncommitted {
-                // Switching scopes must not carry a commit's message
-                // into uncommitted work, where Commit would reuse it;
-                // anything typed here survives, since only an
-                // unedited message came from a commit.
-                if messageEdited == false {
-                    commitMessage = ""
-                }
-                originalMessage = ""
-            } else if scope != .lastCommit {
-                commitMessage = try await git.commitMessage(
-                    worktreePath: worktreePath,
-                    commit: "HEAD",
-                )
-                originalMessage = commitMessage
-            }
-            threads = await fetchThreads()
-            await recordReload(nil)
-        } catch {
-            await recordReload(error)
-        }
-        hasLoaded = true
-    }
-
     /// Reverse-applies every selected line and, when reviewing the
     /// last commit, amends it.
     func rejectSelected() async {
@@ -236,152 +185,5 @@ final class ReviewModel {
         } catch {
             report(error.localizedDescription)
         }
-    }
-
-    func loadLastCommit() async throws {
-        let head = await git.commitHash(of: "HEAD", worktreePath: worktreePath)
-        let committed = try await DiffParser.parse(git.commitDiff(
-            worktreePath: worktreePath,
-            commit: head ?? "HEAD",
-            ignoringWhitespace: hidesWhitespace,
-        ))
-        let message = try await git.commitMessage(worktreePath: worktreePath, commit: head ?? "HEAD")
-        localReviewContext = "commit " + (head ?? "HEAD") + "\n" + message
-        showsUncommitted = false
-        if lastCommitHash != head {
-            excludedFromCommit = []
-        }
-        lastCommitHash = head
-        files = committed
-        commitMessage = message
-        originalMessage = message
-    }
-
-    // MARK: Private
-
-    private let baseRefProvider: () async -> String?
-
-    /// The commit's actual message, for dimming Amend until the
-    /// editor differs from it.
-    private var originalMessage = ""
-
-    /// The upstream scope's commits and their own diff, empty with
-    /// a message until the branch has been pushed.
-    private func loadUpstream(currentBranch: String?) async throws {
-        branchCommits = []
-        localReviewContext = ""
-        guard let currentBranch, hasUpstream else {
-            if currentBranch != nil {
-                setStatus("This branch has not been pushed yet.")
-            }
-            files = []
-            return
-        }
-
-        // Bounded by the base the branch is built on, as the branch
-        // scope is, so a rebase onto a moved base never shows the
-        // base's own changes as this branch's.
-        let upstreamRef = "origin/" + currentBranch
-        let baseRef = await baseRefProvider()
-        branchCommits = await git.unpushedCommitLines(
-            worktreePath: worktreePath,
-            upstreamRef: upstreamRef,
-            baseRef: baseRef,
-        )
-        localReviewContext = try await git.reviewCommitContext(
-            worktreePath: worktreePath,
-            revisions: branchCommits.dropLast().compactMap { $0.split(separator: " ").first.map(String.init) },
-        )
-        files = try await DiffParser.parse(git.upstreamDiff(
-            worktreePath: worktreePath,
-            upstreamRef: upstreamRef,
-            baseRef: baseRef,
-            ignoringWhitespace: hidesWhitespace,
-        ))
-    }
-
-    /// The branch scope's commits and merge-base diff; commits load
-    /// first so they list even when the diff fails to parse.
-    /// One stack entry's own changes, read-only: the commits it
-    /// adds to the branch below it.
-    private func loadStackEntry(parent: String, branch: String) async {
-        branchCommits = []
-        showsUncommitted = false
-        do {
-            localReviewContext = try await git.reviewCommitContext(
-                worktreePath: worktreePath, revisions: [parent + ".." + branch],
-            )
-            files = try await DiffParser.parse(git.stackDiff(
-                worktreePath: worktreePath,
-                parent: parent,
-                branch: branch,
-                ignoringWhitespace: hidesWhitespace,
-            ))
-            // The entry's own tip commit, shown as the last-commit
-            // scope shows one, read-only: amending reaches the
-            // checked-out tip and nothing else.
-            commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: branch)
-            originalMessage = commitMessage
-            await recordReload(nil)
-        } catch {
-            await recordReload(error)
-        }
-    }
-
-    /// One commit or one stack entry, when the pane has been pointed
-    /// at something other than the branch in front of it; false when
-    /// it has not, and the scope loads as usual.
-    private func loadedTarget() async -> Bool {
-        if let commitTarget {
-            await loadCommit(commitTarget)
-            return true
-        }
-        if let stackTarget {
-            await loadStackEntry(parent: stackTarget.parent, branch: stackTarget.branch)
-            return true
-        }
-
-        return false
-    }
-
-    /// One commit on its own: its diff and its message, neither of
-    /// which this pane will write back.
-    private func loadCommit(_ commit: String) async {
-        branchCommits = []
-        showsUncommitted = false
-        do {
-            files = try await DiffParser.parse(git.commitDiff(
-                worktreePath: worktreePath,
-                commit: commit,
-                ignoringWhitespace: hidesWhitespace,
-            ))
-            commitMessage = try await git.commitMessage(worktreePath: worktreePath, commit: commit)
-            localReviewContext = "commit " + commit + "\n" + commitMessage
-            originalMessage = commitMessage
-            await recordReload(nil)
-        } catch {
-            await recordReload(error)
-        }
-    }
-
-    private func loadBranch() async throws {
-        branchCommits = []
-        localReviewContext = ""
-        guard let baseRef = await baseRefProvider() else {
-            setStatus("No base branch to diff against.")
-            files = []
-            return
-        }
-
-        branchCommits = await git.branchCommits(worktreePath: worktreePath, baseRef: baseRef)
-        localReviewContext = try await git.reviewCommitContext(
-            worktreePath: worktreePath,
-            revisions: branchCommits.dropLast().compactMap { $0.split(separator: " ").first.map(String.init) },
-        )
-        files = try await DiffParser.parse(git.branchDiff(
-            worktreePath: worktreePath,
-            baseRef: baseRef,
-            ignoringWhitespace: hidesWhitespace,
-        ))
     }
 }

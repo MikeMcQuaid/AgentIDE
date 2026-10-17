@@ -2,15 +2,14 @@ import AgentIDEData
 import AgentIDEDomain
 import TerminalUI
 
-/// The two things a stack is asked to do as a whole: rebase every
-/// branch onto the one below it and push them bottom first. Split
-/// from `+Stack` for length.
+/// Rebase every branch onto the one below it and push through the
+/// selected entry, bottom first. Split from `+Stack` for length.
 extension PullRequestsModel {
     /// Puts every branch back on the one below it, from whichever
     /// layer asked, and says what moved; a branch already there is
     /// left alone, so no commit is renamed for nothing.
     func restack() async -> Bool {
-        guard let worktree = branchItem?.worktree else {
+        guard let worktree = listedWorktree else {
             return true
         }
 
@@ -62,14 +61,15 @@ extension PullRequestsModel {
     /// that still does gets one more restack before the signing key
     /// is questioned. The branches moved, each named once.
     private func restackUntilSigned(_ worktree: Worktree) async throws -> (moved: [String], pushed: [String]) {
-        var (moved, pushed) = try await restackAndPush(worktree)
+        let shouldPush = unpushedBelow == nil
+        var (moved, pushed) = try await restackAndPush(worktree, shouldPush: shouldPush)
         await readStack()
         if stacking.unsignedBranches.isEmpty == false {
             try? await Task.sleep(for: .milliseconds(Self.signatureSettleMilliseconds))
             await readStack()
         }
         if stacking.unsignedBranches.isEmpty == false {
-            let again = try await restackAndPush(worktree)
+            let again = try await restackAndPush(worktree, shouldPush: shouldPush)
             moved += again.moved.filter { moved.contains($0) == false }
             pushed += again.pushed.filter { pushed.contains($0) == false }
             await readStack()
@@ -77,13 +77,12 @@ extension PullRequestsModel {
         return (moved, pushed)
     }
 
-    /// One restack, then the whole stack pushed bottom first, a
-    /// branch nobody has pushed included: every branch that moved is
-    /// behind what the remote has, GitHub reads a stack whose parents
-    /// moved as no stack at all, and the button says and Push.
-    private func restackAndPush(_ worktree: Worktree) async throws -> (moved: [String], pushed: [String]) {
+    /// Restacks locally, then pushes through the entry that asked.
+    private func restackAndPush(_ worktree: Worktree, shouldPush: Bool) async throws
+        -> (moved: [String], pushed: [String])
+    {
         let moved = try await stacking.restack(worktree, busyWorktrees)
-        guard moved.isEmpty == false else {
+        guard moved.isEmpty == false, shouldPush else {
             return (moved, [])
         }
 
@@ -97,28 +96,15 @@ extension PullRequestsModel {
         await reload(keepingSelection: true)
     }
 
-    /// Pushes the stack bottom up, so each pull request's base is on
+    /// Pushes through the listed branch, so each pull request's base is on
     /// the remote before the branch that points at it.
     func pushStack() async -> Bool {
-        guard let worktree = branchItem?.worktree else {
+        guard let worktree = listedWorktree else {
             return true
         }
 
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
-        do {
-            let pushed = try await stacking.push(worktree)
-            pullRequests.invalidateListings(repositoryPath: repository.path)
-            markChecksPending(for: pushed)
-            recordFinished(.pushed, branch: actedBranch ?? worktree.branch)
-            note("Pushed " + Self.named(pushed) + ".")
-            UtilityTabTarget.requestSidebarRefresh()
-            await reload(keepingSelection: true)
-            refreshAfterPush()
-            return true
-        } catch {
-            report(error.localizedDescription)
-            return false
-        }
+        return await pushSelectedStack(worktree)
     }
 }

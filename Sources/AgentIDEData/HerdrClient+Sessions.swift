@@ -255,10 +255,9 @@ public extension HerdrClient {
         // command that exits instantly hands it straight back, so
         // the wait is bounded rather than required.
         for _ in 0 ..< StartWait.polls {
-            guard await foreground(paneID: paneID).isShell else {
-                break
-            }
-            guard await (try? Task.sleep(for: .milliseconds(StartWait.pollMilliseconds))) != nil else {
+            guard await foreground(paneID: paneID).isShell,
+                  await (try? Task.sleep(for: .milliseconds(StartWait.pollMilliseconds))) != nil
+            else {
                 break
             }
         }
@@ -275,7 +274,7 @@ public extension HerdrClient {
     @discardableResult
     func killSession(name: String) async throws -> Int {
         var closed = 0
-        var failure: (any Error)?
+        var failure: any Error?
         for row in try await snapshotRows() where row.sessionName == name {
             // Every match is tried: stopping at the first refusal
             // would leave the rest of a duplicated label running,

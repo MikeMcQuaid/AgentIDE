@@ -127,13 +127,15 @@ struct PullRequestFooterView: View {
     static let upArrow = "\u{2191}"
     static let downArrow = "\u{2193}"
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: PullRequestsModel
 
-    @AppStorage(UtilityTabTarget.pullRequestCacheKey)
+    /// Shared with the footer's extension files.
+    @AppStorage(UtilityTabTarget.pullRequestCacheKey) // swiftformat:disable:next privateSwiftUIDynamicProperties
     var reviewGeneration = 0
 
-    /// The cross-module signal that switches the utility pane's tab.
-    @AppStorage(UtilityTabTarget.key)
+    /// The tab signal, shared with the footer's extension files.
+    @AppStorage(UtilityTabTarget.key) // swiftformat:disable:next privateSwiftUIDynamicProperties
     var utilityTab = ""
 
     /// Internal so the copy buttons' own file shares it.
@@ -347,7 +349,7 @@ struct PullRequestFooterView: View {
         model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
             || model.isFullyPushed == false
             || model.templateUnedited
-            || model.unpushedBelow != nil
+            || model.unopenedBelow != nil
     }
 
     private var openButton: some View {
@@ -370,7 +372,7 @@ struct PullRequestFooterView: View {
         }
         .keyboardShortcut(.return, modifiers: .command)
         .hoverHelp(
-            model.unpushedBelow.map { "Push and open `" + $0 + "` below this one first" }
+            model.unopenedBelow.map { "Open a pull request for `" + $0 + "` below this branch first" }
                 ?? (model.templateUnedited
                     ? "Fill in the template before opening: it still reads as the repository wrote it"
                     : "Open the pull request with the form's title and body; dimmed until pushed"),

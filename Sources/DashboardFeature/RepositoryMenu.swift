@@ -14,8 +14,12 @@ struct RepositoryMenu: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contextMenu {
-                Button("Refresh") { Task { await model.refreshRepository(path: group.repository.path) } }
-                    .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
+                Button("Refresh") {
+                    Task {
+                        await model.refreshRepository(path: group.repository.path)
+                    }
+                }
+                .hoverHelp("Ask GitHub about this repository's branches and merge queue now")
                 Divider()
                 Button("Copy path") {
                     NSPasteboard.general.clearContents()
@@ -42,7 +46,9 @@ struct RepositoryMenu: ViewModifier {
                 titleVisibility: .visible,
             ) {
                 Button("Delete repository", role: .destructive) {
-                    Task { await model.deleteRepository(group.repository) }
+                    Task {
+                        await model.deleteRepository(group.repository)
+                    }
                 }
                 Button("Cancel", role: .cancel) {
                     // Dismissing is all cancelling does.
@@ -74,6 +80,8 @@ struct RepositoryMenu: ViewModifier {
             return
         }
 
-        Task { await model.addHostDirectory(url.path, to: group.repository) }
+        Task {
+            await model.addHostDirectory(url.path, to: group.repository)
+        }
     }
 }

@@ -62,7 +62,9 @@ struct DirectoryWakeTests {
         let timeout = Duration.seconds(30)
         let rounds = 200
         for _ in 0 ..< rounds {
-            let ringing = Task { wake.ring() }
+            let ringing = Task {
+                wake.ring()
+            }
             let started = ContinuousClock.now
             await wake.wait(timeout: timeout)
             await ringing.value

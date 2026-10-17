@@ -921,7 +921,9 @@ reads additional source files.
    show; the commits listed under it are those whose patch the
    upstream lacks (`git cherry`, bounded the same way). A replay that
    conflicts falls back to those commits' own patches. Only the tip
-   can be amended; other commits review read-only.
+   can be amended; other commits review read-only. A newer reload
+   supersedes earlier reads, including their diffs, messages and
+   availability checks, so late results cannot replace the selection.
 2. Generated files (lockfiles and the like, by path fragment) hide by
    default.
 3. Highlighting uses tree-sitter grammars (Swift, Ruby, Bash, Python,
@@ -1335,8 +1337,13 @@ steps.
   description up to date with what was actually pushed before the
   pull request merges.
 - **The creation form** shows when the branch has no open pull request:
-  title, body and template as fields, drafts saved as typed and only
-  ever filling an empty field, so reloads cannot take back typing.
+  title, body and template as fields, with drafts saved as typed.
+  Untouched title and body defaults refresh from the latest commit
+  messages when revisiting a branch, ignoring whitespace-only edits.
+  The saved default distinguishes automatic text from meaningful
+  edits, which preserve the whole description. Older drafts without
+  that default are preserved until explicitly reset. Open pull
+  requests are never refreshed automatically from commit messages.
   Labels come from `gh label list` once a day per repository through
   the store, forgotten by Refresh, since the form asked on every visit
   and a label-less repository on every reading; a pull request's own
@@ -1350,25 +1357,33 @@ steps.
   working copy or, for sparse checkouts, from git. Committed files use
   `cat-file blob` so a missing literal path cannot become a pattern
   that returns unrelated content.
-- **A stack moves as one.** Rebase on any layer, the bottom included
+- **A stack rebases as one.** Rebase on any layer, the bottom included
   and the menu bar's Rebase with it, restacks the whole stack and
-  then pushes it, bottom first, since GitHub reads a pull request
-  whose parent moved as no stack at all; the button reads Rebase and
-  Push (or Sign and Push) with what comes down and what goes up, its
-  help says why, the note names what was pushed, and Push then reads
-  Pushed. While that button is live Push is not shown at all: two
-  buttons for one job, and Push pressed first pushed branches about
-  to be moved.
+  then pushes through the selected entry, bottom first, if every
+  lower branch was pushed before the rebase; otherwise it only
+  rebases locally. When pushing is allowed, the button
+  reads Rebase and Push (or Sign and Push) with what comes down and
+  what goes up, its help says why, the note names what was pushed,
+  and Push then reads Pushed. Push is hidden beside a live Rebase
+  and Push only when the selected branch or one below it needs
+  rebasing or signing. Work above it cannot hide a ready Push.
   Only one branch action runs at a time: while one does, Rebase and
   Push both dim, since a push pressed mid-rebase failed. Merge on any
   layer, the bottom included, is the stack's merge of that layer and
   everything below it, through the asynchronous merge API that also
   queues a lone pull request. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
-  stack derived afterwards no longer reached them. Pushing any entry
-  pushes every branch of the stack, bottom first, whether or not each
-  has a pull request open yet, and Rebase and Push publishes such a
-  branch the same way.
+  stack derived afterwards no longer reached them. Push and Rebase
+  and Push publish only the selected branch and those below it.
+  Higher branches are not pushed, so unpublished work stays local
+  while the first pull request is opened and updated independently.
+  Push counts, signature checks and restack blockers cover only
+  those selected branches. Opening a pull request creates only the
+  selected entry's pull request.
+  Every local stack entry can be selected and drafted in PRs, even
+  before lower branches are published. Push waits until every lower
+  branch is pushed; Open and Draft wait until every lower branch has
+  an open pull request and the selected branch is fully pushed.
 - **Forks cannot publish stacks across repositories.** Local ancestry
   stays inspectable, with counts and twin selection using each
   branch's own remote. A stack containing a fork disables creation,
@@ -1412,14 +1427,15 @@ steps.
   local default only when the remote ref is absent. The rebase button
   judges the stack against the same refs. Restacking skips a branch
   already in place and signed, from whichever entry asked. A stack
-  push that integrates remote changes also replays each child onto
-  its moved parent, bounded by the parent's tip before the push.
+  push that integrates remote changes also replays each pushed child
+  onto its moved parent, bounded by the parent's tip before the push.
   A stack can span worktrees: git will not check out a branch
   another worktree holds, so that branch is rebased (and rolled back),
   named, in its own worktree. Before anything moves, the restack
   refuses while such a worktree is dirty or its agent is not idle or
-  done, and Rebase dims with the reason, Push with it while the stack
-  needs that rebase; it stops when that worktree has switched
+  done, and Rebase dims with the reason. Push dims for those blockers
+  only when its prefix needs rebasing or signing and contains the
+  blocked worktree. Restacking stops when that worktree has switched
   branches by the time its turn comes. A failed bottom rebase retries
   once against a freshly fetched `origin/<default>` only when that
   ref has advanced from the recorded remote tip, the branch is unchanged
@@ -1542,7 +1558,9 @@ steps.
   and never reusing a workspace: a resumed agent that exits at once
   looks like success, and a "fresh" start on an old workspace talks to
   a process whose files an upgrade deleted. herdr keeps sessions across
-  app restarts, not across agent upgrades.
+  app restarts, not across agent upgrades. Startup keeps checking when
+  a snapshot temporarily omits the named pane; a liveness check only
+  retries when the matching pane is reported finished.
 - While agents or shells run, `SleepInhibitor` defers idle sleep;
   sessions that died with sleep resume on wake.
 - Every earlier conversation in a worktree is listed from its

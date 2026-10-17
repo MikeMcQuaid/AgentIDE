@@ -112,7 +112,11 @@ struct PullRequestConversationPane: View {
                     available: availableLabels,
                     isEnabled: availableLabels.isEmpty == false,
                     help: "Add or remove pull request labels",
-                ) { label in Task { await onToggleLabel(label) } }.menu
+                ) { label in
+                    Task {
+                        await onToggleLabel(label)
+                    }
+                }.menu
                 feedback
             }),
         )

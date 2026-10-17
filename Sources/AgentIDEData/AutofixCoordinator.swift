@@ -97,13 +97,10 @@ actor AutofixCoordinator {
             try reconsiderChanges(state, context: context)
             return
         }
-        guard await ready(target, head: localHead, context: context) else {
-            return
-        }
-        guard try await feedbackReady(state.stageSelection, summary: summary, target: target, context: context) else {
-            return
-        }
-        guard let current = store.load().pullRequestAutomation[key] else {
+        guard await ready(target, head: localHead, context: context),
+              try await feedbackReady(state.stageSelection, summary: summary, target: target, context: context),
+              let current = store.load().pullRequestAutomation[key]
+        else {
             return
         }
 

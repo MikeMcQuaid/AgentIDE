@@ -24,10 +24,13 @@ extension PullRequestsModel {
         UtilityTabTarget.pullRequestCacheChanged()
     }
 
-    /// Pushes every branch of the stack, bottom first, and says so
-    /// as one push rather than as the branch in view: what went up
-    /// is the whole stack.
-    func pushWholeStack(_ worktree: Worktree) async -> Bool {
+    /// Pushes through the listed entry and reports the branches sent.
+    func pushSelectedStack(_ worktree: Worktree) async -> Bool {
+        guard unpushedBelow == nil else {
+            setStatus("Not pushed.", detail: pushStackHelp)
+            return true
+        }
+
         do {
             let pushed = try await stacking.push(worktree)
             pullRequests.invalidateListings(repositoryPath: repository.path)
@@ -54,6 +57,11 @@ extension PullRequestsModel {
     func createPullRequest() async -> Bool {
         guard let worktree = listedWorktree else {
             return false
+        }
+
+        if let below = unopenedBelow {
+            setStatus("Not opened.", detail: "Open a pull request for `" + below + "` below this branch first")
+            return true
         }
 
         let title = prTitle.trimmingCharacters(in: .whitespaces)
@@ -151,11 +159,9 @@ extension PullRequestsModel {
         }
 
         do {
-            // A branch of a stack never goes up alone: the ones
-            // above it are built on this tip, and pushing it by
-            // itself leaves GitHub reading their parents as gone.
+            // Publish the listed entry with its bases, leaving later work local.
             guard stacking.stack.isStacked == false else {
-                return await pushWholeStack(worktree)
+                return await pushSelectedStack(worktree)
             }
 
             let destination = try await performPush(worktree)

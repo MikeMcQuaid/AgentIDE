@@ -164,11 +164,10 @@ public struct DashboardView: View {
     private func row(for item: WorktreeItem) -> some View {
         let isSelected = model.selection?.id == item.id
         let isEmphasised = isSelected && controlActiveState != .inactive
-        let isDeleting = model.deletingPaths.contains(item.worktree.path)
         return Button {
             // A worktree mid-deletion cannot be re-entered; the row
             // only becomes selectable again if the deletion fails.
-            if isDeleting == false {
+            if model.deletingPaths.contains(item.worktree.path) == false {
                 model.select(item)
             }
         } label: {
@@ -191,10 +190,8 @@ public struct DashboardView: View {
         .buttonStyle(.plain)
         .foregroundStyle(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.primary)
         .tint(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.accentColor)
-        .background(
-            RoundedRectangle(cornerRadius: Self.rowCornerRadius)
-                .fill(selectionFill(isSelected: isSelected, isEmphasised: isEmphasised)),
-        )
+        .background(RoundedRectangle(cornerRadius: Self.rowCornerRadius)
+            .fill(selectionFill(isSelected: isSelected, isEmphasised: isEmphasised)))
         .padding(.leading, Self.rowIndent)
         .contextMenu { contextActions(for: item) }
         .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
@@ -210,7 +207,9 @@ public struct DashboardView: View {
         ) {
             Button("Delete worktree and branch", role: .destructive) {
                 pendingForceDelete = nil
-                Task { await model.delete(item: item) }
+                Task {
+                    await model.delete(item: item)
+                }
             }
             Button("Cancel", role: .cancel) { pendingForceDelete = nil }
         } message: {

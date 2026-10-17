@@ -10,6 +10,7 @@ struct ReviewFileListView: View {
     // MARK: Internal
 
     let model: ReviewModel
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var localReview: LocalReviewModel
     let worktreePath: String
 

@@ -5,6 +5,7 @@ import TerminalUI
 struct LocalReviewPromptView: View {
     // MARK: Internal
 
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: LocalReviewModel
 
     var body: some View {

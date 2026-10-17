@@ -2,6 +2,14 @@ import AgentIDEData
 import SwiftUI
 
 extension FeedbackView {
+    var currentActivity: String {
+        if reviewIsBusy {
+            "Review in progress"
+        } else {
+            state.statusSummary
+        }
+    }
+
     func popover(onClose: @escaping () -> Void) -> some View {
         PopoverContent(width: localOnly ? Self.localPopoverWidth : Self.popoverWidth) {
             VStack(alignment: .leading, spacing: Self.spacing) {

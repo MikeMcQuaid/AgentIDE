@@ -66,12 +66,8 @@ public struct PullRequestsView: View {
             // Shown only by a stack, so a lone branch's tab is the
             // one it always was.
             if model.stack.isStacked {
-                BranchStackStrip(
-                    stack: model.stack,
-                    selected: model.listedBranch ?? "",
-                    isEnabled: { model.canList($0) },
-                    onSelect: { model.show(branch: $0) },
-                )
+                BranchStackStrip(stack: model.stack, selected: model.listedBranch ?? "") { model.show(branch: $0) }
+                    .disabled(model.isBranchActionRunning || model.isOpening)
                 Divider()
             }
             if let selected = model.selected {
@@ -106,20 +102,36 @@ public struct PullRequestsView: View {
                 await model.reload(keepingSelection: true)
             }
         }
-        .onChange(of: model.scope) { Task { await model.reload() } }
+        .onChange(of: model.scope) {
+            Task {
+                await model.reload()
+            }
+        }
         // A branch really changing under the pane (an agent checking
         // one out, a restack moving through them) is a reload rather
         // than a rebuild: the listing it has stays on screen while
         // the new one is read.
-        .onChange(of: branchName) { Task { await model.reload(keepingSelection: true) } }
+        .onChange(of: branchName) {
+            Task {
+                await model.reload(keepingSelection: true)
+            }
+        }
         .onChange(of: items) { model.items = items }
         // The sidebar's poll cached a fresher summary: the pane reads
         // the same cache, so the header and the row change together.
         .onChange(of: cacheGeneration) { model.repaintFromCache() }
         // The menu bar's Push and Rebase land here through the
         // storage bus, acting on whichever worktree the pane shows.
-        .onChange(of: pushRequest) { Task { _ = await model.push() } }
-        .onChange(of: rebaseRequest) { Task { _ = await model.rebaseSigned() } }
+        .onChange(of: pushRequest) {
+            Task {
+                _ = await model.push()
+            }
+        }
+        .onChange(of: rebaseRequest) {
+            Task {
+                _ = await model.rebaseSigned()
+            }
+        }
     }
 
     // MARK: Internal

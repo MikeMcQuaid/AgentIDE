@@ -11,10 +11,14 @@ struct SettingsEvents: ViewModifier {
         content
             .task { await dependencies.schedules.runDue() }
             .onReceive(NotificationCenter.default.publisher(for: .NSSystemClockDidChange)) { _ in
-                Task { await dependencies.schedules.runDue() }
+                Task {
+                    await dependencies.schedules.runDue()
+                }
             }
             .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
-                Task { await dependencies.schedules.runDue() }
+                Task {
+                    await dependencies.schedules.runDue()
+                }
             }
             .onChange(of: closeBrowserRequest) {
                 onCloseBrowser(UserDefaults.standard.string(forKey: "closeBrowserPath") ?? "")

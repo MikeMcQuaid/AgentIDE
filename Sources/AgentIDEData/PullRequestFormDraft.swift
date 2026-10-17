@@ -10,12 +10,16 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
         template: String,
         labels: [String] = [],
         isDraft: Bool = false,
+        defaultTitle: String? = nil,
+        defaultBody: String? = nil,
     ) {
         self.title = title
         self.body = body
         self.template = template
         self.labels = labels
         self.isDraft = isDraft
+        self.defaultTitle = defaultTitle
+        self.defaultBody = defaultBody
     }
 
     /// Drafts saved before labels existed have no key for them.
@@ -26,6 +30,8 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
         template = try container.decode(String.self, forKey: .template)
         labels = try container.decodeIfPresent([String].self, forKey: .labels) ?? []
         isDraft = try container.decodeIfPresent(Bool.self, forKey: .isDraft) ?? false
+        defaultTitle = try container.decodeIfPresent(String.self, forKey: .defaultTitle)
+        defaultBody = try container.decodeIfPresent(String.self, forKey: .defaultBody)
     }
 
     // MARK: Public
@@ -44,4 +50,8 @@ public struct PullRequestFormDraft: Codable, Equatable, Sendable {
 
     /// Whether it is to open as a draft.
     public let isDraft: Bool
+
+    /// The last automatic description, for detecting meaningful edits.
+    public let defaultTitle: String?
+    public let defaultBody: String?
 }

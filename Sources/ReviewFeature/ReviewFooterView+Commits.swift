@@ -10,7 +10,9 @@ extension ReviewFooterView {
         Button {
             // The model reports its own refusal to the messages
             // pane, which is where every other failure here lands.
-            Task { _ = await model.generateCommitMessage() }
+            Task {
+                _ = await model.generateCommitMessage()
+            }
         } label: {
             Image(systemName: "sparkles")
                 .accessibilityLabel("Draft commit message")
@@ -82,7 +84,9 @@ extension ReviewFooterView {
     /// Reviews one commit, or the whole scope again when nil.
     func show(commit: String?) {
         model.commitTarget = commit
-        Task { await model.reload() }
+        Task {
+            await model.reload()
+        }
     }
 
     /// One commit line: its hash, subject and ref decorations, the

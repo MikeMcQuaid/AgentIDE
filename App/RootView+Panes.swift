@@ -204,7 +204,9 @@ extension RootView {
         let wasVisible = dependencies.dashboard.isWindowVisible
         dependencies.dashboard.isWindowVisible = visible
         if visible, wasVisible == false {
-            Task { await dependencies.dashboard.refresh() }
+            Task {
+                await dependencies.dashboard.refresh()
+            }
         }
     }
 

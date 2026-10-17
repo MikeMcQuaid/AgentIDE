@@ -4,9 +4,9 @@ import Testing
 
 /// Labels on an open pull request: read on selection, toggled
 /// optimistically and put back when GitHub refuses.
+@MainActor
 extension PullRequestsModelTests {
     @Test
-    @MainActor
     func `toggling a label on an open pull request edits it on GitHub`() async {
         let model = makeModel()
         model.fetchLabels = { ["bug", "ci"] }

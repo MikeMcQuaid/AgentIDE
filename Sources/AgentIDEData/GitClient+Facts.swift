@@ -188,10 +188,10 @@ public extension GitClient {
     func refWasBranchTip(worktreePath: String, branch: String, ref: String) async -> Bool {
         guard
             let tip = try? await git(["rev-parse", ref], in: worktreePath)
-            .standardOutput
-            .trimmingCharacters(in: .whitespacesAndNewlines),
+                .standardOutput
+                .trimmingCharacters(in: .whitespacesAndNewlines),
             let log = try? await git(["reflog", "show", "--format=%H", branch], in: worktreePath)
-            .standardOutput
+                .standardOutput
         else {
             return false
         }

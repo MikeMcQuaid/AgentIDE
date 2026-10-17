@@ -26,7 +26,7 @@ extension PullRequestsModel {
     /// run and, when it has only one job and step, those too.
     func failingLogs(for summary: PullRequestSummary) async throws -> String {
         var runs = [String]()
-        var unreadable: (any Error)?
+        var unreadable: any Error?
         for runID in Self.runIDs(in: summary.failingCheckLinks) {
             // A run with nothing to give is skipped, not fatal: what
             // the other runs already have is what the prompt wants,
