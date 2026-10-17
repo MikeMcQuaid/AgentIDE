@@ -3,26 +3,26 @@ import Foundation
 /// Installs AgentIDE's hook script and Claude Code hook entries into
 /// the sandvault user template, alongside any existing third-party
 /// notifier hooks rather than replacing them.
-public struct HookInstaller: Sendable {
+struct HookInstaller {
     // MARK: Lifecycle
 
     /// Creates an installer for a workspace.
-    public init(paths: WorkspacePaths) {
+    init(paths: WorkspacePaths) {
         self.paths = paths
     }
 
-    // MARK: Public
+    // MARK: Internal
 
     /// The events the hook reports, covering completion, permission
     /// requests and lifecycle for the dashboard.
-    public static let events = [
+    static let events = [
         "UserPromptSubmit", "Stop", "StopFailure", "PostToolUse",
         "PostToolUseFailure", "PermissionRequest", "SessionStart", "SessionEnd",
     ]
 
     /// Ensures the agentide directories, the hook script and the
     /// settings template entries all exist. Idempotent.
-    public func ensureInstalled() throws {
+    func ensureInstalled() throws {
         let manager = FileManager.default
         for directory in [paths.eventsDirectory, paths.promptsDirectory, paths.friendlyWorktreesDirectory] {
             try manager.createDirectory(atPath: directory, withIntermediateDirectories: true)

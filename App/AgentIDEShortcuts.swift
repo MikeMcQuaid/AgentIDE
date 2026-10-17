@@ -229,8 +229,8 @@ struct StartSessionIntent: AppIntent {
 
     @MainActor
     func perform() async -> some IntentResult & ProvidesDialog {
-        guard let dependencies = AppDependencies.shared else {
-            return .result(dialog: "AgentIDE is still starting; try again in a moment.")
+        guard let dependencies = AppDependencies.shared, dependencies.setup.isReady else {
+            return .result(dialog: "Open AgentIDE and complete setup before starting a session.")
         }
 
         // The model and effort last chosen anywhere, the form's own

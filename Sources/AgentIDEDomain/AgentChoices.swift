@@ -15,6 +15,7 @@ public struct AgentChoices: Hashable, Sendable {
         defaultEffort: String,
         names: [String: String] = [:],
         version: String? = nil,
+        isAvailable: Bool = true,
     ) {
         self.models = models
         self.efforts = efforts
@@ -22,6 +23,7 @@ public struct AgentChoices: Hashable, Sendable {
         self.defaultEffort = defaultEffort
         self.names = names
         self.version = version
+        self.isAvailable = isAvailable
     }
 
     // MARK: Public
@@ -32,6 +34,9 @@ public struct AgentChoices: Hashable, Sendable {
     /// The installed CLI's version, as probed once at launch; nil
     /// until the probe has answered, or when no CLI answers.
     public let version: String?
+
+    /// Whether setup found this agent installed and signed in.
+    public let isAvailable: Bool
 
     /// Its reasoning tiers, strongest first.
     public let efforts: [String]

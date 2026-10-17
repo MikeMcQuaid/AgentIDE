@@ -10,37 +10,44 @@ struct AppCommands: Commands {
     // MARK: Internal
 
     let dashboard: DashboardModel
+    let isReady: Bool
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Agent Session") {
-                // No preset: the menu is repository-agnostic, and a
-                // stale preset would lock the picker.
-                dashboard.openNewSession(for: nil)
+            Group {
+                Button("New Agent Session") {
+                    // No preset: the menu is repository-agnostic, and a
+                    // stale preset would lock the picker.
+                    dashboard.openNewSession(for: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
+                Divider()
+                SettingsPaneLink("Manage Sessions…", pane: "sessions")
             }
-            .keyboardShortcut("n", modifiers: .command)
-            Button("Open Repository…") { dashboard.showsRepositoryFinder = true }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
-            Divider()
-            SettingsPaneLink("Manage Sessions…", pane: "sessions")
+            .disabled(isReady == false)
         }
         CommandMenu("Worktree") {
-            Button("New Shell") { newShell() }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
-                // A shell runs in a worktree; with none selected
-                // there is nowhere to put one.
-                .disabled(dashboard.selection == nil)
-            Button("Clear Shell") { clearShellRequest += 1 }
-                .keyboardShortcut("k", modifiers: .command)
-            Button("Push") { bump("pushRequest") }
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-            Button("Rebase on Origin") { bump("rebaseRequest") }
-                .keyboardShortcut("r", modifiers: [.command, .option])
-            Button("Commit Outstanding") { bump("commitRequest") }
-                .keyboardShortcut("k", modifiers: [.command, .option])
-            Divider()
-            Button("Refresh") { bump(UtilityTabTarget.dashboardRefreshKey) }
-                .keyboardShortcut("r", modifiers: .command)
+            Group {
+                Button("New Shell") { newShell() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                    // A shell runs in a worktree; with none selected
+                    // there is nowhere to put one.
+                    .disabled(dashboard.selection == nil)
+                Button("Clear Shell") { clearShellRequest += 1 }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("Push") { bump("pushRequest") }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button("Rebase on Origin") { bump("rebaseRequest") }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
+                Button("Commit Outstanding") { bump("commitRequest") }
+                    .keyboardShortcut("k", modifiers: [.command, .option])
+                Divider()
+                Button("Refresh") { bump(UtilityTabTarget.dashboardRefreshKey) }
+                    .keyboardShortcut("r", modifiers: .command)
+            }
+            .disabled(isReady == false)
         }
         CommandGroup(after: .textEditing) {
             Button("Find…") { find(.showFindInterface) }
@@ -51,24 +58,27 @@ struct AppCommands: Commands {
                 .keyboardShortcut("g", modifiers: [.command, .shift])
         }
         CommandGroup(after: .sidebar) {
-            // The repository sidebar never hides, only resizes, so
-            // the utility pane is the one toggle here.
-            Button(showsUtilityPane ? "Hide Utility Pane" : "Show Utility Pane") {
-                showsUtilityPane.toggle()
+            Group {
+                // The repository sidebar never hides, only resizes, so
+                // the utility pane is the one toggle here.
+                Button(showsUtilityPane ? "Hide Utility Pane" : "Show Utility Pane") {
+                    showsUtilityPane.toggle()
+                }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                Divider()
+                ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
+                    Button(tab.title) { show(tab) }
+                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                }
+                Button("Resize Panes") { resizePanesRequest += 1 }
+                    .keyboardShortcut("0", modifiers: .command)
+                Divider()
+                Button("Find File") { openFinder(searchingContents: false) }
+                    .keyboardShortcut("t", modifiers: .command)
+                Button("Search File Contents") { openFinder(searchingContents: true) }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
             }
-            .keyboardShortcut("u", modifiers: [.command, .shift])
-            Divider()
-            ForEach(Array(UtilityTab.allCases.enumerated()), id: \.element) { index, tab in
-                Button(tab.title) { show(tab) }
-                    .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
-            }
-            Button("Resize Panes") { resizePanesRequest += 1 }
-                .keyboardShortcut("0", modifiers: .command)
-            Divider()
-            Button("Find File") { openFinder(searchingContents: false) }
-                .keyboardShortcut("t", modifiers: .command)
-            Button("Search File Contents") { openFinder(searchingContents: true) }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
+            .disabled(isReady == false)
         }
     }
 

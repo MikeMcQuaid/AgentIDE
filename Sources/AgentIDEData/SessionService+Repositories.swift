@@ -22,6 +22,7 @@ public extension SessionService {
     /// name, then `<owner>-<name>`, so a fork and its upstream can
     /// sit side by side.
     func cloneRepository(fullName: String) async throws -> Repository {
+        try FileManager.default.createDirectory(atPath: paths.repositoriesDirectory, withIntermediateDirectories: true)
         for candidate in [
             fullName.split(separator: "/").last.map(String.init) ?? fullName,
             fullName.replacing("/", with: "-"),

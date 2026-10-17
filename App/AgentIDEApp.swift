@@ -1,4 +1,5 @@
 import AppKit
+import DashboardFeature
 import SwiftUI
 import TerminalUI
 
@@ -62,19 +63,34 @@ struct AgentIDEApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(dependencies: dependencies)
-                .environment(\.openURL, LinkOpener.action)
-                .interfaceFont(.body)
+            Group {
+                if dependencies.setup.isReady {
+                    RootView(dependencies: dependencies)
+                        .onAppear { dependencies.dashboard.availableAgents = dependencies.setup.agents }
+                } else {
+                    SetupView(model: dependencies.setup)
+                }
+            }
+            .environment(\.openURL, LinkOpener.action)
+            .interfaceFont(.body)
         }
 
         // Content over chrome: no title bar, compact toolbar.
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
-        .commands { AppCommands(dashboard: dependencies.dashboard) }
+        .commands {
+            AppCommands(dashboard: dependencies.dashboard, isReady: dependencies.setup.isReady)
+        }
 
         Settings {
-            SettingsView(dependencies: dependencies)
-                .interfaceFont(.body)
+            Group {
+                if dependencies.setup.isReady {
+                    SettingsView(dependencies: dependencies)
+                } else {
+                    SetupView(model: dependencies.setup)
+                }
+            }
+            .interfaceFont(.body)
         }
     }
 

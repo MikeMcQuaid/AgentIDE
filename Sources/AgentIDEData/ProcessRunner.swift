@@ -93,7 +93,7 @@ enum ProcessEnvironment {
     /// Servers are only ever selected explicitly.
     static func scrubbed(merging extra: [String: String] = [:]) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        let toolPath = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        let toolPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         environment["PATH"] = [environment["PATH"], toolPath].compactMap(\.self).joined(separator: ":")
         for variable in [
             "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_ENV",

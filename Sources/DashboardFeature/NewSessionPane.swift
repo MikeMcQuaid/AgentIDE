@@ -43,6 +43,7 @@ public struct NewSessionPane: View {
         // every appearance or a repository plus would show the
         // previous pick.
         .onAppear { repository = resolvedPreset ?? repository }
+        .onExitCommand { model.showsNewSession = false }
         // Another repository's plus while the form is open changes
         // the preset under it; the form and the sidebar both follow.
         .onChange(of: model.newSessionRepository) {

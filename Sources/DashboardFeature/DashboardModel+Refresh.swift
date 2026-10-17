@@ -185,6 +185,13 @@ public extension DashboardModel {
         } else if hasRestoredSelection == false {
             let stored = UserDefaults.standard.string(forKey: Self.selectedWorktreeKey)
             selection = listed.flatMap(\.items).first { $0.worktree.path == stored }
+            if selection == nil, showsNewSession == false, showsRepositoryFinder == false {
+                if listed.isEmpty {
+                    showsRepositoryFinder = true
+                } else {
+                    openNewSession(for: nil)
+                }
+            }
         }
         hasRestoredSelection = true
         hasLoaded = true
