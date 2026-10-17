@@ -251,7 +251,7 @@ public struct ReviewView: View {
     /// The collapse-all and whitespace toggles, one capsule group.
     private var displayToggles: some View {
         HStack(spacing: Self.captionSpacing) {
-            iconButton(
+            PaneIconButton(
                 collapsedAll ? "eye" : "eye.slash",
                 help: collapsedAll
                     ? "Expand every file (generated files stay behind their carets)"
@@ -260,7 +260,7 @@ public struct ReviewView: View {
                 collapsedAll.toggle()
                 collapseOverrides = [:]
             }
-            iconButton(
+            PaneIconButton(
                 "textformat",
                 help: model.hidesWhitespace
                     ? "Whitespace-only changes are hidden; click to show them"

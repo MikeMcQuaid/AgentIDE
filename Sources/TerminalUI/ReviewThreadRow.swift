@@ -200,15 +200,10 @@ public struct ReviewThreadRow: View {
     }
 
     private var copyButton: some View {
-        Button {
+        PaneIconButton("doc.on.doc", help: "Copy this conversation, with its file and line, to the clipboard") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(thread.asText, forType: .string)
-        } label: {
-            Image(systemName: "doc.on.doc")
-                .accessibilityLabel("Copy this conversation")
         }
-        .buttonStyle(.borderless)
-        .hoverHelp("Copy this conversation, with its file and line, to the clipboard")
     }
 
     private var collapseToggle: some View {
@@ -244,12 +239,10 @@ public struct ReviewThreadRow: View {
             collapseToggle
             copyButton
             if let onEdit {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .accessibilityLabel("Edit " + anchor)
-                }
-                .buttonStyle(.borderless)
-                .hoverHelp("Open this file at the anchored line in the built-in editor")
+                PaneIconButton(
+                    "pencil", help: "Open this file at the anchored line in the built-in editor", action: onEdit,
+                )
+                .accessibilityLabel("Edit " + anchor)
             }
         }
     }

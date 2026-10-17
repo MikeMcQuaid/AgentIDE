@@ -8,7 +8,7 @@ import Testing
 /// A `gh` and `git` that answer a branch's listing, counting how
 /// often GitHub was asked, and answering a repeated question with
 /// 304 the way GitHub does when the entity tag still matches.
-private final class CountingRunner: ProcessRunner, @unchecked Sendable {
+final class CountingRunner: ProcessRunner, @unchecked Sendable {
     // MARK: Lifecycle
 
     init(checks: String = "SUCCESS") {

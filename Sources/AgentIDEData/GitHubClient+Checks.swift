@@ -4,6 +4,39 @@ import Foundation
 /// What a pull request's checks add up to. Split from the client
 /// body for length.
 extension GitHubClient {
+    /// One pull request's full summary, including workflow and event names.
+    public func pullRequestSummary(
+        repositoryPath: String,
+        number: Int,
+        requiredChecks: RequiredChecksReader = { _ in nil },
+    ) async throws -> PullRequestSummary? {
+        let fields = Self.coreFields + "," + Self.statusFields + ",headRepository"
+        let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
+        var summary = await Self.summaries(
+            fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks,
+        )
+        .first
+        if var checks = summary?.checkDetails, checks.contains(where: { $0.jobID != nil }),
+           let names = try? await gh(
+               ["pr", "checks", String(number), "--json", "name,link,workflow,event"],
+               in: repositoryPath,
+               allowFailure: true,
+           ),
+           let workflows = try? JSONDecoder().decode([CheckWorkflow].self, from: Data(names.standardOutput.utf8))
+        {
+            for index in checks.indices {
+                if let workflow = workflows.first(where: { item in
+                    item.name == checks[index].name && item.link == checks[index].link
+                }) {
+                    checks[index].workflowName = workflow.workflow
+                    checks[index].event = workflow.event
+                }
+            }
+            summary?.checkDetails = checks
+        }
+        return summary
+    }
+
     /// The rollup, the failures it counts and the failures it does
     /// not.
     struct Rollup {
@@ -48,8 +81,39 @@ extension GitHubClient {
         )
     }
 
+    static func checkDetails(
+        _ rows: [CheckRow],
+        // swiftlint:disable:next discouraged_optional_collection - Unknown rules are distinct from no requirements.
+        required: Set<String>?,
+    ) -> [PullRequestCheck] {
+        let checks = rows.map { row in
+            let check = Self.autofixCheck(row)
+            return PullRequestCheck(
+                name: check.name,
+                status: check.status.isEmpty ? "PENDING" : check.status,
+                conclusion: check.conclusion,
+                requirement: required.map { $0.contains(check.name) ? .required : .optional } ?? .unknown,
+                link: check.link,
+                startedAt: row.startedAt,
+                completedAt: row.completedAt,
+                workflowName: row.workflowName,
+            )
+        }
+        let missing = (required ?? []).subtracting(checks.map(\.name)).sorted().map { name in
+            PullRequestCheck(name: name, status: "EXPECTED", conclusion: "", requirement: .required)
+        }
+        return (checks + missing).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private static func state(_ row: CheckRow) -> String {
         (row.conclusion ?? row.state ?? "").uppercased()
+    }
+
+    private struct CheckWorkflow: Decodable {
+        let name: String
+        let link: String
+        let workflow: String?
+        let event: String?
     }
 
     /// A check run fails with `FAILURE`, a status context with

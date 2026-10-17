@@ -13,16 +13,15 @@ public struct CopyReviewConversationsButton: View {
     // MARK: Public
 
     public var body: some View {
-        Button {
+        PaneIconButton(
+            "doc.on.doc",
+            help: "Copy all unresolved local AI and GitHub conversations, with files and lines",
+            disabled: open.isEmpty,
+        ) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(ReviewThread.digest(of: open), forType: .string)
-        } label: {
-            Image(systemName: "doc.on.doc")
-                .accessibilityLabel("Copy " + String(open.count) + " unresolved conversations")
         }
-        .buttonStyle(.borderless)
-        .disabled(open.isEmpty)
-        .hoverHelp("Copy all unresolved local AI and GitHub conversations, with files and lines")
+        .accessibilityLabel("Copy " + String(open.count) + " unresolved conversations")
     }
 
     // MARK: Private

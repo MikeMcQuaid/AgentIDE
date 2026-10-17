@@ -10,6 +10,9 @@ import TerminalUI
 struct PullRequestConversationPane: View {
     // MARK: Internal
 
+    static let labelsPadding: CGFloat = 8
+
+    let model: PullRequestsModel
     let summary: PullRequestSummary
     let stackDepth: Int
 
@@ -63,26 +66,11 @@ struct PullRequestConversationPane: View {
                     .padding(.bottom, Self.labelsPadding)
             }
             Divider()
-            PullRequestConversationView(
-                github: github,
-                repositoryPath: repositoryPath,
-                number: summary.number,
-                seededBody: summary.body,
-                store: store,
-                localReview: localReview,
-                localWorktreePath: localWorktreePath,
-                onToggleLocalResolved: onToggleLocalResolved,
-                reloadToken: reloadToken,
-                onResolvedChanged: onResolvedChanged,
-                onThreadsChanged: onThreadsChanged,
-                onReviewEventsChanged: onReviewEventsChanged,
-            )
+            checksAndConversation
         }
     }
 
     // MARK: Private
-
-    private static let labelsPadding: CGFloat = 8
 
     private var feedback: some View {
         FeedbackView(
@@ -130,6 +118,8 @@ struct PullRequestConversationPane: View {
 struct PullRequestConversationView: View {
     // MARK: Internal
 
+    let model: PullRequestsModel
+    let summary: PullRequestSummary
     let github: GitHubClient
     let repositoryPath: String
     let number: Int
@@ -160,21 +150,34 @@ struct PullRequestConversationView: View {
     let onReviewEventsChanged: @MainActor () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Self.eventSpacing) {
-                if isLoading, events.isEmpty, description.isEmpty, localReview?.threads.isEmpty != false {
-                    LaunchProgressView(
-                        "Loading the conversation…",
-                        waitingOn: "GitHub for the description, reviews and comments of #" + String(number),
-                    )
-                    .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
-                } else {
-                    content
+        VStack(spacing: 0) {
+            tabs
+            Divider()
+            ZStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Self.eventSpacing) {
+                        if isLoading, events.isEmpty, description.isEmpty, localReview?.threads.isEmpty != false {
+                            LaunchProgressView(
+                                "Loading the conversation…",
+                                waitingOn: "GitHub for the description, reviews and comments of #" + String(number),
+                            )
+                            .frame(maxWidth: .infinity, minHeight: Self.loadingHeight)
+                        } else {
+                            content
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(Self.padding)
+                }
+                .hidden(showsChecks)
+                .accessibilityHidden(showsChecks)
+                if showsChecks {
+                    PullRequestChecksView(model: model, summary: summary, filter: checkFilter)
+                        .id(summary.url)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Self.padding)
         }
+        .onChange(of: summary.url) { showsChecks = false }
         // The listing's body or the cached conversation paints
         // instantly (or the state clears, so another pull request's
         // never lingers) while the fetch refreshes and re-caches. A
@@ -217,6 +220,8 @@ struct PullRequestConversationView: View {
     @State private var events: [ReviewComment] = []
     @State private var threads: [ReviewThread] = []
     @State private var isLoading = true
+    @State private var showsChecks = false
+    @State private var checkFilter: PullRequestCheckFilter = .init()
 
     /// Every question about this pull request goes through the
     /// shared store, which answers from what it already knows unless
@@ -231,6 +236,25 @@ struct PullRequestConversationView: View {
         "Conversation of #" + String(number) + " in " + URL(fileURLWithPath: repositoryPath).lastPathComponent
     }
 
+    private var tabs: some View {
+        HStack {
+            Picker("Conversations and checks", selection: $showsChecks) {
+                Text("Conversations").tag(false)
+                Text(summary.checkDetails.map { "Checks (" + String($0.count) + ")" } ?? "Checks").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .labelsHidden()
+            Spacer()
+            if showsChecks {
+                PullRequestCheckFilterView(filter: $checkFilter)
+            } else {
+                CopyReviewConversationsButton(threads: threads + (localReview?.threads ?? []))
+            }
+        }
+        .padding(Self.padding)
+    }
+
     @ViewBuilder private var content: some View {
         if description.isEmpty == false {
             MarkdownText(description)
@@ -241,11 +265,6 @@ struct PullRequestConversationView: View {
         }
         if threads.isEmpty == false || localReview?.threads.isEmpty == false || isLoading {
             Divider()
-            HStack {
-                Text("Conversations").interfaceFont(.headline)
-                Spacer()
-                CopyReviewConversationsButton(threads: threads + (localReview?.threads ?? []))
-            }
         }
         // The loading state paints instantly; threads can take a
         // while behind the GraphQL round trip.

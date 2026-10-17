@@ -65,6 +65,9 @@ extension GitHubClient {
         let context: String?
         let status: String?
         let createdAt: String?
+        let startedAt: Date?
+        let completedAt: Date?
+        let workflowName: String?
         let targetUrl: String? // swiftformat:disable:this acronyms
         let state: String?
         let conclusion: String?
