@@ -1787,6 +1787,12 @@ caches.
 Scripted Xcode builds pass `ARCHS=arm64` for the whole build graph:
 the app project's setting alone leaves package dependencies building
 unused Intel slices in Release.
+The Xcode project enables dead-code stripping, user-script sandboxing
+and generates Swift asset extensions and string catalogue symbols in
+both configurations.
+It has no shell build phases needing input or output declarations;
+version generation runs before Xcode, and SwiftTerm's package plugin
+keeps the sandbox workaround described in AGENTS.md.
 
 Every first-party Swift target, including tests, treats warnings as
 errors and enables strict memory safety alongside Swift 6's complete
