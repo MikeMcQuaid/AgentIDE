@@ -164,5 +164,15 @@ extension DashboardModel {
             return cached
         }
         store.update { $0.cachedSidebar = cached }
+        let sidebar = real.map { group in
+            SidebarRepository(
+                name: group.repository.name,
+                owner: group.repository.owner,
+                worktrees: group.items.filter { $0.worktree.isHostDirectory == false }.map(\.worktree.path),
+            )
+        }
+        if sidebar != publishedSidebar, service.publishSidebar(sidebar) {
+            publishedSidebar = sidebar
+        }
     }
 }

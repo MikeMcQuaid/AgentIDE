@@ -90,6 +90,13 @@ jobs:
       - name: Build
         run: script/build
 
+      - name: Build iPhone app
+        run: >-
+          xcodebuild -project AgentIDE.xcodeproj -scheme AgentIDE-iOS
+          -configuration Release -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath .DerivedData-iOS -skipPackagePluginValidation
+          -disableAutomaticPackageResolution ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
+
       - name: Zip
         run: script/zip
 

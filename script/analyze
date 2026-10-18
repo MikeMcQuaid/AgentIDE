@@ -9,13 +9,11 @@ cd "$(dirname "$0")/.."
 script/version --xcconfig .build/version.xcconfig
 
 log=".build/analyze-build.log"
+ios_log=".build/analyze-ios-build.log"
 mkdir -p .build
 
 args=(
   -project AgentIDE.xcodeproj
-  -scheme AgentIDEApp
-  -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
-  -derivedDataPath .DerivedData
   -clonedSourcePackagesDirPath .build
   -onlyUsePackageVersionsFromResolvedFile
   ARCHS=arm64
@@ -24,6 +22,8 @@ args=(
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFTPM_DISABLE_SANDBOX=1
   export SWIFT_BUILD_USE_SANDBOX=0
+  ios_swift_args=(--triple arm64-apple-ios26.0-simulator
+    --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)")
 elif command -v xcodegen &>/dev/null; then
   script/project
 fi
@@ -33,8 +33,9 @@ fi
 # would otherwise fail on.
 args+=(-skipPackagePluginValidation)
 periphery_args=(
-  --project AgentIDE.xcodeproj --schemes AgentIDEApp
+  --project AgentIDE.xcodeproj --schemes AgentIDEApp AgentIDE-iOS
   --skip-build --index-store-path .DerivedData/Index.noindex/DataStore
+  .DerivedData/iOS/Index.noindex/DataStore
   -- -skipPackagePluginValidation -onlyUsePackageVersionsFromResolvedFile -clonedSourcePackagesDirPath .build
 )
 
@@ -46,16 +47,28 @@ periphery_args=(
 # like a compile error, so one retry separates the flake from a
 # genuine failure before giving up.
 build() {
+  : >"$ios_log"
   if [[ -n "${SV_SESSION_ID:-}" ]]; then
     # A fresh native index includes every source and no deleted declarations.
     rm -rf .build/analyze || return
     nice -n 10 swift build --disable-sandbox --force-resolved-versions --disable-get-task-allow-entitlement --jobs 6 \
       --build-system native --disable-build-manifest-caching --enable-index-store \
-      --build-tests --scratch-path .build/analyze >"$log" 2>&1
+      --build-tests --scratch-path .build/analyze >"$log" 2>&1 || return
+    # Both platforms must contribute references: a macOS-only index
+    # makes every caller behind #if os(iOS) look like dead code.
+    nice -n 10 swift build --disable-sandbox --force-resolved-versions --jobs 6 \
+      --build-system native --enable-index-store --target AgentIDEiOSAppSources \
+      --scratch-path .build/analyze "${ios_swift_args[@]}" >>"$log" 2>&1
   else
-    rm -rf .DerivedData/Index.noindex || return
-    xcodebuild "${args[@]}" clean build-for-testing CODE_SIGNING_ALLOWED=NO \
-      COMPILER_INDEX_STORE_ENABLE=YES INDEX_ENABLE_DATA_STORE=YES >"$log" 2>&1
+    rm -rf .DerivedData/Index.noindex .DerivedData/iOS/Index.noindex || return
+    xcodebuild "${args[@]}" -scheme AgentIDEApp \
+      -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}" -derivedDataPath .DerivedData \
+      clean build-for-testing CODE_SIGNING_ALLOWED=NO \
+      COMPILER_INDEX_STORE_ENABLE=YES INDEX_ENABLE_DATA_STORE=YES >"$log" 2>&1 || return
+    xcodebuild "${args[@]}" -scheme AgentIDE-iOS \
+      -destination 'generic/platform=iOS Simulator' -derivedDataPath .DerivedData/iOS \
+      clean build CODE_SIGNING_ALLOWED=NO \
+      COMPILER_INDEX_STORE_ENABLE=YES INDEX_ENABLE_DATA_STORE=YES >"$ios_log" 2>&1
   fi
 }
 
@@ -63,7 +76,7 @@ if ! build; then
   echo "build failed; retrying once in case the macro plugin server flaked" >&2
   if ! build; then
     echo "analyze aborted: the build failed, so there is nothing trustworthy to analyse" >&2
-    grep -E "error:" "$log" | head -20 >&2
+    grep -E "error:" "$log" "$ios_log" | head -20 >&2
     exit 1
   fi
 fi
@@ -78,25 +91,34 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   periphery_args=(
     --json-package-manifest-path .build/analyze-package.json
     --index-store-path "$(swift build --disable-sandbox --build-system native --scratch-path .build/analyze --show-bin-path)/index/store"
+    "$(swift build --disable-sandbox --build-system native --scratch-path .build/analyze "${ios_swift_args[@]}" --show-bin-path)/index/store"
     --skip-build
   )
   echo "sandboxed: Periphery runs here; SwiftLint analysis still needs the host's Xcode log" >&2
 else
-  swiftlint analyze --compiler-log-path "$log" --strict || failed=1
+  # SourceKit's cursor lookup enters inactive branches, even for an
+  # unavailable SDK. Analyse platform-specific files with their own SDK.
+  rg --files App Sources Tests -g '*.swift' -g '!**/iOS/**' >.build/analyze-mac-sources.xcfilelist
+  rg --files iOSApp Sources -g '*.swift' -g '!**/macOS/**' >.build/analyze-ios-sources.xcfilelist
+  SCRIPT_INPUT_FILE_LIST_COUNT=1 SCRIPT_INPUT_FILE_LIST_0=.build/analyze-mac-sources.xcfilelist \
+    swiftlint analyze --compiler-log-path "$log" --strict --use-script-input-file-lists || failed=1
+  SCRIPT_INPUT_FILE_LIST_COUNT=1 SCRIPT_INPUT_FILE_LIST_0=.build/analyze-ios-sources.xcfilelist \
+    swiftlint analyze --compiler-log-path "$ios_log" --strict --use-script-input-file-lists || failed=1
 fi
 
-# On the host the project is scanned through the app scheme because periphery's
+# On the host the project is scanned through both app schemes because periphery's
 # SPM mode does not find an index store under the current build
-# system; the app scheme excludes the package test targets, so the few
+# system; these schemes exclude the package test targets, so the few
 # declarations used only by tests carry `// periphery:ignore`.
-# SwiftTerm's generated build information otherwise makes Periphery
-# report dependency output and required module imports as unused.
+# Exclude SwiftTerm's generated plugin sources before indexing: separate
+# platform builds generate conflicting copies. Keep Periphery's defaults.
 if ! command -v periphery &>/dev/null; then
   echo "periphery is required: install it with script/bootstrap" >&2
   failed=1
 else
   periphery scan \
-    --report-exclude '**/.DerivedData/**' '**/BuildToolPluginIntermediates/**' \
+    --index-exclude '**/*?.build/**/*' '**/SourcePackages/checkouts/**' '**/BuildToolPluginIntermediates/**' \
+    --report-exclude '**/.DerivedData/**' \
     --retain-unused-imported-modules SwiftTerm \
     --strict \
     --disable-update-check \

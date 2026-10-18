@@ -133,14 +133,8 @@ final class PaneTerminalView: TerminalView {
             return
         }
 
-        if isHerdrBacked, terminalStateSnapshot().bracketedPasteMode == false,
-           let text = NSPasteboard.general.string(forType: .string)
-        {
-            // Three sends, gathered into one write by the coordinator,
-            // so the agent sees one paste and draws one.
-            send(data: Self.bracketedPasteStart[...])
-            send(txt: text)
-            send(data: Self.bracketedPasteEnd[...])
+        if isHerdrBacked, let text = NSPasteboard.general.string(forType: .string) {
+            send(data: HerdrTerminal.pasteBytes(text)[...])
             return
         }
         super.paste(sender as Any)
@@ -272,11 +266,6 @@ final class PaneTerminalView: TerminalView {
     }
 
     // MARK: Private
-
-    /// `ESC [ 200 ~` and `ESC [ 201 ~`, spelt here because SwiftTerm's
-    /// own are mutable statics strict concurrency refuses.
-    private static let bracketedPasteStart: Array = .init("\u{1B}[200~".utf8)
-    private static let bracketedPasteEnd: Array = .init("\u{1B}[201~".utf8)
 
     /// The last wheel event any pane handled, so a second monitor
     /// seeing the same event does nothing with it.

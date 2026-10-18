@@ -12,9 +12,12 @@ let mainActorByDefault = approachableConcurrency + [.defaultIsolation(MainActor.
 
 let package = Package(
     name: "AgentIDE",
-    platforms: [.macOS("26.0")],
+    platforms: [.macOS("26.0"), .iOS("26.0")],
     products: [
         .library(name: "AgentIDEDomain", targets: ["AgentIDEDomain"]),
+        .library(name: "AgentIDEInterface", targets: ["AgentIDEInterface"]),
+        .library(name: "AgentIDERemote", targets: ["AgentIDERemote"]),
+        .library(name: "MobileFeature", targets: ["MobileFeature"]),
         .library(name: "AgentIDEData", targets: ["AgentIDEData"]),
         .library(name: "DashboardFeature", targets: ["DashboardFeature"]),
         .library(name: "SessionFeature", targets: ["SessionFeature"]),
@@ -23,6 +26,9 @@ let package = Package(
         .library(name: "TerminalUI", targets: ["TerminalUI"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/apple/swift-nio-ssh.git", from: "0.15.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.81.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.12.3"),
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.99.0"),
         // Apple's GitHub-flavoured markdown parser; parsing by hand
         // kept misreading real review comments.
@@ -68,6 +74,13 @@ let package = Package(
         ),
     ],
     targets: [
+        .target(
+            name: "AgentIDEiOSAppSources",
+            dependencies: ["MobileFeature"],
+            path: "iOSApp",
+            exclude: ["PrivacyInfo.xcprivacy"],
+            swiftSettings: mainActorByDefault,
+        ),
         // The app shell's own sources, as a plain target so they can
         // be type-checked without Xcode. The app itself is still
         // built from `project.yml`, which owns its bundle, its icon
@@ -80,6 +93,7 @@ let package = Package(
             name: "AgentIDEAppSources",
             dependencies: [
                 "AgentIDEData",
+                "AgentIDEInterface",
                 "DashboardFeature",
                 "PRFeature",
                 "ReviewFeature",
@@ -93,6 +107,30 @@ let package = Package(
         .target(
             name: "AgentIDEDomain",
             swiftSettings: approachableConcurrency,
+        ),
+        .target(
+            name: "AgentIDEInterface",
+            dependencies: ["AgentIDEDomain"],
+            swiftSettings: mainActorByDefault,
+        ),
+        .target(
+            name: "AgentIDERemote",
+            dependencies: [
+                "AgentIDEDomain",
+                .product(name: "NIOSSH", package: "swift-nio-ssh"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
+            swiftSettings: approachableConcurrency,
+        ),
+        .target(
+            name: "MobileFeature",
+            dependencies: [
+                "AgentIDERemote", "AgentIDEInterface", "AgentIDEDomain",
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+            ],
+            swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "AgentIDEData",
@@ -109,7 +147,7 @@ let package = Package(
         ),
         .target(
             name: "DashboardFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
+            dependencies: ["AgentIDEDomain", "AgentIDEData", "AgentIDEInterface", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
@@ -119,7 +157,7 @@ let package = Package(
         ),
         .target(
             name: "ReviewFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
+            dependencies: ["AgentIDEDomain", "AgentIDEData", "AgentIDEInterface", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
@@ -130,6 +168,7 @@ let package = Package(
         .target(
             name: "TerminalUI",
             dependencies: [
+                "AgentIDEInterface",
                 "AgentIDEDomain",
                 "AgentIDEData",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
@@ -156,13 +195,23 @@ let package = Package(
             swiftSettings: mainActorByDefault,
         ),
         .testTarget(
+            name: "AgentIDERemoteTests",
+            dependencies: ["AgentIDERemote"],
+            swiftSettings: approachableConcurrency,
+        ),
+        .testTarget(
+            name: "MobileFeatureTests",
+            dependencies: ["MobileFeature"],
+            swiftSettings: mainActorByDefault,
+        ),
+        .testTarget(
             name: "AgentIDEDomainTests",
             dependencies: ["AgentIDEDomain"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(
             name: "AgentIDEDataTests",
-            dependencies: ["AgentIDEData"],
+            dependencies: ["AgentIDEData", "AgentIDERemote"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(

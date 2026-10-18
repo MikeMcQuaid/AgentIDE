@@ -79,14 +79,14 @@ public struct TerminalPaneView: View {
                 onCopyAllOutput: onCopyAllOutput,
                 clearRequest: clearShellRequest,
                 onProcessTerminated: onProcessTerminated,
-                onStalled: { isStalled = $0 },
+                onHandoff: { isHandedOff = $0 },
                 reattachRequest: ownerReattachRequest + reattachRequest,
             )
-            // Only once recovery has been tried and failed: a pane
-            // still showing nothing offers the one thing that fixes
-            // it, where a relaunch used to be the only way.
-            if isStalled, isActive {
-                StalledPaneOverlay { reattachRequest += 1 }
+            if isHandedOff, isActive {
+                HandedOffPaneOverlay {
+                    isHandedOff = false
+                    reattachRequest += 1
+                }
             }
         }
     }
@@ -99,9 +99,7 @@ public struct TerminalPaneView: View {
     @AppStorage("clearShellRequest")
     private var clearShellRequest = 0
 
-    /// Whether the pane has drawn nothing through the deadline and a
-    /// reattach, and how many times Reattach has been pressed since.
-    @State private var isStalled = false
+    @State private var isHandedOff = false
     @State private var reattachRequest = 0
 
     private let transport: TerminalTransport
@@ -152,7 +150,7 @@ struct TerminalRepresentable: NSViewRepresentable {
     let onCopyAllOutput: (() async -> String?)?
     let clearRequest: Int
     let onProcessTerminated: (@MainActor () -> Void)?
-    let onStalled: (Bool) -> Void
+    let onHandoff: (Bool) -> Void
     let reattachRequest: Int
 
     /// Detaches the client and stops any local shell when its pane closes.
@@ -182,7 +180,7 @@ struct TerminalRepresentable: NSViewRepresentable {
                     coordinator?.reattach(in: view)
                 }
             }
-            context.coordinator.onStalled = onStalled
+            context.coordinator.onHandoff = onHandoff
             // The owner's count outlives this view: a fresh
             // coordinator takes it as the baseline, not as a press.
             context.coordinator.seenReattachRequest = reattachRequest

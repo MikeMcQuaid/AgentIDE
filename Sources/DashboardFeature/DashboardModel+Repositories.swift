@@ -5,6 +5,11 @@ import TerminalUI
 /// The repository finder's model surface: listing everything the
 /// user can reach on GitHub and jumping to or cloning a pick.
 public extension DashboardModel {
+    /// The repositories available for new sessions.
+    var repositories: [Repository] {
+        service.repositories()
+    }
+
     /// Explicit navigation reveals the row; background readings do not.
     internal func reveal(_ item: WorktreeItem) {
         let defaults = UserDefaults.standard

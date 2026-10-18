@@ -7,6 +7,47 @@ import Testing
 /// private config home: the round trip the terminal panes are built
 /// on.
 struct HerdrTerminalChannelIntegrationTests {
+    @Test(arguments: [false, true])
+    func `paste uses the destination pane mode`(bracketed: Bool) async throws {
+        let (herdr, home) = try TestSupport.makeHerdrClient()
+        let directory = try TestSupport.temporaryDirectory("paste-mode")
+        defer {
+            TestSupport.stopServerSync(configHome: home)
+            try? FileManager.default.removeItem(atPath: directory)
+        }
+        let input = directory + "/paste-input"
+        let text = "first\nsecond café"
+        let expected = bracketed ? HerdrTerminal.pasteBytes(text) : Array(text.utf8)
+        try await herdr.newSession(
+            name: "agentide--r--paste--codex",
+            directory: directory,
+            command: "stty raw -echo; printf '\\033[?2004" + (bracketed ? "h" : "l") + "paste-%s' ready; "
+                + "dd bs=1 count=" + String(expected.count) + " of=" + input.shellQuoted + " 2>/dev/null; stty sane",
+        )
+        let pane = try #require(try await herdr.panes().first)
+        let channel = HerdrTerminalChannel(command: herdr.attachCommand(paneID: pane.paneID))
+        let stream = try await channel.start()
+        let watchdog = Task {
+            try? await Task.sleep(for: .seconds(10))
+            await channel.stop()
+        }
+        for await event in stream {
+            if case let .frame(bytes) = event,
+               String(bytes: bytes, encoding: .utf8)?.contains("paste-ready") == true
+            {
+                channel.send(HerdrTerminal.inputCommand(bytes: HerdrTerminal.pasteBytes(text)))
+                break
+            }
+        }
+        let received = await TestSupport.poll(timeout: 5) {
+            (try? Data(contentsOf: URL(filePath: input)).count) == expected.count
+        }
+        watchdog.cancel()
+        await channel.stop()
+        try #require(received)
+        #expect(try Data(contentsOf: URL(filePath: input)) == Data(expected))
+    }
+
     @Test
     func `scrolling a mouse-aware agent carries the pointer position`() async throws {
         let (herdr, home) = try TestSupport.makeHerdrClient()

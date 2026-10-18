@@ -38,15 +38,15 @@ public enum AppSettings {
     public static let worktreesDirectoryKey = "worktreesDirectory"
 
     /// Interface typography: labels, headings, captions and prose.
-    public static let interfaceFontNameKey = "interfaceFontName"
+    public static let interfaceFontNameKey: String = FontPreferences.interfaceFontNameKey
     /// The interface body point size, which every text style follows.
-    public static let interfaceFontSizeKey = "interfaceFontSize"
+    public static let interfaceFontSizeKey: String = FontPreferences.interfaceFontSizeKey
 
     /// The monospace face's storage key.
-    public static let codeFontNameKey = "codeFontName"
+    public static let codeFontNameKey: String = FontPreferences.codeFontNameKey
 
     /// The monospace point size's storage key.
-    public static let codeFontSizeKey = "codeFontSize"
+    public static let codeFontSizeKey: String = FontPreferences.codeFontSizeKey
 
     /// Repository-name typography in the sidebar.
     public static let repositoryFontNameKey = "repositoryFontName"
@@ -54,9 +54,9 @@ public enum AppSettings {
     public static let repositoryFontSizeKey = "repositoryFontSize"
 
     /// Worktree and branch-name typography.
-    public static let nameFontNameKey = "nameFontName"
+    public static let nameFontNameKey: String = FontPreferences.nameFontNameKey
     /// The point size for worktree and branch names.
-    public static let nameFontSizeKey = "nameFontSize"
+    public static let nameFontSizeKey: String = FontPreferences.nameFontSizeKey
 
     /// The utility pane's tab typography.
     public static let tabFontNameKey = "tabFontName"

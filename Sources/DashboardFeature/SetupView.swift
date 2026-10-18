@@ -1,6 +1,6 @@
 import AgentIDEData
+import AgentIDEInterface
 import SwiftUI
-import TerminalUI
 
 /// Replaces the entire window until setup succeeds; there is no dismiss action.
 public struct SetupView: View {

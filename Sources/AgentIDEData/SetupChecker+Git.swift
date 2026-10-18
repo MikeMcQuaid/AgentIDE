@@ -3,7 +3,10 @@ import Foundation
 extension SetupChecker {
     func gitConfiguration() async -> (issues: [SetupIssue], signingConfigured: Bool) {
         let result = try? await service.git.git(
-            ["config", "--global", "--get-regexp", "^(user\\.(name|email|signingkey)|gpg\\..*|commit\\.gpgsign)$"],
+            [
+                "config", "--global", "--includes", "--get-regexp",
+                "^(user\\.(name|email|signingkey)|gpg\\..*|commit\\.gpgsign)$",
+            ],
             in: nil,
             allowFailure: true,
         )

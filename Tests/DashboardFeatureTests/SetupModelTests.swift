@@ -39,19 +39,35 @@ struct SetupModelTests {
         #expect(attempts.withLock { $0 } == [true, true, false])
     }
 
-    @Test(arguments: [false, true])
-    func `unavailable signing is disabled without blocking or enabling a preference`(configured: Bool) async throws {
+    @Test(arguments: [false, true], [false, true])
+    func `setup preserves explicit signing choices`(configured: Bool, required: Bool) async throws {
         let suite = "setup-test-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        defaults.set(configured == false, forKey: AppSettings.requireSignedCommitsKey)
+        defaults.set(required, forKey: AppSettings.requireSignedCommitsKey)
         let model = SetupModel(check: { _ in
             SetupResult(issues: [], agents: [.codexCLI], signingConfigured: configured)
         }, defaults: defaults)
         await model.recheck()
         #expect(model.isReady)
-        #expect(defaults.bool(forKey: AppSettings.requireSignedCommitsKey) == false)
-        #expect(model.signingDisabled == (configured == false))
+        #expect(defaults.bool(forKey: AppSettings.requireSignedCommitsKey) == required)
+        #expect(model.signingDisabled == false)
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func `only first-time setup defaults unavailable signing off`(configured: Bool, completed: Bool) async throws {
+        let suite = "setup-test-" + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(completed, forKey: SetupModel.completedKey)
+        let model = SetupModel(check: { _ in
+            SetupResult(issues: [], agents: [.codexCLI], signingConfigured: configured)
+        }, defaults: defaults)
+        await model.recheck()
+        #expect(model.isReady)
+        #expect(defaults.object(forKey: AppSettings.requireSignedCommitsKey) as? Bool
+            == (configured || completed ? nil : false))
+        #expect(model.signingDisabled == (configured == false && completed == false))
     }
 
     @Test

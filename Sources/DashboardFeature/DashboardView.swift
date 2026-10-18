@@ -111,7 +111,7 @@ public struct DashboardView: View {
                 model.openNewSession(for: group.repository)
             } label: {
                 SidebarIcon(systemName: "plus", verticalPadding: Self.headerVerticalPadding)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
             .buttonStyle(.plain)
             .fixedSize()
@@ -346,7 +346,7 @@ private struct NewRepositoryRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 SidebarIcon(systemName: "plus", verticalPadding: Self.verticalPadding)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .padding(.vertical, -Self.verticalPadding)
                 Spacer(minLength: 0)
             }

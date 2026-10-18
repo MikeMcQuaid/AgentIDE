@@ -20,6 +20,7 @@ cat >"${scratch}/bin/xcodebuild" <<'BUILDER'
 #!/bin/bash
 set -euo pipefail
 printf '%s\n' "$@" >xcode-arguments
+printf '%s\n' "$*" >>xcode-invocations
 echo 'Build diagnostic on stdout'
 echo 'Build diagnostic on stderr' >&2
 [[ "${BUILD_TEST_FAIL:-}" != 1 ]] || exit 65
@@ -121,6 +122,9 @@ done
 echo 'Build and packaging script tests passed'
 
 mkdir -p "${scratch}/Tests" "${scratch}/.build"
+printf 'only_rules: [trailing_newline]\n' >"${scratch}/.swiftlint.yml"
+mkdir -p "${scratch}/App" "${scratch}/iOSApp" "${scratch}/Sources/Interface/"{macOS,iOS}
+touch "${scratch}/Sources/Interface/"{macOS,iOS}/Font.swift
 printf 'exit 0\n' >"${scratch}/Tests/ScriptTests.sh"
 printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/ps"
 cat >"${scratch}/bin/swift" <<'SWIFT'
@@ -143,14 +147,21 @@ exit "${ANALYZE_TEST_STATUS:-0}"
 PERIPHERY
 cat >"${scratch}/bin/swiftlint" <<'SWIFTLINT'
 #!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >>swiftlint-invocations
+"${SCRIPT_TEST_SWIFTLINT}" lint --config .swiftlint.yml --use-script-input-file-lists --no-cache --strict
 exit "${ANALYZE_TEST_STATUS:-0}"
 SWIFTLINT
 chmod +x "${scratch}/bin/"*
 
+real_swiftlint="$(command -v swiftlint)"
 for sandbox in fixture ''; do
   for status in 0 1; do
+    : >"${scratch}/xcode-invocations"
+    : >"${scratch}/swiftlint-invocations"
     result=0
     env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID="${sandbox}" ANALYZE_TEST_STATUS="${status}" \
+      SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
       "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1 || result=$?
     [[ "${result}" == "${status}" ]] || {
       cat "${scratch}/analyze.log"
@@ -158,8 +169,36 @@ for sandbox in fixture ''; do
     }
     grep -qx -- --strict "${scratch}/periphery-arguments"
     grep -qx -- --index-store-path "${scratch}/periphery-arguments"
+    awk '/^--index-exclude$/ { exclude = 1; next } /^--/ { exclude = 0 } exclude' \
+      "${scratch}/periphery-arguments" | grep -Fxq '**/BuildToolPluginIntermediates/**'
+    if [[ -z "${sandbox}" ]]; then
+      grep -q -- '-scheme AgentIDEApp' "${scratch}/xcode-invocations"
+      grep -q -- '-scheme AgentIDE-iOS' "${scratch}/xcode-invocations"
+      grep -q -- 'generic/platform=iOS Simulator' "${scratch}/xcode-invocations"
+      grep -qx 'AgentIDE-iOS' "${scratch}/periphery-arguments"
+      grep -q -- '--compiler-log-path .build/analyze-build.log' "${scratch}/swiftlint-invocations"
+      grep -q -- '--compiler-log-path .build/analyze-ios-build.log' "${scratch}/swiftlint-invocations"
+      grep -qx 'Sources/Interface/macOS/Font.swift' "${scratch}/.build/analyze-mac-sources.xcfilelist"
+      grep -qx 'Sources/Interface/iOS/Font.swift' "${scratch}/.build/analyze-ios-sources.xcfilelist"
+      if grep -q '/iOS/' "${scratch}/.build/analyze-mac-sources.xcfilelist" ||
+        grep -q '/macOS/' "${scratch}/.build/analyze-ios-sources.xcfilelist"; then
+        echo 'Analysis mixed platform-specific sources' >&2
+        exit 1
+      fi
+    fi
   done
 done
+xcodegen dump --type json | python3 -c '
+import json
+import sys
+
+targets = json.load(sys.stdin)["targets"]
+modules = [
+    targets[name]["settings"]["base"].get("PRODUCT_MODULE_NAME", targets[name]["settings"]["base"]["PRODUCT_NAME"])
+    for name in ["AgentIDEApp", "AgentIDE-iOS"]
+]
+assert len(set(modules)) == len(modules), "App targets share a Swift module name"
+'
 rm "${scratch}/periphery-arguments"
 if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID=fixture SCRIPT_TEST_STATUS=65 \
   "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then

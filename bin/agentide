@@ -74,6 +74,14 @@ $(bold 'agentide new')
     worktree, launches the agent and attaches to it. Run as
     yourself it runs itself as the sandbox user, which owns the
     herdr server the sessions live in.
+
+$(bold 'agentide new') --repository <name> --agent <claude|codex>
+    [--model <name>] [--effort <name>] --no-attach
+    Read the prompt from standard input and print the created herdr
+    workspace as JSON. Only existing repositories are accepted.
+
+$(bold 'agentide repositories')
+    List existing repository names, one per line.
 USAGE
   exit "${1:-64}"
 }
@@ -196,7 +204,7 @@ ask_text() {
 # The app's own slug: lowercase, anything else a dash, runs collapsed
 # and the ends trimmed, never empty.
 slug() {
-  out="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
+  out="$(printf '%s' "$1" | iconv -f UTF-8-MAC -t UTF-8 | tr '[:upper:]' '[:lower:]' |
     sed -e 's/[^a-z0-9-]/-/g' -e 's/--*/-/g' -e 's/^-//' -e 's/-$//')"
   [ -n "${out}" ] || out="unnamed"
   printf '%s' "${out}"
@@ -205,7 +213,7 @@ slug() {
 # What the app calls a branch it names from a prompt: the same slug
 # over the prompt's first words, with underscores between them.
 branch_from_prompt() {
-  printf '%s' "$(slug "$(printf '%s' "$1" | cut -c1-40)")" | tr '-' '_'
+  printf '%s' "$(slug "$(printf '%s' "$1" | tr '\n' ' ' | cut -c1-40)")" | tr '-' '_'
 }
 
 # A new branch starts from the same default as the app. Git's own
@@ -270,10 +278,51 @@ reexec_in_sandbox() {
     GIT_CONFIG_KEY_0=safe.directory \
     "GIT_CONFIG_VALUE_0=/Users/Shared/sv-${host}/*" \
     /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${host}.sb" \
-    /bin/zsh -c "exec ${0} new"
+    /bin/zsh -c 'exec "$@"' agentide "$0" new "$@"
 }
 
 agentide_new() {
+  repository=""
+  agent=""
+  model=""
+  effort=""
+  no_attach=""
+  if [ "$#" -gt 0 ]; then
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --no-attach)
+          no_attach=1
+          shift
+          ;;
+        --repository | --agent | --model | --effort)
+          [ "$#" -ge 2 ] || fail "missing value for $1"
+          case "$1" in
+            --repository) repository="$2" ;;
+            --agent) agent="$2" ;;
+            --model) model="$2" ;;
+            --effort) effort="$2" ;;
+            *) fail "unknown option: $1" ;;
+          esac
+          shift 2
+          ;;
+        *) fail "unknown option: $1" ;;
+      esac
+    done
+    [ -n "${repository}" ] && [ -n "${no_attach}" ] ||
+      fail "remote creation requires --repository and --no-attach"
+    case "${repository}" in
+      . | .. | */*) fail "invalid repository name" ;;
+      *) ;;
+    esac
+    case "${agent}" in
+      claude | codex) ;;
+      *) fail "choose claude or codex" ;;
+    esac
+    case "${model}${effort}" in
+      *[!a-zA-Z0-9_./:-]*) fail "invalid model or effort" ;;
+      *) ;;
+    esac
+  fi
   # Already the sandbox user when its home is this account's own,
   # and a dry run never reaches the server, so it stays where it is:
   # tests run as neither user and have no sandbox to enter.
@@ -283,7 +332,11 @@ agentide_new() {
       if [ -z "${AGENTIDE_DRY_RUN:-}" ]; then
         [ -f "/var/sandvault/sandbox-sandvault-${USER}.sb" ] ||
           fail "no sandvault sandbox for ${USER}; sessions run as its user" 69
-        reexec_in_sandbox
+        if [ -n "${no_attach}" ]; then
+          reexec_in_sandbox --repository "${repository}" --agent "${agent}" --model "${model}" --effort "${effort}" --no-attach
+        else
+          reexec_in_sandbox
+        fi
       fi
       ;;
   esac
@@ -297,29 +350,40 @@ agentide_new() {
   shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
   defaults="$(defaults_file "${shared}")"
 
-  repositories="$(default_for repositories "${defaults}")"
-  if [ -z "${repositories}" ] && [ -d "${shared}/repositories" ]; then
-    for entry in "${shared}"/repositories/*/; do
-      [ -d "${entry}" ] || continue
-      repositories="${repositories}$(basename "${entry}") "
-    done
+  if [ -n "${no_attach}" ]; then
+    repository_path="${shared}/repositories/${repository}"
+    [ -d "${repository_path}/.git" ] || [ -f "${repository_path}/.git" ] ||
+      fail "no repository at ${repository_path}" 66
+    root="$(cd "${shared}/repositories" && pwd -P)"
+    [ "$(cd "${repository_path}" && pwd -P)" = "${root}/${repository}" ] ||
+      fail "repository must be inside ${root}" 66
+    prompt="$(cat)"
+    [ -n "${prompt}" ] || fail "a prompt is required"
+  else
+    repositories="$(default_for repositories "${defaults}")"
+    if [ -z "${repositories}" ] && [ -d "${shared}/repositories" ]; then
+      for entry in "${shared}"/repositories/*/; do
+        [ -d "${entry}" ] || continue
+        repositories="${repositories}$(basename "${entry}") "
+      done
+    fi
+
+    # shellcheck disable=SC2086
+    repository="$(ask_choice Repository "$(default_for repository "${defaults}")" ${repositories})"
+    [ -n "${repository}" ] || fail "no repository to choose from in ${shared}/repositories" 66
+
+    agent="$(ask_choice Agent "$(default_for agent "${defaults}")" claude codex)"
+    [ -n "${agent}" ] || agent=claude
+
+    efforts="$(default_for "${agent}-efforts" "${defaults}")"
+    models="$(default_for "${agent}-models" "${defaults}")"
+    # shellcheck disable=SC2086
+    effort="$(ask_choice Effort "$(default_for "${agent}-effort" "${defaults}")" ${efforts})"
+    # shellcheck disable=SC2086
+    model="$(ask_choice Model "$(default_for "${agent}-model" "${defaults}")" ${models})"
+
+    prompt="$(ask_text Prompt)"
   fi
-
-  # shellcheck disable=SC2086
-  repository="$(ask_choice Repository "$(default_for repository "${defaults}")" ${repositories})"
-  [ -n "${repository}" ] || fail "no repository to choose from in ${shared}/repositories" 66
-
-  agent="$(ask_choice Agent "$(default_for agent "${defaults}")" claude codex)"
-  [ -n "${agent}" ] || agent=claude
-
-  efforts="$(default_for "${agent}-efforts" "${defaults}")"
-  models="$(default_for "${agent}-models" "${defaults}")"
-  # shellcheck disable=SC2086
-  effort="$(ask_choice Effort "$(default_for "${agent}-effort" "${defaults}")" ${efforts})"
-  # shellcheck disable=SC2086
-  model="$(ask_choice Model "$(default_for "${agent}-model" "${defaults}")" ${models})"
-
-  prompt="$(ask_text Prompt)"
 
   repository_path="${shared}/repositories/${repository}"
   branch="$(branch_from_prompt "${prompt}")"
@@ -380,7 +444,13 @@ agentide_new() {
   pane="$(printf '%s' "${created}" |
     grep -o '"pane_id":"[^"]*"' | head -1 | cut -d '"' -f4)"
   [ -n "${pane}" ] || fail "herdr did not name a pane for ${label}" 70
-  herdr pane run "${pane}" "export TMPDIR=\"\$(mktemp -d)\"; ${command}"
+  herdr pane run "${pane}" "export TMPDIR=\"\$(mktemp -d)\"; ${command}" >&2
+  remember "${defaults}" "repository=${repository}" "agent=${agent}" \
+    "${agent}-model=${model}" "${agent}-effort=${effort}"
+  if [ -n "${no_attach}" ]; then
+    printf '%s\n' "${created}"
+    return 0
+  fi
 
   workspace="$(printf '%s' "${created}" |
     grep -o '"workspace_id":"[^"]*"' | head -1 | cut -d '"' -f4)"
@@ -396,7 +466,18 @@ agentide_new() {
 }
 
 if [ "${1:-}" = "new" ]; then
-  agentide_new
+  shift
+  agentide_new "$@"
+  exit 0
+fi
+
+if [ "${1:-}" = "repositories" ]; then
+  shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
+  for entry in "${shared}"/repositories/*/; do
+    [ -L "${entry%/}" ] && continue
+    [ -d "${entry}.git" ] || [ -f "${entry}.git" ] || continue
+    printf '%s\n' "$(basename "${entry}")"
+  done
   exit 0
 fi
 

@@ -1,6 +1,6 @@
 import AgentIDEDomain
+import AgentIDEInterface
 import SwiftUI
-import TerminalUI
 
 /// Familiar repeat, day and time controls beside the shared agent pickers.
 struct ScheduledPromptEditor: View {

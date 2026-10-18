@@ -124,6 +124,36 @@ struct SetupCheckerTests {
         #expect(result.signingConfigured == configured)
     }
 
+    @Test
+    func `setup reads identities and signing from included global configuration`() async throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        try "[include]\npath = signing.gitconfig\n".write(
+            toFile: fixture.root + "/gitconfig", atomically: true, encoding: .utf8,
+        )
+        try """
+        [user]
+        name = Test
+        email = test@example.com
+        signingkey = key::ssh-ed25519 test
+        [gpg]
+        format = ssh
+        [gpg "ssh"]
+        program = /usr/bin/true
+        """.write(toFile: fixture.root + "/signing.gitconfig", atomically: true, encoding: .utf8)
+        _ = await fixture.checker.check(verifyOnline: false)
+        let command = try #require(fixture.runner.commands.withLock { $0.first { $0.first == "git" } })
+        let result = try await FoundationProcessRunner().run(
+            command, workingDirectory: fixture.root, environment: ["GIT_CONFIG_GLOBAL": fixture.root + "/gitconfig"],
+        )
+        #expect(result.succeeded)
+        #expect(result.standardOutput.contains("user.name Test"))
+        #expect(result.standardOutput.contains("user.email test@example.com"))
+        #expect(result.standardOutput.contains("user.signingkey key::ssh-ed25519 test"))
+        #expect(result.standardOutput.contains("gpg.format ssh"))
+        #expect(result.standardOutput.contains("gpg.ssh.program /usr/bin/true"))
+    }
+
     @Test(arguments: ["missing-key", "missing-private-key", "missing-signer", "ready"])
     func `SSH signing needs an available key and signer`(state: String) async throws {
         let fixture = try Fixture()

@@ -1,5 +1,5 @@
+import AgentIDEInterface
 import AppKit
-import TerminalUI
 
 // MARK: - LineNumberRuler
 

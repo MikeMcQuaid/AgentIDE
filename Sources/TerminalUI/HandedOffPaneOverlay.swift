@@ -1,19 +1,17 @@
 import SwiftUI
 
-/// What a pane draws over itself once it has shown nothing through
-/// the deadline and a silent reattach: what is wrong in a line, and
-/// the one button that puts it right.
-struct StalledPaneOverlay: View {
+/// Lets the user reclaim a terminal controlled on another device.
+struct HandedOffPaneOverlay: View {
     // MARK: Internal
 
     let reattach: () -> Void
 
     var body: some View {
         VStack(spacing: Self.spacing) {
-            Text("This pane has drawn nothing from herdr")
+            Text("This pane is controlled on another device")
                 .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
-            Button("Reattach", action: reattach)
+            Button("Take control", action: reattach)
                 .buttonStyle(.glass)
                 .hoverHelp("Discard the herdr client and attach afresh; the session itself keeps running")
         }

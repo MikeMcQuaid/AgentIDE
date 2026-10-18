@@ -1,6 +1,6 @@
+import AgentIDEInterface
 import AppKit
 import CoreText
-import TerminalUI
 
 /// Draws spaces and tabs as visible glyphs in the shared light
 /// whitespace tone, matching the review diff. Nonisolated to match

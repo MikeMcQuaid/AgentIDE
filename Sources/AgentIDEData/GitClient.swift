@@ -169,10 +169,10 @@ public struct GitClient: Sendable {
     /// pairing up what moved is work nobody here reads.
     public func isDirty(worktreePath: String) async -> Bool {
         let output = try? await git(
-            ["status", "--porcelain", "--no-renames"],
+            GitWorktreeStatus.arguments,
             in: worktreePath,
         ).standardOutput
-        return output?.isEmpty == false
+        return output.map { GitWorktreeStatus(porcelain: $0).isDirty } ?? false
     }
 
     /// How many commits the worktree's branch is ahead of its

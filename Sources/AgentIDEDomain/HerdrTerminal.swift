@@ -55,6 +55,9 @@ private struct HerdrTerminalInput: Encodable {
 public enum HerdrTerminal {
     // MARK: Public
 
+    /// Another device deliberately claimed the pane's controller.
+    public static let takeoverReason = "terminal attach taken over"
+
     /// Parses one line of the stream. Unknown record types answer
     /// nil, so additions to the protocol never break the pane.
     public static func parse(line: String) -> HerdrTerminalEvent? {
@@ -83,6 +86,14 @@ public enum HerdrTerminal {
     /// exactly.
     public static func inputCommand(bytes: some Sequence<UInt8>) -> String {
         encode(HerdrTerminalInput(type: "terminal.input", bytes: Data(bytes).base64EncodedString()))
+    }
+
+    /// Marks one paste for herdr, which applies the destination pane's paste mode.
+    public static func pasteBytes(_ text: String) -> [UInt8] {
+        Array((
+            "\u{1B}[200~" + text.replacing("\u{1B}[201~", with: "").replacing("\u{1B}", with: "")
+                + "\u{1B}[201~"
+        ).utf8)
     }
 
     /// The command that sets the controller's viewport size, which

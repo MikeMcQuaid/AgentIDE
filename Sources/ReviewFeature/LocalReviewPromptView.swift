@@ -1,6 +1,6 @@
+import AgentIDEInterface
 import AppKit
 import SwiftUI
-import TerminalUI
 
 struct LocalReviewPromptView: View {
     // MARK: Internal
