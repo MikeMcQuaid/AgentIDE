@@ -62,7 +62,7 @@ struct PullRequestRowView: View {
                 }
             }
             Divider()
-            Button("Open in Browser") { LinkOpener.open(summary.url) }
+            Button("Open in Browser", systemImage: LinkOpener.systemImage) { LinkOpener.open(summary.url) }
         }
     }
 
@@ -217,7 +217,7 @@ struct PullRequestRowView: View {
                 Button {
                     LinkOpener.open(summary.url)
                 } label: {
-                    Image(systemName: "safari")
+                    Image(systemName: LinkOpener.systemImage)
                         .accessibilityLabel("Open pull request in browser")
                 }
                 .buttonStyle(.glass)

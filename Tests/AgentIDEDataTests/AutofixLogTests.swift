@@ -32,7 +32,7 @@ struct AutofixLogTests {
         #expect(prompt.contains("optional") == false)
         #expect(await runner.commands == [
             ["gh", "api", "repos/{owner}/{repo}", "--cache", "60s"],
-            ["gh", "api", "repos/{owner}/{repo}/actions/jobs/11/logs"],
+            ["gh", "api", "--allow-escape-sequences", "repos/{owner}/{repo}/actions/jobs/11/logs"],
         ])
     }
 

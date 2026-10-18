@@ -87,18 +87,6 @@ public struct GitHubClient: Sendable {
         )
     }
 
-    /// One pull request's full summary, fetched when a light list
-    /// row clicks through so its header gains the status icons.
-    public func pullRequestSummary(
-        repositoryPath: String,
-        number: Int,
-        requiredChecks: RequiredChecksReader = { _ in nil },
-    ) async throws -> PullRequestSummary? {
-        let fields = Self.coreFields + "," + Self.statusFields + ",headRepository"
-        let result = try await gh(["pr", "view", String(number), "--json", fields], in: repositoryPath)
-        return await Self.summaries(fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks).first
-    }
-
     /// The authenticated user's login followed by their
     /// organisations, for the repository finder's owner step.
     public func organisations(directory: String) async throws -> [String] {
@@ -376,6 +364,8 @@ public struct GitHubClient: Sendable {
                 AutofixChecks(required: required, results: (row.statusCheckRollup ?? []).map(Self.autofixCheck))
             },
             headRepository: row.headRepository?.nameWithOwner,
+            checkDetails: askedForChecks || row.statusCheckRollup != nil
+                ? Self.checkDetails(row.statusCheckRollup ?? [], required: requiredChecks) : nil,
         )
     }
 }

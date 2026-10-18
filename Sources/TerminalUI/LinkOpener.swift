@@ -76,6 +76,9 @@ public enum UtilityTabTarget {
 public enum LinkOpener {
     // MARK: Public
 
+    /// The shared symbol for opening a page in the browser.
+    public static let systemImage = "safari"
+
     /// The action every in-app link takes, installed at the window's
     /// root: web links route through `open`, so a link in a
     /// conversation or pull request lands in the embedded browser,

@@ -9,6 +9,16 @@ import Testing
 /// the client's tests for length.
 extension GitHubClientTests {
     @Test
+    func `individual job logs read complete output without asking for the run`() async throws {
+        let output = "2026-10-17T10:00:00Z \u{1B}[32msuccess\u{1B}[0m\n" + String(repeating: "line\n", count: 400)
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/11/logs": .success(output),
+        ])
+        let log = try await GitHubClient(runner: runner) { true }.jobLog(repositoryPath: "/repo", jobID: 11)
+        #expect(log == "2026-10-17T10:00:00Z success\n" + String(repeating: "line\n", count: 400))
+    }
+
+    @Test
     func `failed jobs parse from a run's jobs listing`() {
         let json = """
         {"jobs": [
@@ -43,7 +53,8 @@ extension GitHubClientTests {
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
             "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
-            "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("2026-09-01T10:00:00Z it broke\n"),
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/11/logs":
+                .success("2026-09-01T10:00:00Z it broke\n"),
         ])
         let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
         #expect(log == "[job style]\n2026-09-01T10:00:00Z it broke")
@@ -60,7 +71,7 @@ extension GitHubClientTests {
             "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .success("early\tstep\tbroke here\n"),
             "gh run view --job 12 --log-failed": .failure("run 9 is still in progress"),
-            "gh api repos/{owner}/{repo}/actions/jobs/12/logs": .failure("still uploading"),
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/12/logs": .failure("still uploading"),
         ])
         let log = try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
         #expect(log == "early\tstep\tbroke here")
@@ -81,7 +92,8 @@ extension GitHubClientTests {
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
             "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
-            "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .success("PK\u{3}\u{4}archive"),
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/11/logs":
+                .success("PK\u{3}\u{4}archive"),
         ])
         await #expect(throws: Error.self) {
             try await GitHubClient(runner: runner).failedRunLog(repositoryPath: "/repo", runID: 9)
@@ -115,7 +127,7 @@ extension GitHubClientTests {
             "gh run view 9 --log-failed": .failure("run 9 is still in progress"),
             "gh run view 9 --json url,jobs": .success(jobs),
             "gh run view --job 11 --log-failed": .failure("run 9 is still in progress"),
-            "gh api repos/{owner}/{repo}/actions/jobs/11/logs": .failure("still uploading"),
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/11/logs": .failure("still uploading"),
         ])
         let failure = await #expect(throws: GitHubClient.RunLogsUnavailable.self) {
             try await GitHubClient(runner: runner) { true }

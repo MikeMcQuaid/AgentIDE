@@ -51,7 +51,9 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Completes local review and commit rounds before pushing and gathering GitHub feedback, then verifies the final CI and review results before reporting success or continued failure.
 - Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.
 - Collapses resolved conversations and those marked for the next push, keeping contents expandable and copyable with a distinct pending icon.
-- Copies failing CI logs, clearing the clipboard immediately so stale text cannot be pasted while logs load.
+- Filters compact CI checks by requirement and progress beside PR conversation tabs, with full workflow names, event types, required status and timings.
+- Opens individual CI logs with collapsible Actions groups, highlighted diagnostics and optional timestamps, copying complete logs while other checks run.
+- Copies failing CI logs with a count of finished checks, clearing the clipboard immediately while logs load.
 - Preserves CI errors, warnings and failure markers such as ❌ with surrounding diagnostics and stack traces in Checks, Copy all and autofix prompts, including failures in the middle of long logs.
 - Reads complete failed required job logs and condenses them into bounded autofix and clipboard output, prioritising errors over warnings and including diagnostics outside GitHub's recognised steps.
 - Copies pull request URLs and branch names from context menus on pull request rows, headers and actions, including stacked pull requests.

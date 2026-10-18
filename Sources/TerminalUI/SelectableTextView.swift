@@ -7,9 +7,10 @@ import SwiftUI
 public struct SelectableTextView: NSViewRepresentable {
     // MARK: Lifecycle
 
-    /// Creates the view over the attributed text it shows.
-    public init(text: NSAttributedString) {
+    /// Creates the document; a link handler returns true when it handles a local action.
+    public init(text: NSAttributedString, onOpenLink: ((URL) -> Bool)? = nil) {
         self.text = text
+        self.onOpenLink = onOpenLink
     }
 
     // MARK: Public
@@ -25,12 +26,16 @@ public struct SelectableTextView: NSViewRepresentable {
 
         // MARK: Public
 
+        public var onOpenLink: ((URL) -> Bool)?
+
         public func textView(_: NSTextView, clickedOnLink link: Any, at _: Int) -> Bool {
             guard let url = link as? URL else {
                 return false
             }
 
-            LinkOpener.open(url.absoluteString)
+            if onOpenLink?(url) != true {
+                LinkOpener.open(url.absoluteString)
+            }
             return true
         }
     }
@@ -58,7 +63,8 @@ public struct SelectableTextView: NSViewRepresentable {
         return scroll
     }
 
-    public func updateNSView(_ scroll: NSScrollView, context _: Context) {
+    public func updateNSView(_ scroll: NSScrollView, context: Context) {
+        context.coordinator.onOpenLink = onOpenLink
         guard let view = scroll.documentView as? NSTextView,
               unsafe view.textStorage?.isEqual(to: text) == false
         else {
@@ -75,7 +81,9 @@ public struct SelectableTextView: NSViewRepresentable {
     }
 
     public func makeCoordinator() -> Coordinator {
-        Coordinator()
+        let coordinator = Coordinator()
+        coordinator.onOpenLink = onOpenLink
+        return coordinator
     }
 
     // MARK: Private
@@ -83,4 +91,5 @@ public struct SelectableTextView: NSViewRepresentable {
     private static let inset: CGFloat = 8
 
     private let text: NSAttributedString
+    private let onOpenLink: ((URL) -> Bool)?
 }

@@ -25,7 +25,7 @@ extension ReviewView {
         help: String,
         disabled: Bool = false,
     ) -> some View {
-        iconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
+        PaneIconButton(systemImage, help: help, isOn: model.scope == scope, disabled: disabled) {
             model.scope = scope
             model.commitTarget = nil
             collapseOverrides = [:]
@@ -103,36 +103,4 @@ extension ReviewView {
             .disabled(localReview.isBusy)
         }
     }
-
-    /// One icon control; a selected one fills its bubble.
-    func iconButton(
-        _ systemImage: String,
-        help: String,
-        isOn: Bool = false,
-        disabled: Bool = false,
-        action: @escaping () -> Void,
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .foregroundStyle(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                .padding(Self.iconPadding)
-                .background(
-                    RoundedRectangle(cornerRadius: Self.iconCornerRadius)
-                        .fill(isOn ? Color.accentColor.opacity(Self.iconSelectedOpacity) : .clear),
-                )
-                .contentShape(Rectangle())
-                .accessibilityLabel(help)
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .opacity(disabled ? Self.disabledOpacity : 1)
-        // The colour fill alone is invisible to VoiceOver.
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-        .hoverHelp(help)
-    }
-
-    private static let iconPadding: CGFloat = 4
-    private static let iconCornerRadius: CGFloat = 5
-    private static let iconSelectedOpacity = 0.2
-    private static let disabledOpacity = 0.4
 }

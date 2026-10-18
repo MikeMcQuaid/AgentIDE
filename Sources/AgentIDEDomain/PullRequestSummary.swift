@@ -34,6 +34,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         autofixChecks: AutofixChecks? = nil,
         headRepository: String? = nil,
         stackStanding: StackStanding? = nil,
+        // swiftlint:disable:next discouraged_optional_collection - Distinguishes unloaded from empty.
+        checkDetails: [PullRequestCheck]? = nil,
     ) {
         self.number = number
         self.title = title
@@ -60,6 +62,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.autofixChecks = autofixChecks
         self.headRepository = headRepository
         self.stackStanding = stackStanding
+        self.checkDetails = checkDetails
     }
 
     /// Decodes a summary a cache wrote, an older release's included:
@@ -93,6 +96,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         autofixChecks = try container.decodeIfPresent(AutofixChecks.self, forKey: .autofixChecks)
         headRepository = try container.decodeIfPresent(String.self, forKey: .headRepository)
         stackStanding = try container.decodeIfPresent(StackStanding.self, forKey: .stackStanding)
+        checkDetails = try container.decodeIfPresent([PullRequestCheck].self, forKey: .checkDetails)
     }
 
     // MARK: Public
@@ -190,6 +194,11 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// GitHub's reported position, available from REST branch listings.
     public var stackStanding: StackStanding?
 
+    // swiftlint:disable discouraged_optional_collection - Distinguishes unloaded from empty.
+    /// Nil until an enriched summary has read the checks.
+    public var checkDetails: [PullRequestCheck]?
+    // swiftlint:enable discouraged_optional_collection
+
     public let optionalFailures: Int
 
     /// Whether the checks rollup is red: a check the branch requires
@@ -267,6 +276,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             autofixChecks: autofixChecks,
             headRepository: headRepository,
             stackStanding: stackStanding,
+            checkDetails: checkDetails,
         )
         edited.unresolvedComments = unresolvedComments
         return edited

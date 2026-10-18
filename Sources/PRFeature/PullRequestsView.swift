@@ -202,6 +202,7 @@ public struct PullRequestsView: View {
     private func conversation(for summary: PullRequestSummary) -> some View {
         let local = model.localReview(for: summary)
         return PullRequestConversationPane(
+            model: model,
             summary: summary,
             stackDepth: model.stackDepth(for: summary),
             service: service,

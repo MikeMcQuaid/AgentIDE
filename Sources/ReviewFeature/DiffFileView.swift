@@ -175,16 +175,10 @@ struct DiffFileView: View {
     /// Beside the name rather than at the end of the row: it copies
     /// that name, and among the actions it read as one of them.
     private var copyPathButton: some View {
-        Button {
+        PaneIconButton("doc.on.doc", help: "Copy this file's path to the clipboard") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(file.path, forType: .string)
-        } label: {
-            Image(systemName: "doc.on.doc")
-                .accessibilityLabel("Copy file path")
         }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
-        .hoverHelp("Copy this file's path to the clipboard")
     }
 
     private var headerRow: some View {
