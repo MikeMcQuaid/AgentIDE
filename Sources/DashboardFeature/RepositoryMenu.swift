@@ -27,6 +27,10 @@ struct RepositoryMenu: ViewModifier {
                 }
                 .hoverHelp("Copy this repository's full path")
                 Divider()
+                Button("New session from branch…", systemImage: "plus") {
+                    model.openNewSession(for: group.repository, base: selectedBranch)
+                }
+                .hoverHelp("Start a new agent session from this repository's selected branch, or its default branch")
                 Button("Add local directory…", systemImage: "laptopcomputer") { addDirectory() }
                     .hoverHelp(
                         "List a directory of your own here for a shell, an editor and a diff; "
@@ -66,6 +70,15 @@ struct RepositoryMenu: ViewModifier {
     /// confirmation; owned here because nothing outside the menu
     /// reads it.
     @State private var isConfirming = false
+
+    private var selectedBranch: String? {
+        group.items
+            .first { item in
+                item.id == model.selection?.id && item.isPlaceholder == false
+                    && item.worktree.isHostDirectory == false && item.worktree.branch != group.defaultBranch
+            }?.worktree
+            .branch
+    }
 
     /// Asks for the directory, then lists it under this
     /// repository. Nothing is copied or changed on disk.

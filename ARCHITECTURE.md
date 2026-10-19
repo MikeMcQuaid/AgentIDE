@@ -517,6 +517,12 @@ each waited on the other until the app was restarted.
 
 ### Start work
 
+The repository header’s New session from branch… context-menu action
+opens the existing new-session form through
+`DashboardModel.openNewSession(for:base:)`. It presets the selected
+worktree’s branch when it belongs to that repository, otherwise using
+the default branch. Placeholders and host directories supply no base.
+
 1. Input: a prompt, an issue or pull request number or a security
    advisory's GHSA id, plus repository, agent, model and effort. Every
    picker opens on something: the last
