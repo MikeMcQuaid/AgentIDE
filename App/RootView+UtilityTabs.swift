@@ -112,25 +112,50 @@ extension RootView {
             .hidden(shown != .review)
             editorPane(for: item, role: .utility)
                 .hidden(shown != .editor)
-            PullRequestsView(
-                repository: Repository(
-                    name: target.worktree.repositoryName,
-                    path: target.worktree.isHostDirectory
-                        ? target.worktree.path
-                        : target.worktree.repositoryPath,
-                ),
-                items: repositoryItems(for: item),
-                github: dependencies.github,
-                service: dependencies.service,
-                store: dependencies.store,
-                branch: target.worktree.branch,
-                worktreePath: target.worktree.path,
-                defaultBranch: defaultBranch(of: item),
-                isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
-            )
-            .hidden(shown != .pullRequests)
+            pullRequestsPane(for: item, target: target)
+                .hidden(shown != .pullRequests)
             if shown == .errors {
                 ErrorsPane(isVisible: dependencies.dashboard.isWindowVisible)
+            }
+        }
+    }
+
+    /// The Pull requests tab, out of the stack for its length.
+    func pullRequestsPane(for item: WorktreeItem, target: WorktreeItem) -> some View {
+        PullRequestsView(
+            repository: Repository(
+                name: target.worktree.repositoryName,
+                path: target.worktree.isHostDirectory
+                    ? target.worktree.path
+                    : target.worktree.repositoryPath,
+            ),
+            items: repositoryItems(for: item),
+            github: dependencies.github,
+            service: dependencies.service,
+            store: dependencies.store,
+            branch: target.worktree.branch,
+            worktreePath: target.worktree.path,
+            defaultBranch: defaultBranch(of: item),
+            isMainCheckout: target.worktree.path == target.worktree.repositoryPath,
+            onStartAgent: startAgentAction(for: target.worktree),
+        )
+    }
+
+    /// The Pull requests tab's Start Agent action, nil for a host
+    /// directory, which is no repository of the sandbox's.
+    func startAgentAction(for worktree: Worktree) -> StartAgentAction? {
+        guard worktree.isHostDirectory == false else {
+            return nil
+        }
+
+        let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
+        return { number, immediately in
+            Task {
+                await dependencies.dashboard.startAgent(
+                    onPullRequest: number,
+                    repository: repository,
+                    immediately: immediately,
+                )
             }
         }
     }

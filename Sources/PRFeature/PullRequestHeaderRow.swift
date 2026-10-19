@@ -19,6 +19,9 @@ struct PullRequestHeaderRow: View {
     let onCopyComments: @MainActor () async -> Void
     let onOpenChecks: @MainActor () async -> Void
 
+    /// Starts an agent on the pull request, in the list alone.
+    var onStartAgent: StartAgentAction?
+
     /// Opens the title and body for editing, on the conversation's
     /// header alone.
     var onEdit: (@MainActor () -> Void)?
@@ -41,6 +44,7 @@ struct PullRequestHeaderRow: View {
                 showsActions: true,
                 onCopyComments: onCopyComments,
                 onOpenChecks: onOpenChecks,
+                onStartAgent: onStartAgent,
                 onEdit: onEdit,
                 onAskBot: onAskBot,
                 requestableBots: requestableBots,

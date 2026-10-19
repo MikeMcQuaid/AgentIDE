@@ -17,6 +17,10 @@ struct PullRequestRowView: View {
     let onCopyComments: @MainActor () async -> Void
     let onOpenChecks: @MainActor () async -> Void
 
+    /// Starts an agent on the pull request; nil where the list has
+    /// no repository of the sandbox's to start one in.
+    var onStartAgent: StartAgentAction?
+
     /// Opens the title and body for editing; nil where the row is
     /// not the open conversation's header, or the pull request is
     /// no longer open to edit.
@@ -48,6 +52,13 @@ struct PullRequestRowView: View {
         // The same actions as the buttons, reachable from list rows
         // that hide them.
         .contextMenu {
+            if let onStartAgent, summary.state == "OPEN" {
+                Button("Start Agent…") { onStartAgent(summary.number, false) }
+                    .modifierKeyAlternate(.option) {
+                        Button("Start Agent Without Prompt") { onStartAgent(summary.number, true) }
+                    }
+                Divider()
+            }
             CopyPullRequestURLButton(summary.url)
             CopyBranchNameButton(summary.headBranch)
             Divider()

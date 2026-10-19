@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -8,16 +9,19 @@ import TerminalUI
 /// that searches as you type: opening it focuses a field over the
 /// list, digits jump to a number and anything else matches a GHSA
 /// id or a title. Arrows move the highlight, return or a click picks
-/// and Escape closes it.
+/// and Escape closes it. One that `allowsSeveral` still picks one that
+/// way; its rows' checkboxes, Cmd-click and Cmd-Return check several
+/// while the list stays open, and a footer counts and clears them.
 struct ReferencedItemPicker<Item: ReferencedItem>: View {
     // MARK: Lifecycle
 
     /// Creates the picker; `label` names it for assistive technology
     /// the way a picker's own label would, since the button shows
-    /// only the pick.
+    /// only the picks.
     init(
         _ label: String,
-        selection: Binding<Item.ID?>,
+        selection: Binding<Set<Item.ID>>,
+        allowsSeveral: Bool,
         items: [Item],
         placeholder: String,
         searchPrompt: String,
@@ -27,6 +31,7 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
     ) {
         self.label = label
         _selection = selection
+        self.allowsSeveral = allowsSeveral
         self.items = items
         self.placeholder = placeholder
         self.searchPrompt = searchPrompt
@@ -37,9 +42,10 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
 
     // MARK: Internal
 
-    @Binding var selection: Item.ID?
+    @Binding var selection: Set<Item.ID>
 
     let label: String
+    let allowsSeveral: Bool
     let items: [Item]
     let placeholder: String
     let searchPrompt: String
@@ -48,13 +54,21 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
     let isLoading: Bool
 
     var body: some View {
+        let picked = items.filter { selection.contains($0.id) }
         Button {
             isPresented = true
         } label: {
             HStack {
-                Text(selectedLabel ?? placeholder)
+                Text(picked.first.map { $0.reference + " " + $0.title } ?? placeholder)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                // Outside the title, so a long one never truncates
+                // the count away.
+                if picked.count > 1 {
+                    Text("+" + String(picked.count - 1))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down")
                     .imageScale(.small)
@@ -74,10 +88,6 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
     @State private var highlighted = 0
     @FocusState private var fieldFocused: Bool
 
-    private var selectedLabel: String? {
-        items.first { $0.id == selection }.map { $0.reference + " " + $0.title }
-    }
-
     /// Ranked once per render, since the body reads it several times.
     private var results: [Item] {
         ReferencedItemSearch.rank(items, query: query)
@@ -93,6 +103,7 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
                         .focused($fieldFocused)
                         .onChange(of: query) { highlighted = 0 }
                         .onSubmit { pick(ranked, at: highlighted) }
+                        .onKeyPress(.return, phases: .down) { press in check(ranked, at: highlighted, on: press) }
                         .highlightNavigation($highlighted, count: ranked.count)
                     if ranked.isEmpty {
                         Group {
@@ -107,6 +118,10 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
                     } else {
                         resultsList(ranked)
                     }
+                    if allowsSeveral, items.isEmpty == false {
+                        Divider()
+                        footer(ranked)
+                    }
                 }
                 .padding(Layout.spacing)
             }
@@ -114,7 +129,7 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
         }
         .onExitCommand { isPresented = false }
         .onAppear {
-            highlighted = ranked.firstIndex { $0.id == selection } ?? 0
+            highlighted = ranked.firstIndex { selection.contains($0.id) } ?? 0
             fieldFocused = true
         }
         // Clearing on close rather than open: the query's onChange
@@ -127,7 +142,9 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
             results,
             id: \.id,
             highlighted: highlighted,
-            help: "Arrows move the highlight; return or a click picks",
+            help: allowsSeveral
+                ? "Return or a click picks just this one; its checkbox, Cmd-click or Cmd-Return checks several"
+                : "Arrows move the highlight; return or a click picks",
             scrolls: false,
             onPick: { pick($0) },
             row: { row($0) },
@@ -136,12 +153,18 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
 
     private func row(_ item: Item) -> some View {
         HStack(spacing: Layout.spacing) {
+            if allowsSeveral {
+                Toggle(isOn: isChecked(item)) { EmptyView() }
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .accessibilityLabel("Include " + item.reference)
+            }
             Text(item.reference)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
             Text(item.title).lineLimit(1)
             Spacer(minLength: 0)
-            if item.id == selection {
+            if allowsSeveral == false, selection.contains(item.id) {
                 Image(systemName: "checkmark")
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("Chosen")
@@ -151,15 +174,66 @@ struct ReferencedItemPicker<Item: ReferencedItem>: View {
         .padding(.vertical, Layout.rowPadding)
     }
 
+    /// The count and bulk actions under a list that checks several,
+    /// always shown so the popover never changes height as the first
+    /// box is checked, and saying how before anything is.
+    private func footer(_ ranked: [Item]) -> some View {
+        let unchecked = ranked.filter { selection.contains($0.id) == false }
+        return HStack(spacing: Layout.spacing) {
+            Text(selection.isEmpty ? "Check several to start one session each" : String(selection.count) + " checked")
+                .interfaceFont(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if query.isEmpty == false, unchecked.isEmpty == false {
+                Button("Check all " + String(unchecked.count)) { selection.formUnion(unchecked.map(\.id)) }
+                    .hoverHelp("Check every result matching the search")
+            }
+            Button("Clear") { selection = [] }
+                .disabled(selection.isEmpty)
+                .hoverHelp("Uncheck everything")
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+    }
+
+    private func isChecked(_ item: Item) -> Binding<Bool> {
+        Binding(
+            get: { selection.contains(item.id) },
+            set: { isOn in
+                if isOn {
+                    selection.insert(item.id)
+                } else {
+                    selection.remove(item.id)
+                }
+            },
+        )
+    }
+
     private func pick(_ results: [Item], at index: Int) {
         if results.indices.contains(index) {
             pick(results[index])
         }
     }
 
+    /// Picks just this one and closes, or with Cmd held checks it
+    /// beside the rest, the way Cmd-click adds to a selection
+    /// everywhere else on the Mac.
     private func pick(_ item: Item) {
-        selection = item.id
-        isPresented = false
+        if allowsSeveral, NSEvent.modifierFlags.contains(.command) {
+            isChecked(item).wrappedValue.toggle()
+        } else {
+            selection = [item.id]
+            isPresented = false
+        }
+    }
+
+    private func check(_ results: [Item], at index: Int, on press: KeyPress) -> KeyPress.Result {
+        guard allowsSeveral, press.modifiers.contains(.command), results.indices.contains(index) else {
+            return .ignored
+        }
+
+        isChecked(results[index]).wrappedValue.toggle()
+        return .handled
     }
 }
 

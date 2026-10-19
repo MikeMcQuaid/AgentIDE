@@ -292,7 +292,7 @@ public final class DashboardModel {
 
     static let selectedWorktreeKey = "selectedWorktreePath"
 
-    /// A failed launch's draft waiting for its form to show.
+    /// A draft waiting for its form to show.
     var launchRetry: LaunchRetry?
 
     @ObservationIgnored var notifiedFeedback: [String: PullRequestAutomation]

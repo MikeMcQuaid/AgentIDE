@@ -69,9 +69,9 @@ extension SessionService {
     /// look sessions up by working directory.
     public func resumeInNewWorktree(_ past: TranscriptSession, repository: Repository) async throws -> String {
         let seed = past.title.isEmpty ? past.id : past.title
-        let branch = await availableBranch(repository: repository, prompt: "resume " + seed)
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch)
-        let sessionName = SessionName.make(repository: repository.name, branch: branch, agent: past.agent)
+        let slot = try await createWorktree(repository: repository, named: branchName(for: "resume " + seed))
+        let worktreePath = slot.path
+        let sessionName = SessionName.make(repository: repository.name, branch: slot.branch, agent: past.agent)
         let agentRunner = runner(for: past.agent)
         await progress("Copying the transcript into the new worktree")
         copyTranscript(past, intoWorktree: worktreePath, using: agentRunner)

@@ -109,10 +109,9 @@ public struct SessionService: Sendable {
         await clearQuarantine(for: agent)
         async let probed = probeVersion(of: agent)
         await progress("Naming the branch from the prompt, and asking the CLI its version beside it")
-        let branch = await availableBranch(repository: repository, prompt: prompt)
-        await progress("Creating the worktree for `" + branch + "`")
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch, base: baseBranch)
-        let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
+        let name = await branchName(for: prompt)
+        await progress("Creating the worktree for `" + name + "`")
+        let slot = try await createWorktree(repository: repository, named: name, base: baseBranch)
         return try await start(
             prompt: prompt,
             agent: agent,
@@ -186,6 +185,9 @@ public struct SessionService: Sendable {
     /// untouched, and a class so every copy of the service shares
     /// one set of in-flight listings.
     let fileListings: FileListings = .init()
+
+    /// See `InFlightFetches`; shared by every copy like the listings.
+    let inFlightFetches: InFlightFetches = .init()
     let keychainCheck: KeychainCheck = .init()
     let feedbackCollector: FeedbackCollector = .init()
 

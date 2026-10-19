@@ -102,7 +102,7 @@ extension SessionNavigationTests {
             }
             let submission = try #require(submitted)
             #expect(submission.source == .issue)
-            #expect(submission.number == 12)
+            #expect(submission.numbers == [12])
             #expect(submission.context == "Fix it prompt")
             #expect(submission.agent == .codexCLI)
             #expect(submission.options == AgentLaunchOptions(model: "test-model", effort: "low"))

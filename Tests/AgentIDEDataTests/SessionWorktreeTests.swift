@@ -1,6 +1,9 @@
 @testable import AgentIDEData
 import Foundation
+import Synchronization
 import Testing
+
+// MARK: - SessionWorktreeTests
 
 struct SessionWorktreeTests {
     @Test
@@ -18,6 +21,35 @@ struct SessionWorktreeTests {
 
         #expect(try await world.service.git.worktrees(of: world.repository).isEmpty)
         #expect(world.service.store.load().gitFetchedAt[world.repository.path] == nil)
+    }
+
+    @Test
+    func `worktrees started together under one name get distinct branches`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+
+        async let first = world.service.createWorktree(repository: world.repository, named: "same_work")
+        async let second = world.service.createWorktree(repository: world.repository, named: "same_work")
+        let branches = try await [first.branch, second.branch]
+
+        #expect(Set(branches) == ["same_work", "same_work-2"])
+    }
+
+    @Test
+    func `stale remotes asked for together are fetched once`() async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let origin = world.root + "/origin"
+        try await TestSupport.makeRepository(at: origin)
+        try await TestSupport.runGit(["remote", "add", "origin", origin], in: world.repository.path)
+        let runner = FetchCountingRunner()
+        let service = world.service(herdr: world.herdr, git: GitClient(runner: runner))
+
+        async let first: Void = service.fetchIfStale(repositoryPath: world.repository.path)
+        async let second: Void = service.fetchIfStale(repositoryPath: world.repository.path)
+        _ = try await (first, second)
+
+        #expect(runner.fetches.withLock(\.self) == 1)
     }
 
     @Test(arguments: [nil, -3_601, -1_800, -30] as [TimeInterval?])
@@ -58,4 +90,40 @@ struct SessionWorktreeTests {
             #expect(world.service.store.load().gitFetchedAt[repository.path] == stamp)
         }
     }
+}
+
+// MARK: - FetchCountingRunner
+
+/// Runs every command for real, counting the `git fetch`es.
+private final class FetchCountingRunner: ProcessRunner {
+    // MARK: Lifecycle
+
+    deinit {
+        // Nothing to clean up.
+    }
+
+    // MARK: Internal
+
+    let fetches: Mutex<Int> = .init(0)
+
+    func run(
+        _ arguments: [String],
+        workingDirectory: String?,
+        environment: [String: String],
+        outputLimit: Int?,
+    ) async throws -> ProcessResult {
+        if arguments.contains("fetch") {
+            fetches.withLock { $0 += 1 }
+        }
+        return try await runner.run(
+            arguments,
+            workingDirectory: workingDirectory,
+            environment: environment,
+            outputLimit: outputLimit,
+        )
+    }
+
+    // MARK: Private
+
+    private let runner: FoundationProcessRunner = .init()
 }

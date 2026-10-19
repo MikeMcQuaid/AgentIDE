@@ -21,7 +21,9 @@ public extension SessionService {
                 return SessionName.make(repository: repository.name, branch: branch, agent: prompt.agent)
             }
         } else {
-            path = try await service.createWorktreePath(repository: repository, branch: branch)
+            path = try await git.withRemoteOperation(worktreePath: repository.path) {
+                try await service.createWorktreePath(repository: repository, branch: branch)
+            }
         }
         return try await service.start(
             prompt: prompt.prompt,

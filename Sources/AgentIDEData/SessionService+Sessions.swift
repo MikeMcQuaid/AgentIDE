@@ -222,12 +222,17 @@ public extension SessionService {
     /// pane listing, which is all a resume needs to know before
     /// launching, where a whole overview read every worktree's git.
     func hasLiveSession(worktreePath: String) async -> Bool {
+        await liveSessionName(worktreePath: worktreePath) != nil
+    }
+
+    /// The agent session running in a worktree, if one is.
+    func liveSessionName(worktreePath: String) async -> String? {
         let recorded = store.load().sessionsByWorktree[worktreePath]
         let panes = await (try? herdr.panes()) ?? []
-        return panes.contains { pane in
+        return panes.first { pane in
             SessionName.isAgentIDE(pane.sessionName) && pane.isFinished == false
                 && (pane.sessionName == recorded || pane.currentPath == worktreePath)
-        }
+        }?.sessionName
     }
 
     /// Whether the worktree's last session ended by explicit close,

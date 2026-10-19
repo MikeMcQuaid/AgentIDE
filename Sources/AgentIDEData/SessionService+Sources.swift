@@ -104,48 +104,11 @@ public extension SessionService {
             body: issue.body,
             context: context,
         )
-        let branch = await availableBranch(repository: repository, prompt: "issue-\(number)-" + issue.title)
-        let worktreePath = try await createWorktreePath(repository: repository, branch: branch, base: baseBranch)
-        let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
-        return try await start(
-            prompt: prompt,
-            agent: agent,
-            options: options,
-            slot: slot,
-            probed: probed,
+        let slot = try await createWorktree(
+            repository: repository,
+            named: branchName(for: "issue-\(number)-" + issue.title),
+            base: baseBranch,
         )
-    }
-
-    /// Creates a session on a pull request's own branch: the worktree
-    /// is checked out with `gh pr checkout`, so pushes and pulls
-    /// track the pull request directly.
-    func createSession(
-        fromPullRequest number: Int,
-        repository: Repository,
-        context: String,
-        agent: AgentKind,
-        options: AgentLaunchOptions = AgentLaunchOptions(),
-    ) async throws -> String {
-        await clearQuarantine(for: agent)
-        async let probed = probeVersion(of: agent)
-        let detail = try await github.pullRequestDetail(repositoryPath: repository.path, number: number)
-        let prompt = GitHubClient.pullRequestPrompt(
-            number: number,
-            title: detail.title,
-            body: detail.body,
-            context: context,
-        )
-        let worktreePath = try await createDetachedWorktreePath(repository: repository, name: "pr-\(number)")
-        try await git.withRemoteOperation(worktreePath: worktreePath) {
-            try await github.checkoutPullRequest(worktreePath: worktreePath, number: number)
-        }
-        let branch = detail.headBranch.isEmpty ? "pr-\(number)" : detail.headBranch
-        // A pull request from a fork is checked out with the fork's
-        // URL and no remote named for it: naming one here is what
-        // gives the branch a tracking ref to count against and a
-        // remote to push back to.
-        _ = await forkRemote(worktreePath: worktreePath, branch: branch)
-        let slot = WorktreeSlot(repository: repository, branch: branch, path: worktreePath)
         return try await start(
             prompt: prompt,
             agent: agent,
@@ -158,16 +121,16 @@ public extension SessionService {
     /// How much of the prompt seeds the fallback branch name.
     internal static let branchSlugLength = 40
 
-    /// The branch a new session gets, kept beside the other naming
+    /// The branch name a new session asks for, numbered by
+    /// `createWorktree` if taken; kept beside the other naming
     /// helpers for the main file's length.
-    func availableBranch(repository: Repository, prompt: String) async -> String {
+    func branchName(for prompt: String) async -> String {
         // The on-device model names the branch from what the task
         // means; without it the prompt's first words serve, in the
         // same underscore style.
         let fallback = SessionName.slug(String(prompt.prefix(Self.branchSlugLength)))
             .replacing("-", with: "_")
-        let base = await summariser.branchName(for: prompt) ?? fallback
-        return await availableBranch(repository: repository, base: base)
+        return await summariser.branchName(for: prompt) ?? fallback
     }
 
     /// Fetches origin and hard-resets the main checkout to its

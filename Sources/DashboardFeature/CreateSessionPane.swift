@@ -129,7 +129,7 @@ public struct CreateSessionPane: View {
             )
 
         case .issue:
-            guard let number = submission.number else {
+            guard let number = submission.numbers.first else {
                 return
             }
 
@@ -142,7 +142,7 @@ public struct CreateSessionPane: View {
             )
 
         case .pullRequest:
-            guard let number = submission.number else {
+            guard let number = submission.numbers.first else {
                 return
             }
 

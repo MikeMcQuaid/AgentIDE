@@ -19,6 +19,8 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Checks local prerequisites at launch and guides you through a setup wizard with copyable commands before opening a repository or prompt.
 - Starts sessions while others are launching and keeps failed launches available to retry with their original choices.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
+- Starts sessions on several picked issues or pull requests at once, each in its own worktree with the same optional prompt.
+- Starts an agent on a listed pull request from its context menu, or straight away without a prompt by holding Option.
 - Starts a session on top of another branch's work, so a large change splits into stacked pull requests.
 - Schedules repository prompts daily, weekly or monthly while AgentIDE is open, catching up once after reopening or waking.
 - Shows agent activity, pull requests, CI checks and uncommitted changes across repositories in one sidebar.

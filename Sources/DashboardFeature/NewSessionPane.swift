@@ -28,6 +28,7 @@ public struct NewSessionPane: View {
             AgentSessionForm(
                 model: model,
                 repository: repository,
+                picksSeveral: true,
                 submitTitle: "Start agent",
                 submitHelp: "Create a worktree and branch and launch the agent in it (Cmd-Return)",
                 onSourceChange: { source = $0 },
@@ -112,6 +113,20 @@ public struct NewSessionPane: View {
         }
     }
 
+    /// Launches every pick side by side; only the first takes the
+    /// selection, so the sidebar does not jump from row to row as
+    /// their placeholders appear.
+    private func startEach(
+        _ numbers: [Int],
+        _ launch: @escaping @MainActor @Sendable (Int, Bool) async -> Void,
+    ) async {
+        await withTaskGroup { group in
+            for (index, number) in numbers.enumerated() {
+                group.addTask { await launch(number, index == 0) }
+            }
+        }
+    }
+
     private func start(_ submission: AgentSessionForm.Submission) async {
         guard let repository else {
             return
@@ -128,31 +143,30 @@ public struct NewSessionPane: View {
             )
 
         case .issue:
-            guard let number = submission.number else {
-                return
+            let base = model.newSessionBase
+            await startEach(submission.numbers) { number, reveals in
+                await model.createSession(
+                    fromIssue: number,
+                    repository: repository,
+                    context: submission.context,
+                    agent: submission.agent,
+                    options: submission.options,
+                    baseBranch: base,
+                    reveals: reveals,
+                )
             }
-
-            await model.createSession(
-                fromIssue: number,
-                repository: repository,
-                context: submission.context,
-                agent: submission.agent,
-                options: submission.options,
-                baseBranch: model.newSessionBase,
-            )
 
         case .pullRequest:
-            guard let number = submission.number else {
-                return
+            await startEach(submission.numbers) { number, reveals in
+                await model.createSession(
+                    fromPullRequest: number,
+                    repository: repository,
+                    context: submission.context,
+                    agent: submission.agent,
+                    options: submission.options,
+                    reveals: reveals,
+                )
             }
-
-            await model.createSession(
-                fromPullRequest: number,
-                repository: repository,
-                context: submission.context,
-                agent: submission.agent,
-                options: submission.options,
-            )
 
         case .advisory:
             guard let ghsaID = submission.ghsaID else {
