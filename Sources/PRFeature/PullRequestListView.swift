@@ -27,6 +27,8 @@ struct PullRequestListView: View {
     /// fights SwiftFormat.
     let onSelect: (PullRequestSummary) -> Void
 
+    let onStartAgent: StartAgentAction?
+
     @Binding var page: Int
 
     var body: some View {
@@ -99,6 +101,7 @@ struct PullRequestListView: View {
             onBack: nil,
             onCopyComments: noAction,
             onOpenChecks: noAction,
+            onStartAgent: onStartAgent,
         )
         .contentShape(Rectangle())
         .onTapGesture { onSelect(summary) }

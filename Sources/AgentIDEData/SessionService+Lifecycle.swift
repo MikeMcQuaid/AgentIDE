@@ -123,6 +123,23 @@ public extension SessionService {
         return path
     }
 
+    /// Names a free branch after `name` and adds its worktree, one
+    /// launch at a time per repository: launches started together
+    /// all found the same name free, and their fetches and worktree
+    /// additions raced on the same refs. A launch queued behind
+    /// another finds that one's fetch fresh and skips its own.
+    internal func createWorktree(
+        repository: Repository,
+        named name: String,
+        base: String? = nil,
+    ) async throws -> WorktreeSlot {
+        try await git.withRemoteOperation(worktreePath: repository.path, onWait: progress) {
+            let branch = await availableBranch(repository: repository, base: name)
+            let path = try await createWorktreePath(repository: repository, branch: branch, base: base)
+            return WorktreeSlot(repository: repository, branch: branch, path: path)
+        }
+    }
+
     /// Adds a detached worktree, letting `gh pr checkout` create the
     /// branch afterwards.
     func createDetachedWorktreePath(repository: Repository, name: String) async throws -> String {

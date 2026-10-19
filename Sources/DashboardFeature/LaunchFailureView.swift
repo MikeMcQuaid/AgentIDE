@@ -18,8 +18,9 @@ struct LaunchDraft: Equatable {
 
 // MARK: - LaunchRetry
 
-/// A failed launch's draft on its way back to the form that started
-/// it: the new session form, or a worktree's own at `worktreePath`.
+/// A draft on its way to a form: a failed launch's back to the one
+/// that started it, the new session form or a worktree's own at
+/// `worktreePath`, or a pull request list's to the new session form.
 /// The repository matters too: a new session form still showing
 /// another repository takes the draft only once it has switched,
 /// since switching resets the picks.

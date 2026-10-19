@@ -530,6 +530,25 @@ each waited on the other until the app was restarted.
    containing it (a GHSA id, case aside) and then ranks titles through
    `FuzzyMatcher`.
    Surrounding whitespace and line breaks are trimmed for pasted numbers.
+   A click or return picks one and closes, as everywhere else; in the
+   new session form, each row's checkbox, Cmd-click or Cmd-Return
+   checks several while the list stays open, and a footer that never
+   changes the popover's height counts them, clears them or checks
+   every search result. A worktree's own form, which is one place,
+   takes one. Several picks
+   become one ordinary launch per pick, side by side, each with the
+   same typed context, its own placeholder, progress and failure, and
+   a retry of just that pick. Only the first takes the selection, so
+   the sidebar does not jump from row to row as they appear. Nothing
+   caps how many: the launches only queue where they would write the
+   same repository's refs and config (step 3).
+   A pull request row in the Pull requests tab offers Start Agent…,
+   which opens this form on that pull request, and with Option held,
+   Start Agent Without Prompt, which launches at once on its title and
+   body with the agent, model and effort last chosen, as Shortcuts do.
+   That launch never takes the selection: the list belongs to the
+   selected row, and moving it lost the list the next pull request
+   was to be started from.
    Advisories are the repository's own, read through REST
    (`repos/{owner}/{repo}/security-advisories`, one call per state,
    which is the only filter the endpoint takes) and only in the triage
@@ -598,7 +617,25 @@ each waited on the other until the app was restarted.
    (`followDefaultBranch`, the main checkout moving with it), and
    `agentide new` re-points `origin/HEAD` the same way; an old clone
    once needed `git remote set-head origin --auto` by hand before it
-   could start anything. `git worktree add` runs under
+   could start anything. Naming a free branch, the fetch and
+   `git worktree add` run one launch at a time per repository, through
+   the queue push and fork fetches already take (`withRemoteOperation`,
+   keyed by git's common directory), and `gh pr checkout` with them,
+   since it writes the branch's config: launches started together all
+   found one name free and raced their fetches on the same refs. A
+   launch queued behind another says so in its progress and finds that
+   one's fetch fresh. Any caller finding a repository's remotes stale
+   (a launch, a rebase, a push) joins the fetch already running there
+   (`InFlightFetches`) rather than starting a second. The agents
+   themselves start side by side.
+   A pull request whose `pr-<number>` worktree exists is worked on
+   there, or answers with the agent already running in it, rather than
+   failing to add a second; the directory identifies it, not the branch,
+   which two forks' pull requests can share. A pull request already
+   launching is not launched again until that launch ends: the second
+   found the first's worktree before its agent was running and killed
+   it to start its own.
+   `git worktree add` runs under
    `/Users/Shared/sv-<user>/worktrees/<repository>/<branch>`, where
    `<repository>` names the main checkout's directory. A clone takes
    the repository's name, or `<owner>-<name>` when another owner's

@@ -46,7 +46,8 @@ public extension DashboardModel {
         }
     }
 
-    /// Creates a session working on a GitHub issue.
+    /// Creates a session working on a GitHub issue; `reveals` is
+    /// false for every launch of several picks but the first.
     func createSession(
         fromIssue number: Int,
         repository: Repository,
@@ -54,11 +55,12 @@ public extension DashboardModel {
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
         baseBranch: String? = nil,
+        reveals: Bool = true,
     ) async {
         let draft = LaunchDraft(
             text: context, source: .issue, agent: agent, options: options, number: number, base: baseBranch,
         )
-        await run(draft, in: repository, placeholder: "issue-\(number)") { service in
+        await run(draft, in: repository, placeholder: "issue-\(number)", reveals: reveals) { service in
             try await service.createSession(
                 fromIssue: number,
                 repository: repository,
@@ -70,16 +72,27 @@ public extension DashboardModel {
         }
     }
 
-    /// Creates a session on a pull request's own branch.
+    /// Creates a session on a pull request's own branch; `reveals` as
+    /// for issues.
     func createSession(
         fromPullRequest number: Int,
         repository: Repository,
         context: String,
         agent: AgentKind,
         options: AgentLaunchOptions = AgentLaunchOptions(),
+        reveals: Bool = true,
     ) async {
+        // One launch per pull request at a time: a second found the
+        // first's worktree before its agent was running, and killed
+        // that agent to start its own. A launch holds a progress log
+        // under its placeholder's path until it ends.
+        let pending = repository.path + Self.placeholderMarker + "pr-\(number)-"
+        guard launchProgresses.keys.contains(where: { $0.hasPrefix(pending) }) == false else {
+            return
+        }
+
         let draft = LaunchDraft(text: context, source: .pullRequest, agent: agent, options: options, number: number)
-        await run(draft, in: repository, placeholder: "pr-\(number)") { service in
+        await run(draft, in: repository, placeholder: "pr-\(number)", reveals: reveals) { service in
             try await service.createSession(
                 fromPullRequest: number,
                 repository: repository,
@@ -186,6 +199,7 @@ public extension DashboardModel {
         in repository: Repository? = nil,
         placeholder: String? = nil,
         at worktreePath: String? = nil,
+        reveals: Bool = true,
         _ work: (SessionService) async throws -> String,
     ) async -> LaunchFailure? {
         // Only creation shows a placeholder: launching an agent in an
@@ -205,9 +219,14 @@ public extension DashboardModel {
             }
         }
         progress.begin("Starting")
-        showsNewSession = false
-        if let pending {
-            reveal(pending)
+        // A launch that leaves the selection alone leaves the page
+        // over it alone too: one started from the pull request list
+        // closed a new session form being filled in beside it.
+        if reveals {
+            showsNewSession = false
+            if let pending {
+                reveal(pending)
+            }
         }
         do {
             // Told once per run, and never acted on: the steps are

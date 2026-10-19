@@ -22,8 +22,10 @@ public struct PullRequestsView: View {
         worktreePath: String? = nil,
         defaultBranch: String? = nil,
         isMainCheckout: Bool = false,
+        onStartAgent: StartAgentAction? = nil,
     ) {
         self.service = service
+        self.onStartAgent = onStartAgent
         self.items = items
         self.isMainCheckout = isMainCheckout
         branchName = branch
@@ -160,6 +162,7 @@ public struct PullRequestsView: View {
     @State private var loadedIdentity = ""
 
     private let service: SessionService
+    private let onStartAgent: StartAgentAction?
 
     private let isMainCheckout: Bool
 
@@ -191,6 +194,7 @@ public struct PullRequestsView: View {
             hasMore: model.hasMore,
             stackDepth: { model.stackDepth(for: $0) },
             onSelect: { model.select($0) },
+            onStartAgent: onStartAgent,
             page: $model.page,
         )
     }

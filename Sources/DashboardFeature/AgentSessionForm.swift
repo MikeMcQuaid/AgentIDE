@@ -13,7 +13,8 @@ struct AgentSessionForm: View {
     /// What the user chose, handed to the submit action.
     struct Submission {
         let source: PromptSource
-        let number: Int?
+        /// The picked issues or pull requests, one launch each.
+        let numbers: [Int]
         let ghsaID: String?
         let prompt: String
         let context: String
@@ -32,6 +33,10 @@ struct AgentSessionForm: View {
     /// The worktree this form starts an agent in, nil on the new
     /// session form; a failed launch's retry finds its form by it.
     var worktreePath: String?
+
+    /// Whether the issue and pull request pickers take several picks,
+    /// each its own session; a worktree's own form is one place.
+    var picksSeveral = false
 
     let submitTitle: String
     let submitHelp: String
@@ -88,7 +93,11 @@ struct AgentSessionForm: View {
     @AppStorage("agentKind")
     private var agentKindName = AgentKind.claudeCode.rawValue
 
-    @State private var number: Int?
+    /// Kept per source: issues and pull requests share one numbering,
+    /// so an issue's number carried over to the pull request picker
+    /// would start a launch the picker did not show.
+    @State private var issueNumbers: Set<Int> = []
+    @State private var pullRequestNumbers: Set<Int> = []
     @State private var ghsaID: String?
 
     /// Guards against double submission: creating a worktree takes
@@ -133,10 +142,32 @@ struct AgentSessionForm: View {
 
         case .issue,
              .pullRequest:
-            return number == nil
+            return pickedNumbers.isEmpty
 
         case .advisory:
             return ghsaID == nil
+        }
+    }
+
+    private var pickedNumbers: Set<Int> {
+        switch source {
+        case .issue:
+            issueNumbers
+
+        case .pullRequest:
+            pullRequestNumbers
+
+        case .advisory,
+             .prompt:
+            []
+        }
+    }
+
+    private var startTitle: String {
+        if pickedNumbers.count > 1 {
+            "Start " + String(pickedNumbers.count) + " agents"
+        } else {
+            submitTitle
         }
     }
 
@@ -144,7 +175,7 @@ struct AgentSessionForm: View {
     /// prompt editor, where plain Return types a newline, via a
     /// hidden button carrying the second shortcut.
     private var submitButton: some View {
-        Button(isStarting ? "Starting…" : submitTitle) { submit() }
+        Button(isStarting ? "Starting…" : startTitle) { submit() }
             .keyboardShortcut(.defaultAction)
             .disabled(submitDisabled || isStarting)
             .hoverHelp(submitHelp)
@@ -167,63 +198,31 @@ struct AgentSessionForm: View {
         case .advisory,
              .issue,
              .pullRequest:
-            numberPicker
+            SourcePicker(
+                source: source,
+                repository: repository,
+                picksSeveral: picksSeveral,
+                issueNumbers: $issueNumbers,
+                pullRequestNumbers: $pullRequestNumbers,
+                ghsaID: $ghsaID,
+                issues: issues,
+                pullRequests: pullRequests,
+                advisories: advisories,
+                isLoadingSources: isLoadingSources,
+                isLoadingAdvisories: isLoadingAdvisories,
+                reloadAdvisories: reloadAdvisories,
+            )
             TextEditor(text: $prompt)
                 .interfaceFont(.body)
                 .frame(minHeight: Self.contextHeight)
                 .border(.separator)
-                .hoverHelp("Context appended to the fetched title and body; anything typed first is kept")
-        }
-    }
-
-    @ViewBuilder private var numberPicker: some View {
-        if repository == nil {
-            Text("Pick a repository first.").interfaceFont(.callout).foregroundStyle(.secondary)
-        } else if source == .issue {
-            ReferencedItemPicker(
-                "Issue",
-                selection: $number,
-                items: issues,
-                placeholder: "Choose an open issue",
-                searchPrompt: "Find an issue by number or title",
-                loadingTitle: "Listing open issues…",
-                emptyTitle: "No open issues",
-                isLoading: isLoadingSources,
-            )
-            .hoverHelp("The repository's open issues; the pick becomes the prompt")
-        } else if source == .advisory {
-            ReferencedItemPicker(
-                "Security advisory",
-                selection: $ghsaID,
-                items: advisories,
-                placeholder: "Choose an advisory in triage or draft",
-                searchPrompt: "Find an advisory by GHSA id or title",
-                loadingTitle: "Listing advisories in triage or draft…",
-                emptyTitle: "No advisories in triage or draft",
-                isLoading: isLoadingAdvisories,
-            )
-            .hoverHelp(
-                "The repository's security advisories still in triage or draft; the pick becomes the prompt,"
-                    + " and the agent is told to keep its commits and pull request quiet about it",
-            )
-            .task(id: repository?.id ?? "") { await reloadAdvisories() }
-        } else {
-            ReferencedItemPicker(
-                "Pull request",
-                selection: $number,
-                items: pullRequests,
-                placeholder: "Choose an open pull request",
-                searchPrompt: "Find a pull request by number or title",
-                loadingTitle: "Listing open pull requests…",
-                emptyTitle: "No open pull requests",
-                isLoading: isLoadingSources,
-            )
-            .hoverHelp("The repository's open pull requests; its branch is checked out to work on directly")
+                .hoverHelp("Context appended to each fetched title and body; anything typed first is kept")
         }
     }
 
     private func reloadSources() async {
-        number = nil
+        issueNumbers = []
+        pullRequestNumbers = []
         ghsaID = nil
         advisories = []
         applyRetry()
@@ -283,7 +282,9 @@ struct AgentSessionForm: View {
 
         model.launchRetry = nil
         source = retry.draft.source
-        number = retry.draft.number
+        let picks = Set([retry.draft.number].compactMap(\.self))
+        issueNumbers = retry.draft.source == .issue ? picks : []
+        pullRequestNumbers = retry.draft.source == .pullRequest ? picks : []
         ghsaID = retry.draft.ghsaID
         prompt = retry.draft.text
         agentKindName = retry.draft.agent.rawValue
@@ -300,7 +301,7 @@ struct AgentSessionForm: View {
         isStarting = true
         let submission = Submission(
             source: source,
-            number: number,
+            numbers: pickedNumbers.sorted(),
             ghsaID: ghsaID,
             prompt: source == .prompt ? prompt : "",
             context: source == .prompt ? "" : prompt,
