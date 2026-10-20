@@ -195,6 +195,7 @@ public struct PullRequestsView: View {
             stackDepth: { model.stackDepth(for: $0) },
             onSelect: { model.select($0) },
             onStartAgent: onStartAgent,
+            onNextPage: { await model.showNextPage() },
             page: $model.page,
         )
     }

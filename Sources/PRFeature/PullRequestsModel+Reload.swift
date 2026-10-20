@@ -26,14 +26,15 @@ extension PullRequestsModel {
 
     /// The cached listing paints instantly while the fetch runs; a
     /// kept selection is re-selected once the fetch answers, and a
-    /// single result opens its conversation directly. Extending
-    /// keeps the current page and raises the fetch limit.
+    /// single result opens its conversation directly. The listing
+    /// starts over at the first page and one page's fetch.
     /// `refreshingFacts` re-reads what the worktree itself says:
     /// its signing, its rebase need, its template and its stack.
     /// Moving up and down a stack leaves all of that alone, since
     /// every entry shares one worktree, and asking git again is
     /// what made the move feel like a load rather than a click.
     func reload(keepingSelection: Bool = false, refreshingFacts: Bool = true) async {
+        listingGeneration += 1
         let previous = keepingSelection ? selected?.number : nil
         isLoading = true
         // The cache paints before any of the reading: the listing
@@ -67,26 +68,11 @@ extension PullRequestsModel {
             isLoading = false
             hasLoaded = true
         }
-        // Captured before the await: a slow answer for an already
-        // switched scope must neither show nor cache under the new
-        // scope's key.
-        let requested = cacheKey
         do {
-            let limit = GitHubClient.listLimit
-            let fetched = try await listing(limit: limit)
-            guard Task.isCancelled == false, requested == cacheKey else {
+            guard try await showListing(limit: GitHubClient.listLimit) else {
                 return
             }
 
-            // As the caches took it: a pushed branch's row stays
-            // pending until GitHub has caught up with the push.
-            let kept = pullRequests.rememberListing(
-                repositoryPath: repository.path,
-                scope: scope.listScope(branch: listedBranch),
-                summaries: fetched,
-            )
-            summaries = Self.worthShowing(kept)
-            fetchedLimit = limit
             // A branch with one live pull request opens it: there
             // is nothing else the list could be for.
             let chosen = summaries.first { $0.number == previous }

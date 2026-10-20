@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import TerminalUI
 
 /// What the tab is listing and how it asks for it. Split from the
 /// model for length.
@@ -41,5 +42,60 @@ extension PullRequestsModel {
         }
 
         return try await fetchList(scope.listScope(branch: listedBranch), limit)
+    }
+
+    /// Fetches the listing up to `limit` and shows it; false when the
+    /// tab moved to another scope or branch while it was asked, so
+    /// the answer was dropped.
+    func showListing(limit: Int) async throws -> Bool {
+        // Captured before the await: a slow answer for an already
+        // switched scope must neither show nor cache under the new
+        // scope's key, and one a reload overtook must not replace
+        // the reload's rows.
+        let requested = cacheKey
+        let generation = listingGeneration
+        let fetched = try await listing(limit: limit)
+        guard Task.isCancelled == false, requested == cacheKey, generation == listingGeneration else {
+            return false
+        }
+
+        // As the caches took it: a pushed branch's row stays
+        // pending until GitHub has caught up with the push.
+        let kept = pullRequests.rememberListing(
+            repositoryPath: repository.path,
+            scope: scope.listScope(branch: listedBranch),
+            summaries: fetched,
+        )
+        summaries = Self.worthShowing(kept)
+        fetchedLimit = limit
+        return true
+    }
+
+    /// Moves to the next page, asking GitHub for one more page first
+    /// when the last answer filled its limit and holds nothing for
+    /// it. An answer with nothing further steps back to the last
+    /// page that has rows.
+    func showNextPage() async {
+        let generation = listingGeneration
+        page += 1
+        let pageSize = PullRequestListView.pageSize
+        guard hasMore, summaries.count <= page * pageSize else {
+            return
+        }
+
+        isLoading = true
+        defer {
+            if generation == listingGeneration {
+                isLoading = false
+                page = min(page, max(0, summaries.count - 1) / pageSize)
+            }
+        }
+        do {
+            _ = try await showListing(limit: (page + 1) * pageSize)
+        } catch where generation == listingGeneration {
+            ServiceStatus.shared.record(failure: error, doing: "Pull requests for " + repository.name)
+        } catch {
+            // A reload overtook this fetch and answers for it.
+        }
     }
 }

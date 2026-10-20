@@ -54,8 +54,8 @@ struct PullRequestsModelTests {
         await model.reload()
         #expect(model.fetchedLimit == GitHubClient.listLimit)
 
-        // Paging walks what is here rather than fetching further
-        // into a repository with thousands of open pull requests.
+        // Moving the page alone fetches nothing; only Next asks
+        // further into a repository with thousands open.
         model.page = 1
         try? await Task.sleep(for: .milliseconds(50))
         #expect(asked.withLock { $0 } == [GitHubClient.listLimit])
@@ -76,6 +76,42 @@ struct PullRequestsModelTests {
         model.currentBranch = "feature"
         await model.reload()
         #expect(asked.withLock { $0 } == 1)
+    }
+
+    @Test
+    func `the next page past a full answer asks for one page more`() async {
+        let model = makeModel()
+        let asked = Mutex([Int]())
+        model.fetchList = { _, limit in
+            asked.withLock { $0.append(limit) }
+            return (1 ... limit).map { summary($0, head: "branch-\($0)") }
+        }
+        await model.reload()
+        #expect(model.hasMore)
+
+        await model.showNextPage()
+        let pageSize = PullRequestListView.pageSize
+        #expect(asked.withLock { $0 } == [GitHubClient.listLimit, 2 * pageSize])
+        #expect(model.page == 1)
+        #expect(model.summaries.count == 2 * pageSize)
+
+        // Back and forward again walks what is already here.
+        model.page = 0
+        await model.showNextPage()
+        #expect(asked.withLock { $0 }.count == 2)
+        #expect(model.page == 1)
+    }
+
+    @Test
+    func `a next page with nothing further stays on the last one`() async {
+        let model = makeModel()
+        model.fetchList = { _, _ in
+            (1 ... GitHubClient.listLimit).map { summary($0, head: "branch-\($0)") }
+        }
+        await model.reload()
+        await model.showNextPage()
+        #expect(model.page == 0)
+        #expect(model.hasMore == false)
     }
 
     @Test

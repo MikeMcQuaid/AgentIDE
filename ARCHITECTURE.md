@@ -1194,15 +1194,18 @@ steps.
   `PullRequestStore`**, which owns answers and the moments they arrived
   (in the metadata file, so relaunching does not restart the asking).
   Never repository-wide `gh pr list` on large repositories: query per
-  branch, ten pull requests at most, never the default branch. A
-  branch's listing is conditional REST (`If-None-Match`, a 304 costs no
-  rate limit); a tag is dropped with the listing it stamped, since a
-  304 answering for a listing no longer held reported no pull request
-  at all. The head filter takes its owner from the branch's push
-  remote, whether a URL or a named remote, while the request itself
-  targets origin's repository; the owner is remembered against the
-  config file the remote lives in (`RepositoryFacts`), since reading
-  it was three processes per branch per poll. Fork comments and
+  branch, ten pull requests at a time, never the default branch. The
+  tab's pager asks for ten more only when Next passes the last full
+  answer, and that ask skips the minute floor, since no earlier answer
+  holds those rows. A branch's listing is conditional REST
+  (`If-None-Match`, a 304 costs no rate limit); a tag is dropped with
+  the listing it stamped, since a 304 answering for a listing no longer
+  held reported no pull request at all. The head filter takes its owner
+  from the branch's push remote, whether a URL or a named remote, while
+  the request itself targets origin's repository; the owner is
+  remembered against the config file the remote lives in
+  (`RepositoryFacts`), since reading it was three processes per branch
+  per poll. Fork comments and
   checks therefore belong to the upstream pull request. Merge queue
   membership is one aliased GraphQL query per repository (no pull
   request field reports it), asked for every repository at once
