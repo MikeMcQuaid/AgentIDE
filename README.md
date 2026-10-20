@@ -68,7 +68,8 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Merges pull requests and stacks, enables automerge for waiting standalone pull requests with or without a merge queue and shows when automerge is enabled or a pull request is queued.
 - Can automatically remove clean, fully merged worktrees and branches when it observes a merge, leaving the selected worktree and main checkout in place.
 - Notifies you when an agent finishes or needs input.
-- Starts and steers work from a phone through SSH, Shortcuts and Siri.
+- Starts and steers work through Shortcuts and Siri.
+- Offers an [iPhone companion](#-iphone-companion) for switching between running agents and starting work in existing repositories over SSH.
 
 ## 🚫 Out of Scope
 
@@ -76,7 +77,6 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Running agents without a sandboxed non-admin user.
 - Team, multi-user or hosted features: one developer, one Mac.
 - An agent marketplace or bundled models; bring your own agent CLI.
-- A native iOS app: SSH into `herdr` from any iOS client instead.
 - An updater or a Mac App Store build; Homebrew's cask upgrades it, and the App Store sandbox forbids running agents as another user.
 
 ## 📋 Requirements
@@ -85,7 +85,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - [Homebrew](https://brew.sh), with Git, [`gh`](https://cli.github.com), [`herdr`](https://herdr.dev) and [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
 - [sandvault](https://github.com/webcoyote/sandvault), which creates the sandbox user and the shared workspace.
 - [`gh`](https://cli.github.com) authenticated as you; it stays with your user and agents never see it.
-- Claude Code or Codex CLI installed and signed in inside sandvault; [`mosh`](https://mosh.org) is optional for phone access.
+- Claude Code or Codex CLI installed and signed in inside sandvault.
 - Xcode 27 or later, only to build from source.
 
 ## 📦 Installation
@@ -115,7 +115,7 @@ Settings (Cmd-,) controls:
 - **Sessions**: Inspect and stop running agent sessions and browser pages.
 - **Review**: Choose the reviewer, model and effort and customise the local review, local fix, GitHub fix and commit follow-up prompts.
 - **Notifications**: Choose which events notify, badge the Dock or play a sound.
-- **Fonts**: Customise fonts and sizes throughout the app.
+- **Fonts**: Customise fonts and sizes throughout the Mac app.
 - **Editor**: Choose the external editor opened with Cmd-click.
 - **Advanced**: Set repository and worktree locations, refresh intervals, idle sleep and performance logging.
 
@@ -135,17 +135,26 @@ fi
 `agentide /some/file` opens the file in its worktree's editor.
 Both expand the repository and bring AgentIDE to the foreground; a file outside every worktree opens beside the current selection.
 
-## 📱 iPhone SSH access
+## 📱 iPhone companion
 
-Agents run as the sandbox user, so anything that can SSH to that user can start and steer them.
-[Moshi](https://getmoshi.app) is the iOS client this is currently built around, because it speaks both [`mosh`](https://mosh.org), so a phone changing network keeps its session rather than dropping it, and `herdr`, so it attaches to the same sessions the app does.
+The iPhone companion lets you view and steer running agents and start work in existing repositories over SSH.
+Established connections stay open across app switches when iOS allows, with automatic reconnection after interruptions.
+Its session list shares the Mac's sidebar order, repository avatars, agent icons, activity indicators, branch names and local Git status.
+Interface text follows your iPhone's system text size, with a separate terminal size control in Settings.
+Run `script/bootstrap` and `script/install` on your Mac to install the matching Mac build, then select a signing team in Xcode and build the `AgentIDE-iOS` scheme for iOS 26 or later.
+Enter your Mac's IP address or hostname and your Mac username; the companion adds the `sandvault-` prefix for the sandbox account.
+Keep the SSH port at `22` unless your Mac uses another port, and choose `agentide` for the installed Mac app or `agentide-dev` for a development build from the session menu.
+Install the public key shown in Settings using the steps below.
+Confirm the Mac's host key on first connection against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`; a changed key requires an explicit replacement in Settings.
 
-1. Put the phone's public key in sandvault's guest template, which is what the sandbox home is built from, then rebuild it.
+1. Copy the public key from iPhone Settings to your Mac's clipboard, for example with Universal Clipboard.
+   The commands below save it as `~/Downloads/agentide-phone.pub`, add it to sandvault's guest template and rebuild the sandbox home.
    A sandvault upgrade replaces the template, so keep this in your dotfiles:
 
    ```bash
+   printf '%s\n' "$(pbpaste)" >"${HOME}/Downloads/agentide-phone.pub"
    guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
-   cat "${HOME}/Downloads/moshi.pub" >>"${guest_keys}"
+   cat "${HOME}/Downloads/agentide-phone.pub" >>"${guest_keys}"
    sv --rebuild build
    ```
 
@@ -156,15 +165,7 @@ Agents run as the sandbox user, so anything that can SSH to that user can start 
        SetEnv SHARED_WORKSPACE=/Users/Shared/sv-<you>
    ```
 
-3. In the sandbox user's shell configuration, name the session and give the new-session command a short alias:
-
-   ```bash
-   export HERDR_SESSION=agentide
-   alias ain='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
-   ```
-
-Connect as `sandvault-<you>` and run `herdr`: one attach presents every agent's workspace, and `ain` starts a new session, asking for repository, agent, model, effort and prompt.
-A session steered from the phone is the same session the Mac shows.
+Choose **Connect** in the iPhone app to see the same sessions as your Mac.
 
 ## 🛠️ Development
 
@@ -181,6 +182,7 @@ A session steered from the phone is the same session the Mac shows.
 Project code treats compiler and linker warnings as errors, with Swift's strict concurrency and memory safety checks enabled.
 Xcode also runs Apple's static analyser during builds.
 `script/analyze` checks for dead code on the host, in the sandbox and in CI, with SwiftLint's additional analysis on the host and in CI.
+CI also builds the iPhone simulator app.
 CI runs the full test suite once with Thread Sanitizer, then checks terminal, rendering and parser tests with Address Sanitizer on macOS 27.
 CI uploads a Release app, signed and notarised when signing secrets are available.
 

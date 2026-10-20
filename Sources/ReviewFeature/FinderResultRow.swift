@@ -1,5 +1,5 @@
+import AgentIDEInterface
 import SwiftUI
-import TerminalUI
 
 // MARK: - FinderResultRow
 

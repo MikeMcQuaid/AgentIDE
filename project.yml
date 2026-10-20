@@ -4,6 +4,7 @@ options:
   createIntermediateGroups: true
   deploymentTarget:
     macOS: "26.0"
+    iOS: "26.0"
 packages:
   AgentIDEPackage:
     path: .
@@ -39,6 +40,41 @@ settings:
     CLANG_ANALYZER_SECURITY_INSECUREAPI_STRCPY: YES
     CLANG_ANALYZER_SECURITY_BUFFER_OVERFLOW_EXPERIMENTAL: YES
 targets:
+  AgentIDE-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - iOSApp
+      - App/Assets.xcassets
+    dependencies:
+      - package: AgentIDEPackage
+        product: MobileFeature
+    configFiles:
+      Debug: .build/version.xcconfig
+      Release: .build/version.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
+        PRODUCT_NAME: AgentIDE
+        PRODUCT_MODULE_NAME: AgentIDEiOS
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Connect to your Mac over SSH to view and steer its agents.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsMultipleScenes: NO
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: >-
+          UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SWIFT_VERSION: "6.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_STYLE: Automatic
   AgentIDEApp:
     type: application
     platform: macOS
@@ -63,6 +99,8 @@ targets:
         product: TerminalUI
       - package: AgentIDEPackage
         product: AgentIDEData
+      - package: AgentIDEPackage
+        product: AgentIDEInterface
     # The version and build number come from git through
     # `script/version`, which writes this before the project is
     # generated and before every scripted build; a build started in

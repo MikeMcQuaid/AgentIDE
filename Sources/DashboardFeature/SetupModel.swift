@@ -48,7 +48,10 @@ public final class SetupModel {
         let result = await check(defaults.bool(forKey: Self.completedKey) == false)
         issues = result.issues
         agents = result.agents
-        if result.signingConfigured == false {
+        if result.signingConfigured == false,
+           defaults.bool(forKey: Self.completedKey) == false,
+           defaults.object(forKey: AppSettings.requireSignedCommitsKey) == nil
+        {
             defaults.set(false, forKey: AppSettings.requireSignedCommitsKey)
             signingDisabled = true
         }

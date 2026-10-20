@@ -157,11 +157,6 @@ public final class DashboardModel {
         }
     }
 
-    /// The repositories available for new sessions.
-    public var repositories: [Repository] {
-        service.repositories()
-    }
-
     /// Whether a worktree's pane should wait rather than decide.
     public func isAwaitingSession(_ item: WorktreeItem) -> Bool {
         awaitedSessions.contains(item.worktree.path)
@@ -291,6 +286,8 @@ public final class DashboardModel {
     // MARK: Internal
 
     static let selectedWorktreeKey = "selectedWorktreePath"
+
+    @ObservationIgnored var publishedSidebar: [SidebarRepository] = []
 
     /// A draft waiting for its form to show.
     var launchRetry: LaunchRetry?

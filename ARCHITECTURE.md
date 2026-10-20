@@ -25,7 +25,7 @@ updating the app loses nothing.
 
 ```mermaid
 flowchart LR
-    ios["iOS SSH client"]
+    ios["AgentIDE iPhone companion"]
     subgraph mac["Mac"]
         subgraph host["Host user"]
             app["AgentIDE.app<br/>gh credentials stay here"]
@@ -45,7 +45,7 @@ flowchart LR
     agents <--> shared
     app -->|"gh CLI"| github
     agents -.->|"no credentials"| github
-    ios -->|"SSH as sandbox user,<br/>then herdr attach"| herdr
+    ios -->|"SSH as sandbox user,<br/>herdr snapshots and terminal control"| herdr
 ```
 
 Boundary facts the design relies on:
@@ -75,7 +75,8 @@ Boundary facts the design relies on:
    logic lives only in adapters.
 6. **P6: One client per external system.** git speaks through
    `GitClient`, GitHub through `gh` in `GitHubClient` and herdr through
-   `HerdrClient`; nothing else shells out to them.
+   `HerdrClient` locally or `RemoteHerdr` over SSH; both use the shared
+   herdr wire types.
 7. **P7: Agent output is hostile input.** Every host-side touch of
    guest-writable data is hardened accordingly.
 
@@ -110,10 +111,13 @@ GitHub authentication and API access are verified until setup first
 succeeds, recorded in UserDefaults; later launches need no network for
 setup. GitHub's login command selects HTTPS; accepting its default Git
 authentication choice configures credentials without a separate command.
-Git identity and signing configuration are checked locally. An unavailable
-signer disables AgentIDE's signed-commit requirement without changing
-global Git configuration or blocking setup. No signature is attempted
-during setup. Agent quarantine is cleared through the existing launch
+Git identity and signing configuration are checked locally, including
+files included by the global Git configuration. Only first-time setup
+without a saved signing preference can disable the signed-commit
+requirement when no signer is available. Later launches preserve saved
+choices and otherwise keep signing required, even if the signer probe
+fails. Setup never changes global Git configuration, blocks on signing or
+attempts a signature. Agent quarantine is cleared through the existing launch
 repair before sign-in probes, which run from the sandbox home with its
 user's temporary directory and surface diagnostics on failure.
 Checks never start herdr or an interactive
@@ -255,9 +259,12 @@ Rules that follow from that shape:
   (bracketed paste, kitty keyboard) never do. So the local terminal
   never learns bracketed paste is on, and a paste sent as keystrokes
   submits at every newline. A herdr-backed pane wraps a paste in the
-  bracketed-paste markers itself (`PaneTerminalView.isHerdrBacked`)
-  and sends it as one write; a local shell pane owns its PTY, sees the
-  modes and needs nothing. A paste goes to herdr whole
+  bracketed-paste markers itself (`HerdrTerminal.pasteBytes`, shared by
+  Mac and phone) and removes embedded terminators and escape characters.
+  Herdr 0.9.5 recognises that wrapper and sends the paste according to
+  the pane's actual mode, including plain text when that mode is off.
+  Local shell panes use SwiftTerm's native paste handling instead.
+  A paste goes to herdr whole
   (`HerdrLargeInputIntegrationTests` pushes 180 KiB through one
   command); chunking it as separate commands only moved the loss. The
   remaining limit is herdr's: the PTY master accepts a write only while
@@ -293,7 +300,7 @@ Rules that follow from that shape:
   limitation: herdr does not rewrap scrollback on resize.
 - **`--takeover`** replaces a controller leaked by an earlier app run,
   which would otherwise own the pane's input forever. Full herdr
-  clients (SSH, Moshi) attach independently and are never dropped.
+  clients over SSH attach independently and are never dropped.
   Closing the view releases the controller and never kills the session.
 - **Agent panes pin the palette recorded at launch**
   (`terminalSchemes` in the metadata). Agent TUIs read the colours
@@ -408,7 +415,10 @@ One root `Package.swift` defines every library target; the app shell in
 `App/` is generated into an Xcode project by XcodeGen (`project.yml`
 committed, `.xcodeproj` gitignored). `AgentIDEAppSources` in the package
 carries the same sources so `swift build` type-checks them in the
-sandbox, where `xcodebuild` cannot run.
+sandbox, where `xcodebuild` cannot run. The companion shell in `iOSApp/`
+uses the same project and package, with `AgentIDEiOSAppSources` providing
+the equivalent iOS type-check target. Analysis indexes both platforms
+so Periphery sees callers behind `#if os(iOS)`.
 
 ```mermaid
 flowchart TD
@@ -420,10 +430,17 @@ flowchart TD
     Terminal["TerminalUI"]
     Data["AgentIDEData<br/>(adapters)"]
     Domain["AgentIDEDomain<br/>(pure)"]
+    Phone["AgentIDE-iOS"]
+    Mobile["MobileFeature"]
+    Remote["AgentIDERemote"]
+    Interface["AgentIDEInterface"]
 
     App --> Dashboard & Session & Review & PR & Data
     Dashboard & Session & Review & PR --> Domain & Data & Terminal
-    Terminal --> Domain & Data
+    Phone --> Mobile
+    Mobile --> Remote & Interface & Domain
+    Remote & Interface --> Domain
+    Terminal --> Domain & Data & Interface
     Data --> Domain
 ```
 
@@ -431,7 +448,7 @@ flowchart TD
   `RepositoryGroup`, `AgentSession`, `AgentKind`, `PullRequestSummary`,
   `ReviewThread`, `BranchStack`, `TranscriptSession`, `DiffFile`) and
   pure logic (`DiffParser`, `PatchBuilder`, `SessionName`,
-  `HerdrTerminal` frame decoding, the keyword tokenizer, `FuzzyMatcher`,
+  `HerdrTerminal` frame decoding, `HerdrSnapshot`, the keyword tokenizer, `FuzzyMatcher`,
   `Wrapping`, `ShellTabs`). Foundation value types are allowed;
   process, file, network and database APIs are banned.
 - **AgentIDEData**: the adapters, composed by `SessionService`:
@@ -449,19 +466,26 @@ flowchart TD
   `ReviewFeature` the diff and editor (SwiftUI text and an attributed
   `NSTextView`).
 - **TerminalUI**: shared components, not a feature: the SwiftTerm
-  wrapper, markdown rendering, tooltips, `LinkOpener`, `BusyButton`,
+  AppKit wrapper, markdown rendering, tooltips and `LinkOpener`,
   `PaneIconButton` (matching icon slots for compact pane controls),
-  `LaunchProgress`, `HighlightedResultsList` (the arrow-key result
+  `HighlightedResultsList` (the arrow-key result
   list every finder and searchable picker shows under its field),
   `SelectableTextView` (read-only document-style selection) and
   syntax highlighting (tree-sitter grammars, with
   the Domain's tokenizer as fallback for fragmentary text).
+- **AgentIDEInterface**: shared typography, `BusyButton`, `Motion` and
+  `LaunchProgress`; TerminalUI re-exports these for the Mac's features.
+- **AgentIDERemote**: SwiftNIO SSH command channels, device Keychain
+  credentials, host verification and the remote herdr adapter.
+- **MobileFeature**: repository navigation, session creation and a UIKit
+  SwiftTerm wrapper. It does not import the macOS data or feature targets.
 - **AgentIDEApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
 
 Third-party imports are confined (P3): SwiftTerm, swift-markdown, SwiftSoup,
 SwiftTreeSitter and grammars in TerminalUI; WebKit in SessionFeature;
-FoundationModels in AgentIDEData.
+FoundationModels in AgentIDEData; SwiftNIO, SwiftNIO SSH and Swift Crypto
+in AgentIDERemote. MobileFeature also uses SwiftTerm’s UIKit renderer.
 
 **One implementation per concern.** Terminals, editors, conversation
 views, markdown rendering, git access, GitHub access and link opening
@@ -498,14 +522,17 @@ Claude.
 |---|---|---|
 | AgentIDEDomain | nonisolated | Sendable value types by construction |
 | AgentIDEData | nonisolated | `@concurrent` on parsing and subprocess work |
-| Features, TerminalUI | MainActor | `@Observable` MainActor view models |
+| AgentIDERemote | nonisolated | actors own the SSH connection and remote adapter |
+| Features, TerminalUI, AgentIDEInterface | MainActor | `@Observable` MainActor view models |
 | AgentIDEApp | MainActor | wiring only |
 
 Under approachable concurrency `nonisolated async` runs on the caller's
 actor, so quick awaited I/O stays plain; only CPU-bound or blocking leaf
 work is `@concurrent`. Events flow as `AsyncStream`s consumed via
-`.task`. Three actors are sanctioned, each guarding one resource:
-`HerdrTerminalChannel`, `StackCache` and `RepositoryFacts`; another
+`.task`. Actors guard individual resources:
+`HerdrTerminalChannel`, `StackCache` and `RepositoryFacts`. The phone adds
+`SSHConnection` to serialise channel lifetime and `RemoteHerdr` to own the
+connection for its destination. Another
 needs a written justification here. `@unchecked Sendable` and
 `nonisolated(unsafe)` are banned. Never loop awaiting a maybe-finished
 task on an actor: keep one running and one queued follow-up. A reading
@@ -879,7 +906,7 @@ shows a different branch from the one checked out.
   The right divider and Resize Panes allocate one-third of the width
   beside the sidebar to the utility pane, leaving two-thirds for the
   middle pane, within the pane width limits.
-- **Fonts settings** makes every font in the app changeable, for
+- **Fonts settings** makes every font in the Mac app changeable, for
   accessibility: interface text, code and terminal typography,
   repository names, worktree and branch names and the tabs, utility
   and shell alike, with shared spacing and colours (`TabCapsule`). Each
@@ -1795,19 +1822,135 @@ The variables shell files and scripts can read or set:
 
 ### From a phone
 
-Sessions are reachable over SSH as the sandbox user;
-[Moshi](https://getmoshi.app) speaks `mosh`, so a phone changing network
-keeps its session. Two things are particular to sandvault and herdr, and
+The `AgentIDE-iOS` target is a thin SwiftUI shell in `iOSApp`, sharing
+Domain, the herdr protocol and common UI controls with the Mac. Its SSH
+adapter uses SwiftNIO SSH with a device-generated Ed25519 key held in
+Keychain. The device identity is added without updating an existing key;
+concurrent creators read the stored key after a duplicate-item response.
+Host keys are confirmed on first use and pinned per host and
+port; a changed key never reconnects automatically.
+Channel closure fails pending authentication with public-key installation
+guidance even when NIOSSH consumes the inactive event, so the authentication
+timeout cannot leave the phone connecting indefinitely.
+Successful authentication and earlier host-key errors keep their result.
+The iPhone icon uses the Mac's terminal artwork without the desktop
+icon's outer padding, so iOS applies its own mask without an extra border.
+Phone interface typography follows system text styles and Dynamic Type,
+with monospaced branch names. The terminal uses the system monospaced
+font at 13 points before Dynamic Type scaling, matching the Mac default;
+Settings can change only its base size. Other saved font overrides are
+ignored.
+Connection settings accept an IP address or hostname and keep the
+`sandvault-` username prefix fixed. The SSH port stays visible beside the
+address; a menu selects `agentide` for the installed Mac app or
+`agentide-dev` for development builds. Network errors name the destination
+and give actionable guidance for permissions, DNS, refusal and timeouts.
+Validation, connections, host-key pins and diagnostics share a host value
+with surrounding whitespace removed.
+After authentication the companion checks the installed command's
+capabilities before requesting repositories or creating worktrees;
+an older editor shim must never turn a command into an edit request.
+The help probe reads output even when the command exits unsuccessfully,
+so missing and older Mac builds receive the same installation guidance.
+
+One SSH connection carries separate command channels for snapshots,
+events, session creation and the selected pane's terminal stream. The
+phone subscribes to herdr events and refreshes authoritative snapshots,
+including after reconnecting. Activity subscriptions name each current
+pane and are replaced when that list changes, followed by another
+snapshot. A pane-list change during subscription opening discards that
+channel and subscribes again with the latest panes before reading events.
+Only existing repositories are offered, with those containing
+sessions first. Compact rows have no separators, and empty repositories
+occupy a single row. Repository headers match the Mac's primary title,
+secondary count and adjacent primary-coloured plus for session creation.
+The whole header is a touch target at least 44 points high, with a
+44-by-44-point Liquid Glass circle around the body-sized plus and
+20-point avatars that scale with the headline's Dynamic Type size.
+Both platforms' plus icons use the same primary colour as the Mac's
+disclosure caret.
+The Mac publishes repository owners and ordered worktree paths to
+`agentide/sidebar-agentide.json` or `sidebar-agentide-dev.json` in the
+shared workspace, only when that projection changes. The phone reads it
+on connection and manual refresh, orders known repositories and worktrees
+accordingly and keeps new or unlisted sessions accessible. Without a
+snapshot it retains the sessions-first listing. This optional snapshot
+never grants access to repositories absent from the command's listing.
+Both platforms share `OwnerAvatar` and its per-owner memory and disk
+cache. Avatars load from GitHub's public `/<owner>.png?size=64` endpoint
+without credentials, falling back to a folder when unavailable; no host
+GitHub access or additional sandbox privileges are involved.
+Transport failures leave an owner eligible for the next avatar load;
+HTTP misses and undecodable images are cached for the process lifetime.
+Rows share the Mac sidebar's `AgentIcon`, `SessionStatusIcon` and Git
+change summaries. A batched request computes the branch name, local
+upstream counts and dirty flag on the Mac for each distinct pane
+directory. Only those four fields cross SSH, in request order;
+filenames, file records and repeated directory paths stay off the wire.
+Each response row stays the same size regardless of how many files
+changed. Failed Git readings leave an empty row so other worktrees
+remain available. `GitWorktreeStatus` shares the resulting values and
+display summary with the desktop. Reads avoid
+optional index locks and filesystem-monitor hooks, never fetch or call
+GitHub and need no additional sandbox privileges. They refresh on
+connection, manual refresh and changes to a pane's agent or activity;
+unchanged panes reuse the last result. Detached heads use the worktree
+directory name, as on the Mac. Session labels and herdr IDs remain
+internal. Repository counts count worktrees with sessions; GitHub badges
+and host-only feedback-loop, load and unread state are not inferred.
+Repository listings omit symlinked aliases, matching the desktop and
+creation's physical-path check. Creation accepts listed names, including
+spaces and non-ASCII characters, but rejects path separators and traversal.
+The command composes decomposed accents before filtering session labels.
+Creation uses the installed
+`agentide new` command's non-interactive interface, retaining its
+worktree, prompt and agent-launch rules, and decodes only the returned
+root pane's ID. That ID confirms creation even if the following listing
+fails or the phone disconnects; the creation sheet closes to avoid
+inviting another launch.
+Requests are not replayed after an ambiguous connection failure.
+
+The selected terminal uses the same JSON frames and commands as the Mac
+through SwiftTerm's UIKit view. Its light/dark button matches the palette
+of the existing agent without following the phone’s appearance changes.
+Attaching takes control; leaving the pane releases it without stopping
+the agent. App switches retain an established SSH connection, its event
+subscription and the selected terminal controller. Returning reuses them
+without reattaching or changing the terminal's identity. An incomplete
+connection attempt is still cancelled on backgrounding. iOS can suspend
+the app or close its sockets; interrupted connections use the existing
+automatic recovery. A displaced Mac
+controller waits for a user to return rather than automatically fighting
+the phone for control. **Take control** on the Mac reattaches without
+losing the eventual process-exit notification; either reattach action
+clears the handoff state. The phone retries interrupted connections and
+remembers a successful connection across foregrounding and app restarts.
+The desktop's review, editor, GitHub and historical-conversation surfaces
+are outside this companion's scope. The main screen's top-right icon
+offers Connect or Disconnect. Connect is blue on the disconnected page;
+Disconnect keeps its neutral colour. The disconnected page shows only
+its title and instruction, with the Connect icon inline. An explicit
+disconnect clears the selection and the saved connection state, so
+returning to the app stays disconnected
+until the user chooses Connect. Host-key messages take precedence over
+the generic disconnected page. A failed connection does not enable
+automatic reconnection on the next visit.
+
+Sessions are reachable over SSH as the sandbox user.
+Two things are particular to sandvault and herdr, and
 `sshd` is otherwise hardened however you would harden it:
 
-1. The sandbox user's home is built from a template sandvault owns, so
+1. Copy the public key from iPhone Settings to the Mac's clipboard,
+   for example with Universal Clipboard, and save it before installing.
+   The sandbox user's home is built from a template sandvault owns, so
    the client's key goes into that template and the home is rebuilt. A
    sandvault upgrade replaces the template, so keep this in your
    dotfiles if it must stay automatic:
 
    ```bash
+   printf '%s\n' "$(pbpaste)" >"${HOME}/Downloads/agentide-phone.pub"
    guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
-   cat "${HOME}/Downloads/moshi.pub" >>"${guest_keys}"
+   cat "${HOME}/Downloads/agentide-phone.pub" >>"${guest_keys}"
    sv --rebuild build
    ```
 
@@ -1840,20 +1983,19 @@ a failed fetch is silent. The performance log
 hit or miss; tests point it into the scratch directory. While it is on, every
 message the Messages pane shows is also appended to `messages.log`
 beside it: the pane does not survive a relaunch, and a fault worth
-relaunching for is exactly what needs reading afterwards. One such
-fault is a terminal pane that draws nothing: a control pane with no
-frame, or only a blank screen, five seconds after attaching, its
-client still running, is discarded and attached afresh once by
-itself, silently, and reported only if that draws nothing either,
-when the pane draws Reattach over itself (`StalledPaneOverlay`) so a
-relaunch is never the only way back; a client that exits before drawing
-(a stale pane target after a herdr restart, say) is held the same way
-until the next attach draws or fails. Reattach in the pane's menu, or
-the session strip's, does the same by hand. A size herdr was
-already told is not sent again: the attach and the terminal's own size
-callback both said the same size, and herdr 0.8.2 dropped the repaint
-after that transient pair (0.9.0 says it repaints after transient
-resizes).
+relaunching for is exactly what needs reading afterwards. A client that
+exits before drawing (a stale pane target after a herdr restart, say)
+shows its diagnostic in the terminal immediately; the Messages pane
+withholds it until another attach fails. Reattach in
+the pane's menu or the session strip discards the client and attaches
+afresh by hand. Blank or quiet terminals have no deadline, automatic
+reattach or warning: screen contents cannot establish a connection
+failure. An explicit takeover event alone shows the device handoff
+message and Take control action; reattaching clears that message.
+A size herdr was already told is not sent again: the attach and the
+terminal's own size callback both said the same size, and herdr 0.8.2
+dropped the repaint after that transient pair (0.9.0 says it repaints
+after transient resizes).
 
 ## Security model
 
@@ -1890,6 +2032,7 @@ organisation.
 | Package | Role | Note |
 |---|---|---|
 | SwiftTerm | terminal emulator views | ships a build plugin; scripts pass `-skipPackagePluginValidation` |
+| swift-nio, swift-nio-ssh, swift-crypto | SSH transport and device keys | Apple-maintained packages; no external SSH binary on iOS |
 | swift-markdown | markdown parsing | swiftlang exception |
 | SwiftSoup | HTML fragments in Markdown | native parsing of nested review disclosures and formatting |
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
@@ -1945,9 +2088,19 @@ After applying fixes, both Swift linters check the resulting files.
 Workflow linting uses zizmor's strict collection, so an unreadable or
 invalid workflow cannot silently escape the checks.
 
-`script/analyze` keeps SwiftLint analysis and Periphery on the host,
-sharing one clean Xcode build's log and index instead of building twice.
-The clean build keeps SwiftLint's analysis complete on every run.
+`script/analyze` builds the Mac and iPhone simulator schemes on the
+host, keeping their compiler logs separate and sharing both schemes'
+indexes with Periphery. SwiftLint uses each platform's own build log
+and `.xcfilelist`, the extension its file-list reader requires, and
+excludes the other platform's font implementations: SourceKit's
+cursor lookup otherwise enters inactive branches with an unavailable SDK.
+Phone font styles use distinct concrete types behind the shared names
+so the combined index keeps both platforms' declarations.
+The iPhone app's Swift module is `AgentIDEiOS`, distinct from the Mac's
+`AgentIDE`, while both products remain named AgentIDE. SwiftTerm's
+generated plugin sources are excluded from indexing, not just reporting,
+so platform-specific copies cannot collide in the combined index.
+The clean builds keep SwiftLint's analysis complete on every run.
 In the sandbox it builds app and test targets into a fresh
 `.build/analyze` index, exports the package description unsandboxed and
 passes both to Periphery without another build. SwiftPM's native build

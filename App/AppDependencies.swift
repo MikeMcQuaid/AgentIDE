@@ -1,7 +1,7 @@
 import AgentIDEData
+import AgentIDEInterface
 import DashboardFeature
 import ReviewFeature
-import TerminalUI
 
 /// Builds every adapter once and hands them to the features; the
 /// app's only wiring.

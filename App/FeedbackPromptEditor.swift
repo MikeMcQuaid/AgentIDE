@@ -1,6 +1,6 @@
 import AgentIDEData
+import AgentIDEInterface
 import SwiftUI
-import TerminalUI
 
 struct FeedbackPromptEditor: View {
     // MARK: Lifecycle

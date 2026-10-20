@@ -56,23 +56,13 @@ struct WorktreeRowView: View {
     /// having drifted apart. The default-branch distance stays in
     /// the pull request footer's Rebase count, where it is acted on.
     private var counts: String {
-        var parts = [String]()
-        if let unpushed = item.aheadOfUpstream, unpushed > 0 {
-            parts.append("↑\(unpushed)")
-        }
-        if let unpulled = item.behindUpstream, unpulled > 0 {
-            parts.append("↓\(unpulled)")
-        }
-        if item.isDirty {
-            parts.append("±")
-        }
-        // Something has to say the row is not just quiet but idle,
-        // and only when nothing else on the line does.
-        if parts.isEmpty {
-            return item.session == nil && item.worktree.isHostDirectory == false ? "idle" : ""
-        }
-
-        return parts.joined(separator: " ")
+        let summary = GitWorktreeStatus(
+            branch: item.worktree.branch,
+            isDirty: item.isDirty,
+            aheadOfUpstream: item.aheadOfUpstream,
+            behindUpstream: item.behindUpstream,
+        ).summary
+        return summary.isEmpty && item.session == nil && item.worktree.isHostDirectory == false ? "idle" : summary
     }
 
     /// What the stack marker says on hover: where this branch is,
@@ -83,14 +73,6 @@ struct WorktreeRowView: View {
         return "Stacked: number \(standing.position) of \(standing.height)"
             + (standing.base.map { ", based on " + $0 } ?? "")
             + (above > 0 ? ", and " + riding : "")
-    }
-
-    private var countsExplanation: String {
-        """
-        ↑ commits not yet pushed to the branch's upstream, ↓ commits on \
-        the upstream not yet pulled, ± uncommitted changes; nothing means \
-        level with what was pushed
-        """
     }
 
     /// Whether the row is a repository's own checkout rather than a
@@ -163,7 +145,7 @@ struct WorktreeRowView: View {
                 Text(counts)
                     .lineLimit(1)
                     .fixedSize()
-                    .hoverHelp(countsExplanation)
+                    .hoverHelp(GitWorktreeStatus.countsHelp)
                 Spacer(minLength: 0)
             }
             .interfaceFont(.caption)
@@ -178,12 +160,7 @@ struct WorktreeRowView: View {
             if let agent = item.session?.agent {
                 // The brand mark, monochrome so it reads as detail
                 // beside the counts rather than shouting colour.
-                Image(agent.iconAssetName)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: Self.agentIconSize, height: Self.agentIconSize)
-                    .accessibilityLabel(agent.displayName)
+                AgentIcon(agent, size: Self.agentIconSize)
                     .hoverHelp("A " + agent.displayName + " session runs here")
             }
             pullRequestBadge
@@ -191,7 +168,7 @@ struct WorktreeRowView: View {
             Text(counts)
                 .lineLimit(1)
                 .fixedSize()
-                .hoverHelp(countsExplanation)
+                .hoverHelp(GitWorktreeStatus.countsHelp)
             Spacer(minLength: 0)
         }
         .interfaceFont(.caption)
@@ -222,58 +199,10 @@ struct WorktreeRowView: View {
             )
             .hoverHelp(stateHelp(for: pullRequest))
         } else {
-            // The media-player vocabulary, shared with the session
-            // strip: play is working, pause is rest, a tick is a
-            // turn's answer waiting, a question mark is a question
-            // asked of you, stop is an exited process and a dotted
-            // circle is herdr unable to tell.
-            switch item.session?.status {
-            case .running where item.session?.activity == .blocked:
-                Image(systemName: "questionmark.circle.fill")
-                    .foregroundStyle(.orange)
+            if let session = item.session {
+                SessionStatusIcon(status: session.status, activity: session.activity)
                     .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("The agent asked a question or wants an approval")
-
-            case .running where item.session?.activity == .working:
-                Image(systemName: "play.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("The agent is working on its turn")
-
-            case .running where item.session?.activity == .done:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("The turn is done; the answer is waiting")
-
-            case .running where item.session?.activity == .idle:
-                Image(systemName: "pause.circle")
-                    .foregroundStyle(.secondary)
-                    .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("At rest: nothing asked, or the turn was interrupted")
-
-            case .running:
-                Image(systemName: "circle.dotted")
-                    .foregroundStyle(.secondary)
-                    .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("Running, but herdr cannot tell what the agent is doing")
-
-            case .finished:
-                Image(systemName: "stop.circle")
-                    .foregroundStyle(.secondary)
-                    .font(nameStyle.small)
-                    .accessibilityHidden(true)
-                    .hoverHelp("The agent's process exited; the conversation stays resumable")
-
-            case nil:
-                // The one deliberate difference from a worktree row:
-                // the repository's own checkout rests green, home
-                // rather than idle.
+            } else {
                 Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
                     .hoverHelp(isMainCheckout
                         ? "The repository's own checkout, where merged work lands"

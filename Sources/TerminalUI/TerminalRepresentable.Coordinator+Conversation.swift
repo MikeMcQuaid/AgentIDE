@@ -14,7 +14,6 @@ extension TerminalRepresentable.Coordinator {
     func requestInitialState(of view: PaneTerminalView) {
         let terminal = view.terminalDimensions
         sendResize(columns: terminal.cols, rows: terminal.rows)
-        armFrameDeadline()
     }
 
     /// Tells herdr the pane's size, once per size: see `sentSize`.
@@ -25,22 +24,6 @@ extension TerminalRepresentable.Coordinator {
 
         sentSize = (columns, rows)
         channel?.send(HerdrTerminal.resizeCommand(columns: columns, rows: rows))
-    }
-
-    /// A stream that never renders must not hold the pane blank
-    /// silently; the deadline reports enough state to name the
-    /// failing layer. Frames arrive unbidden, so there is nothing to
-    /// retry: a slow sudo or sandbox launch recovers by itself.
-    func armFrameDeadline() {
-        frameDeadline = Task { [weak self] in
-            // A deadline cut short was cancelled for a fresh client,
-            // whose own deadline is the one that counts.
-            guard await (try? Task.sleep(for: .seconds(Self.frameTimeoutSeconds))) != nil else {
-                return
-            }
-
-            self?.reportIfBlank()
-        }
     }
 
     func handle(_ event: HerdrTerminalEvent, from sender: HerdrTerminalChannel) {
@@ -58,12 +41,13 @@ extension TerminalRepresentable.Coordinator {
             heldFailure = nil
             view?.feed(byteArray: bytes[...])
             blockSelector?.follow()
-            if isStalled, let view, Self.isScreenBlank(view) == false {
-                setStalled(false)
-            }
 
         case let .closed(reason):
             exitReason = reason
+            if reason == HerdrTerminal.takeoverReason {
+                heldFailure = nil
+                onHandoff?(true)
+            }
         }
     }
 
@@ -76,11 +60,15 @@ extension TerminalRepresentable.Coordinator {
             return
         }
 
+        let reason = exitReason
+        channel = nil
+        guard reason != HerdrTerminal.takeoverReason else {
+            return
+        }
+
         let callback = onProcessTerminated
         onProcessTerminated = nil
-        let reason = exitReason
         let sawFrames = framesSeen > 0
-        channel = nil
         Task { [weak self] in
             let diagnostics = await ended.collectedErrorText()
             let detail = [reason, diagnostics.isEmpty ? nil : diagnostics]
@@ -101,32 +89,25 @@ extension TerminalRepresentable.Coordinator {
         }
     }
 
-    /// A client that ended without drawing. Held while recovery has
-    /// yet to be tried: a stale pane target is replaced by the next
-    /// listing's transport, and a running client that draws nothing
-    /// is reattached, and either drawing a frame makes the failure
-    /// not news. Once recovery has been tried, reported at once with
-    /// what was held.
+    /// An exited client's diagnostic. Held from Messages while recovery
+    /// has yet to be tried: a stale pane target is replaced by the next
+    /// listing's transport. A frame from the replacement clears the
+    /// failure; another failure or a failed manual retry reports it.
     func failed(_ message: String) {
-        guard reattachments >= Self.automaticReattachments || heldFailure != nil else {
+        guard reattachments > 0 || heldFailure != nil else {
             heldFailure = message
             PerformanceLog.recordMessage("Terminal: " + message + " (held while recovery is tried)", isError: true)
+            view?.feed(text: "\r\n[herdr client exited: " + message + "]\r\n")
             return
         }
 
-        report(message)
-    }
-
-    // MARK: Private
-
-    /// Reports a failure and whatever was held before it, and says
-    /// so in the pane.
-    private func report(_ message: String) {
         let whole = heldFailure.map { $0 + "; then " + message } ?? message
         heldFailure = nil
         ErrorLog.shared.report("Terminal: " + whole)
         view?.feed(text: "\r\n[herdr client exited: " + whole + "]\r\n")
     }
+
+    // MARK: Private
 
     /// Whether the client's reason for ending is the terminal simply
     /// being gone: herdr words a closed target as the session having
@@ -137,59 +118,5 @@ extension TerminalRepresentable.Coordinator {
         }
 
         return reason.contains(" exited") || reason.contains("not found")
-    }
-
-    /// Whether every visible row shows nothing.
-    static func isScreenBlank(_ view: PaneTerminalView) -> Bool {
-        view.visibleRowsText(0 ..< view.terminalDimensions.rows).allSatisfy { row in
-            row.allSatisfy(\.isWhitespace)
-        }
-    }
-
-    /// The deadline fired. A client that is running yet has drawn
-    /// nothing, no frame or only an empty screen, is discarded and
-    /// attached afresh, once and silently: every pane once went
-    /// blank at the same time with its sessions running on, and only
-    /// a relaunch brought them back. Only a pane still blank after
-    /// that is reported, with enough state to name the failing
-    /// layer, and then offers Reattach over itself.
-    private func reportIfBlank() {
-        guard tornDown == false, let view, framesSeen == 0 || Self.isScreenBlank(view) else {
-            return
-        }
-
-        let ended = channel
-        let what = framesSeen == 0 ? "no frames" : "a blank screen after \(framesSeen) frames"
-        Task { [weak self] in
-            let running = await ended?.isRunning() ?? false
-            let chain = await ended?.launchChainSnapshot() ?? "gone"
-            let state = " (client running: \(running); chain: \(chain))"
-            guard let self else {
-                return
-            }
-
-            if running, reattachments < Self.automaticReattachments {
-                PerformanceLog.recordMessage(
-                    "Terminal: " + what + " after \(Self.frameTimeoutSeconds)s" + state + "; reattaching",
-                    isError: false,
-                )
-                reattach(in: view)
-                return
-            }
-
-            report(what + " after \(Self.frameTimeoutSeconds)s"
-                + (reattachments > 0 ? ", after reattaching" : "") + state)
-            setStalled(true)
-        }
-    }
-
-    /// Tells the pane whether to draw its Reattach.
-    func setStalled(_ stalled: Bool) {
-        guard isStalled != stalled else {
-            return
-        }
-
-        isStalled = stalled
-        onStalled?(stalled)
     }
 }

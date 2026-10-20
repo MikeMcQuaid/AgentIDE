@@ -1,5 +1,5 @@
+import AgentIDEInterface
 import SwiftUI
-import TerminalUI
 
 /// Sidebar icons share a highlight on hover and keyboard focus.
 struct SidebarIcon: View {

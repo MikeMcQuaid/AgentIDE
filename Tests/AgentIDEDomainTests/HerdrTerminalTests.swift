@@ -6,6 +6,21 @@ import Testing
 /// command lines a controller writes.
 struct HerdrTerminalTests {
     @Test
+    func `a paste preserves Unicode and line breaks within one wrapper`() {
+        #expect(String(bytes: HerdrTerminal.pasteBytes("café\n雪\ttext"), encoding: .utf8)
+            == "\u{1B}[200~café\n雪\ttext\u{1B}[201~")
+    }
+
+    @Test(arguments: ["before\u{1B}[201~after", "before\u{1B}[20\u{1B}[201~1~after"])
+    func `clipboard content cannot terminate a paste early`(text: String) throws {
+        let pasted = try #require(String(bytes: HerdrTerminal.pasteBytes(text), encoding: .utf8))
+        #expect(pasted.components(separatedBy: "\u{1B}[201~").count == 2)
+        #expect(pasted.dropFirst(6).dropLast(6).contains("\u{1B}") == false)
+        #expect(pasted.contains("before"))
+        #expect(pasted.contains("after"))
+    }
+
+    @Test
     func `frame records decode their base64 bytes`() {
         let bytes = Array("hi\u{1B}[0m".utf8)
         let line = #"{"type":"terminal.frame","seq":1,"encoding":"base64","bytes":""#

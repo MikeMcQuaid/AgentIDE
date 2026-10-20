@@ -23,13 +23,6 @@ extension TerminalRepresentable {
 
         // MARK: Internal
 
-        /// How long the pane waits for its first frame before
-        /// reporting the launch chain; frames keep being accepted
-        /// afterwards, so a slow attach recovers by itself.
-        static let frameTimeoutSeconds = 5
-
-        static let automaticReattachments = 1
-
         /// The last applied appearance; re-applying identical colours
         /// on every SwiftUI update forces needless full redraws.
         var appliedScheme: ColorScheme?
@@ -40,7 +33,6 @@ extension TerminalRepresentable {
         weak var view: PaneTerminalView?
         var channel: HerdrTerminalChannel?
         var framesSeen = 0
-        var frameDeadline: Task<Void, Never>?
 
         /// The size herdr was last told, so the same size is never
         /// sent twice in a row: the attach sends the view's size and
@@ -50,8 +42,7 @@ extension TerminalRepresentable {
         /// blank with a cursor.
         var sentSize: (columns: Int, rows: Int)?
 
-        /// How many times the client was discarded and attached
-        /// afresh; the blank-pane deadline does it once by itself.
+        /// How many times the user discarded the client and attached afresh.
         var reattachments = 0
 
         /// A client's failure kept back while recovery has its go:
@@ -60,10 +51,7 @@ extension TerminalRepresentable {
         /// until recovery has been tried and failed.
         var heldFailure: String?
 
-        /// Whether the pane still shows nothing after the deadline
-        /// and a reattach, when it draws Reattach over itself.
-        var isStalled = false
-        var onStalled: ((Bool) -> Void)?
+        var onHandoff: ((Bool) -> Void)?
 
         /// The last Reattach pressed on the pane, so a repaint never
         /// reattaches twice for one press.
@@ -112,8 +100,6 @@ extension TerminalRepresentable {
             }
             blockMonitor = nil
             tornDown = true
-            frameDeadline?.cancel()
-            frameDeadline = nil
             pump?.cancel()
             onProcessTerminated = nil
             if let channel {
@@ -146,17 +132,12 @@ extension TerminalRepresentable {
             }
         }
 
-        /// Discards the client and attaches afresh: by hand from the
-        /// pane's menu, and once by itself when no frame arrived
-        /// within the deadline while the client was still running,
-        /// which is a pane that would otherwise sit blank with a
-        /// cursor until the app was relaunched.
+        /// Discards the client and attaches afresh when the user requests it.
         func reattach(in view: PaneTerminalView) {
             guard let transport = startedTransport, tornDown == false else {
                 return
             }
 
-            setStalled(false)
             reattachments += 1
             discardClient(of: view)
             startWhenSized(transport, in: view)
@@ -296,8 +277,9 @@ extension TerminalRepresentable {
         /// the terminal clears via a full reset so the old session's
         /// screen never shows over the new one.
         private func discardClient(of view: PaneTerminalView) {
-            frameDeadline?.cancel()
-            frameDeadline = nil
+            if exitReason == HerdrTerminal.takeoverReason {
+                onHandoff?(false)
+            }
             pump?.cancel()
             pump = nil
             if let channel {

@@ -1,66 +1,6 @@
 import AgentIDEDomain
 import Foundation
 
-// MARK: - SnapshotEnvelope
-
-/// The layers of a `herdr api snapshot` answer this module reads;
-/// flat rather than nested because same-file grouping extensions and
-/// deeper nesting are both banned.
-private struct SnapshotEnvelope: Decodable {
-    let result: SnapshotResult?
-}
-
-// MARK: - SnapshotResult
-
-private struct SnapshotResult: Decodable {
-    let snapshot: Snapshot?
-}
-
-// MARK: - Snapshot
-
-private struct Snapshot: Decodable {
-    let workspaces: [SnapshotWorkspace]
-    let panes: [SnapshotPane]
-}
-
-// MARK: - SnapshotWorkspace
-
-private struct SnapshotWorkspace: Decodable {
-    // swiftlint:disable explicit_enum_raw_value
-    enum CodingKeys: String, CodingKey {
-        case workspaceID = "workspace_id"
-        case label
-    }
-
-    // swiftlint:enable explicit_enum_raw_value
-
-    let workspaceID: String
-    let label: String
-}
-
-// MARK: - SnapshotPane
-
-private struct SnapshotPane: Decodable {
-    // swiftlint:disable explicit_enum_raw_value
-    enum CodingKeys: String, CodingKey {
-        case paneID = "pane_id"
-        case workspaceID = "workspace_id"
-        case cwd
-        case foregroundCwd = "foreground_cwd"
-        case agent
-        case agentStatus = "agent_status"
-    }
-
-    // swiftlint:enable explicit_enum_raw_value
-
-    let paneID: String
-    let workspaceID: String
-    let cwd: String?
-    let foregroundCwd: String?
-    let agent: String?
-    let agentStatus: String?
-}
-
 // MARK: - CreateEnvelope
 
 /// A `workspace create` answer, read for the root pane to run the
@@ -355,7 +295,7 @@ public extension HerdrClient {
     /// agent dead and the retry kill it.
     internal func snapshotRows() async throws -> [SnapshotRow] {
         let result = try await herdr(["api", "snapshot"])
-        guard let snapshot = decode(SnapshotEnvelope.self, from: result.standardOutput)?.result?.snapshot else {
+        guard let snapshot = try? HerdrSnapshot.decode(Data(result.standardOutput.utf8)) else {
             throw CommandError(command: "herdr api snapshot", result: result)
         }
 
