@@ -93,11 +93,16 @@ done
 
 rm "${scratch}/installation-started"
 : >"${scratch}/installation-events"
-if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= BUILD_TEST_FAIL=1 \
-  "${scratch}/script/install" >"${scratch}/failure.log" 2>&1; then
-  echo 'A failed build installed a stale app' >&2
-  exit 1
-fi
+build_status=0
+env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= BUILD_TEST_FAIL=1 \
+  "${scratch}/script/install" >"${scratch}/failure.log" 2>&1 || build_status=$?
+[[ "${build_status}" == 65 ]] || exit 1
+for stream in stdout stderr; do
+  if ! grep -q "Build diagnostic on ${stream}" "${scratch}/failure.log"; then
+    echo "Installation hid the build failure diagnostic on ${stream}" >&2
+    exit 1
+  fi
+done
 [[ ! -e "${scratch}/installation-started" ]] || exit 1
 [[ ! -s "${scratch}/installation-events" ]] || exit 1
 if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID=fixture \

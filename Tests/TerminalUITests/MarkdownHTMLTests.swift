@@ -5,6 +5,59 @@ import Testing
 @MainActor
 struct MarkdownHTMLTests {
     @Test
+    func `html lists, code spans and comment markers become markdown`() {
+        let body = """
+        [//]: # (dependabot-automerge-start)
+        <ul>
+        <li><code>55cc834</code> Merge pull request #1768</li>
+        <li>Additional commits viewable in compare view</li>
+        </ul>
+        [//]: # (dependabot-automerge-end)
+        """
+        let stripped = MarkdownText.strippingHTML(body)
+        #expect(stripped.contains("- `55cc834` Merge pull request #1768"))
+        #expect(stripped.contains("- Additional commits viewable in compare view"))
+        #expect(stripped.contains("<") == false)
+        #expect(stripped.contains("[//]: #") == false)
+    }
+
+    @Test
+    func `details tables remain structured after tag stripping`() throws {
+        let body = """
+        <details><summary>Show a summary per file</summary>
+
+        | File | Description |
+        | ---- | ----------- |
+        | `Sources/a.swift` | Does a thing |
+
+        </details>
+        """
+        let chunk = try #require(MarkdownText.parsedChunks(body).first)
+        #expect(chunk.detailsSummary == "Show a summary per file")
+        let content = MarkdownText.content(chunk.text)
+        #expect(MarkdownTestSupport.kinds(content).contains(.tableHeaderRow))
+        #expect(String(content.characters).contains("Sources/a.swiftDoes a thing"))
+    }
+
+    @Test(arguments: ["-1", "1000000000"])
+    func `HTML list starts outside the GFM range fall back to one`(start: String) {
+        let kinds = MarkdownTestSupport.kinds(
+            MarkdownText.content("<ol start=\"" + start + "\"><li>First</li><li>Second</li></ol>"),
+        )
+        #expect(kinds.contains(.orderedList))
+        #expect(kinds.contains(.listItem(ordinal: 2)))
+    }
+
+    @Test
+    func `HTML ordered lists keep their start and nested lists`() {
+        let content = MarkdownText.content("""
+        <ol start="3"><li>Third<ul><li>Nested bullet</li></ul></li><li>Fourth</li></ol>
+        """)
+        #expect(MarkdownTestSupport.kinds(content).contains(.listItem(ordinal: 3)))
+        #expect(MarkdownTestSupport.kinds(content).contains(.unorderedList))
+    }
+
+    @Test
     func `bot HTML formatting and entities become readable Markdown`() {
         let source = """
         - [ ] <strong title="Keep fixing > findings">Autopilot</strong> · Keep fixing
@@ -76,15 +129,12 @@ struct MarkdownHTMLTests {
     }
 
     @Test
-    func `quoted review paragraphs stay separate`() throws {
+    func `quoted review paragraphs stay separate`() {
         let source = "<blockquote><p>First finding.</p><p>Second finding.</p></blockquote>"
-        let block = try #require(MarkdownText.proseBlocks(MarkdownText.strippingHTML(source)).first)
-        guard case let .quote(text) = block else {
-            Issue.record("The HTML quote should render as a native Markdown quote")
-            return
-        }
-
-        #expect(text == "First finding.\n\nSecond finding.")
+        let content = MarkdownText.content(source)
+        #expect(String(content.characters) == "First finding.Second finding.")
+        #expect(MarkdownTestSupport.kinds(content).count { $0 == .paragraph } == 2)
+        #expect(MarkdownTestSupport.kinds(content).contains(.blockQuote))
     }
 
     @Test
@@ -102,19 +152,10 @@ struct MarkdownHTMLTests {
         let markdown = MarkdownText.strippingHTML(source)
         #expect(markdown.contains("bad()") == false)
         #expect(markdown.contains("color: red") == false)
-        #expect(MarkdownText.ticked(markdown).contains("☑ **Review**"))
-        let blocks = MarkdownText.proseBlocks(markdown)
-        #expect(blocks.contains { block in
-            if case let .table(header, rows) = block {
-                return header == ["File", "Status"] && rows == [["`file.swift`", "**Fixed**"]]
-            }
-            return false
-        })
-        #expect(blocks.contains { block in
-            if case let .quote(text) = block {
-                return text.contains("[the finding](https://example.com)")
-            }
-            return false
-        })
+        let content = MarkdownText.content(source)
+        #expect(String(content.characters).contains("☑ Review"))
+        #expect(MarkdownTestSupport.kinds(content).contains(.tableHeaderRow))
+        #expect(MarkdownTestSupport.kinds(content).contains(.blockQuote))
+        #expect(content.runs.contains { $0.link?.absoluteString == "https://example.com" })
     }
 }

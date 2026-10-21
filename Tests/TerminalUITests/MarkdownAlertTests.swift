@@ -1,61 +1,38 @@
+import Foundation
 @testable import TerminalUI
 import Testing
 
 @MainActor
 struct MarkdownAlertTests {
     @Test(arguments: ["Note", "Tip", "Important", "Warning", "Caution"])
-    func `all GitHub alerts keep body formatting`(title: String) throws {
-        let block = try #require(MarkdownText.proseBlocks(
-            "> [!" + title.uppercased() + "]\n> **Check** `file.swift`.\n>\n> - First\n> - Second",
+    func `all GitHub alerts keep body formatting`(title: String) {
+        let content = MarkdownText.content(
+            "> [!" + title.uppercased() + "]\n> **Check** `file.swift`.\n>\n> 3. Third\n> 4. Fourth",
         )
-        .first)
-        guard case let .quote(text) = block else {
-            Issue.record("The alert should remain a callout")
-            return
-        }
-
-        #expect(text.hasPrefix("**" + title + "**\n\n"))
-        #expect(text.contains("**Check** `file.swift`."))
-        #expect(text.contains("- First\n- Second"))
+        #expect(String(content.characters).hasPrefix(title + "\n"))
+        #expect(MarkdownTestSupport.kinds(content).contains(.blockQuote))
+        #expect(MarkdownTestSupport.kinds(content).contains(.listItem(ordinal: 3)))
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true })
     }
 
-    @Test(arguments: ["> [!UNKNOWN]\n> Literal", "> `[!NOTE]`\n> Literal", "> Ordinary quote"])
-    func `ordinary quotes and code markers stay literal`(source: String) throws {
-        let block = try #require(MarkdownText.proseBlocks(source).first)
-        guard case let .quote(text) = block else {
-            Issue.record("The quote should remain a quote")
-            return
-        }
+    @Test(arguments: ["[!UNKNOWN]", "`[!NOTE]`", "Ordinary quote"])
+    func `ordinary quotes and code markers stay literal`(source: String) {
+        let content = MarkdownText.content("> " + source)
+        #expect(String(content.characters) == source.replacing("`", with: ""))
+    }
 
-        #expect(text.hasPrefix("**") == false)
+    @Test(arguments: ["> - First\n>\n> [!NOTE] Literal", "- First\n\n  [x] Literal", "- `[x]` Literal"])
+    func `markers outside the opening text stay literal`(source: String) {
+        let content = String(MarkdownText.content(source).characters)
+        #expect(content.contains(source.contains("[!NOTE]") ? "[!NOTE]" : "[x]"))
     }
 
     @Test
-    func `alert examples inside code remain literal`() throws {
-        let source = "> [!NOTE]\n> Literal"
-        let block = try #require(MarkdownText.proseBlocks("```markdown\n" + source + "\n```").first)
-        guard case let .code(text, _) = block else {
-            Issue.record("The example should remain code")
-            return
-        }
-
-        #expect(text == source)
-    }
-
-    @Test
-    func `a CodeRabbit processing note renders without literal markers`() throws {
-        let body = "Currently processing new changes in this PR. This may take a few minutes, please wait…"
-        let blocks = MarkdownText.proseBlocks(MarkdownText.strippingHTML(
-            "> [!NOTE]\n> " + body,
-        ))
-        let block = try #require(blocks.first)
-        guard case let .quote(text) = block else {
-            Issue.record("The note should remain a callout")
-            return
-        }
-
-        #expect(text.contains("[!NOTE]") == false)
-        #expect(text.contains("**Note**"))
-        #expect(text.contains(body))
+    func `alert and task examples inside code remain literal`() {
+        let source = "> [!NOTE]\n- [x] Literal\n"
+        let content = MarkdownText.content("```markdown\n" + source + "``` ")
+        #expect(String(content.characters) == source)
+        #expect(MarkdownTestSupport.kinds(content).contains(.codeBlock(languageHint: "markdown")))
     }
 }
