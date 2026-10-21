@@ -87,7 +87,10 @@ public struct PullRequestStore: Sendable {
         // swiftlint:disable:next discouraged_optional_collection
     ) async throws -> [PullRequestSummary]? {
         let key = Self.listingKey(repositoryPath: repositoryPath, scope: scope)
-        guard due(key, interval: interval) else {
+        // Paging past the last answer asks for rows no cache holds.
+        let reachesFurther = limit > GitHubClient.listLimit
+            && (store.load().pullRequestListsCache[key]?.summaries.count ?? 0) < limit
+        guard reachesFurther || due(key, interval: interval) else {
             return nil
         }
 

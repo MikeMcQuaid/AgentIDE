@@ -237,12 +237,14 @@ final class PullRequestsModel {
 
     var summaries: [PullRequestSummary] = []
     var isLoading = false
+    /// Bumped per reload: a page fetch a reload overtook leaves the
+    /// loading state and the page to it.
+    var listingGeneration = 0
 
     /// True once the first listing answered; the creation form only
     /// appears after that, and mid-reload churn never hides it.
     var hasLoaded = false
-    /// Fetches stay one page ahead of the visible one, so the pager
-    /// knows whether a next page exists.
+    /// What the shown listing asked for; a full answer may have more.
     var fetchedLimit = 0
     var hasMergeQueue = false
 
@@ -351,10 +353,8 @@ final class PullRequestsModel {
     var checkTipSigned: (Worktree) async -> Bool
     var fetchTipCommit: (Worktree) async -> String?
 
-    /// The visible page. Every scope asks GitHub for one small
-    /// listing and no more, so paging walks what is already here
-    /// rather than fetching further into a repository with thousands
-    /// of open pull requests.
+    /// The visible page. Only `showNextPage` asks GitHub further,
+    /// one page at a time, never past the pages actually visited.
     var page = 0
 
     /// What the repository offers; empty until read.

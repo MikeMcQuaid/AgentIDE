@@ -29,9 +29,11 @@ extension PullRequestsModel {
     }
 
     /// Whether the last fetch filled its limit, so more pages may
-    /// exist beyond what is loaded.
+    /// exist beyond what is loaded. At least rather than exactly: a
+    /// reload inside the minute floor gets back the longer listing a
+    /// page further cached.
     var hasMore: Bool {
-        summaries.isEmpty == false && summaries.count == fetchedLimit
+        summaries.isEmpty == false && summaries.count >= fetchedLimit
     }
 
     /// Paints the stored listing for this scope, if any. A cached

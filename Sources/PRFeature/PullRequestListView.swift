@@ -11,7 +11,7 @@ struct PullRequestListView: View {
     // MARK: Internal
 
     /// One fetch page; the tab grows its query limit in these steps.
-    static let pageSize = 25
+    static let pageSize: Int = GitHubClient.listLimit
 
     let summaries: [PullRequestSummary]
     let isLoading: Bool
@@ -29,6 +29,9 @@ struct PullRequestListView: View {
 
     let onStartAgent: StartAgentAction?
 
+    /// Asks the model for the next page, which may fetch it first.
+    let onNextPage: @MainActor () async -> Void
+
     @Binding var page: Int
 
     var body: some View {
@@ -44,7 +47,7 @@ struct PullRequestListView: View {
                 }
             }
             .overlay {
-                if isLoading, summaries.isEmpty {
+                if isLoading, pageSummaries.isEmpty {
                     LaunchProgressView(spinner: "Loading pull requests…")
                 } else if summaries.isEmpty {
                     ContentUnavailableView("No pull requests", systemImage: "arrow.triangle.pull")
@@ -73,16 +76,23 @@ struct PullRequestListView: View {
             Button("Previous page", systemImage: "chevron.backward") { page -= 1 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-                .disabled(page == 0)
+                .disabled(page == 0 || isLoading)
                 .hoverHelp("The previous \(Self.pageSize) pull requests")
-            Text(String(page * Self.pageSize + 1) + "–" + String(last) + " of " + String(summaries.count))
-                .interfaceFont(.caption)
-                .foregroundStyle(.secondary)
-            Button("Next page", systemImage: "chevron.forward") { page += 1 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.borderless)
-                .disabled(last >= summaries.count && hasMore == false)
-                .hoverHelp("The next \(Self.pageSize) pull requests")
+            // A page still being fetched has no range to name yet.
+            if pageSummaries.isEmpty == false {
+                Text(String(page * Self.pageSize + 1) + "–" + String(last) + " of " + String(summaries.count))
+                    .interfaceFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button("Next page", systemImage: "chevron.forward") {
+                Task {
+                    await onNextPage()
+                }
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .disabled(isLoading || (last >= summaries.count && hasMore == false))
+            .hoverHelp("The next \(Self.pageSize) pull requests")
             Spacer()
         }
         .padding(Self.rowSpacing)
