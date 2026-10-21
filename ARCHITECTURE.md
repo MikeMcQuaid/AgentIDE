@@ -2199,8 +2199,10 @@ so that only the last needs credentials:
   selects Debug explicitly. A successful host build verifies the app,
   updates the repository-root symlink and prints the app's path.
   Installation quits the running app after a successful build, copies
-  that output into /Applications and relaunches it. It ignores SIGHUP
-  so closing an AgentIDE shell pane cannot interrupt installation.
+  that output into /Applications and relaunches it. On build failure,
+  installation prints the captured output and preserves the exit status.
+  It ignores SIGHUP so closing an AgentIDE shell pane cannot interrupt
+  installation.
   Zipping and distribution signing always use Release. Sandboxed builds
   only compile, so they cannot install an app bundle.
 - `script/zip` verifies the built app's signature, then zips it with

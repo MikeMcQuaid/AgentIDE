@@ -6,7 +6,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-app="$(script/build | tail -1)"
+build_output="$(script/build)" || {
+  build_status=$?
+  printf '%s\n' "${build_output}" >&2
+  exit "${build_status}"
+}
+app="$(tail -1 <<<"${build_output}")"
 [[ -d "${app}" ]] || {
   echo "No app bundle to install; run script/install on the host." >&2
   exit 1
