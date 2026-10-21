@@ -48,7 +48,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Shows reviewer icons in menus and infers the PR’s review button from existing bot comments, asking which bot to request when neither or both have commented.
 - Keeps Review, Copy all and loop actions together with progress and expandable activity, with a local-only autofix popover in Review and GitHub and push controls in PR.
 - Sizes popovers to their contents, scrolling only when they would exceed the screen.
-- Renders review Markdown, GitHub alerts, nested disclosures and common HTML formatting while preserving literal code examples.
+- Renders Markdown previews, PR descriptions, conversations and review comments consistently with GitHub-style headings, nested lists, task lists, tables, code, alerts and expandable details.
 - Keeps local review controls separate from GitHub automation and exposes reviewer errors with the model, effort and captured output.
 - Completes local review and commit rounds before pushing and gathering GitHub feedback, then verifies the final CI and review results before reporting success or continued failure.
 - Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.

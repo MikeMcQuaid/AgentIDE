@@ -1,18 +1,8 @@
 import AgentIDEDomain
 import SwiftUI
 
-/// One syntax-highlighted source line, shared by the diff, markdown
-/// code fences and search results.
+/// Syntax colours shared by diffs and Markdown code blocks.
 public enum HighlightedLine {
-    /// The line as a single `Text`, for concatenation with prefixes.
-    /// Unknown languages come back plain.
-    public static func text(line: String, language: SyntaxLanguage?) -> Text {
-        CodeHighlighter.tokens(for: line, language: language)
-            .lazy
-            .map { token in Text(token.text).foregroundStyle(colour(for: token.kind)) }
-            .reduce(Text("")) { Text("\($0)\($1)") }
-    }
-
     /// The one token colour mapping every code surface shares.
     public static func colour(for kind: SyntaxToken.Kind) -> Color {
         switch kind {

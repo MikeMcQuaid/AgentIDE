@@ -1,86 +1,105 @@
-import AgentIDEDomain
 import Foundation
-import Markdown
+import SwiftUI
+import Textual
 
-/// The markdown parsing behind the view: apple/swift-markdown reads
-/// the GitHub-flavoured structure and the shapes here are what the
-/// view renders. Split from the view body for length.
 extension MarkdownText {
-    /// One structural piece of a comment: GitHub comments mix
-    /// headings, rules, fenced code and pipe tables into markdown.
-    enum ProseBlock {
-        case heading(String)
-        case quote(String)
-        case rule
-        case code(String, SyntaxLanguage?)
-        case table(header: [String], rows: [[String]])
-        case image(source: String, alt: String)
-        case text(String)
-    }
-
-    /// Parses one chunk with the official GitHub-flavoured parser,
-    /// mapping its block structure onto the renderer's shapes.
-    /// Consecutive prose blocks merge, so one Text renders them and
-    /// selection can span paragraphs and lists.
-    static func proseBlocks(_ text: String) -> [ProseBlock] {
-        var blocks = [ProseBlock]()
-        var body = text
-        // Front matter leads as a table of its fields, the keys in
-        // bold, the way a site renders a post's metadata; left to
-        // the parser it read as a rule, a paragraph and a rule.
-        if let matter = frontMatter(in: text) {
-            blocks.append(.table(header: [], rows: matter.fields.map { ["**" + $0.key + "**", $0.value] }))
-            body = matter.body
-        }
-        let document = Document(parsing: body)
-        for child in document.blockChildren {
-            switch child {
-            case let heading as Heading:
-                blocks.append(.heading(heading.plainText))
-
-            case let code as CodeBlock:
-                blocks.append(.code(
-                    code.code.trimmingCharacters(in: .newlines),
-                    syntaxLanguage(for: code.language ?? ""),
-                ))
-
-            case let quote as BlockQuote:
-                // Detach the children so formatting removes the outer quote.
-                blocks.append(.quote(alert(Document(quote.blockChildren).format())))
-
-            case is ThematicBreak:
-                blocks.append(.rule)
-
-            case let table as Markdown.Table:
-                blocks.append(.table(
-                    header: table.head.cells.map { cellSource($0) },
-                    rows: table.body.rows.map { row in row.cells.map { cellSource($0) } },
-                ))
-
-            case let paragraph as Paragraph where image(in: paragraph) != nil:
-                // A paragraph holding nothing but an image is the
-                // shape a screenshot takes in a README; anything
-                // around it stays prose.
-                if let found = image(in: paragraph) {
-                    blocks.append(.image(source: found.source, alt: found.alt))
+    static func content(_ text: String) -> AttributedString {
+        contentCache.value(for: text) { raw in
+            let source = strippingHTML(raw)
+            let matter = frontMatter(in: source)
+            let body = matter?.body ?? source
+            var content = (try? AttributedStringMarkdownParser.markdown().attributedString(for: body))
+                ?? AttributedString(body)
+            for run in content.runs {
+                if let url = run.imageURL, url.scheme == nil, url.host == nil, url.path.hasPrefix("/") {
+                    content[run.range].imageURL = URL(filePath: url.path)
                 }
-
-            default:
-                appendProse(reflowed(child.format()), to: &blocks)
             }
+            var result = matter.map { frontMatterTable($0.fields) } ?? AttributedString()
+            result.append(adapted(content))
+            return result
         }
-        return blocks
     }
 
-    private static func alert(_ source: String) -> String {
-        for title in ["Note", "Tip", "Important", "Warning", "Caution"] {
-            let marker = "[!" + title.uppercased() + "]"
-            if source == marker || source.hasPrefix(marker + "\n") || source.hasPrefix(marker + " ") {
-                return "**" + title + "**\n\n"
-                    + source.dropFirst(marker.count).trimmingCharacters(in: .whitespacesAndNewlines)
+    private static func frontMatterTable(_ fields: [(key: String, value: String)]) -> AttributedString {
+        var result = AttributedString()
+        // Metadata identities stay separate from parsed blocks.
+        var identity = -1
+        let table = PresentationIntent(
+            .table(columns: [.init(alignment: .left), .init(alignment: .left)]), identity: identity,
+        )
+        for (index, field) in ([(key: "Field", value: "Value")] + fields).enumerated() {
+            identity -= 1
+            let row = PresentationIntent(
+                index == 0 ? .tableHeaderRow : .tableRow(rowIndex: index),
+                identity: identity,
+                parent: table,
+            )
+            for (column, value) in [field.key, field.value].enumerated() {
+                identity -= 1
+                var cell = AttributedString(value.isEmpty ? " " : value)
+                cell.presentationIntent = PresentationIntent(
+                    .tableCell(columnIndex: column), identity: identity, parent: row,
+                )
+                if column == 0 {
+                    cell.inlinePresentationIntent = .stronglyEmphasized
+                }
+                result.append(cell)
             }
         }
-        return source
+        return result
+    }
+
+    private static func adapted(_ original: AttributedString) -> AttributedString {
+        var content = original
+        var containers = Set<Int>()
+        var replacements = [(Range<AttributedString.Index>, AttributedString)]()
+        for (intent, range) in original.runs[\.presentationIntent] {
+            guard let components = intent?.components, let container = components.dropFirst().first else {
+                continue
+            }
+
+            let first = containers.insert(container.identity).inserted
+            containers.formUnion(components.map(\.identity))
+            guard first, components.first?.kind == .paragraph,
+                  original[range].runs.first?.inlinePresentationIntent == nil
+            else {
+                continue
+            }
+
+            let source = String(original[range].characters)
+            if case .listItem = container.kind {
+                for (marker, symbol) in [("[ ]", "☐"), ("[x]", "☑"), ("[X]", "☑")]
+                    where source == marker || source.hasPrefix(marker + " ")
+                {
+                    let end = original.characters.index(range.lowerBound, offsetBy: marker.count)
+                    var replacement = AttributedString(symbol)
+                    replacement.presentationIntent = intent
+                    replacements.append((range.lowerBound ..< end, replacement))
+                }
+            } else if container.kind == .blockQuote {
+                let alerts: [(String, Color)] = [
+                    ("Note", .blue), ("Tip", .green), ("Important", .purple), ("Warning", .orange), ("Caution", .red),
+                ]
+                for (title, colour) in alerts {
+                    let marker = "[!" + title.uppercased() + "]"
+                    guard source == marker || source.hasPrefix(marker + " ") else {
+                        continue
+                    }
+
+                    let end = original.characters.index(range.lowerBound, offsetBy: min(source.count, marker.count + 1))
+                    var replacement = AttributedString(title + "\n")
+                    replacement.presentationIntent = intent
+                    replacement.inlinePresentationIntent = .stronglyEmphasized
+                    replacement.foregroundColor = colour
+                    replacements.append((range.lowerBound ..< end, replacement))
+                }
+            }
+        }
+        for (range, replacement) in replacements.reversed() {
+            content.replaceSubrange(range, with: replacement)
+        }
+        return content
     }
 
     /// YAML front matter and what follows it, when the text opens
@@ -126,169 +145,8 @@ extension MarkdownText {
         return value
     }
 
-    /// The image a paragraph is, when that is all it is: the source
-    /// and whatever alt text it carries.
-    static func image(in paragraph: Paragraph) -> (source: String, alt: String)? {
-        let children = Array(paragraph.inlineChildren).filter { inline in
-            (inline as? Markdown.Text)?.string.trimmingCharacters(in: .whitespaces).isEmpty != true
-        }
-        guard children.count == 1, let image = children.first as? Markdown.Image,
-              let source = image.source, source.isEmpty == false
-        else {
-            return nil
-        }
-
-        return (source, image.plainText)
-    }
-
-    /// Prose as GitHub renders it: a single newline inside a
-    /// paragraph or a list item is a soft break, which joins rather
-    /// than wrapping where the author's editor happened to. A blank
-    /// line still ends a paragraph, a line git or markdown gives
-    /// structure to (a heading, a quote, a list marker, a table row,
-    /// a fence) starts afresh, and a line ending in two spaces or a
-    /// backslash keeps the break it asked for.
-    static func reflowed(_ text: String) -> String {
-        var lines = [String]()
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
-            guard let previous = lines.last, continues(line, after: previous) else {
-                lines.append(line)
-                continue
-            }
-
-            lines[lines.count - 1] = previous + " " + line.trimmingCharacters(in: .whitespaces)
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    /// Whether a line carries on the one before it rather than
-    /// starting something of its own.
-    private static func continues(_ line: String, after previous: String) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return trimmed.isEmpty == false
-            && previous.trimmingCharacters(in: .whitespaces).isEmpty == false
-            && previous.hasSuffix("  ") == false
-            && previous.hasSuffix("\\") == false
-            && starts(trimmed) == false
-    }
-
-    /// Whether a line begins something markdown gives its own shape.
-    private static func starts(_ trimmed: String) -> Bool {
-        let markers = ["- ", "* ", "+ ", "> ", "#", "|", "```", "~~~"]
-        if markers.contains(where: trimmed.hasPrefix) {
-            return true
-        }
-
-        // `1.` and friends: a number, a dot or bracket, a space.
-        let digits = trimmed.prefix(while: \.isNumber)
-        let rest = trimmed.dropFirst(digits.count)
-        return digits.isEmpty == false && (rest.hasPrefix(". ") || rest.hasPrefix(") "))
-    }
-
-    /// The fence tag's language, tolerating common aliases.
-    static func syntaxLanguage(for tag: String) -> SyntaxLanguage? {
-        switch tag.trimmingCharacters(in: .whitespaces).lowercased() {
-        case "swift":
-            .swift
-
-        case "rb",
-             "ruby":
-            .ruby
-
-        case "bash",
-             "sh",
-             "shell",
-             "zsh":
-            .shell
-
-        case "py",
-             "python":
-            .python
-
-        case "json":
-            .json
-
-        case "dockerfile":
-            .dockerfile
-
-        case "ts",
-             "tsx",
-             "typescript":
-            .typescript
-
-        case "yaml",
-             "yml":
-            .yaml
-
-        case "markdown",
-             "md":
-            .markdown
-
-        default:
-            nil
-        }
-    }
-
-    /// Maps common HTML formatting to Markdown, preserving code
-    /// examples and omitting comments and executable elements.
+    /// Maps common HTML formatting while preserving literal code.
     static func strippingHTML(_ text: String) -> String {
         (try? MarkdownHTML(text).markdown) ?? text
-    }
-
-    static func inline(_ text: String) -> AttributedString {
-        inlineCache.value(for: text) { text in
-            let options = AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace,
-            )
-            let source = ticked(text)
-            return (try? AttributedString(markdown: source, options: options)) ?? AttributedString(source)
-        }
-    }
-
-    /// Task list markers render as their box glyphs: markdown's
-    /// inline parser leaves `- [x]` as literal brackets, so a
-    /// checklist read as punctuation rather than state.
-    static func ticked(_ text: String) -> String {
-        text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { tickedLine(String($0)) }
-            .joined(separator: "\n")
-    }
-
-    /// One line's task marker as its box glyph, the indentation and
-    /// list marker kept so nesting still reads.
-    private static func tickedLine(_ line: String) -> String {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        for marker in ["- ", "* ", "+ "] where trimmed.hasPrefix(marker) {
-            let rest = String(trimmed.dropFirst(marker.count))
-            let indent = String(line.prefix(while: \.isWhitespace))
-            if rest.hasPrefix("[ ] ") {
-                return indent + marker + "\u{2610} " + rest.dropFirst("[ ] ".count)
-            }
-            if rest.lowercased().hasPrefix("[x] ") {
-                return indent + marker + "\u{2611} " + rest.dropFirst("[x] ".count)
-            }
-        }
-        return line
-    }
-
-    /// Merges consecutive prose into one block; the regenerated
-    /// markdown keeps soft breaks, list markers and quote prefixes
-    /// for the inline renderer.
-    private static func appendProse(_ source: String, to blocks: inout [ProseBlock]) {
-        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else {
-            return
-        }
-
-        if case let .text(previous) = blocks.last {
-            blocks[blocks.count - 1] = .text(previous + "\n\n" + trimmed)
-        } else {
-            blocks.append(.text(trimmed))
-        }
-    }
-
-    /// One table cell's inline markdown source.
-    private static func cellSource(_ cell: Markdown.Table.Cell) -> String {
-        cell.inlineChildren.map { $0.format() }.joined().trimmingCharacters(in: .whitespaces)
     }
 }

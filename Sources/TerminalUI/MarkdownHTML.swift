@@ -51,6 +51,7 @@ struct MarkdownHTML {
     // MARK: Private
 
     private static let fenceLength = 3
+    private static let maximumListStart = 999_999_999
 
     private let protected: MarkdownHTMLCode
     private let document: SwiftSoup.Document
@@ -104,11 +105,25 @@ struct MarkdownHTML {
             return "\n\n---\n\n"
 
         case "div",
-             "ol",
              "p",
-             "section",
-             "ul":
+             "section":
             return "\n\n" + body + "\n\n"
+
+        case "ol",
+             "ul":
+            let start = Int((try? element.attr("start")) ?? "")
+                .flatMap { (0 ... Self.maximumListStart).contains($0) ? $0 : nil } ?? 1
+            return "\n\n" + element.children()
+                .filter { $0.tagName() == "li" }
+                .enumerated()
+                .lazy
+                .map { index, item in
+                    let marker = element.tagName() == "ol" ? String(start + index) + ". " : "- "
+                    return marker + render(item.getChildNodes())
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .replacing("\n", with: "\n" + String(repeating: " ", count: marker.count))
+                }
+                .joined(separator: "\n") + "\n\n"
 
         case "li":
             return "\n- " + body.trimmingCharacters(in: .whitespacesAndNewlines)

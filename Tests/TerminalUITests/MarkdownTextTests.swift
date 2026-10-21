@@ -1,85 +1,82 @@
+import Foundation
 @testable import TerminalUI
 import Testing
 
-/// Exercises the markdown parsing feeding the one markdown view.
+/// The same attributed content feeds Textual on every Markdown surface.
 @MainActor
 struct MarkdownTextTests {
-    @Test
-    func `html lists, code spans and comment markers become markdown`() {
-        let body = """
-        [//]: # (dependabot-automerge-start)
-        <ul>
-        <li><code>55cc834</code> Merge pull request #1768</li>
-        <li>Additional commits viewable in compare view</li>
-        </ul>
-        [//]: # (dependabot-automerge-end)
-        """
-        let stripped = MarkdownText.strippingHTML(body)
-        #expect(stripped.contains("- `55cc834` Merge pull request #1768"))
-        #expect(stripped.contains("- Additional commits viewable in compare view"))
-        #expect(stripped.contains("<") == false)
-        #expect(stripped.contains("[//]: #") == false)
+    @Test(arguments: ["1. **First**\n2. Second", "1. **First**\n1. Second", "1) **First**\n2) Second"])
+    func `ordered lists remain structured`(source: String) {
+        let content = MarkdownText.content(source)
+        let kinds = MarkdownTestSupport.kinds(content)
+        #expect(kinds.contains(.orderedList))
+        #expect(kinds.contains(.listItem(ordinal: 1)))
+        #expect(kinds.contains(.listItem(ordinal: 2)))
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
     }
 
     @Test
-    func `details tables parse as tables after tag stripping`() {
-        let body = """
-        <details>
-        <summary>Show a summary per file</summary>
+    func `nested lists retain independent starting numbers and blocks`() {
+        let content = MarkdownText.content("""
+        3. Third
+        4. Fourth
 
-        | File | Description |
-        | ---- | ----------- |
-        | `Sources/a.swift` | Does a thing |
+           7. Nested seventh
+           8. Nested eighth
 
-        </details>
-        """
-        let stripped = MarkdownText.strippingHTML(body)
-        let blocks = MarkdownText.proseBlocks(stripped)
-        let isTable = blocks.contains { block in
-            if case let .table(header, rows) = block {
-                return header == ["File", "Description"] && rows.count == 1
-            }
-            return false
+           Another paragraph.
+
+           > A quotation.
+
+        ## Next section
+        1. Restart
+        2. Continue
+        """)
+        let kinds = MarkdownTestSupport.kinds(content)
+        for ordinal in [3, 4, 7, 8, 1, 2] {
+            #expect(kinds.contains(.listItem(ordinal: ordinal)))
         }
-        #expect(isTable)
+        #expect(kinds.count { $0 == .orderedList } == 3)
+        #expect(kinds.contains(.blockQuote))
+        #expect(kinds.contains(.header(level: 2)))
+        #expect(String(content.characters).contains("Another paragraph."))
+    }
+
+    @Test(arguments: 1 ... 6)
+    func `headings retain their levels and inline formatting`(level: Int) {
+        let content = MarkdownText.content(String(repeating: "#", count: level) + " Use `git status` and **review**")
+        #expect(MarkdownTestSupport.kinds(content).contains(.header(level: level)))
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true })
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
     }
 
     @Test
-    func `consecutive prose lines merge into one selectable block`() {
-        let markdown = """
-        First line
-        second line
+    func `tables preserve alignment tasks preserve state and references resolve`() {
+        let content = MarkdownText.content("""
+        | Left | Centre | Right |
+        | :--- | :---: | ---: |
+        | `code` | **bold** | ~~old~~ |
 
-        another paragraph
-        # Heading
-        | a | b |
-        | - | - |
-        | 1 | 2 |
-        """
-        let blocks = MarkdownText.proseBlocks(markdown)
-        #expect(blocks.count == 3)
-        if case let .text(text) = blocks[0] {
-            #expect(text.contains("First line"))
-            #expect(text.contains("another paragraph"))
-        } else {
-            Issue.record("The prose lines should merge into one text block")
-        }
-        if case let .heading(title) = blocks[1] {
-            #expect(title == "Heading")
-        } else {
-            Issue.record("The heading should end the text block")
-        }
-        if case let .table(header, rows)? = blocks.last {
-            #expect(header == ["a", "b"])
-            #expect(rows == [["1", "2"]])
-        } else {
-            Issue.record("The pipe rows should parse as a table")
-        }
+        - [ ] Open
+        - [x] Done
+
+        [Documentation][docs] and <https://example.com>.
+
+        [docs]: https://example.com/docs "Documentation"
+        """)
+        #expect(MarkdownTestSupport.kinds(content).contains(.table(columns: [
+            .init(alignment: .left), .init(alignment: .center), .init(alignment: .right),
+        ])))
+        #expect(content.runs.contains { $0.inlinePresentationIntent?.contains(.strikethrough) == true })
+        #expect(String(content.characters).contains("☐ Open"))
+        #expect(String(content.characters).contains("☑ Done"))
+        #expect(content.runs.contains { $0.link?.absoluteString == "https://example.com/docs" })
+        #expect(content.runs.contains { $0.link?.absoluteString == "https://example.com" })
     }
 
     @Test
-    func `front matter leads as a table of its fields, keys in bold`() {
-        let post = """
+    func `front matter leads as a table followed by the document`() {
+        let content = MarkdownText.content("""
         ---
         title: "Homebrew 7.0.0"
         date: 2026-09-05
@@ -91,31 +88,37 @@ struct MarkdownTextTests {
         # Homebrew 7.0.0
 
         Today's release.
-        """
-        let blocks = MarkdownText.proseBlocks(post)
-        guard case let .table(header, rows) = blocks.first else {
-            Issue.record("front matter did not lead as a table")
-            return
-        }
+        """)
+        let kinds = MarkdownTestSupport.kinds(content)
+        #expect(kinds.contains(.tableHeaderRow))
+        #expect(kinds.contains(.header(level: 1)))
+        #expect(String(content.characters).contains("Homebrew 7.0.0"))
+        #expect(String(content.characters).contains("- release - homebrew"))
+        #expect(MarkdownText.frontMatter(in: "---\n\nSome prose\n\n---\n\nMore") == nil)
+    }
 
-        #expect(header.isEmpty)
-        #expect(rows == [
-            ["**title**", "Homebrew 7.0.0"],
-            ["**date**", "2026-09-05"],
-            ["**tags**", "- release - homebrew"],
-        ])
-        // What follows parses as it always did.
-        #expect(blocks.contains { block in
-            if case .heading("Homebrew 7.0.0") = block {
+    @Test
+    func `front matter preserves empty cells and literal formatting`() {
+        let content = MarkdownText.content("---\nempty:\nliteral: '*value* | other'\n---\n\nBody")
+        let cells = MarkdownTestSupport.kinds(content).filter { kind in
+            if case .tableCell = kind {
                 true
             } else {
                 false
             }
-        })
+        }
+        #expect(cells.count == 6)
+        #expect(String(content.characters).contains("*value* | other"))
+    }
 
-        // A document that merely opens with a rule is not front
-        // matter: the lines between are prose, not fields.
-        let ruled = "---\n\nSome prose\n\n---\n\nMore"
-        #expect(MarkdownText.frontMatter(in: ruled) == nil)
+    @Test
+    func `unchanged content is parsed once`() {
+        let cache = MarkdownText.ParseCache<Int>()
+        var parses = 0
+        for _ in 0 ..< 2 {
+            #expect(cache.value(for: "same") { _ in parses += 1; return parses } == 1)
+        }
+        #expect(parses == 1)
+        #expect(cache.value(for: "changed") { _ in parses += 1; return parses } == 2)
     }
 }

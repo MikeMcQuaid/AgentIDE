@@ -482,7 +482,7 @@ flowchart TD
 - **AgentIDEApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
 
-Third-party imports are confined (P3): SwiftTerm, swift-markdown, SwiftSoup,
+Third-party imports are confined (P3): SwiftTerm, Textual, swift-markdown, SwiftSoup,
 SwiftTreeSitter and grammars in TerminalUI; WebKit in SessionFeature;
 FoundationModels in AgentIDEData; SwiftNIO, SwiftNIO SSH and Swift Crypto
 in AgentIDERemote. MobileFeature also uses SwiftTerm’s UIKit renderer.
@@ -2037,6 +2037,7 @@ organisation.
 | SwiftTerm | terminal emulator views | ships a build plugin; scripts pass `-skipPackagePluginValidation` |
 | swift-nio, swift-nio-ssh, swift-crypto | SSH transport and device keys | Apple-maintained packages; no external SSH binary on iOS |
 | swift-markdown | markdown parsing | swiftlang exception |
+| Textual | native Markdown rendering and GitHub style | explicitly approved exception to the star threshold; pinned to 0.5.0 |
 | SwiftSoup | HTML fragments in Markdown | native parsing of nested review disclosures and formatting |
 | swift-tree-sitter | highlighting runtime | official-organisation exception |
 | tree-sitter-* grammars | highlighting | pinned to ABI 14 releases the runtime accepts; Swift from alex-pinkus, the grammar the ecosystem standardises on, pinned to its generated-files tag's revision so Dependabot does not mistake it for older; Python 0.23.6 and CSS 0.23.2 are pinned by revision so Dependabot cannot reintroduce 0.25.0's broken scanner lookup; their manifests include their scanners without a root sentinel that breaks Go and embedded-template |
@@ -2260,16 +2261,25 @@ it. Releases are full releases, never drafts or prereleases, which lets
 
 ## Pull request automation
 
-The shared Markdown renderer recognises GitHub's note, tip, important,
-warning and caution alerts in blockquotes, with a labelled callout and
-the body rendered as Markdown. Unknown markers and code remain literal.
-The shared Markdown renderer uses SwiftSoup for HTML fragments, retaining
-nested details as native disclosures and mapping emphasis, links, lists,
-quotes and HTML code into the existing Markdown views. Subscript and
-superscript wrappers retain their text. HTML comments and executable
-content are omitted. Markdown code spans and fences stay literal; the
-same content caches still avoid repeated parsing. GitHub task lists and
-tables continue through swift-markdown. No web view executes review HTML.
+Markdown previews, transcript entries, PR descriptions, timeline comments
+and review threads all use `MarkdownText` over Textual's `StructuredText`
+and GitHub style. Its Foundation Markdown parser keeps heading levels,
+inline formatting, list start numbers, hanging indents, nested blocks,
+table alignment and hard versus soft breaks. A shared parser caches
+attributed content by source and adapts GitHub alert labels and task
+states without flattening the document. Interface and code fonts follow
+Settings, Textual highlights code with the shared token colours and
+links use the existing opener. Its attachment loader handles local and
+remote images, resolving relative images beside the previewed file.
+The view identity follows source and image directory so retained
+attachments cannot outlive their document.
+SwiftSoup maps common HTML formatting into Markdown and keeps nested
+details as native disclosures. GitHub alerts remain labelled callouts,
+and YAML front matter remains a table. Unknown alert markers and code
+stay literal. HTML comments and executable content are omitted; no web
+view executes review HTML. Textual 0.5.0 is an explicitly approved
+exception to the dependency star threshold. Mermaid and maths extensions
+are not enabled.
 Code protection maps parser locations against UTF-8 lines, recognising
 LF, CRLF and CR line endings. Locations are checked before slicing;
 unusable ranges leave the original text readable instead of crashing
