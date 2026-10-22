@@ -90,10 +90,16 @@ plus resume.
 
 ### First-launch setup
 
-The startup gate checks local prerequisites asynchronously on every
-launch, before mounting the dashboard, schedules or terminals. Independent
-checks run concurrently, with a spinner only after half a second.
-Instructions appear only after a check reports missing prerequisites.
+After initial setup succeeds, the saved completion marker opens the
+dashboard, schedules and terminals immediately on later launches. Local
+prerequisites are rechecked once in the background, with independent
+checks running concurrently. A failure replaces the workspace with setup
+guidance and blocks further actions until repaired. A first-ever launch
+shows startup progress in the normal app window until checks succeed.
+The workspace then opens; setup controls appear only after a failure.
+Completed setups show no startup progress. After a failure, manual
+rechecks show a spinner only after half a second. Agent availability
+updates in the mounted dashboard when the background check completes.
 Missing tools, sandbox access, Git identity, workspace permissions or an
 authenticated agent fill the window with a five-step wizard: tools, Git
 identity, GitHub, sandvault and agent sign-in. Only the first unfinished
@@ -491,10 +497,15 @@ in AgentIDERemote. MobileFeature also uses SwiftTerm’s UIKit renderer.
 views, markdown rendering, git access, GitHub access and link opening
 each have exactly one shared component or client. Every in-app link
 takes `LinkOpener` (the window's `openURL`): web links to the Browser
-tab, or the system browser with Cmd; anything without a web scheme and
-host is refused with a message rather than handed to the system opener,
-whose failure is an unhelpful "error -50". The terminal's link delegate
-opens web links only and leaves a clicked file path selectable.
+tab, or the system browser with Cmd. Commit links in review comments
+use the existing `agentide-commit` scheme and open that commit read-only
+in Review, scoped to the utility pane’s worktree. Abbreviated hashes
+resolve locally without changing HEAD, and returning restores an edited
+commit message and its baseline. A request counter allows repeated clicks
+on the same commit. Other links without a web scheme and host are refused
+with a message rather than handed to the system opener, whose failure is
+an unhelpful "error -50". The terminal’s link delegate opens web links
+only and leaves a clicked file path selectable.
 
 ### The AgentRunner seam
 
@@ -847,6 +858,15 @@ shows a different branch from the one checked out.
   file; the full name comes from the remote URL, never `gh repo view`.
   Every read passes `--no-optional-locks` so nothing waits on an
   agent's index lock. Rows are kept between readings (`GitReadScope`).
+  The sidebar, PR pane and Review pane share each worktree's branch
+  status. The batch includes commit identities, so moving the default
+  branch or rewriting a tip refreshes the panes even if counts stay
+  unchanged. Review refreshes preserve edited commit messages.
+  Review bases read the current checkout even when the pane retains an
+  older worktree record, keeping PR and stack bases correct after checkout.
+  Session updates preserve these facts. Default-branch names are cached
+  by owning checkout, so fetching through any linked worktree invalidates
+  the same answer.
 - **A pane that is holding the machine down says so** (`PaneLoad`,
   `PaneLoads`). One `ps` every thirty seconds sums each pane's
   process tree and names its heaviest process; a tree over three
@@ -1193,6 +1213,8 @@ steps.
 - **Every GitHub question goes through `gh` and one gate,
   `PullRequestStore`**, which owns answers and the moments they arrived
   (in the metadata file, so relaunching does not restart the asking).
+  Simultaneous listing, summary and conversation reads join one request
+  across panes sharing that metadata file.
   Never repository-wide `gh pr list` on large repositories: query per
   branch, ten pull requests at a time, never the default branch. The
   tab's pager asks for ten more only when Next passes the last full
@@ -1411,6 +1433,13 @@ steps.
   request merged elsewhere stayed open on its row until clicked),
   and one it reports open again is asked about at the next
   enrichment rather than painted finished from the cache.
+  The sidebar reads branch identity and queue membership directly from
+  the shared store, without a second cache. Shared listing changes also
+  repaint the PR pane's rows, including newly opened pull requests.
+  Shorter reads update returned rows without discarding cached later
+  pages. A read covering all cached rows or an explicit refresh can
+  replace the listing, including with an empty result.
+  A selection missing from the refreshed listing closes its conversation.
 - **A guarded default branch is not pushed from here.** Whether the
   default branch takes a push is GitHub's to say: the branch's own
   summary says whether classic protection is on it, and the rules
@@ -1462,26 +1491,30 @@ steps.
   to be a boolean any worktree refresh cleared, so counts gathered
   before the push arrived after it and swapped the two buttons back
   and forth until the next reading caught up.
-- **A button says what it just did.** A finished rebase, sign or push
-  turns its own dimmed button's label to the past tense (Rebased,
-  Signed, Pushed) rather than narrating it in the middle of the bar,
-  which is left for what went wrong and is cleared by the next
-  success. Each label belongs to the entry it acted on, so reading up
-  and down a stack never shows one branch's work on another's.
-- **Signing.** Settings' Require signed commits (default on) makes Push
-  wait for the tip to verify and rebases sign (`--force-rebase
-  --gpg-sign` after a fetch); off, nothing signs or checks and nothing
-  passes `--no-gpg-sign`. Verification is proof, never trust: Push
-  dims until the current tip has been read as signed, fresh worktree
-  counts re-read it (an agent's commits arrive between reloads), and
-  the click reads it once more, declining in the footer with Rebase
-  relit to sign; the service's own refusal stays as the backstop no
-  user path reaches. The signed rebase picks the branch's own
-  remote ref, including a contributor's fork, when it is still an
-  ancestor and every commit unique to the branch verifies, else
-  origin/HEAD. The ancestor test keeps an amended branch out of that
-  path (its pushed commit is a stale twin, not a parent). A fetch
-  inside the minute is reused (`gitFetchedAt`).
+- **One action prepares and pushes a branch.** The PR footer offers
+  Sign and Push, Rebase and Push or Push according to the work needed,
+  for standalone branches and stacks alike. Signing and rebasing finish
+  before pushing; a failure stops the sequence. Open PR then enables
+  for the pushed tip. The Worktree menu and Shift-Cmd-P use this same
+  action. The rebase label includes the commits behind the default
+  branch, and a newer base enables the action even when all local
+  commits are already pushed. Sidebar changes to either remote count
+  refresh the rebase facts. The button reads Pushed after success until
+  the branch or its base moves again.
+  An explicit reload takes precedence over a queued sidebar refresh.
+  Refresh order is recorded before reading the stack, so a slow stack
+  read cannot restart older branch facts after a newer reload finishes.
+- **Signing.** Settings' Require signed commits (default on) makes
+  rebases sign (`--force-rebase --gpg-sign` after a fetch); off, nothing
+  signs or checks and nothing passes `--no-gpg-sign`. The combined action
+  refreshes the signing and rebase facts before acting, so a commit
+  amended since the last reading is signed in the same click. Push
+  verifies the tip again before sending it. The signed rebase picks the
+  branch's own remote ref, including a contributor's fork, when it is
+  still an ancestor, the default branch is already integrated and every
+  commit unique to the branch verifies, else origin/HEAD. The ancestor
+  test keeps an amended branch out of that path (its pushed commit is a
+  stale twin, not a parent). A fetch inside the minute is reused (`gitFetchedAt`).
 - **The same form edits an open pull request.** The pencil beside the
   browser button in the conversation's header puts the pull request's
   title and body into the creation form in the conversation's place, with the generate
@@ -1503,6 +1536,13 @@ steps.
   pull request merges.
 - **The creation form** shows when the branch has no open pull request:
   title, body and template as fields, with drafts saved as typed.
+  After creation, GitHub's closing issue references identify issues
+  to assign to the authenticated user through `gh issue edit` with
+  `--add-assignee @me`, preserving existing assignees. Issue URLs keep
+  fork and cross-repository references pointed at their own repository.
+  GitHub interprets closing keywords for PRs targeting the default
+  branch. Assignment failures leave the new pull request open and
+  report the failed follow-up without repeating creation.
   Untouched title and body defaults refresh from the latest commit
   messages when revisiting a branch, ignoring whitespace-only edits.
   The saved default distinguishes automatic text from meaningful
@@ -1522,25 +1562,21 @@ steps.
   working copy or, for sparse checkouts, from git. Committed files use
   `cat-file blob` so a missing literal path cannot become a pattern
   that returns unrelated content.
-- **A stack rebases as one.** Rebase on any layer, the bottom included
-  and the menu bar's Rebase with it, restacks the whole stack and
-  then pushes through the selected entry and any higher branches
-  already on the remote, bottom first, if every lower branch was
-  pushed before the rebase; otherwise it only rebases locally.
-  When pushing is allowed, the button
-  reads Rebase and Push (or Sign and Push) with what comes down and
-  what goes up, its help says why, the note names what was pushed,
-  and Push then reads Pushed. Push is hidden beside a live Rebase
-  and Push only when a branch being pushed needs rebasing or signing.
-  Unpublished work above it cannot hide a ready Push.
-  Only one branch action runs at a time: while one does, Rebase and
-  Push both dim, since a push pressed mid-rebase failed. Merge on any
-  layer, the bottom included, is the stack's merge of that layer and
+- **A stack rebases as one.** Rebasing any layer, the bottom included,
+  restacks the whole stack and then pushes through the selected entry
+  and any higher branches already on the remote, bottom first.
+  Publication waits until every lower branch has been pushed.
+  The single branch action restacks before pushing when a branch being
+  published needs rebasing or signing. Unpublished work above it does
+  not prevent a ready push. It waits for lower branches to be pushed
+  first and for worktrees needed by the rebase to be available.
+  Only one branch action runs at a time. Merge on any layer, the bottom
+  included, is the stack's merge of that layer and
   everything below it, through the asynchronous merge API that also
   queues a lone pull request. Rebasing one
   layer on its own rewrote what the layers above fork from, and the
-  stack derived afterwards no longer reached them. Push and Rebase
-  and Push publish the selected branch, those below it and higher
+  stack derived afterwards no longer reached them. The combined branch
+  action publishes the selected branch, those below it and higher
   branches with a remote branch. Higher branches without a remote
   branch stay local while earlier pull requests are opened and updated.
   Push counts, signature checks and restack blockers cover only
@@ -2198,9 +2234,11 @@ so that only the last needs credentials:
   including the sandbox's SwiftPM build; `XCODE_CONFIGURATION=Debug`
   selects Debug explicitly. A successful host build verifies the app,
   updates the repository-root symlink and prints the app's path.
-  Installation quits the running app after a successful build, copies
-  that output into /Applications and relaunches it. On build failure,
-  installation prints the captured output and preserves the exit status.
+  Installation streams build output and preserves a failed build’s exit
+  status. After success, it asks the current user’s running app to quit,
+  waits for its exit and kills it if necessary before replacing the
+  bundle in /Applications and launching the new app. If the old process
+  cannot be stopped, installation fails without replacing its bundle.
   It ignores SIGHUP so closing an AgentIDE shell pane cannot interrupt
   installation.
   Zipping and distribution signing always use Release. Sandboxed builds
@@ -2274,11 +2312,41 @@ Settings, Textual highlights code with the shared token colours and
 links use the existing opener. Its attachment loader handles local and
 remote images, resolving relative images beside the previewed file.
 The view identity follows source and image directory so retained
-attachments cannot outlive their document.
+attachments cannot outlive their document. Paragraphs and headings fill
+the available width inside Textual's selection overlay, so a drag can
+start beside short text as well as directly over it.
+Only one Markdown region holds a selection at a time. Conversation rows
+put author headers above full-width comment bodies and retain their
+compact rails; author names use the shared selectable renderer. Headers
+include the available date and time without a polling timer. Headers and
+timeline boundaries add no Markdown paragraph or thematic break margins.
+Review authors sit beside a separate collapse button, so selecting a
+name never competes with opening the thread.
+CodeRabbit and Copilot share their product names and brand marks in
+conversation headers. Other GitHub commenters reuse `OwnerAvatar` and
+its memory and disk cache, with a person placeholder while unavailable;
+local agent findings keep their existing agent marks. The timeline orders
+dated entries chronologically and shows only the latest from each bot,
+adding "Latest of N comments" beside its name when more than one exists;
+inline findings remain separate. Bot bodies hide command help, the
+change-stack link and the Autofix checkbox. CodeRabbit’s billing notices
+and usage receipts, thank-you promotions and Share sections are also
+hidden with their surrounding callout or disclosure, preserving the
+surrounding Markdown source. With pretty printing disabled, SwiftSoup
+2.14.2 reuses original element source without normalising entity
+spellings; notice removal uses these original spans. Bot commit
+references link to Review. Automatic links need a hexadecimal letter, so
+ordinary numbers stay text. Code examples and existing links remain
+unchanged. This is cached presentation filtering: original events remain
+available to Copy all, review completion detection and autofix.
+Headers, timeline entries, native disclosures, separate review threads
+and scrolling code or table regions remain selection boundaries.
 SwiftSoup maps common HTML formatting into Markdown and keeps nested
-details as native disclosures. GitHub alerts remain labelled callouts,
-and YAML front matter remains a table. Unknown alert markers and code
-stay literal. HTML comments and executable content are omitted; no web
+details as native disclosures with eight-point gaps; thematic breaks
+use the same 16-point margins as paragraphs. GitHub alerts remain
+labelled callouts, and YAML front matter remains a table. Unknown alert
+markers and code stay literal. HTML comments and executable content are
+omitted without leaving empty layout blocks around disclosures; no web
 view executes review HTML. Textual 0.5.0 is an explicitly approved
 exception to the dependency star threshold. Mermaid and maths extensions
 are not enabled.
@@ -2552,7 +2620,7 @@ findings rather than the full review. Individual and bulk conversation
 copies and autofix share the same CodeRabbit body cleanup: omit leading
 classification badges and trailing tracking and attribution comments,
 preserving finding text, code examples, anchors and replies. Raw bodies
-remain available for display and completion detection.
+remain cached for completion detection and feedback extraction.
 Summary findings have durable review IDs
 but no thread resolution action. Completion can be a submitted review or
 a new run with no findings for the current head in CodeRabbit's overview

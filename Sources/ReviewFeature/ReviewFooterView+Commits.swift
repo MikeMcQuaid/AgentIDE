@@ -29,12 +29,6 @@ extension ReviewFooterView {
         )
     }
 
-    /// The URL scheme a commit line links to; nothing opens it but
-    /// this file's own handler.
-    static var commitScheme: String {
-        "agentide-commit"
-    }
-
     /// The commit listing coloured like git log: hashes orange,
     /// subjects bold and the trailing ref decorations green, all in
     /// one attributed block so selection still spans lines.
@@ -73,19 +67,18 @@ extension ReviewFooterView {
     /// Reviews the clicked commit on its own. Any other kind of
     /// link is left to the system, though the listing carries none.
     func show(commit url: URL) -> OpenURLAction.Result {
-        guard url.scheme == Self.commitScheme else {
+        guard let hash = ReviewCommitLink.hash(in: url) else {
             return .systemAction
         }
 
-        show(commit: String(url.absoluteString.dropFirst(Self.commitScheme.count + 1)))
+        show(commit: hash)
         return .handled
     }
 
     /// Reviews one commit, or the whole scope again when nil.
     func show(commit: String?) {
-        model.commitTarget = commit
         Task {
-            await model.reload()
+            await model.showCommit(commit)
         }
     }
 
@@ -96,7 +89,7 @@ extension ReviewFooterView {
         let hashEnd = line.firstIndex(of: " ") ?? line.endIndex
         var hash = AttributedString(String(line[..<hashEnd]))
         hash.foregroundColor = .orange
-        let target = URL(string: commitScheme + ":" + String(line[..<hashEnd]))
+        let target = URL(string: ReviewCommitLink.scheme + ":" + String(line[..<hashEnd]))
         var rest = String(line[hashEnd...])
         var trailing = ""
         if rest.hasSuffix(")"), let open = rest.range(of: " (", options: .backwards) {

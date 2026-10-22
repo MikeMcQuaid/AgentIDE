@@ -5,7 +5,7 @@ import Markdown
 struct MarkdownHTMLCode {
     // MARK: Lifecycle
 
-    init(_ text: String) throws {
+    init(_ text: String, transform: (any Markup) -> String? = { _ in nil }) throws {
         let lines = text.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" || $0 == "\r" }
         func sourceIndex(at location: SourceLocation) -> String.Index? {
             guard location.line > 0, location.line <= lines.count, location.column > 0 else {
@@ -21,18 +21,19 @@ struct MarkdownHTMLCode {
 
             return String.Index(index, within: text)
         }
-        var ranges = [Range<String.Index>]()
+        var ranges = [(Range<String.Index>, String?)]()
         func visit(_ node: any Markup) throws {
-            if node is CodeBlock || node is InlineCode || node is Link || node is Markdown.Image,
+            let replacement = transform(node)
+            if replacement != nil || node is CodeBlock || node is InlineCode || node is Link || node is Markdown.Image,
                let range = node.range
             {
                 guard let start = sourceIndex(at: range.lowerBound), let end = sourceIndex(at: range.upperBound),
-                      start <= end, (ranges.last?.upperBound ?? text.startIndex) <= start
+                      start <= end, (ranges.last?.0.upperBound ?? text.startIndex) <= start
                 else {
                     throw InvalidSourceRange()
                 }
 
-                ranges.append(start ..< end)
+                ranges.append((start ..< end, replacement))
             } else {
                 for child in node.children {
                     try visit(child)
@@ -43,7 +44,12 @@ struct MarkdownHTMLCode {
         var escaped = text
         var saved = [(String, String)]()
         let prefix = "AGENTIDE" + UUID().uuidString
-        for (index, range) in ranges.reversed().enumerated() {
+        for (index, entry) in ranges.reversed().enumerated() {
+            let (range, replacement) = entry
+            if let replacement {
+                escaped.replaceSubrange(range, with: replacement)
+                continue
+            }
             let key = prefix + String(index) + "END"
             saved.append((key, String(text[range])))
             escaped.replaceSubrange(range, with: key)

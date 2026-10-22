@@ -8,6 +8,32 @@ import Testing
 /// the old default moves to the new.
 struct DefaultBranchMoveTests {
     @Test
+    func `linked worktrees share default branch cache invalidation`() async throws {
+        let base = try TestSupport.temporaryDirectory("shared-default")
+        defer { try? FileManager.default.removeItem(atPath: base) }
+        let path = base + "/repo"
+        let linked = base + "/linked"
+        try await TestSupport.makeRepository(at: path)
+        try await TestSupport.runGit(["worktree", "add", "-b", "feature", linked], in: path)
+        try await TestSupport.runGit(["update-ref", "refs/remotes/origin/trunk", "HEAD"], in: path)
+        try await TestSupport.runGit(["update-ref", "refs/remotes/origin/main", "HEAD"], in: path)
+        try await TestSupport.runGit(
+            ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"], in: path,
+        )
+        let git = GitClient(runner: FoundationProcessRunner()) { true }
+        let repository = Repository(name: "repo", path: path)
+        let worktree = Repository(name: "repo", path: linked)
+        #expect(await git.defaultBaseRef(of: repository) == "origin/trunk")
+        #expect(await git.defaultBaseRef(of: worktree) == "origin/trunk")
+
+        try await TestSupport.runGit(["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main"], in: path)
+        try await git.fetch(repositoryPath: linked)
+
+        #expect(await git.defaultBaseRef(of: repository) == "origin/main")
+        #expect(await git.defaultBaseRef(of: worktree) == "origin/main")
+    }
+
+    @Test
     func `the checkout follows a default branch that moved from trunk to main`() async throws {
         let base = try TestSupport.temporaryDirectory("default-move")
         let origin = base + "/origin.git"
@@ -18,7 +44,7 @@ struct DefaultBranchMoveTests {
         try await TestSupport.runGit(["remote", "add", "origin", origin], in: path)
         try await TestSupport.runGit(["push", "-q", "-u", "origin", "trunk"], in: path)
         try await TestSupport.runGit(["remote", "set-head", "origin", "--auto"], in: path)
-        let git = GitClient(runner: FoundationProcessRunner())
+        let git = GitClient(runner: FoundationProcessRunner()) { true }
         let repository = Repository(name: "repo", path: path)
         #expect(await git.defaultBaseRef(of: repository) == "origin/trunk")
 

@@ -330,6 +330,7 @@ public extension SessionService {
             behindDefault: known?.behind,
             behindUpstream: known?.behindUpstream,
             lastActivityAt: lastActivity,
+            revision: known?.revision,
         )
     }
 

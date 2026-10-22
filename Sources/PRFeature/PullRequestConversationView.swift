@@ -113,8 +113,7 @@ struct PullRequestConversationPane: View {
 
 // MARK: - PullRequestConversationView
 
-/// A pull request's conversation: its description, then every review
-/// and comment down a timeline rail.
+/// A pull request's description, compact timeline and inline review threads.
 struct PullRequestConversationView: View {
     // MARK: Internal
 
@@ -155,7 +154,7 @@ struct PullRequestConversationView: View {
             Divider()
             ZStack {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Self.eventSpacing) {
+                    VStack(alignment: .leading, spacing: PullRequestTimeline.spacing) {
                         if isLoading, events.isEmpty, description.isEmpty, localReview?.threads.isEmpty != false {
                             LaunchProgressView(
                                 "Loading the conversation…",
@@ -207,10 +206,6 @@ struct PullRequestConversationView: View {
     // MARK: Private
 
     private static let padding: CGFloat = 8
-    private static let eventSpacing: CGFloat = 10
-    private static let headerSpacing: CGFloat = 4
-    private static let railWidth: CGFloat = 2
-    private static let railInset: CGFloat = 10
     private static let loadingHeight: CGFloat = 120
 
     @AppStorage(UtilityTabTarget.pullRequestCacheKey)
@@ -256,12 +251,8 @@ struct PullRequestConversationView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if description.isEmpty == false {
-            MarkdownText(description)
-            Divider()
-        }
-        ForEach(events) { event in
-            eventRow(event)
+        if description.isEmpty == false || events.isEmpty == false {
+            PullRequestTimeline(description: description, events: events)
         }
         if threads.isEmpty == false || localReview?.threads.isEmpty == false || isLoading {
             Divider()
@@ -301,29 +292,6 @@ struct PullRequestConversationView: View {
             Text("No description or feedback yet.")
                 .interfaceFont(.callout)
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    /// One timeline entry: the author and review type over the body,
-    /// beside the rail.
-    private func eventRow(_ event: ReviewComment) -> some View {
-        VStack(alignment: .leading, spacing: Self.headerSpacing) {
-            HStack(spacing: Self.headerSpacing) {
-                Text(ChecksStyle.authorDisplayName(event.author)).interfaceFont(.callout, weight: .bold)
-                if let icon = ChecksStyle.reviewOcticonName(for: event.kind) {
-                    Octicon(icon, colour: ChecksStyle.reviewColour(for: event.kind))
-                    Text(event.kind.replacing("_", with: " ").lowercased())
-                        .interfaceFont(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if event.body.isEmpty == false {
-                MarkdownText(event.body)
-            }
-        }
-        .padding(.leading, Self.railInset)
-        .overlay(alignment: .leading) {
-            Rectangle().fill(.separator).frame(width: Self.railWidth)
         }
     }
 

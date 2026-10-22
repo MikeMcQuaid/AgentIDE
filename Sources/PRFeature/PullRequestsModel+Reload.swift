@@ -10,7 +10,11 @@ extension PullRequestsModel {
     func loadMergeQueue() async {
         hasMergeQueue = await fetchHasMergeQueue()
         if hasMergeQueue {
+            let previous = store.load().queuedCache
             _ = await pullRequests.queuedNumbers(repositoryPaths: [repository.path])
+            if previous != store.load().queuedCache {
+                UtilityTabTarget.pullRequestCacheChanged()
+            }
             if let selected {
                 self.selected = withCachedUnresolved(selected)
             }

@@ -30,11 +30,14 @@ struct SetupViewTests {
         host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         host.layoutSubtreeIfNeeded()
         #expect(containsInstructions(in: host) == false)
+        #expect(host.fittingSize.height > 0)
+        #expect(host.fittingSize.width > 0)
 
         await model.recheck()
         host.rootView = SetupView(model: model).body
         host.layoutSubtreeIfNeeded()
         #expect(containsInstructions(in: host) == requiresSetup)
+        #expect((host.fittingSize == .zero) == (requiresSetup == false))
     }
 
     // MARK: Private

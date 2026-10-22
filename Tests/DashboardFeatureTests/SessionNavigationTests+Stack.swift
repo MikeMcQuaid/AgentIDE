@@ -13,17 +13,19 @@ extension SessionNavigationTests {
                 base: "trunk", branches: ["bottom", "middle", "main", "upper", "unpushed"], checkedOut: "main",
             )
         }
-        fixture.model.branchPullRequests[fixture.repository.path + "#main"] = PullRequestSummary(
-            number: 7,
-            title: "Work",
-            url: "",
-            headBranch: "main",
-            mergeable: "",
-            reviewDecision: "",
-            checks: "",
-            baseBranch: "middle",
-            stackStanding: StackStanding(position: 3, height: 4, base: "middle"),
-        )
+        fixture.model.store.update { metadata in
+            metadata.pullRequestCache[fixture.repository.path + "#main"] = PullRequestSummary(
+                number: 7,
+                title: "Work",
+                url: "",
+                headBranch: "main",
+                mergeable: "",
+                reviewDecision: "",
+                checks: "",
+                baseBranch: "middle",
+                stackStanding: StackStanding(position: 3, height: 4, base: "middle"),
+            )
+        }
         #expect(fixture.model.stackStanding(for: item)
             == StackStanding(position: 3, height: unpublished ? 5 : 4, base: "middle"))
     }

@@ -4,6 +4,41 @@ import AgentIDEDomain
 import Testing
 
 extension SessionNavigationTests {
+    @Test
+    func `the sidebar follows a replacement PR and queue changes from the shared store`() async throws {
+        let fixture = Fixture()
+        defer { fixture.close() }
+        let model = fixture.model
+        let item = try #require(model.groups.first?.items.first)
+        let old = PullRequestSummary(
+            number: 7,
+            title: "Old",
+            url: "",
+            headBranch: "main",
+            mergeable: "",
+            reviewDecision: "",
+            checks: "",
+            state: "OPEN",
+        )
+        model.pullRequests.rememberBranchSummary(old, repositoryPath: fixture.repository.path, branch: "main")
+        await model.refreshStalePullRequests(forcing: [])
+        let fresh = PullRequestSummary(
+            number: 8,
+            title: "New",
+            url: "",
+            headBranch: "main",
+            mergeable: "",
+            reviewDecision: "",
+            checks: "",
+            state: "OPEN",
+        )
+        model.pullRequests.rememberBranchSummary(fresh, repositoryPath: fixture.repository.path, branch: "main")
+        model.store.update { $0.queuedCache[fixture.repository.path] = [8] }
+
+        #expect(model.pullRequest(for: item)?.number == 8)
+        #expect(model.pullRequest(for: item)?.isQueued == true)
+    }
+
     @Test(arguments: [false, true])
     func `sidebar tracks the worktree's local and PR loops until completion`(local: Bool) throws {
         let fixture = Fixture()
@@ -20,7 +55,9 @@ extension SessionNavigationTests {
             checks: "",
             state: "OPEN",
         )
-        model.branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch] = summary
+        model.pullRequests.rememberBranchSummary(
+            summary, repositoryPath: item.worktree.repositoryPath, branch: item.worktree.branch,
+        )
         let url = local ? "local:" + item.worktree.path : summary.url
         var state = PullRequestAutomation(repositoryPath: item.worktree.repositoryPath, number: 7, url: url)
         let key = PullRequestAutomation.key(for: url)

@@ -122,16 +122,11 @@ public struct PullRequestsView: View {
         // The sidebar's poll cached a fresher summary: the pane reads
         // the same cache, so the header and the row change together.
         .onChange(of: cacheGeneration) { model.repaintFromCache() }
-        // The menu bar's Push and Rebase land here through the
+        // The menu bar's combined branch action lands here through the
         // storage bus, acting on whichever worktree the pane shows.
         .onChange(of: pushRequest) {
             Task {
-                _ = await model.push()
-            }
-        }
-        .onChange(of: rebaseRequest) {
-            Task {
-                _ = await model.rebaseSigned()
+                _ = await model.publish()
             }
         }
     }
@@ -152,8 +147,6 @@ public struct PullRequestsView: View {
     /// The menu bar's action signals.
     @AppStorage("pushRequest")
     private var pushRequest = 0
-    @AppStorage("rebaseRequest")
-    private var rebaseRequest = 0
 
     @State private var model: PullRequestsModel
 

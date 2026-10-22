@@ -20,14 +20,14 @@ public extension SessionService {
 
     /// Pushes the branch to origin without opening anything. An
     /// unsigned tip refuses: every pushed commit must be GPG signed
-    /// (a local hook enforces the same), and Rebase on origin is the
-    /// signing path.
+    /// (a local hook enforces the same), and the combined publish action
+    /// signs before pushing.
     func push(worktree: Worktree) async throws -> PushDestination {
         if AppSettings.requiresSignedCommits,
            await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false
         {
             throw SessionServiceError(
-                "The tip commit is not GPG signed; Rebase on origin signs the branch before pushing.",
+                "The tip commit is not GPG signed; use Sign and Push to sign the branch before pushing.",
             )
         }
 

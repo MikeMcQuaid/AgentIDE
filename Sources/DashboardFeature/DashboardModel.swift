@@ -301,24 +301,12 @@ public final class DashboardModel {
     /// Internal so the pull request extension file can query GitHub.
     let github: GitHubClient
 
-    /// Each worktree branch's open pull request, keyed by repository
-    /// path and branch. A cached nil records "asked, none open", so
-    /// failures keep the last good answer either way. Stored here,
-    /// managed by the pull request extension file.
-    var branchPullRequests: [String: PullRequestSummary?] = [:]
-
     /// The stack git says each worktree holds, by worktree path, and
     /// when each is next worth deriving again. Managed by the stack
     /// extension file, which is where the rota lives.
     var derivedStacks: [String: BranchStack] = [:]
 
     var nextStackDerivation: [String: Date] = [:]
-
-    /// The pull requests in each repository's merge queue, by
-    /// repository path, as the shared store last answered. When it
-    /// was asked is the store's business, like every other pull
-    /// request timer.
-    var queuedNumbers: [String: Set<Int>] = [:]
 
     /// Internal so the pull request extension file can persist its
     /// cache.

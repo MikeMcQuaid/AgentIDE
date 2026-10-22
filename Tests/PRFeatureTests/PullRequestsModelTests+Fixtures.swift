@@ -28,6 +28,9 @@ extension PullRequestsModelTests {
         model.fetchAcceptsDefaultPushes = { false }
         model.fetchThreads = { _ in [] }
         model.performCreate = { _, _, _, _, _ in "" }
+        model.performAssignClosingIssues = { _ in
+            // Succeeds without side effects.
+        }
         model.performLinkStack = { _ in
             // Succeeds without side effects.
         }
@@ -121,6 +124,7 @@ extension PullRequestsModelTests {
     func item(
         branch: String,
         ahead: Int?,
+        behind: Int? = nil,
         session: AgentSession? = nil,
         path: String? = nil,
     ) -> WorktreeItem {
@@ -135,6 +139,7 @@ extension PullRequestsModelTests {
             isDirty: false,
             aheadOfUpstream: ahead,
             hasUnread: false,
+            behindDefault: behind,
         )
     }
 }

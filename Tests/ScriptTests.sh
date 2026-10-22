@@ -43,20 +43,33 @@ echo 'Build complete'
 SWIFT
 cat >"${scratch}/bin/ditto" <<'DITTO'
 #!/bin/bash
-[[ -d "$1" && "$2" == /Applications/AgentIDE.app ]] || exit 1
+[[ -d "$1" && "$2" == /Applications/AgentIDE.app && ! -e app-running ]] || exit 1
 printf '%s\n' "$1" >installed-app
 echo copy >>installation-events
 DITTO
 cat >"${scratch}/bin/osascript" <<'QUIT'
 #!/bin/bash
-[[ "$1" == -e && "$2" == 'quit app "AgentIDE"' ]] || exit 1
+[[ "$*" == *'quit app "AgentIDE"'* ]] || exit 1
 echo quit >>installation-events
 # Quitting the app closes its shell panes and hangs up their commands.
 kill -HUP "${PPID}"
+[[ "${INSTALL_TEST_STUCK:-}" == 1 ]] || /bin/rm -f app-running
 QUIT
+cat >"${scratch}/bin/pgrep" <<'PGREP'
+#!/bin/bash
+[[ "$*" == "-u $(id -u) -x AgentIDE" ]] || exit 99
+[[ -e app-running ]]
+PGREP
+cat >"${scratch}/bin/pkill" <<'PKILL'
+#!/bin/bash
+[[ "$*" == "-KILL -u $(id -u) -x AgentIDE" ]] || exit 99
+echo kill >>installation-events
+[[ "${INSTALL_TEST_UNKILLABLE:-}" == 1 ]] || /bin/rm -f app-running
+PKILL
+printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/sleep"
 cat >"${scratch}/bin/open" <<'OPEN'
 #!/bin/bash
-[[ "$1" == /Applications/AgentIDE.app ]] || exit 1
+[[ "$1" == /Applications/AgentIDE.app && ! -e app-running ]] || exit 1
 echo open >>installation-events
 OPEN
 printf '#!/bin/bash\ntouch installation-started\necho replace >>installation-events\n' >"${scratch}/bin/rm"
@@ -78,8 +91,12 @@ for configuration in Release Debug; do
     grep -q "Build diagnostic on ${stream}" "${scratch}/build.log"
   done
   : >"${scratch}/installation-events"
+  touch "${scratch}/app-running"
   env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= XCODE_CONFIGURATION="${override}" \
     "${scratch}/script/install" >"${scratch}/install.log" 2>&1
+  for stream in stdout stderr; do
+    grep -q "Build diagnostic on ${stream}" "${scratch}/install.log"
+  done
   [[ "$(cat "${scratch}/installed-app")" == "${app}" ]] || exit 1
   [[ "$(cat "${scratch}/installation-events")" == $'quit\nreplace\ncopy\nopen' ]] || exit 1
   [[ "$(stat -f %Sm -t %Y "${scratch}/AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")" == 2000 ]] || exit 1
@@ -91,7 +108,26 @@ for configuration in Release Debug; do
   grep -qx -- --force-resolved-versions "${scratch}/swift-arguments"
 done
 
-rm "${scratch}/installation-started"
+for stuck in 1 0; do
+  : >"${scratch}/installation-events"
+  [[ "${stuck}" == 0 ]] || touch "${scratch}/app-running"
+  env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= INSTALL_TEST_STUCK="${stuck}" \
+    "${scratch}/script/install" >"${scratch}/install.log" 2>&1
+  if [[ "${stuck}" == 1 ]]; then
+    [[ "$(cat "${scratch}/installation-events")" == $'quit\nkill\nreplace\ncopy\nopen' ]] || exit 1
+  else
+    [[ "$(cat "${scratch}/installation-events")" == $'replace\ncopy\nopen' ]] || exit 1
+  fi
+done
+: >"${scratch}/installation-events"
+touch "${scratch}/app-running"
+if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= INSTALL_TEST_STUCK=1 INSTALL_TEST_UNKILLABLE=1 \
+  "${scratch}/script/install" >"${scratch}/install.log" 2>&1; then
+  echo 'Installation replaced an app that was still running' >&2
+  exit 1
+fi
+[[ "$(cat "${scratch}/installation-events")" == $'quit\nkill' ]] || exit 1
+rm "${scratch}/app-running" "${scratch}/installation-started"
 : >"${scratch}/installation-events"
 build_status=0
 env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= BUILD_TEST_FAIL=1 \

@@ -67,12 +67,11 @@ final class PullRequestsModel {
         }
         performCreate = { worktree, title, body, labels, isDraft in
             try await service.createPullRequest(
-                worktree: worktree,
-                title: title,
-                body: body,
-                labels: labels,
-                isDraft: isDraft,
+                worktree: worktree, title: title, body: body, labels: labels, isDraft: isDraft,
             )
+        }
+        performAssignClosingIssues = { url in
+            try await github.assignClosingIssues(repositoryPath: repository.path, pullRequestURL: url)
         }
         fetchLabels = {
             await gate.labels(repositoryPath: repository.path)
@@ -281,6 +280,7 @@ final class PullRequestsModel {
     var fetchThreads: (Int) async -> [ReviewThread]
     var restoreLocalReviewIdentity: (String, PullRequestSummary) async -> Bool
     var performCreate: (Worktree, String, String, [String], Bool) async throws -> String
+    var performAssignClosingIssues: (String) async throws -> Void
 
     /// The repository's labels, read once per model when the form
     /// first needs them.

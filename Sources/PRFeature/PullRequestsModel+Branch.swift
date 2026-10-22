@@ -11,13 +11,14 @@ extension PullRequestsModel {
     /// need, template and checked-out branch. Skipped when moving
     /// between a stack's entries, which share all of it.
     func refreshWorktreeFacts(_ worktree: Worktree) async {
-        await loadStack()
-        // Gather, then write only while still the newest read: an
-        // older reload landing stale signing facts over the rebase's
-        // fresh ones is how Push sometimes stayed locked until a
-        // second press ran a fresh read.
+        // Claim the refresh before a slow stack read can be superseded.
         stacking.factsGeneration += 1
         let generation = stacking.factsGeneration
+        await loadStack()
+        guard generation == stacking.factsGeneration else {
+            return
+        }
+
         // Before the counts are read: a pull request from a fork has
         // no tracking ref until its remote is named, and everything
         // below counts against one.
@@ -54,23 +55,25 @@ extension PullRequestsModel {
         }
     }
 
-    /// Fresh counts can mean fresh commits, and nobody has read the
-    /// new tip: the signing and rebase facts follow the item, so
-    /// Push can never light up on a tip the last read never saw.
+    /// Reverify signing and rebase facts when the sidebar changes,
+    /// keeping Push disabled until the new tip is verified.
     func reverifyBranchFacts(from oldItems: [WorktreeItem]) {
         guard let current = branchItem else {
             return
         }
 
         let previous = oldItems.first { $0.worktree.path == current.worktree.path }
-        guard previous?.aheadOfUpstream != current.aheadOfUpstream
-            || previous?.isDirty != current.isDirty
-        else {
+        guard previous?.branchStatus != current.branchStatus else {
             return
         }
 
         tipSignature = .unread
+        let generation = stacking.factsGeneration
         Task {
+            guard generation == stacking.factsGeneration else {
+                return
+            }
+
             await refreshWorktreeFacts(current.worktree)
         }
     }
@@ -349,7 +352,7 @@ extension PullRequestsModel {
             "Checking that the tip commit is GPG signed; Push enables once it proves to be"
 
         case .unsigned:
-            "The tip commit is not GPG signed; Rebase on origin signs the branch first"
+            "The tip commit is not GPG signed; Sign and Push signs the branch before pushing"
 
         case .signed:
             "Push this branch's unpushed commits to origin; a failure reports to the Errors tab"

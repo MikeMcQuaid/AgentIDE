@@ -101,6 +101,7 @@ extension DashboardModel {
                     behindDefault: worktree.behindDefault,
                     behindUpstream: worktree.behindUpstream,
                     lastActivityAt: worktree.lastActivityAt,
+                    revision: worktree.revision,
                 )
             }
             return RepositoryGroup(repository: repository, items: items, defaultBranch: cached.defaultBranch)
@@ -153,6 +154,7 @@ extension DashboardModel {
                 worktree.behindDefault = item.behindDefault
                 worktree.behindUpstream = item.behindUpstream
                 worktree.lastActivityAt = item.lastActivityAt
+                worktree.revision = item.revision
                 worktree.hasSession = item.session != nil
                 if let stack = derivedStacks[item.worktree.path] {
                     worktree.stackBase = stack.base

@@ -1,10 +1,41 @@
-import AgentIDEData
+@testable import AgentIDEData
 @testable import PRFeature
 import Synchronization
 import Testing
 
 /// A page fetch and a reload that overtakes it.
 extension PullRequestsModelTests {
+    @Test
+    func `a smaller shared listing preserves later pages until refresh`() async throws {
+        let model = makeModel()
+        model.scope = .open
+        model.fetchList = { _, limit in
+            (1 ... limit).map { self.summary($0, head: "branch-\($0)") }
+        }
+        await model.reload()
+        await model.showNextPage()
+        let selected = try #require(model.summaries.last)
+        model.select(selected)
+
+        let other = makeModel(metadataFile: model.store.file)
+        other.scope = .open
+        other.fetchList = { _, _ in [self.summary(1, head: "updated")] }
+        await other.reload()
+        model.repaintFromCache()
+
+        #expect(model.page == 1)
+        #expect(model.selected?.number == selected.number)
+        #expect(model.summaries.count == 2 * GitHubClient.listLimit)
+        #expect(model.summaries.first?.headBranch == "updated")
+
+        other.pullRequests.invalidateListings(repositoryPath: other.repository.path)
+        await other.reload()
+        model.repaintFromCache()
+        #expect(model.page == 0)
+        #expect(model.selected == nil)
+        #expect(model.summaries.map(\.number) == [1])
+    }
+
     @Test
     func `a page fetch a reload overtook leaves the loading state to the reload`() async {
         let race = await overtakenPageFetch()

@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import CryptoKit
 import Foundation
 
 // MARK: - BranchFacts
@@ -18,6 +19,7 @@ public struct BranchFacts: Sendable {
     /// same way: what says a branch is behind what was pushed.
     public let behindUpstream: Int?
     public let committedAt: Int
+    public var revision: String?
 }
 
 /// The two facts a repository does not change while the app runs:
@@ -32,16 +34,19 @@ public extension GitClient {
     /// Only a worktree on a detached head falls back to asking about
     /// itself.
     func branchFacts(repositoryPath: String, baseRef: String?) async -> [String: BranchFacts] {
-        let counts = baseRef.map { "%(ahead-behind:" + $0 + ")" } ?? ""
+        let counts = baseRef.map { base in
+            "%(if:equals=refs/heads)%(refname:rstrip=-2)%(then)%(ahead-behind:" + base + ")%(end)"
+        } ?? ""
         let format = [
             "%(refname:short)",
             "%(upstream)",
             "%(upstream:track,nobracket)",
             counts,
             "%(committerdate:unix)",
+            "%(objectname)",
         ].joined(separator: "\t")
         let result = try? await git(
-            ["for-each-ref", "--format=" + format, "refs/heads/"],
+            ["for-each-ref", "--format=" + format, "refs/heads/", "refs/remotes/"],
             in: repositoryPath,
             allowFailure: true,
         )
@@ -75,6 +80,18 @@ public extension GitClient {
 
     /// Parses what `for-each-ref` printed; separated for tests.
     static func branchFacts(fromForEachRef output: String) -> [String: BranchFacts] {
+        let fieldCount = 6
+        let revision = output.split(separator: "\n")
+            .compactMap { line -> String? in
+                let fields = line.components(separatedBy: "\t")
+                guard fields.count == fieldCount else {
+                    return nil
+                }
+
+                return fields[0] + " " + (fields.last ?? "")
+            }
+            .joined(separator: "\n")
+        let fingerprint = revision.isEmpty ? nil : Data(SHA256.hash(data: Data(revision.utf8))).base64EncodedString()
         var facts = [String: BranchFacts]()
         for line in output.split(separator: "\n") {
             var fields = line.components(separatedBy: "\t").makeIterator()
@@ -92,6 +109,7 @@ public extension GitClient {
                 aheadOfUpstream: Self.upstreamCount("ahead", upstream: upstream, track: track),
                 behindUpstream: Self.upstreamCount("behind", upstream: upstream, track: track),
                 committedAt: Int(committed) ?? 0,
+                revision: fingerprint,
             )
         }
         return facts

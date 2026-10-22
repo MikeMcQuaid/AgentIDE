@@ -2,10 +2,30 @@ import AppKit
 import SwiftUI
 @testable import TerminalUI
 import Testing
+import Textual
 
 @MainActor
 struct MarkdownRenderingTests {
     // MARK: Internal
+
+    @Test(arguments: [
+        "First paragraph.\n\nSecond paragraph.", "# Heading\n\nParagraph.", "1. First\n   - Nested\n2. Second",
+    ])
+    func `full width selection preserves GitHub block spacing`(source: String) async throws {
+        let host = NSHostingView(rootView: MarkdownText(source).frame(width: 400))
+        let baseline = NSHostingView(rootView: StructuredText(markdown: source)
+            .interfaceFont(.callout)
+            .textual
+            .structuredTextStyle(.gitHub)
+            .frame(width: 400))
+        for _ in 0 ..< 10 {
+            host.layoutSubtreeIfNeeded()
+            baseline.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(host.fittingSize.height > 0)
+        #expect(abs(host.fittingSize.height - baseline.fittingSize.height) < 1)
+    }
 
     @Test
     func `changing an image document refreshes its text`() async throws {

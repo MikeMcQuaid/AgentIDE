@@ -3,6 +3,34 @@ import AgentIDEDomain
 
 /// Async reads check their generation before publishing any result.
 extension ReviewModel {
+    func showCommit(_ commit: String?) async {
+        guard isAmending == false else {
+            setStatus("Wait for the commit to finish before opening another commit.")
+            return
+        }
+
+        reloadGeneration += 1
+        let generation = reloadGeneration
+        hasLoaded = false
+        status = nil
+        if let commit {
+            let resolved = await git.commitHash(of: commit + "^{commit}", worktreePath: worktreePath)
+            guard generation == reloadGeneration, Task.isCancelled == false else {
+                return
+            }
+            guard let resolved else {
+                hasLoaded = true
+                setStatus("Commit " + commit + " is not available in this worktree.")
+                return
+            }
+
+            commitTarget = resolved
+        } else {
+            commitTarget = nil
+        }
+        await reload()
+    }
+
     func reload() async {
         reloadGeneration += 1
         let generation = reloadGeneration
@@ -25,7 +53,9 @@ extension ReviewModel {
                 } else if scope != .lastCommit {
                     let message = try await git.commitMessage(worktreePath: worktreePath, commit: "HEAD")
                     try checkReload(generation)
-                    commitMessage = message
+                    if messageEdited == false {
+                        commitMessage = message
+                    }
                     originalMessage = message
                 }
                 let threads = await fetchThreads()
@@ -69,7 +99,9 @@ extension ReviewModel {
         }
         lastCommitHash = head
         files = committed
-        commitMessage = message
+        if messageEdited == false {
+            commitMessage = message
+        }
         originalMessage = message
     }
 

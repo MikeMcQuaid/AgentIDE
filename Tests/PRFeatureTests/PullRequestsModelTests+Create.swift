@@ -9,6 +9,48 @@ import Testing
 /// read one per-branch cache, so the row learns the number and state
 /// without waiting for a poll. Split from the model tests for length.
 extension PullRequestsModelTests {
+    @Test(arguments: [false, true])
+    func `opening assigns closing issues without losing a created PR on assignment failure`(fails: Bool) async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        var actions = [String]()
+        var assignedURL: String?
+        model.performCreate = { _, _, body, _, _ in
+            #expect(body == "Fixes #24324")
+            actions.append("create")
+            return "https://github.com/o/r/pull/42"
+        }
+        model.performAssignClosingIssues = { url in
+            actions.append("assign")
+            assignedURL = url
+            if fails {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+        }
+        model.performLinkStack = { _ in actions.append("stack") }
+        model.prTitle = "A change"
+        model.prBody = "Fixes #24324"
+
+        #expect(await model.createPullRequest())
+        #expect(actions == (fails ? ["create", "assign", "assign", "stack"] : ["create", "assign", "stack"]))
+        #expect(assignedURL == "https://github.com/o/r/pull/42")
+        #expect(model.selected?.number == 42)
+        #expect(model.prTitle.isEmpty)
+    }
+
+    @Test
+    func `failed creation never assigns an issue`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.performCreate = { _, _, _, _, _ in throw CocoaError(.fileWriteNoPermission) }
+        var assigned = false
+        model.performAssignClosingIssues = { _ in assigned = true }
+        model.prTitle = "A change"
+        model.prBody = "Fixes #24324"
+
+        #expect(await model.createPullRequest() == false)
+        #expect(assigned == false)
+        #expect(model.prBody == "Fixes #24324")
+    }
+
     @Test
     func `the draft toggle opens a draft and is remembered`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])

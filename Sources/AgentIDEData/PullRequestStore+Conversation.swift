@@ -35,35 +35,37 @@ public extension PullRequestStore {
         interval: TimeInterval = minimumInterval,
     ) async throws -> PullRequestConversation {
         let key = Self.conversationKey(repositoryPath: repositoryPath, number: number)
-        let threadsKey = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: number)
-        guard due(key, interval: interval) else {
-            return cachedConversation(key: key, threadsKey: threadsKey, seededBody: seededBody)
-        }
-
-        let body: String
-        let events: [ReviewComment]
-        if let seededBody {
-            body = seededBody
-            events = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
-        } else {
-            (body, events) = try await github.conversation(repositoryPath: repositoryPath, number: number)
-        }
-        let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
-        store.update { metadata in
-            metadata.conversationCache[key] = CachedConversation(body: body, events: events)
-            // A REST fallback never overwrites cached GraphQL threads:
-            // that would strip the resolve buttons from a reopen.
-            if answer.graphQLFailure == nil {
-                metadata.threadsCache[threadsKey] = CachedThreads(threads: answer.threads)
+        return try await Self.conversationReads.run(key: [store.file, key]) {
+            let threadsKey = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: number)
+            guard due(key, interval: interval) else {
+                return cachedConversation(key: key, threadsKey: threadsKey, seededBody: seededBody)
             }
-            metadata.fetchedAt[key] = Date()
+
+            let body: String
+            let events: [ReviewComment]
+            if let seededBody {
+                body = seededBody
+                events = try await github.reviewComments(repositoryPath: repositoryPath, number: number)
+            } else {
+                (body, events) = try await github.conversation(repositoryPath: repositoryPath, number: number)
+            }
+            let answer = await github.conversationThreads(repositoryPath: repositoryPath, number: number)
+            store.update { metadata in
+                metadata.conversationCache[key] = CachedConversation(body: body, events: events)
+                // A REST fallback never overwrites cached GraphQL threads:
+                // that would strip the resolve buttons from a reopen.
+                if answer.graphQLFailure == nil {
+                    metadata.threadsCache[threadsKey] = CachedThreads(threads: answer.threads)
+                }
+                metadata.fetchedAt[key] = Date()
+            }
+            return PullRequestConversation(
+                body: body,
+                events: events,
+                threads: answer.threads,
+                graphQLFailure: answer.graphQLFailure,
+            )
         }
-        return PullRequestConversation(
-            body: body,
-            events: events,
-            threads: answer.threads,
-            graphQLFailure: answer.graphQLFailure,
-        )
     }
 
     /// What the app already knows, for painting before anything is

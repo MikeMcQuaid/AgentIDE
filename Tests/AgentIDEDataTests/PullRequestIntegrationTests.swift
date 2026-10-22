@@ -159,6 +159,38 @@ struct PullRequestIntegrationTests {
         #expect(local == pushed)
     }
 
+    @Test(arguments: [false, true])
+    func `a newer default branch is rebased even when pushed commits are signed`(hasLocalCommit: Bool) async throws {
+        let world = try await World.make()
+        defer { world.tearDown() }
+        let path = world.repository.path
+        try await BranchStackIntegrationTests.signable(path)
+        try ".signing-key*\n.allowed-signers\n".write(
+            toFile: path + "/.git/info/exclude", atomically: true, encoding: .utf8,
+        )
+        _ = try await addRemote("origin", to: world)
+        try await TestSupport.runGit(["checkout", "-q", "-b", "feature"], in: path)
+        try "feature\n".write(toFile: path + "/feature.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(["add", "feature.txt"], in: path)
+        try await TestSupport.runGit(["commit", "-q", "-S", "-m", "Feature"], in: path)
+        try await TestSupport.runGit(["push", "-q", "-u", "origin", "feature"], in: path)
+        if hasLocalCommit {
+            try await TestSupport.runGit(["commit", "-q", "-S", "--allow-empty", "-m", "Local work"], in: path)
+        }
+        try await TestSupport.runGit(["checkout", "-q", "main"], in: path)
+        for message in ["First update", "Second update"] {
+            try await TestSupport.runGit(["commit", "-q", "-S", "--allow-empty", "-m", message], in: path)
+        }
+        try await TestSupport.runGit(["push", "-q", "origin", "main"], in: path)
+        try await TestSupport.runGit(["checkout", "-q", "feature"], in: path)
+
+        let worktree = Worktree(repositoryName: "repo", repositoryPath: path, branch: "feature", path: path)
+        #expect(await world.service.signedRebaseTarget(worktreePath: path, branch: "feature") == "origin/HEAD")
+        #expect(await world.service.rebaseNeed(worktree: worktree) == .rebase)
+        #expect(try await world.service.rebaseSigned(worktree: worktree) == "origin/HEAD")
+        #expect(await world.service.git.isAncestor("origin/main", of: "feature", worktreePath: path))
+    }
+
     // MARK: Private
 
     private func addRemote(_ remote: String, to world: World) async throws -> String {

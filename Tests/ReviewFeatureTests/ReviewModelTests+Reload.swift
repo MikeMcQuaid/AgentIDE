@@ -4,6 +4,66 @@ import Foundation
 import Testing
 
 extension ReviewModelTests {
+    @Test
+    func `opening a short commit reference preserves the draft on return`() async throws {
+        let path = FileManager.default.currentDirectoryPath + "/.test-scratch/review-link-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+        let git = GitClient(runner: FoundationProcessRunner())
+        let first = try #require(await git.commitHash(of: "HEAD", worktreePath: path))
+        try "new\n".write(toFile: path + "/new.txt", atomically: true, encoding: .utf8)
+        try await runGit(["add", "new.txt"], in: path)
+        try await runGit(["commit", "-m", "Later commit"], in: path)
+        let head = await git.commitHash(of: "HEAD", worktreePath: path)
+        let model = ReviewModel(worktreePath: path, repositoryName: path, git: git)
+        model.scope = .lastCommit
+        await model.reload()
+        model.commitMessage = "My unfinished draft"
+        await model.showCommit("0000000000000000000000000000000000000000")
+        #expect(model.commitTarget == nil)
+        #expect(model.commitMessage == "My unfinished draft")
+        #expect(model.status?.contains("not available") == true)
+        let shortHashLength = 5
+        await model.showCommit(String(first.prefix(shortHashLength)))
+        #expect(model.status == nil)
+        #expect(model.commitTarget == first)
+        #expect(model.commitMessage == "Initial commit")
+        #expect(model.files.contains { $0.path == "new.txt" } == false)
+        #expect(model.isReadOnly)
+        #expect(await git.commitHash(of: "HEAD", worktreePath: path) == head)
+        await model.showCommit(nil)
+        #expect(model.commitMessage == "My unfinished draft")
+        #expect(model.originalMessage == "Later commit")
+        #expect(model.messageEdited)
+        #expect(model.files.map(\.path) == ["new.txt"])
+    }
+
+    @Test(arguments: [ReviewModel.Scope.branch, .lastCommit], [false, true])
+    func `refreshing branch state preserves an edited commit message`(
+        scope: ReviewModel.Scope, checkout: Bool,
+    ) async throws {
+        let path = FileManager.default.currentDirectoryPath + "/.test-scratch/review-message-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        try await makeRepository(at: path)
+        let model = ReviewModel(
+            worktreePath: path, repositoryName: path, git: GitClient(runner: FoundationProcessRunner()),
+        )
+        model.scope = scope
+        await model.reload()
+        model.commitMessage = "Keep my edited message"
+
+        if checkout {
+            try await runGit(["checkout", "-b", "feature"], in: path)
+            try await runGit(["commit", "--allow-empty", "-m", "New branch message"], in: path)
+        }
+
+        await model.reload()
+
+        #expect(model.commitMessage == "Keep my edited message")
+        #expect(model.messageEdited)
+        #expect(model.originalMessage == (checkout ? "New branch message" : "Initial commit"))
+    }
+
     @Test(arguments: [
         ("lastCommit", "--patch"), ("uncommitted", "diff"), ("upstream", "diff"),
         ("branch", "diff"), ("commit", "--patch"), ("stack", "diff"),

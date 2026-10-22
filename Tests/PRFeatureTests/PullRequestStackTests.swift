@@ -306,10 +306,9 @@ struct PullRequestStackTests {
 
         #expect(await model.rebaseSigned())
 
-        // Both buttons report the listed entry's work; higher
+        // The button reports the listed entry's work; higher
         // branches were rebased locally without being published.
         #expect(done.withLock { $0 } == ["restack", "push"])
-        #expect(model.rebaseDoneTitle == "Rebased")
         #expect(model.pushDoneTitle == "Pushed")
     }
 

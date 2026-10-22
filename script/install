@@ -6,11 +6,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-build_output="$(script/build)" || {
-  build_status=$?
-  printf '%s\n' "${build_output}" >&2
-  exit "${build_status}"
-}
+build_output="$(script/build | tee /dev/stderr)"
 app="$(tail -1 <<<"${build_output}")"
 [[ -d "${app}" ]] || {
   echo "No app bundle to install; run script/install on the host." >&2
@@ -19,7 +15,24 @@ app="$(tail -1 <<<"${build_output}")"
 
 # Quitting AgentIDE also hangs up commands in its shell panes.
 trap '' HUP
-osascript -e 'quit app "AgentIDE"' &>/dev/null || true
+if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
+  osascript -e 'with timeout of 5 seconds' -e 'quit app "AgentIDE"' -e 'end timeout' &>/dev/null || true
+  for ((attempt = 0; attempt < 50; attempt++)); do
+    pgrep -u "$(id -u)" -x AgentIDE &>/dev/null || break
+    sleep 0.1
+  done
+  if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
+    pkill -KILL -u "$(id -u)" -x AgentIDE || true
+    for ((attempt = 0; attempt < 50; attempt++)); do
+      pgrep -u "$(id -u)" -x AgentIDE &>/dev/null || break
+      sleep 0.1
+    done
+  fi
+  if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
+    echo "AgentIDE is still running; the installed app was not replaced." >&2
+    exit 1
+  fi
+fi
 rm -rf /Applications/AgentIDE.app
 ditto "${app}" /Applications/AgentIDE.app
 open /Applications/AgentIDE.app

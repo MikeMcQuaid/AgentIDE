@@ -3,7 +3,7 @@ import AgentIDEDomain
 import Foundation
 import Observation
 
-/// Keeps the app gated until local checks and the first online setup succeed.
+/// Revalidates completed setup in the background and gates the app on failures.
 @Observable
 public final class SetupModel {
     // MARK: Lifecycle
@@ -13,6 +13,7 @@ public final class SetupModel {
     public init(check: @escaping @Sendable (Bool) async -> SetupResult, defaults: UserDefaults = .standard) {
         self.check = check
         self.defaults = defaults
+        isReady = defaults.bool(forKey: Self.completedKey)
     }
 
     deinit {
@@ -37,13 +38,23 @@ public final class SetupModel {
         issues.first
     }
 
+    /// Runs once per launch even when completed setup opens the workspace immediately.
+    public func checkOnLaunch() async {
+        guard hasChecked == false else {
+            return
+        }
+
+        await recheck()
+    }
+
     /// Retries setup, contacting GitHub only until the first complete success.
     public func recheck() async {
-        guard isChecking == false, isReady == false else {
+        guard isChecking == false else {
             return
         }
 
         isChecking = true
+        hasChecked = true
         defer { isChecking = false }
         let result = await check(defaults.bool(forKey: Self.completedKey) == false)
         issues = result.issues
@@ -56,6 +67,7 @@ public final class SetupModel {
             signingDisabled = true
         }
         guard issues.isEmpty else {
+            isReady = false
             return
         }
 
@@ -74,4 +86,5 @@ public final class SetupModel {
 
     private let check: @Sendable (Bool) async -> SetupResult
     private let defaults: UserDefaults
+    @ObservationIgnored private var hasChecked = false
 }
