@@ -16,7 +16,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 ## ✨ Features
 
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
-- Checks local prerequisites at launch and guides you through a setup wizard with copyable commands before opening a repository or prompt.
+- Opens the workspace immediately after initial setup, checks prerequisites in the background and shows setup guidance only when a check fails.
 - Starts sessions while others are launching and keeps failed launches available to retry with their original choices.
 - Starts a new task from a prompt, GitHub issue, pull request or security advisory in triage or draft.
 - Starts sessions on several picked issues or pull requests at once, each in its own worktree with the same optional prompt.
@@ -27,7 +27,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
 - Scrolls the agent conversation under the pointer.
 - Switches between visited agents instantly, preserving their terminal size and content.
-- Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
+- Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments and clickable bot commit references.
 - Shows local AI findings beside matching code in Review and with captured code in PR conversations, and copies them together with GitHub comments using the existing conversation copy buttons.
 - Requests reviews from another agent or your choice of Copilot or CodeRabbit.
 - Reviews committed changes with their full commit messages without a diff size limit, while uncommitted review snapshots remain limited to 256 KiB.
@@ -49,6 +49,8 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Keeps Review, Copy all and loop actions together with progress and expandable activity, with a local-only autofix popover in Review and GitHub and push controls in PR.
 - Sizes popovers to their contents, scrolling only when they would exceed the screen.
 - Renders Markdown previews, PR descriptions, conversations and review comments consistently with GitHub-style headings, nested lists, task lists, tables, code, alerts and expandable details.
+- Selects and copies rendered conversation text and author names.
+- Shows PR comment headers with cached GitHub avatars and dates, keeping only the latest CodeRabbit or Copilot timeline entry with its total comment count and hiding bot commands, billing notices and promotions.
 - Keeps local review controls separate from GitHub automation and exposes reviewer errors with the model, effort and captured output.
 - Completes local review and commit rounds before pushing and gathering GitHub feedback, then verifies the final CI and review results before reporting success or continued failure.
 - Resolves review threads marked for the next push only after GitHub confirms a new head, preserving threads that receive further comments.
@@ -62,7 +64,8 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Edits code with syntax highlighting, search and change tracking, keeping each worktree's open file and scroll position.
 - Runs multiple shell tabs in each worktree for development servers, tests and other commands.
 - Commits or amends selected files with messages drafted by Apple's on-device model.
-- Pushes, automatically fetching and rebasing remote changes, and manages pull requests, including forks and stacked branches.
+- Signs, rebases and pushes branches in one action before opening pull requests, including forks and stacked branches.
+- Assigns issues linked by closing references to you after opening a pull request.
 - Browses and drafts every local stack entry, publishing branches and opening pull requests in order.
 - Creates and extends GitHub stacks directly and shows their reported positions even when other branches are not available locally.
 - Merges pull requests and stacks, enables automerge for waiting standalone pull requests with or without a merge queue and shows when automerge is enabled or a pull request is queued.
@@ -172,7 +175,7 @@ Choose **Connect** in the iPhone app to see the same sessions as your Mac.
 - `script/bootstrap`: install `Brewfile` dependencies and generate the Xcode project with XcodeGen
 - `script/build`: build the app in Release, or Debug with `XCODE_CONFIGURATION=Debug`; `AgentIDE.app` in the repository root symlinks its output
 - `script/version`: print the version and build number git says, which scripted and Xcode builds both use
-- `script/install`: build, copy the app to /Applications and relaunch it automatically
+- `script/install`: stream the build output, stop the old app, copy the new app to /Applications and launch it automatically
 - `script/test [--sanitize address|thread] [swift test options]`: unit, integration and App Intents tests, optionally checking memory accesses or data races
 - `script/style [--fix]`: SwiftLint and SwiftFormat, every rule on
 - `script/analyze`: static analysis and dead code

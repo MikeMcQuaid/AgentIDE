@@ -132,7 +132,16 @@ final class ReviewModel {
     /// the last-commit scope gives, with its message read-only
     /// because amending reaches the tip and nothing else.
     var commitTarget: String? {
-        didSet { reloadGeneration += 1 }
+        didSet {
+            reloadGeneration += 1
+            if oldValue == nil, commitTarget != nil {
+                messageBeforeCommit = (commitMessage, originalMessage)
+            } else if commitTarget == nil, let messageBeforeCommit {
+                commitMessage = messageBeforeCommit.edited
+                originalMessage = messageBeforeCommit.original
+                self.messageBeforeCommit = nil
+            }
+        }
     }
 
     /// The review scope; per-line rejection and message amendment
@@ -186,4 +195,8 @@ final class ReviewModel {
             report(error.localizedDescription)
         }
     }
+
+    // MARK: Private
+
+    @ObservationIgnored private var messageBeforeCommit: (edited: String, original: String)?
 }

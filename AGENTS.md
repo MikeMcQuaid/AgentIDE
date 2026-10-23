@@ -516,8 +516,10 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    apple/swift-markdown), over bespoke reimplementations.
 7. Keep agent-specific logic inside its adapter; everything else
    speaks one agent interface.
-8. Describe third-party apps this project replaces by category, never
-   by product name, in every committed file.
+8. Describe competing apps this project replaces by category, never by
+   product name, in committed files. Products, libraries and services
+   this project uses or integrates with may be named, including
+   CodeRabbit and Copilot.
 9. Never place app files in bare `/tmp`: cross-user files belong in
    the shared workspace or the owning user's home, per-user scratch
    in that user's macOS temporary directory, and test scratch in the

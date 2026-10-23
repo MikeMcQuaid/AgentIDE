@@ -15,6 +15,28 @@ struct PullRequestDetail {
 /// Issue and pull request detail: prompt sources, checkouts and
 /// review feedback.
 public extension GitHubClient {
+    /// Adds the authenticated user to the issues GitHub says this PR closes.
+    func assignClosingIssues(repositoryPath: String, pullRequestURL: String) async throws {
+        let result = try await gh(
+            [
+                "pr", "view", pullRequestURL, "--json", "closingIssuesReferences",
+                "--jq", ".closingIssuesReferences[].url",
+            ],
+            in: repositoryPath,
+        )
+        var failures = [String]()
+        for url in Set(result.standardOutput.split(separator: "\n").map(String.init)).sorted() {
+            do {
+                try await gh(["issue", "edit", url, "--add-assignee", "@me"], in: repositoryPath)
+            } catch {
+                failures.append(url + ": " + error.localizedDescription)
+            }
+        }
+        if failures.isEmpty == false {
+            throw SessionServiceError(failures.joined(separator: "\n"))
+        }
+    }
+
     /// The repository's open issues, newest first. The limit is
     /// named: `gh` defaults to thirty, which quietly cut the picker
     /// short on any repository with a real backlog.

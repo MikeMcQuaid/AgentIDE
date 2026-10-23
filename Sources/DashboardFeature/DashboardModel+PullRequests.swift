@@ -15,19 +15,10 @@ extension DashboardModel {
         // Read so a bump repaints every row: the pane that fetched a
         // fresher summary bumps it through the storage bus.
         _ = pullRequestCacheGeneration
-        // flatMap flattens the dictionary's double optional. The
-        // branch cache says which pull request; the shared summary
-        // cache, written by whichever side fetched last, says what
-        // state it is in, so the row and the pane never disagree.
-        // The pane writes the same per-branch cache, so a pull
-        // request opened there is on the row before this model's own
-        // poll has heard of it.
-        let known = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
-            .flatMap(\.self)
-            ?? pullRequests.branchSummary(
-                repositoryPath: item.worktree.repositoryPath,
-                branch: item.worktree.branch,
-            )
+        let known = pullRequests.branchSummary(
+            repositoryPath: item.worktree.repositoryPath,
+            branch: item.worktree.branch,
+        )
         let cached = known
             .map { pullRequests.cachedSummary(repositoryPath: item.worktree.repositoryPath, number: $0.number) ?? $0 }
         // Through the same choice the fetch makes, so a cache
@@ -45,19 +36,20 @@ extension DashboardModel {
         // One query for every repository due, not one each.
         // While anything is queued the queue is what is about to
         // change, so it is asked about as often as the pull request.
-        let anythingQueued = queuedNumbers.values.contains { $0.isEmpty == false }
+        let previous = store.load().queuedCache
+        let anythingQueued = previous.values.contains { $0.isEmpty == false }
             || groups.flatMap(\.items).contains { item in
                 pullRequests.mergeRequestedRecently(
                     repositoryPath: item.worktree.repositoryPath,
                     branch: item.worktree.branch,
                 )
             }
-        let answers = await pullRequests.queuedNumbers(
+        _ = await pullRequests.queuedNumbers(
             repositoryPaths: groups.map(\.repository.path),
             interval: anythingQueued ? Self.inFlightInterval : Self.queueInterval,
         )
-        for (path, numbers) in answers {
-            queuedNumbers[path] = numbers
+        if previous != store.load().queuedCache {
+            UtilityTabTarget.pullRequestCacheChanged()
         }
     }
 
@@ -72,7 +64,7 @@ extension DashboardModel {
         let key = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: summary.number)
         let threads = store.load().threadsCache[key]?.threads ?? []
         let unresolved = threads.count { $0.isResolved == false }
-        let queued = queuedNumbers[repositoryPath]?.contains(summary.number) ?? false
+        let queued = store.load().queuedCache[repositoryPath]?.contains(summary.number) ?? summary.isQueued
         // Copied rather than rebuilt field by field: a rebuild
         // silently drops whatever field it forgets, as it did with
         // the date a pull request closed.
@@ -88,7 +80,6 @@ extension DashboardModel {
     /// cached answer, and a branch whose cached result is green and
     /// approved for its current commit is final and never refetched.
     func refreshStalePullRequests(forcing repositoryPaths: Set<String>) async {
-        hydratePullRequestCache()
         await refreshMergeQueues()
         let collapsed = Set(
             (UserDefaults.standard.string(forKey: "collapsedRepositories") ?? "")
@@ -107,11 +98,14 @@ extension DashboardModel {
             // it blank however often the poll came round.
             let rows = group.items.filter { $0.worktree.path != group.repository.path || isOffDefaultBranch($0) }
             for item in rows {
-                let key = item.worktree.repositoryPath + "#" + item.worktree.branch
                 if ridesOutOutage, item.id != selection?.id {
                     continue
                 }
 
+                let previous = pullRequests.branchSummary(
+                    repositoryPath: group.repository.path,
+                    branch: item.worktree.branch,
+                )
                 do {
                     // Nil means the store asked recently enough; the
                     // row keeps what it is already showing.
@@ -137,8 +131,6 @@ extension DashboardModel {
                         summary = enriched ?? summary
                         summary?.stackStanding = open.stackStanding
                     }
-                    let previous = branchPullRequests[key].flatMap(\.self)
-                    branchPullRequests[key] = summary
                     persist(summary, previous: previous, worktree: item.worktree)
                     await cleanUpIfMerged(item, previous: previous, fresh: summaries)
                     ServiceStatus.shared.recordSuccess(doing: "Pull requests for " + group.repository.name)
@@ -224,7 +216,7 @@ extension DashboardModel {
     /// the poll's answers alone stopped at the first of them.
     private func openPullRequests(in repositoryPath: String) -> [PullRequestSummary] {
         let prefix = repositoryPath + "#"
-        let polled = branchPullRequests.filter { $0.key.hasPrefix(prefix) }.values.compactMap(\.self)
+        let polled = store.load().pullRequestCache.filter { $0.key.hasPrefix(prefix) }.map(\.value)
         let listed = store.load()
             .pullRequestListsCache
             .filter { $0.key.hasPrefix("list#" + repositoryPath + "#") }
@@ -253,7 +245,7 @@ extension DashboardModel {
     /// Whether a pull request is about to change: queued, recently
     /// requested to merge or with checks running less than an hour.
     private func isInFlight(_ pullRequest: PullRequestSummary, in repositoryPath: String) -> Bool {
-        if queuedNumbers[repositoryPath]?.contains(pullRequest.number) == true
+        if store.load().queuedCache[repositoryPath]?.contains(pullRequest.number) == true
             || pullRequests.mergeRequestedRecently(repositoryPath: repositoryPath, branch: pullRequest.headBranch)
         {
             return true
@@ -352,18 +344,6 @@ extension DashboardModel {
     private static let expandedInterval: TimeInterval = 300
     private static let collapsedInterval: TimeInterval = 1_800
 
-    /// Loads the persisted cache once, so badges paint on launch
-    /// without waiting for the first fetch.
-    private func hydratePullRequestCache() {
-        guard branchPullRequests.isEmpty else {
-            return
-        }
-
-        for (key, summary) in store.load().pullRequestCache {
-            branchPullRequests[key] = summary
-        }
-    }
-
     /// Records the branch's summary where the pane reads it too and,
     /// when it changed, tells the pane now: its header changes with
     /// the row rather than on its own next fetch.
@@ -377,8 +357,7 @@ extension DashboardModel {
     private func interval(for item: WorktreeItem, collapsed: Set<String>) -> TimeInterval {
         // Requested merges, queue entries and running checks are
         // asked about at the fastest cadence whatever their row's tier.
-        let pullRequest = branchPullRequests[item.worktree.repositoryPath + "#" + item.worktree.branch]
-            .flatMap(\.self)
+        let pullRequest = pullRequest(for: item)
         if let pullRequest, pullRequest.state == "OPEN", isInFlight(pullRequest, in: item.worktree.repositoryPath) {
             return Self.inFlightInterval
         }

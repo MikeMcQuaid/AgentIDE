@@ -18,7 +18,7 @@ public struct MarkdownText: View {
     // MARK: Public
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
+        VStack(alignment: .leading, spacing: Self.disclosureSpacing) {
             ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
                 if let summary = chunk.detailsSummary {
                     DisclosureGroup(
@@ -36,6 +36,12 @@ public struct MarkdownText: View {
         .inlineStyle(.gitHub
             .code(.font(codeStyle.font), .backgroundColor(DynamicColor(Color(nsColor: .quaternaryLabelColor))))
             .link(.foregroundColor(DynamicColor(Color(nsColor: .linkColor)))))
+        .textual
+        .paragraphStyle(ParagraphStyle())
+        .textual
+        .headingStyle(HeadingStyle())
+        .textual
+        .thematicBreakStyle(ThematicBreakStyle())
         .textual
         .codeBlockStyle(MarkdownCodeStyle())
         .textual
@@ -100,11 +106,39 @@ public struct MarkdownText: View {
 
     // MARK: Private
 
+    /// Expand inside Textual's selection overlay, not outside StructuredText.
+    private struct ParagraphStyle: StructuredText.ParagraphStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            StructuredText.GitHubParagraphStyle.gitHub
+                .makeBody(configuration: configuration)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private struct HeadingStyle: StructuredText.HeadingStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            StructuredText.GitHubHeadingStyle.gitHub
+                .makeBody(configuration: configuration)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private struct Parser: MarkupParser {
         func attributedString(for input: String) -> AttributedString {
             MarkdownText.content(input)
         }
     }
+
+    private struct ThematicBreakStyle: StructuredText.ThematicBreakStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            StructuredText.GitHubThematicBreakStyle.gitHub
+                .makeBody(configuration: configuration)
+                .textual
+                .blockSpacing(.init(top: MarkdownText.spacing, bottom: MarkdownText.spacing))
+        }
+    }
+
+    private static let disclosureSpacing: CGFloat = 8
 
     private var codeStyle: CodeStyle = .init()
     private let text: String
@@ -119,5 +153,6 @@ public struct MarkdownText: View {
             // Textual retains resolved attachments when new content has no images.
             .id(source)
             .id(directory)
+            .modifier(MarkdownSelection())
     }
 }

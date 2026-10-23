@@ -75,7 +75,7 @@ extension PullRequestsModel {
         defer { isOpening = false }
         do {
             let url = try await performCreate(worktree, title, body, prLabels, prIsDraft)
-            note("Opened pull request " + url)
+            await assignClosingIssues(pullRequestURL: url)
             // A stack is built one pull request at a time: each one
             // links what is open into the stack, and failing to link
             // never takes the pull request that opened with it.
@@ -121,6 +121,22 @@ extension PullRequestsModel {
         }
     }
 
+    private func assignClosingIssues(pullRequestURL: String) async {
+        note("Opened pull request " + pullRequestURL)
+        do {
+            try await performAssignClosingIssues(pullRequestURL)
+        } catch {
+            let firstFailure = error.localizedDescription
+            PerformanceLog.recordMessage("Assigning closing issues failed; retrying: " + firstFailure, isError: false)
+            do {
+                try await performAssignClosingIssues(pullRequestURL)
+            } catch {
+                report("Opened " + pullRequestURL + ", but assigning its closing issues failed: " + firstFailure
+                    + ". Retry failed: " + error.localizedDescription)
+            }
+        }
+    }
+
     /// Pushes the checked-out branch; false means the push failed
     /// and the errors tab should open with the cause.
     func push() async -> Bool {
@@ -142,18 +158,15 @@ extension PullRequestsModel {
 
         isBranchActionRunning = true
         defer { isBranchActionRunning = false }
-        // The button dims on what the last read knew, and a tip
-        // amended since then must never reach the service's refusal
-        // as an error: the signature is read again at the click, and
-        // a failed check declines in the footer instead, with Rebase
-        // relit to sign.
+        // The tip can change during preparation, so verify it again
+        // before pushing and let the combined action retry signing.
         guard await checkTipSigned(worktree) else {
             tipSignature = .unsigned
             rebaseNeed = await fetchRebaseNeed(worktree)
             setStatus(
                 "Not pushed: the tip commit is unsigned.",
                 detail: "The tip commit of `" + worktree.branch
-                    + "` is not GPG signed; Rebase on origin signs the branch, then Push.",
+                    + "` is not GPG signed; check the signing key, then use Sign and Push again.",
             )
             return true
         }

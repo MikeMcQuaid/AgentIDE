@@ -136,7 +136,7 @@ public struct ReviewThreadRow: View {
         var lastAuthor = thread.comments.first?.author ?? ""
         for comment in thread.comments {
             if comment.author != lastAuthor {
-                sections.append("**" + comment.author + "**")
+                sections.append("**" + ChecksStyle.authorDisplayName(comment.author) + "**")
                 lastAuthor = comment.author
             }
             sections.append(comment.body)
@@ -214,8 +214,6 @@ public struct ReviewThreadRow: View {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .interfaceFont(.caption)
                 conversationIcon
-                Text(thread.comments.first?.author ?? "")
-                    .interfaceFont(.callout, weight: .semibold)
                 Text(status)
                     .interfaceFont(.caption)
                     .foregroundStyle(.secondary)
@@ -236,6 +234,7 @@ public struct ReviewThreadRow: View {
     /// The disclosure header stays interactive after resolution.
     private var header: some View {
         HStack(spacing: Self.spacing) {
+            ConversationAuthor(thread.comments.first?.author ?? "", showsAvatar: localReviewer == nil)
             collapseToggle
             copyButton
             if let onEdit {

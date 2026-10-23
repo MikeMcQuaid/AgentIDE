@@ -66,13 +66,18 @@ struct AgentIDEApp: App {
             Group {
                 if dependencies.setup.isReady {
                     RootView(dependencies: dependencies)
-                        .onAppear { dependencies.dashboard.availableAgents = dependencies.setup.agents }
+                        .onChange(of: dependencies.setup.agents, initial: true) {
+                            if dependencies.setup.agents.isEmpty == false {
+                                dependencies.dashboard.availableAgents = dependencies.setup.agents
+                            }
+                        }
                 } else {
                     SetupView(model: dependencies.setup)
                 }
             }
             .environment(\.openURL, LinkOpener.action)
             .interfaceFont(.body)
+            .task { await dependencies.setup.checkOnLaunch() }
         }
 
         // Content over chrome: no title bar, compact toolbar.
@@ -91,6 +96,7 @@ struct AgentIDEApp: App {
                 }
             }
             .interfaceFont(.body)
+            .task { await dependencies.setup.checkOnLaunch() }
         }
     }
 

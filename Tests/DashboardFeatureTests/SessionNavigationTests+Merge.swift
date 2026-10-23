@@ -12,20 +12,21 @@ extension SessionNavigationTests {
         let model = fixture.model
         let repository = fixture.repository
         model.groups[0] = RepositoryGroup(repository: repository, items: model.groups[0].items, defaultBranch: "other")
-        model.branchPullRequests[repository.path + "#main"] = PullRequestSummary(
-            number: 7,
-            title: "Work",
-            url: "",
-            headBranch: "main",
-            mergeable: "MERGEABLE",
-            reviewDecision: "APPROVED",
-            checks: "SUCCESS",
-            state: "OPEN",
-        )
+        model.store.update { metadata in
+            metadata.pullRequestCache[repository.path + "#main"] = PullRequestSummary(
+                number: 7,
+                title: "Work",
+                url: "",
+                headBranch: "main",
+                mergeable: "MERGEABLE",
+                reviewDecision: "APPROVED",
+                checks: "SUCCESS",
+                state: "OPEN",
+            )
+        }
         if state == "requested" || state == "expired" {
             model.pullRequests.markMergeRequested(repositoryPath: repository.path, branches: ["main"])
         }
-        model.queuedNumbers[repository.path] = state == "queued" ? [7] : []
         let listing = PullRequestStore.listingKey(repositoryPath: repository.path, scope: .branch("main"))
         let queue = "queue#" + repository.path
         let before = Date().addingTimeInterval(-RefreshCadence.slowed(90, onBattery: PowerSource.isOnBattery))

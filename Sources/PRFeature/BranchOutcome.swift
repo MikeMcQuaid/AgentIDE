@@ -28,21 +28,7 @@ extension PullRequestsModel {
         listedBranch
     }
 
-    /// What the rebase button says once it has nothing left to do
-    /// because it has just done it; nil when it has not.
-    var rebaseDoneTitle: String? {
-        guard let finished, finished.branch == actedBranch else {
-            return nil
-        }
-
-        if finished.outcomes.contains(.rebased) {
-            return "Rebased"
-        }
-
-        return finished.outcomes.contains(.signed) ? "Signed" : nil
-    }
-
-    /// The same for the push button; a stack's rebase pushes back
+    /// What the finished action says; a stack's rebase pushes back
     /// the branches the remote already had, and says so here.
     var pushDoneTitle: String? {
         guard let finished, finished.branch == actedBranch, finished.outcomes.contains(.pushed) else {

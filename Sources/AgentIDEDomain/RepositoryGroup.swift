@@ -16,6 +16,7 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         behindDefault: Int? = nil,
         behindUpstream: Int? = nil,
         lastActivityAt: Int = 0,
+        revision: String? = nil,
     ) {
         self.worktree = worktree
         self.session = session
@@ -27,15 +28,16 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         self.behindUpstream = behindUpstream
         self.hasUnread = hasUnread
         self.lastActivityAt = lastActivityAt
+        self.revision = revision
     }
 
     // MARK: Public
 
     /// The worktree itself.
-    public let worktree: Worktree
+    public private(set) var worktree: Worktree
 
     /// The agent session running in it, when one exists.
-    public let session: AgentSession?
+    public private(set) var session: AgentSession?
 
     /// Earlier conversations discovered from transcripts, newest
     /// first, excluding the live session's own transcript.
@@ -64,6 +66,23 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// When the worktree last saw work: a commit, agent output, a
     /// running session or uncommitted edits. Seconds since 1970.
     public let lastActivityAt: Int
+
+    /// The refs used to read this branch, including the shared default.
+    public let revision: String?
+
+    /// Git state shared by the sidebar, PR pane and Review pane.
+    public var branchStatus: BranchStatus {
+        BranchStatus(
+            worktreePath: worktree.path,
+            branch: worktree.branch,
+            isDirty: isDirty,
+            aheadOfUpstream: aheadOfUpstream,
+            aheadOfDefault: aheadOfDefault,
+            behindDefault: behindDefault,
+            behindUpstream: behindUpstream,
+            revision: revision,
+        )
+    }
 
     /// Whether work is happening right now: a session with the run
     /// light on, or a session whose worktree holds uncommitted
@@ -101,56 +120,30 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// pane listing already in hand, where the rest of the row is
     /// git the idle repository was not asked again.
     public func with(session: AgentSession?) -> Self {
-        Self(
-            worktree: worktree,
-            session: session,
-            isDirty: isDirty,
-            aheadOfUpstream: aheadOfUpstream,
-            hasUnread: hasUnread,
-            pastSessions: pastSessions,
-            aheadOfDefault: aheadOfDefault,
-            behindDefault: behindDefault,
-            lastActivityAt: lastActivityAt,
-        )
+        var item = self
+        item.session = session
+        return item
     }
 
     /// The same row on a different branch, for a checkout that has
     /// just moved: the sidebar says so before the next full reading
     /// comes back.
     public func renamed(branch: String) -> Self {
-        Self(
-            worktree: Worktree(
-                repositoryName: worktree.repositoryName,
-                repositoryPath: worktree.repositoryPath,
-                branch: branch,
-                path: worktree.path,
-                isHostDirectory: worktree.isHostDirectory,
-            ),
-            session: session,
-            isDirty: isDirty,
-            aheadOfUpstream: aheadOfUpstream,
-            hasUnread: hasUnread,
-            pastSessions: pastSessions,
-            aheadOfDefault: aheadOfDefault,
-            behindDefault: behindDefault,
-            lastActivityAt: lastActivityAt,
+        var item = self
+        item.worktree = Worktree(
+            repositoryName: worktree.repositoryName,
+            repositoryPath: worktree.repositoryPath,
+            branch: branch,
+            path: worktree.path,
+            isHostDirectory: worktree.isHostDirectory,
         )
+        return item
     }
 
     /// The same row with no session running in it, for a close that
     /// should show on screen before herdr has been asked again.
     public func withoutSession() -> Self {
-        Self(
-            worktree: worktree,
-            session: nil,
-            isDirty: isDirty,
-            aheadOfUpstream: aheadOfUpstream,
-            hasUnread: hasUnread,
-            pastSessions: pastSessions,
-            aheadOfDefault: aheadOfDefault,
-            behindDefault: behindDefault,
-            lastActivityAt: lastActivityAt,
-        )
+        with(session: nil)
     }
 }
 

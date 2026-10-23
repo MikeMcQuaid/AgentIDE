@@ -243,9 +243,10 @@ public extension SessionService {
     /// request's base, else the branch below in its stack, else the
     /// default branch.
     func reviewBase(for worktree: Worktree) async -> String? {
+        let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
         let summaries = try? await pullRequests.listing(
             repositoryPath: worktree.repositoryPath,
-            scope: .branch(worktree.branch),
+            scope: .branch(branch),
         )
         if let base = summaries?.first(where: { $0.state == "OPEN" })?.baseBranch, base.isEmpty == false {
             return "origin/" + base

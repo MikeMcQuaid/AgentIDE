@@ -8,14 +8,26 @@ extension PullRequestsModel {
     /// every listed row, so what the sidebar just learnt shows here
     /// too; the cache is written by whichever side fetched last.
     func repaintFromCache() {
-        if let selected,
-           let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number),
-           withCachedUnresolved(cached) != selected
-        {
-            self.selected = withCachedUnresolved(cached)
+        let listed = pullRequests.cachedListing(
+            repositoryPath: repository.path,
+            scope: scope.listScope(branch: listedBranch),
+        ) ?? summaries
+        summaries = Self.worthShowing(listed).map { row in
+            withCachedUnresolved(pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row)
         }
-        summaries = summaries.map { row in
-            pullRequests.cachedSummary(repositoryPath: repository.path, number: row.number) ?? row
+        page = min(page, max(0, summaries.count - 1) / PullRequestListView.pageSize)
+        if let selected {
+            guard let listedSelection = summaries.first(where: { $0.number == selected.number }) else {
+                self.selected = nil
+                return
+            }
+
+            let cached = pullRequests.cachedSummary(repositoryPath: repository.path, number: selected.number)
+                ?? listedSelection
+            let painted = withCachedUnresolved(cached)
+            if painted != selected {
+                self.selected = painted
+            }
         }
     }
 
@@ -65,9 +77,10 @@ extension PullRequestsModel {
             repositoryPath: repository.path,
             scope: scope.listScope(branch: listedBranch),
             summaries: fetched,
+            limit: limit,
         )
         summaries = Self.worthShowing(kept)
-        fetchedLimit = limit
+        fetchedLimit = max(limit, kept.count)
         return true
     }
 

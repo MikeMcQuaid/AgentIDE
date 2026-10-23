@@ -233,15 +233,22 @@ struct GitClientIntegrationTests {
         // works out for a whole repository in one.
         let facts = await git.branchFacts(repositoryPath: path, baseRef: "main")
         let feature = try #require(facts["feature"])
-        let main = try #require(facts["main"])
 
         #expect(feature.ahead == 1)
         #expect(feature.behind == 0)
         #expect(feature.committedAt > 0)
         // Pushed and level: nothing to push. A branch that was never
         // pushed has no upstream to count against at all.
-        #expect(main.aheadOfUpstream == 0)
+        #expect(facts["main"]?.aheadOfUpstream == 0)
         #expect(feature.aheadOfUpstream == nil)
+
+        // A moved remote can leave every local count unchanged.
+        try await TestSupport.runGit(["update-ref", "refs/remotes/origin/main", "HEAD"], in: path)
+        let moved = await git.branchFacts(repositoryPath: path, baseRef: "main")
+        #expect(moved["feature"]?.revision != feature.revision)
+        #expect(moved["feature"]?.revision == moved["main"]?.revision)
+        #expect(moved["feature"]?.ahead == feature.ahead)
+        #expect(moved["feature"]?.behind == feature.behind)
 
         // The parsing itself, including an upstream that has gone.
         let parsed = GitClient.branchFacts(

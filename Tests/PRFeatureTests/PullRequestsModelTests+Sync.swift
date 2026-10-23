@@ -6,6 +6,53 @@ import Testing
 /// The pane and the sidebar share one summary cache and tell each
 /// other when it changes.
 extension PullRequestsModelTests {
+    @Test(arguments: [false, true])
+    func `a removed pull request clears the conversation selection`(replacement: Bool) async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.fetchList = { _, _ in [self.summary(7, head: "feature")] }
+        await model.reload()
+        model.pullRequests.rememberSummary(repositoryPath: model.repository.path, summary: summary(7, head: "feature"))
+        model.pullRequests.rememberListing(
+            repositoryPath: model.repository.path,
+            scope: .branch("feature"),
+            summaries: replacement ? [summary(8, head: "feature")] : [],
+        )
+
+        model.repaintFromCache()
+
+        #expect(model.selected == nil)
+        #expect(model.summaries.map(\.number) == (replacement ? [8] : []))
+    }
+
+    @Test
+    func `queue changes repaint a PR before its enriched summary arrives`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.fetchList = { _, _ in [self.summary(7, head: "feature")] }
+        await model.reload()
+        model.store.update { $0.queuedCache[model.repository.path] = [7] }
+
+        model.repaintFromCache()
+
+        #expect(model.selected?.isQueued == true)
+        #expect(model.summaries.first?.isQueued == true)
+    }
+
+    @Test
+    func `rows include new pull requests from the shared listing`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        model.fetchList = { _, _ in [] }
+        await model.reload()
+        model.pullRequests.rememberListing(
+            repositoryPath: model.repository.path,
+            scope: .branch("feature"),
+            summaries: [summary(8, head: "feature")],
+        )
+
+        model.repaintFromCache()
+
+        #expect(model.summaries.map(\.number) == [8])
+    }
+
     @Test
     func `rows repaint from what the sidebar cached, and a changed state bumps the bus`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])

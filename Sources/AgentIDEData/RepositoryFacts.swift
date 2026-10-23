@@ -53,17 +53,17 @@ actor RepositoryFacts {
     }
 
     func baseRef(of repositoryPath: String) -> Answer? {
-        baseRefs[repositoryPath]
+        baseRefs[Self.repositoryKey(repositoryPath)]
     }
 
     func remember(baseRef: String?, of repositoryPath: String) {
-        baseRefs[repositoryPath] = Answer(value: baseRef)
+        baseRefs[Self.repositoryKey(repositoryPath)] = Answer(value: baseRef)
     }
 
     /// Forgets a path's default branch, for a fetch that may have
     /// moved it.
     func forget(_ repositoryPath: String) {
-        baseRefs[repositoryPath] = nil
+        baseRefs[Self.repositoryKey(repositoryPath)] = nil
     }
 
     // MARK: Private
@@ -77,6 +77,10 @@ actor RepositoryFacts {
     private var names: [String: Stamped] = [:]
     private var headOwners: [String: Stamped] = [:]
     private var baseRefs: [String: Answer] = [:]
+
+    private static func repositoryKey(_ path: String) -> String {
+        URL(fileURLWithPath: GitClient.owningCheckout(of: path) ?? path).resolvingSymlinksInPath().path
+    }
 
     private func remembered(_ stamped: Stamped?, at modified: Date?) -> Answer? {
         guard let modified, let stamped, stamped.modified == modified else {

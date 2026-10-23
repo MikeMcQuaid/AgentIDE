@@ -14,11 +14,13 @@ public struct ReviewView: View {
     /// feeds the inline pull request conversations.
     public init(
         worktree: Worktree,
+        branchStatus: BranchStatus,
         git: GitClient,
         github: GitHubClient,
         service: SessionService,
         localReviews: LocalReviewStore,
     ) {
+        self.branchStatus = branchStatus
         worktreePath = worktree.path
         self.worktree = worktree
         self.service = service
@@ -53,7 +55,7 @@ public struct ReviewView: View {
                 resolved: resolved,
             )
         }
-        let builder = {
+        makeModel = {
             let created = ReviewModel(
                 worktreePath: worktree.path,
                 repositoryName: worktree.repositoryName,
@@ -66,8 +68,7 @@ public struct ReviewView: View {
             created.configureResolveOnPush(worktree: worktree, git: git, pullRequests: pullRequests)
             return created
         }
-        makeModel = builder
-        _model = State(initialValue: builder())
+        _model = State(initialValue: makeModel())
         makeLocalReview = { localReviews.model(worktreePath: worktree.path) }
         _localReview = State(initialValue: makeLocalReview())
     }
@@ -81,17 +82,35 @@ public struct ReviewView: View {
             // The find bar fades in rather than popping; nothing else
             // in the stack changes with it.
             .animation(Motion.quick, value: showsFind)
-            // State survives view re-initialisation: rebuild the diff
-            // and reconnect to this worktree's retained local review.
-            .task(id: worktreePath) {
-                model = makeModel()
-                localReview = makeLocalReview()
-                showsLocalReview = false
-                stack = await service.stack(for: worktree)
-                // The same entry the pull request tab is on, when one is
-                // remembered for this worktree.
-                let remembered = StackSelection.branch(for: worktreePath)
-                show(remembered.flatMap { stack.branches.contains($0) ? $0 : nil } ?? stack.checkedOut)
+            .task(id: branchStatus) {
+                if model.worktreePath != worktreePath {
+                    model = makeModel()
+                    localReview = makeLocalReview()
+                    showsLocalReview = false
+                    selectedBranch = ""
+                }
+                guard model.isAmending == false else {
+                    return
+                }
+
+                let fresh = await service.stack(for: worktree)
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                stack = fresh
+                if stack.branches.contains(selectedBranch) == false {
+                    if selectedBranch.isEmpty == false {
+                        model.commitTarget = nil
+                    }
+                    let remembered = StackSelection.branch(for: worktreePath)
+                    selectedBranch = remembered.flatMap { stack.branches.contains($0) ? $0 : nil } ?? stack.checkedOut
+                    StackSelection.remember(selectedBranch, for: worktreePath)
+                }
+                model.stackTarget = selectedBranch == stack.checkedOut
+                    ? nil
+                    : stack.parent(of: selectedBranch).map { (parent: $0, branch: selectedBranch) }
+                await model.reload()
             }
             // Cmd-F reaches the pane through the storage bus: a diff is
             // not a text view, so AppKit's own find bar, which the
@@ -99,6 +118,7 @@ public struct ReviewView: View {
             .onChange(of: findRequest) { showsFind = true }
             .onChange(of: findNextRequest) { model.moveFind(by: 1) }
             .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
+            .onChange(of: reviewCommitRequest) { showRequestedCommit(isBusy: localReview.isBusy) }
             // The menu bar's Commit Outstanding lands here through the
             // storage bus.
             .onChange(of: commitRequest) {
@@ -132,6 +152,11 @@ public struct ReviewView: View {
     // swiftformat:disable:next privateSwiftUIDynamicProperties -- Shared with cross-file extensions.
     @State var collapseOverrides: [String: Bool] = [:] // swiftlint:disable:this private_swiftui_state
 
+    // Whether the find bar is showing; the menu's Find opens it
+    // and Escape or its own button closes it.
+    // swiftformat:disable:next privateSwiftUIDynamicProperties -- Shared with the content extension.
+    @State var showsFind = false // swiftlint:disable:this private_swiftui_state
+
     /// Internal, since the commit extension file reads them.
     let worktreePath: String
 
@@ -161,9 +186,8 @@ public struct ReviewView: View {
     @AppStorage("commitRequest")
     private var commitRequest = 0
 
-    /// Whether the find bar is showing; the menu's Find opens it
-    /// and Escape or its own button closes it.
-    @State private var showsFind = false
+    @AppStorage(ReviewCommitLink.requestKey)
+    private var reviewCommitRequest = 0
 
     /// The find menu items' counters on the storage bus.
     @AppStorage("reviewFindRequest")
@@ -172,6 +196,8 @@ public struct ReviewView: View {
     private var findNextRequest = 0
     @AppStorage("reviewFindPreviousRequest")
     private var findPreviousRequest = 0
+
+    private let branchStatus: BranchStatus
 
     private let makeModel: () -> ReviewModel
     private let makeLocalReview: () -> LocalReviewModel
@@ -291,14 +317,5 @@ public struct ReviewView: View {
         Task {
             await model.reload()
         }
-    }
-
-    /// The collapsible file list; the uncommitted scope embeds the
-    /// shared editor per file so fixes are typed directly.
-    /// Closing clears the query too, so the highlights go with the
-    /// bar rather than being left behind on the diff.
-    private func closeFind() {
-        showsFind = false
-        model.findQuery = ""
     }
 }

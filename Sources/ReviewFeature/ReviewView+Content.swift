@@ -3,6 +3,25 @@ import SwiftUI
 import TerminalUI
 
 extension ReviewView {
+    func closeFind() {
+        showsFind = false
+        model.findQuery = ""
+    }
+
+    func showRequestedCommit(isBusy: Bool) {
+        guard let commit = ReviewCommitLink.requestedCommit(worktreePath: worktreePath) else {
+            return
+        }
+        guard isBusy == false else {
+            model.setStatus("Wait for the local review to finish before opening another commit.")
+            return
+        }
+
+        Task {
+            await model.showCommit(commit)
+        }
+    }
+
     @ViewBuilder var scopeButtons: some View {
         scopeButton(.uncommitted, systemImage: "pencil", help: "Review uncommitted changes")
         scopeButton(.lastCommit, systemImage: "clock", help: "Review the last commit")

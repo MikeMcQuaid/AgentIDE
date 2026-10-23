@@ -13,6 +13,7 @@ public extension PullRequestStore {
         repositoryPath: String,
         scope: GitHubClient.ListScope,
         summaries: [PullRequestSummary],
+        limit: Int = GitHubClient.listLimit,
     ) -> [PullRequestSummary] {
         var kept = summaries
         store.update { metadata in
@@ -20,6 +21,7 @@ public extension PullRequestStore {
                 summaries,
                 key: Self.listingKey(repositoryPath: repositoryPath, scope: scope),
                 repositoryPath: repositoryPath,
+                limit: limit,
                 in: &metadata,
             )
         }

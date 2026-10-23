@@ -104,6 +104,7 @@ extension RootView {
         return ZStack(alignment: .top) {
             ReviewView(
                 worktree: target.worktree,
+                branchStatus: target.branchStatus,
                 git: dependencies.git,
                 github: dependencies.github,
                 service: dependencies.service,
@@ -118,6 +119,7 @@ extension RootView {
                 ErrorsPane(isVisible: dependencies.dashboard.isWindowVisible)
             }
         }
+        .environment(\.openURL, LinkOpener.action(worktreePath: target.worktree.path))
     }
 
     /// The Pull requests tab, out of the stack for its length.

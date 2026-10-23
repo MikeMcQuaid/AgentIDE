@@ -37,10 +37,8 @@ struct AppCommands: Commands {
                     .disabled(dashboard.selection == nil)
                 Button("Clear Shell") { clearShellRequest += 1 }
                     .keyboardShortcut("k", modifiers: .command)
-                Button("Push") { bump("pushRequest") }
+                Button("Sign, Rebase and Push") { bump("pushRequest") }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
-                Button("Rebase on Origin") { bump("rebaseRequest") }
-                    .keyboardShortcut("r", modifiers: [.command, .option])
                 Button("Commit Outstanding") { bump("commitRequest") }
                     .keyboardShortcut("k", modifiers: [.command, .option])
                 Divider()

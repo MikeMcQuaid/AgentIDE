@@ -61,6 +61,10 @@ public struct MetadataStore: Sendable {
         try write(metadata)
     }
 
+    // MARK: Internal
+
+    let file: String
+
     // MARK: Private
 
     /// Serialises every write. The file is one app's, so a lock
@@ -70,8 +74,6 @@ public struct MetadataStore: Sendable {
     /// The decoded copy per file path, shared by every store on the
     /// same file.
     private static let cached: Mutex<[String: AppMetadata]> = .init([:])
-
-    private let file: String
 
     private func loadFromDisk() -> AppMetadata {
         guard let data = FileManager.default.contents(atPath: file) else {

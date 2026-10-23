@@ -22,17 +22,19 @@ struct MarkdownHTML {
 
     var chunks: [MarkdownText.Chunk] {
         var result = [MarkdownText.Chunk]()
-        var plain = ""
+        var plain = [Node]()
         for node in disclosureNodes(document.body()?.getChildNodes() ?? []) {
             guard let element = node as? Element, element.tagName() == "details" else {
-                plain += (try? node.outerHtml()) ?? ""
+                plain.append(node)
                 continue
             }
 
-            if plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                result.append(MarkdownText.Chunk(text: protected.restore(plain), detailsSummary: nil))
+            if render(plain).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                result.append(MarkdownText.Chunk(
+                    text: protected.restore(plain.map { (try? $0.outerHtml()) ?? "" }.joined()), detailsSummary: nil,
+                ))
             }
-            plain = ""
+            plain = []
             let children = element.getChildNodes()
             let summary = children.first { ($0 as? Element)?.tagName() == "summary" }
             let title = protected.restore(render(summary?.getChildNodes() ?? []))
@@ -42,8 +44,10 @@ struct MarkdownHTML {
                 text: protected.restore(body), detailsSummary: title.isEmpty ? "Details" : title,
             ))
         }
-        if plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            result.append(MarkdownText.Chunk(text: protected.restore(plain), detailsSummary: nil))
+        if render(plain).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            result.append(MarkdownText.Chunk(
+                text: protected.restore(plain.map { (try? $0.outerHtml()) ?? "" }.joined()), detailsSummary: nil,
+            ))
         }
         return result
     }

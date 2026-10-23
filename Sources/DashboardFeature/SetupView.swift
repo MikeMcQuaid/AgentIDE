@@ -2,7 +2,7 @@ import AgentIDEData
 import AgentIDEInterface
 import SwiftUI
 
-/// Replaces the entire window until setup succeeds; there is no dismiss action.
+/// Shows repair instructions only after a failed check; there is no dismiss action.
 public struct SetupView: View {
     // MARK: Lifecycle
 
@@ -13,8 +13,31 @@ public struct SetupView: View {
     // MARK: Public
 
     public var body: some View {
+        if model.currentIssue != nil {
+            wizard
+        } else if model.isReady == false {
+            LaunchProgressView(spinner: "Starting AgentIDE…")
+                .frame(minWidth: Self.minimumWidth, minHeight: Self.minimumHeight)
+        }
+    }
+
+    // MARK: Private
+
+    private static let spacing: CGFloat = 20
+    private static let issueSpacing: CGFloat = 8
+    private static let maximumWidth: CGFloat = 760
+    private static let minimumWidth: CGFloat = 640
+    private static let minimumHeight: CGFloat = 480
+    private static let progressSeconds = 0.5
+
+    @State private var showsProgress = false
+
+    private let model: SetupModel
+    private var codeStyle: CodeStyle = .init()
+
+    private var wizard: some View {
         VStack(spacing: Self.spacing) {
-            if model.isChecking || model.issues.isEmpty {
+            if model.isChecking {
                 if showsProgress {
                     LaunchProgressView(spinner: "Checking AgentIDE setup…")
                 } else {
@@ -38,7 +61,6 @@ public struct SetupView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background, ignoresSafeAreaEdges: [])
         .environment(\.openURL, OpenURLAction { _ in .systemAction(prefersInApp: false) })
-        .task { await model.recheck() }
         .task(id: model.isChecking) {
             showsProgress = false
             guard model.isChecking else {
@@ -51,20 +73,6 @@ public struct SetupView: View {
             }
         }
     }
-
-    // MARK: Private
-
-    private static let spacing: CGFloat = 20
-    private static let issueSpacing: CGFloat = 8
-    private static let maximumWidth: CGFloat = 760
-    private static let minimumWidth: CGFloat = 640
-    private static let minimumHeight: CGFloat = 480
-    private static let progressSeconds = 0.5
-
-    @State private var showsProgress = false
-
-    private let model: SetupModel
-    private var codeStyle: CodeStyle = .init()
 
     private var instructions: some View {
         ScrollView {

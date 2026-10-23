@@ -111,8 +111,9 @@ public extension SessionService {
 
     /// The ref a signed rebase lands on. The branch's own remote ref
     /// wins when it exists, is still an ancestor of the branch,
-    /// every commit unique to it verifies and local commits sit on
-    /// top needing signatures: rebasing there signs only the new
+    /// the default branch is integrated, every unique commit verifies
+    /// and local commits sit on top needing signatures: rebasing
+    /// there signs only the new
     /// commits, so pushed history keeps its hashes. Anything else
     /// falls back to origin/HEAD, re-signing the whole branch, with
     /// one exception: a remote that moved to a tip this branch
@@ -144,6 +145,7 @@ public extension SessionService {
                 true
             }
         guard pushedSigned,
+              await git.isAncestor("origin/HEAD", of: branch, worktreePath: worktreePath),
               await (git.commitCount(worktreePath: worktreePath, range: remote + "..HEAD") ?? 0) > 0
         else {
             return "origin/HEAD"

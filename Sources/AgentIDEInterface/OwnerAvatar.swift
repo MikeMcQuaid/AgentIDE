@@ -87,14 +87,15 @@ final class OwnerAvatarStore {
 
 // MARK: - OwnerAvatar
 
-/// A public GitHub avatar with a folder placeholder and a per-owner disk cache.
+/// A public GitHub avatar with a placeholder and a per-owner disk cache.
 public struct OwnerAvatar: View {
     // MARK: Lifecycle
 
-    /// Creates an avatar for an owner, nil when the repository has no known owner.
-    public init(owner: String?, size: CGFloat) {
+    /// Creates an avatar for a GitHub login, nil when unknown.
+    public init(owner: String?, size: CGFloat, placeholder: String = "folder.fill") {
         self.owner = owner?.lowercased()
         self.size = size
+        self.placeholder = placeholder
     }
 
     // MARK: Public
@@ -104,7 +105,7 @@ public struct OwnerAvatar: View {
             if let image = owner.flatMap({ store.images[$0] }) {
                 Image(decorative: image, scale: 1).resizable()
             } else {
-                Image(systemName: "folder.fill").interfaceFont(.caption)
+                Image(systemName: placeholder).interfaceFont(.caption)
             }
         }
         .frame(width: size, height: size)
@@ -121,4 +122,5 @@ public struct OwnerAvatar: View {
     private var store: OwnerAvatarStore = .shared
     private let owner: String?
     private let size: CGFloat
+    private let placeholder: String
 }

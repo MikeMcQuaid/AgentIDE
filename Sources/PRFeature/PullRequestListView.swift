@@ -138,7 +138,6 @@ struct PullRequestFooterView: View {
     /// the remote, down what has yet to come from it. A button draws
     /// one of them at most, beside one count.
     static let upArrow = "\u{2191}"
-    static let downArrow = "\u{2193}"
 
     // swiftformat:disable:next privateSwiftUIDynamicProperties -- Supplied by the parent view.
     @Bindable var model: PullRequestsModel
@@ -153,26 +152,6 @@ struct PullRequestFooterView: View {
 
     /// Internal so the copy buttons' own file shares it.
     var interfaceStyle: InterfaceStyle = .init()
-
-    /// How far the branch sits behind its base, bare: an arrow
-    /// belongs to whichever button draws one, and the stack's own
-    /// pair already carry theirs as icons.
-    var rebaseCount: String {
-        let behind = model.branchItem?.behindDefault ?? 0
-        return behind > 0 ? String(behind) : ""
-    }
-
-    var rebaseHelp: String {
-        guard AppSettings.requiresSignedCommits else {
-            return model.rebaseTitle
-                + ": fetch, then rebase onto origin; a conflict aborts and reports to Messages"
-        }
-
-        return model.rebaseTitle + ": fetch, then rebase with --force-rebase --gpg-sign onto this "
-            + "branch's own origin ref when that is fully signed and only new commits need "
-            + "signatures, otherwise onto origin/HEAD re-signing everything; a conflict aborts "
-            + "and reports to Messages"
-    }
 
     var body: some View {
         HStack {
@@ -271,32 +250,6 @@ struct PullRequestFooterView: View {
         .hoverHelp("Take it back to a draft: it stays open, and nobody is asked to review a draft")
     }
 
-    var rebaseButton: some View {
-        BusyButton(
-            rebaseLabel,
-            busy: signsOnly ? "Signing" : "Rebasing",
-            disabled: model.canRebase == false,
-        ) {
-            if await model.rebaseSigned() == false {
-                utilityTab = UtilityTabTarget.errors
-            }
-        }
-        .hoverHelp(rebaseHelp, shortcut: "⌥⌘R")
-    }
-
-    var pushButton: some View {
-        BusyButton(
-            pushLabel,
-            busy: "Pushing",
-            disabled: model.canPush == false,
-        ) {
-            if await model.push() == false {
-                utilityTab = UtilityTabTarget.errors
-            }
-        }
-        .hoverHelp(model.pushHelp, shortcut: "⇧⌘P")
-    }
-
     /// One shape for every branch action's title, lone or stacked:
     /// what a click is about to do and the count it is about to
     /// send, or what the last click did while the button stays dim.
@@ -311,48 +264,6 @@ struct PullRequestFooterView: View {
     // MARK: Private
 
     private static let padding: CGFloat = 8
-
-    /// Whether the button would only sign: the base has not moved,
-    /// so nothing is being rebased onto anything.
-    private var signsOnly: Bool {
-        if case .sign = model.rebaseNeed {
-            return true
-        }
-
-        return false
-    }
-
-    /// What a click is about to do, or what the last one did while
-    /// the button stays dim: signing alone when there is no
-    /// rebasing in it, otherwise the rebase and how far behind the
-    /// branch is.
-    private var rebaseLabel: String {
-        actionTitle(
-            signsOnly ? "Sign" : "Rebase",
-            arrow: Self.downArrow,
-            count: signsOnly ? "" : rebaseCount,
-            active: model.canRebase,
-            done: model.rebaseDoneTitle,
-        )
-    }
-
-    /// The same for the push: what it would send, or that it sent
-    /// it, while it stays dim.
-    private var pushLabel: String {
-        actionTitle("Push", arrow: Self.upArrow, count: pushCount, active: model.canPush, done: model.pushDoneTitle)
-    }
-
-    /// The commits this branch has above the base it was rebased
-    /// on, which is the number the branch is: what one push happens
-    /// to carry changes with every push, and read as a size it was
-    /// never the size of anything.
-    private var pushCount: String {
-        if model.commitsAboveBase > 0 {
-            String(model.commitsAboveBase)
-        } else {
-            ""
-        }
-    }
 
     /// What stops either button opening anything: a title of spaces
     /// dims rather than failing on click, the push comes first, and
