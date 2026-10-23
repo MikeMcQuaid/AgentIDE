@@ -1,5 +1,5 @@
 {
-  "originHash" : "bc8be0913f62cfac148503c1dacca265b76dd8822f7bd5edf2e34a2c7b65b3bf",
+  "originHash" : "b2a6a5f8d69b1b9b23b00a95e169f4c04a291ebd42f4c950a93c68ade568f906",
   "pins" : [
     {
       "identity" : "h",
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
-        "version" : "3.15.1"
+        "revision" : "da9d28d69ebe3894b18376c8f2395c2f37b8448f",
+        "version" : "4.5.2"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/scinfu/SwiftSoup",
       "state" : {
-        "revision" : "18b80329749eca5ea29fc50211dca5c7eff5bfec",
-        "version" : "2.13.9"
+        "revision" : "7a185638b31911a9980655b70a26af1279d4917b",
+        "version" : "2.14.2"
       }
     },
     {
