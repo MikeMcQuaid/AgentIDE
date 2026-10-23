@@ -8,7 +8,7 @@ scratch="$(mktemp -d "${PWD}/.test-scratch/scripts.XXXXXX")"
 trap 'rm -rf "${scratch}"' EXIT
 mkdir -p "${scratch}/script" "${scratch}/bin" "${scratch}/AgentIDE.xcodeproj"
 printf '{"pins": [], "version": 3}\n' >"${scratch}/Package.resolved"
-cp script/build script/install script/package script/analyze script/test script/project "${scratch}/script/"
+cp script/bootstrap script/build script/install script/package script/analyze script/test script/project "${scratch}/script/"
 cat >"${scratch}/script/version" <<'VERSION'
 #!/bin/bash
 printf '1.2.3\n42\n'
@@ -28,6 +28,18 @@ if [[ " $* " != *' ARCHS=arm64 '* ]]; then
   echo 'Package dependencies would also build unused Intel slices' >&2
   exit 1
 fi
+case "$*" in
+  *'-scheme AgentIDEApp'*)
+    echo "/usr/bin/swiftc -module-name AgentIDE ${PWD}/Sources/Interface/macOS/Font.swift"
+    ;;
+  *'-scheme AgentIDE-iOS'*)
+    echo "/usr/bin/swiftc -module-name AgentIDEiOS ${PWD}/Sources/Interface/iOS/Font.swift"
+    ;;
+esac
+for source in "${PWD}"/Sources/*.swift; do
+  [[ -f "${source}" ]] || continue
+  printf '/usr/bin/swiftc -module-name Shared %q\n' "${source}"
+done
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == -configuration ]]; then
     mkdir -p ".DerivedData/Build/Products/$2/AgentIDE.app"
@@ -75,6 +87,29 @@ OPEN
 printf '#!/bin/bash\ntouch installation-started\necho replace >>installation-events\n' >"${scratch}/bin/rm"
 printf '#!/bin/bash\ntouch keychain-accessed\nexit 99\n' >"${scratch}/bin/security"
 chmod +x "${scratch}/script/"* "${scratch}/bin/"*
+
+cat >"${scratch}/bin/brew" <<'BREW'
+#!/bin/bash
+printf '%s\n' "$*" >>brew-invocations
+if [[ "$*" == 'bundle check' ]]; then
+  exit "${BOOTSTRAP_TEST_MISSING:-0}"
+fi
+exit "${BOOTSTRAP_TEST_STATUS:-0}"
+BREW
+chmod +x "${scratch}/bin/brew"
+for missing in 0 1; do
+  : >"${scratch}/brew-invocations"
+  env PATH="${scratch}/bin:${PATH}" BOOTSTRAP_TEST_MISSING="${missing}" "${scratch}/script/bootstrap"
+  [[ "$(head -1 "${scratch}/brew-invocations")" == 'bundle check' ]] || exit 1
+  [[ "$(wc -l <"${scratch}/brew-invocations")" -eq $((missing + 1)) ]] || exit 1
+done
+: >"${scratch}/brew-invocations"
+env PATH="${scratch}/bin:${PATH}" "${scratch}/script/bootstrap" swiftlint xcodegen
+[[ "$(cat "${scratch}/brew-invocations")" == 'install swiftlint xcodegen' ]] || exit 1
+if env PATH="${scratch}/bin:${PATH}" BOOTSTRAP_TEST_STATUS=1 "${scratch}/script/bootstrap" xcodegen; then
+  echo 'Bootstrap accepted a failed dependency installation' >&2
+  exit 1
+fi
 
 for configuration in Release Debug; do
   override="${configuration/Release/}"
@@ -163,7 +198,7 @@ done
 echo 'Build and packaging script tests passed'
 
 mkdir -p "${scratch}/Tests" "${scratch}/.build"
-printf 'only_rules: [trailing_newline]\n' >"${scratch}/.swiftlint.yml"
+printf 'only_rules: [trailing_newline]\nanalyzer_rules: [unused_import]\n' >"${scratch}/.swiftlint.yml"
 mkdir -p "${scratch}/App" "${scratch}/iOSApp" "${scratch}/Sources/Interface/"{macOS,iOS}
 touch "${scratch}/Sources/Interface/"{macOS,iOS}/Font.swift
 printf 'exit 0\n' >"${scratch}/Tests/ScriptTests.sh"
@@ -190,8 +225,16 @@ cat >"${scratch}/bin/swiftlint" <<'SWIFTLINT'
 #!/bin/bash
 set -euo pipefail
 printf '%s\n' "$*" >>swiftlint-invocations
-"${SCRIPT_TEST_SWIFTLINT}" lint --config .swiftlint.yml --use-script-input-file-lists --no-cache --strict
-exit "${ANALYZE_TEST_STATUS:-0}"
+if [[ "${ANALYZE_TEST_EMPTY:-}" == 1 ]]; then
+  echo 'Done analyzing! Found 0 violations, 0 serious in 0 files.'
+  exit 0
+fi
+"${SCRIPT_TEST_SWIFTLINT}" "$@" --config .swiftlint.yml >swiftlint.log 2>&1
+cat swiftlint.log
+if [[ -z "${AGENTIDE_ANALYZE_BASE:-}" ]]; then
+  grep -q "Analyzing 'Font.swift' (1/1)" swiftlint.log
+fi
+exit "${ANALYZE_TEST_SWIFTLINT_STATUS:-${ANALYZE_TEST_STATUS:-0}}"
 SWIFTLINT
 chmod +x "${scratch}/bin/"*
 
@@ -201,7 +244,7 @@ for sandbox in fixture ''; do
     : >"${scratch}/xcode-invocations"
     : >"${scratch}/swiftlint-invocations"
     result=0
-    env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID="${sandbox}" ANALYZE_TEST_STATUS="${status}" \
+    env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID="${sandbox}" ANALYZE_TEST_STATUS="${status}" XCODE_CONFIGURATION= \
       SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
       "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1 || result=$?
     [[ "${result}" == "${status}" ]] || {
@@ -213,14 +256,15 @@ for sandbox in fixture ''; do
     awk '/^--index-exclude$/ { exclude = 1; next } /^--/ { exclude = 0 } exclude' \
       "${scratch}/periphery-arguments" | grep -Fxq '**/BuildToolPluginIntermediates/**'
     if [[ -z "${sandbox}" ]]; then
+      grep -q -- '-configuration Debug' "${scratch}/xcode-invocations"
       grep -q -- '-scheme AgentIDEApp' "${scratch}/xcode-invocations"
       grep -q -- '-scheme AgentIDE-iOS' "${scratch}/xcode-invocations"
       grep -q -- 'generic/platform=iOS Simulator' "${scratch}/xcode-invocations"
       grep -qx 'AgentIDE-iOS' "${scratch}/periphery-arguments"
       grep -q -- '--compiler-log-path .build/analyze-build.log' "${scratch}/swiftlint-invocations"
       grep -q -- '--compiler-log-path .build/analyze-ios-build.log' "${scratch}/swiftlint-invocations"
-      grep -qx 'Sources/Interface/macOS/Font.swift' "${scratch}/.build/analyze-mac-sources.xcfilelist"
-      grep -qx 'Sources/Interface/iOS/Font.swift' "${scratch}/.build/analyze-ios-sources.xcfilelist"
+      grep -Fxq "${scratch}/Sources/Interface/macOS/Font.swift" "${scratch}/.build/analyze-mac-sources.xcfilelist"
+      grep -Fxq "${scratch}/Sources/Interface/iOS/Font.swift" "${scratch}/.build/analyze-ios-sources.xcfilelist"
       if grep -q '/iOS/' "${scratch}/.build/analyze-mac-sources.xcfilelist" ||
         grep -q '/macOS/' "${scratch}/.build/analyze-ios-sources.xcfilelist"; then
         echo 'Analysis mixed platform-specific sources' >&2
@@ -229,6 +273,90 @@ for sandbox in fixture ''; do
     fi
   done
 done
+: >"${scratch}/xcode-invocations"
+env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= XCODE_CONFIGURATION=Release \
+  SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
+  "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1
+[[ "$(grep -c -- '-configuration Release' "${scratch}/xcode-invocations")" -eq 2 ]] || exit 1
+if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= ANALYZE_TEST_EMPTY=1 \
+  "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
+  echo 'Analysis accepted a SwiftLint pass that checked no files' >&2
+  exit 1
+fi
+
+git -C "${scratch}" init --quiet --initial-branch=fixture
+git -C "${scratch}" config user.name 'Script Tests'
+git -C "${scratch}" config user.email 'tests@example.invalid'
+touch "${scratch}/README.md" "${scratch}/Sources/Shared File.swift"
+git -C "${scratch}" add -- README.md Sources Tests .swiftlint.yml Package.resolved
+git -C "${scratch}" -c commit.gpgsign=false commit --quiet --no-verify -m 'Add analysis fixtures'
+for change in docs shared mac ios rename delete configuration uncompiled; do
+  base="$(git -C "${scratch}" rev-parse HEAD)"
+  case "${change}" in
+    docs) file=README.md ;;
+    shared) file='Sources/Shared File.swift' ;;
+    mac) file=Sources/Interface/macOS/Font.swift ;;
+    ios) file=Sources/Interface/iOS/Font.swift ;;
+    rename)
+      file='Sources/Renamed File.swift'
+      mv "${scratch}/Sources/Shared File.swift" "${scratch}/${file}"
+      ;;
+    delete)
+      file='Sources/Renamed File.swift'
+      rm "${scratch}/${file}"
+      ;;
+    configuration) file=.swiftlint.yml ;;
+    uncompiled) file=Tests/Uncompiled.swift ;;
+    *) exit 1 ;;
+  esac
+  [[ "${change}" == delete ]] || printf '\n' >>"${scratch}/${file}"
+  git -C "${scratch}" add --all -- README.md Sources Tests .swiftlint.yml
+  git -C "${scratch}" -c commit.gpgsign=false commit --quiet --no-verify -m 'Change analysis fixture'
+  : >"${scratch}/swiftlint-invocations"
+  rm "${scratch}/periphery-arguments"
+  env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE="${base}" \
+    SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
+    "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1
+  [[ -s "${scratch}/periphery-arguments" ]] || exit 1
+  for platform in mac ios; do
+    case "${change}:${platform}" in
+      shared:* | rename:* | mac:mac | ios:ios | uncompiled:mac) expected="${scratch}/${file}" ;;
+      *) expected="" ;;
+    esac
+    [[ "$(cat "${scratch}/.build/analyze-${platform}-sources.xcfilelist")" == "${expected}" ]] || {
+      echo "Import analysis selected the wrong ${platform} files for ${change}" >&2
+      exit 1
+    }
+    if [[ -n "${expected}" && "${change}" != uncompiled ]]; then
+      grep -q 'in 1 file\.$' "${scratch}/.build/analyze-swiftlint-${platform}.log" || {
+        cat "${scratch}/analyze.log"
+        exit 1
+      }
+    fi
+  done
+  if [[ "${change}" == docs || "${change}" == delete || "${change}" == configuration ]]; then
+    [[ ! -s "${scratch}/swiftlint-invocations" ]] || exit 1
+  fi
+  if [[ "${change}" == shared ]]; then
+    rm "${scratch}/periphery-arguments"
+    if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE="${base}" \
+      ANALYZE_TEST_SWIFTLINT_STATUS=1 SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
+      "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
+      echo 'Changed-file analysis ignored a SwiftLint failure' >&2
+      exit 1
+    fi
+    [[ -s "${scratch}/periphery-arguments" ]] || exit 1
+  fi
+done
+: >"${scratch}/xcode-invocations"
+if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE=missing-commit \
+  SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
+  "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
+  echo 'Analysis accepted an invalid base commit' >&2
+  exit 1
+fi
+[[ ! -s "${scratch}/xcode-invocations" ]] || exit 1
+
 xcodegen dump --type json | python3 -c '
 import json
 import sys

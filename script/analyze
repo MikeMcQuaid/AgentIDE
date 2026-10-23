@@ -12,8 +12,16 @@ log=".build/analyze-build.log"
 ios_log=".build/analyze-ios-build.log"
 mkdir -p .build
 
+if [[ -n "${AGENTIDE_ANALYZE_BASE:-}" ]]; then
+  git diff --name-only -z --no-renames --diff-filter=d "${AGENTIDE_ANALYZE_BASE}" HEAD -- '*.swift' |
+    while IFS= read -r -d '' source; do
+      printf '%s/%s\n' "${PWD}" "${source}"
+    done >.build/analyze-changed-sources.xcfilelist
+fi
+
 args=(
   -project AgentIDE.xcodeproj
+  -configuration "${XCODE_CONFIGURATION:-Debug}"
   -clonedSourcePackagesDirPath .build
   -onlyUsePackageVersionsFromResolvedFile
   ARCHS=arm64
@@ -98,12 +106,32 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
 else
   # SourceKit's cursor lookup enters inactive branches, even for an
   # unavailable SDK. Analyse platform-specific files with their own SDK.
-  rg --files App Sources Tests -g '*.swift' -g '!**/iOS/**' >.build/analyze-mac-sources.xcfilelist
-  rg --files iOSApp Sources -g '*.swift' -g '!**/macOS/**' >.build/analyze-ios-sources.xcfilelist
-  SCRIPT_INPUT_FILE_LIST_COUNT=1 SCRIPT_INPUT_FILE_LIST_0=.build/analyze-mac-sources.xcfilelist \
-    swiftlint analyze --compiler-log-path "$log" --strict --use-script-input-file-lists || failed=1
-  SCRIPT_INPUT_FILE_LIST_COUNT=1 SCRIPT_INPUT_FILE_LIST_0=.build/analyze-ios-sources.xcfilelist \
-    swiftlint analyze --compiler-log-path "$ios_log" --strict --use-script-input-file-lists || failed=1
+  rg --files "${PWD}/App" "${PWD}/Sources" "${PWD}/Tests" -g '*.swift' -g '!**/iOS/**' >.build/analyze-mac-sources.xcfilelist
+  rg --files "${PWD}/iOSApp" "${PWD}/Sources" -g '*.swift' -g '!**/macOS/**' >.build/analyze-ios-sources.xcfilelist
+  analyze_imports() {
+    local sources=".build/analyze-${1}-sources.xcfilelist"
+    local analysis_log=".build/analyze-swiftlint-${1}.log"
+    if [[ -n "${AGENTIDE_ANALYZE_BASE:-}" ]]; then
+      awk 'NR == FNR { changed[$0] = 1; next } $0 in changed' \
+        .build/analyze-changed-sources.xcfilelist "${sources}" >"${sources}.changed"
+      mv "${sources}.changed" "${sources}"
+    fi
+    : >"${analysis_log}"
+    if [[ ! -s "${sources}" ]]; then
+      echo "No changed ${1} sources to analyse for unused imports"
+      return
+    fi
+    SCRIPT_INPUT_FILE_LIST_COUNT=1 SCRIPT_INPUT_FILE_LIST_0="${sources}" \
+      swiftlint analyze --compiler-log-path "$2" --strict --use-script-input-file-lists 2>&1 |
+      tee "${analysis_log}" || failed=1
+    # Changed files may belong only to the other platform's build.
+    if [[ -z "${AGENTIDE_ANALYZE_BASE:-}" ]] && grep -q 'in 0 files\.$' "${analysis_log}"; then
+      echo 'analyze failed: SwiftLint checked no files' >&2
+      failed=1
+    fi
+  }
+  analyze_imports mac "$log"
+  analyze_imports ios "$ios_log"
 fi
 
 # On the host the project is scanned through both app schemes because periphery's

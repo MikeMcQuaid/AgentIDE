@@ -1,10 +1,12 @@
 #!/bin/bash
-# Install Brewfile dependencies and generate AgentIDE.xcodeproj.
+# Install Brewfile dependencies (or named formulae) and generate the project.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if ! brew bundle check &>/dev/null; then
+if [[ $# -gt 0 ]]; then
+  brew install "$@"
+elif ! brew bundle check &>/dev/null; then
   brew bundle
 fi
 
