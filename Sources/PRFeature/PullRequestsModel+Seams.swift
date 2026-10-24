@@ -25,7 +25,7 @@ extension PullRequestsModel {
                 return try await github.merge(
                     repositoryPath: repository.path,
                     number: summary.number,
-                    asynchronously: hasMergeQueue,
+                    usingMergeQueue: hasMergeQueue,
                 )
             }
             try await github.enableAutomerge(

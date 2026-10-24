@@ -8,7 +8,7 @@ import Testing
 extension PullRequestsModelTests {
     @Test(arguments: [
         ("plain", "repos/{owner}/{repo}/pulls/7/merge"),
-        ("queue", "repos/{owner}/{repo}/pulls/7/merge-async"),
+        ("queue", "merge"),
         ("queue-pending", "--auto"),
         ("queue-review", "--auto"),
         ("queue-unknown", "--auto"),
@@ -48,8 +48,12 @@ extension PullRequestsModelTests {
             gate: PullRequestStore(github: github, store: store),
         )
         let calls = runner.calls.withLock { $0 }
-        #expect(calls.count == 1)
+        #expect(calls.count == (state == "queue" ? 2 : 1))
         #expect(calls.first?.contains(command) == true)
+        if state == "queue" {
+            #expect(calls.first == ["gh", "pr", "merge", "7"])
+            #expect(calls.last?.contains("number=7") == true)
+        }
         if state.hasPrefix("queue"), command == "--auto" {
             #expect(calls.first == ["gh", "pr", "merge", "7", "--auto"])
         }
@@ -87,6 +91,13 @@ private final nonisolated class MergeRoutingRunner: ProcessRunner {
             return ProcessResult(status: 0, standardOutput: "PR_7\n", standardError: "")
         }
         calls.withLock { $0.append(arguments) }
+        if arguments.contains("number=7") {
+            return ProcessResult(
+                status: 0,
+                standardOutput: #"{"merged":false,"autoMergeRequest":null,"mergeQueueEntry":{"id":"entry"}}"#,
+                standardError: "",
+            )
+        }
         let body = arguments.contains("repos/{owner}/{repo}/pulls/7/merge-async")
             ? #"{"status":"pending","details":{}}"# : #"{"merged":true}"#
         return ProcessResult(status: 0, standardOutput: "HTTP/2.0 200 OK\r\n\r\n" + body, standardError: "")

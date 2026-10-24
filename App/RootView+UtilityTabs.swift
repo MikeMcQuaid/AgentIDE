@@ -119,7 +119,6 @@ extension RootView {
                 ErrorsPane(isVisible: dependencies.dashboard.isWindowVisible)
             }
         }
-        .environment(\.openURL, LinkOpener.action(worktreePath: target.worktree.path))
     }
 
     /// The Pull requests tab, out of the stack for its length.

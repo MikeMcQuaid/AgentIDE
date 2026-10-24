@@ -18,9 +18,6 @@ extension ReviewCommentText {
             {
                 return ""
             }
-            if let code = node as? InlineCode, ReviewCommitLink.isHash(code.code) {
-                return "`" + code.code + "`"
-            }
             return nil
         }
     }
@@ -48,13 +45,5 @@ extension ReviewCommentText {
         } catch {
             return source
         }
-    }
-
-    static func linkedCommits(_ source: String) -> String {
-        source.replacingOccurrences(
-            of: #"(?i)\b(up to\s+)(`?)((?=[0-9]*[a-f])[a-f0-9]{4,40})\2(?![\w`])"#,
-            with: "$1[$2$3$2](" + ReviewCommitLink.scheme + ":$3)",
-            options: .regularExpression,
-        )
     }
 }

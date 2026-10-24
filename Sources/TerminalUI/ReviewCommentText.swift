@@ -34,32 +34,32 @@ public struct ReviewCommentText: View {
             return text
         }
 
-        return protected.restore(linkedCommits((isCodeRabbit ? withoutNotices(protected.source) : protected.source)
-                .split(separator: "\n", omittingEmptySubsequences: false)
-                .filter { line in
-                    let content = MarkdownText.content(protected.restore(String(line)))
-                    guard content.runs.contains(where: { run in
-                        run.presentationIntent?.components.contains { component in
-                            if case .codeBlock = component.kind {
-                                return true
-                            }
-                            return false
-                        } == true
-                    }) == false else {
-                        return true
-                    }
-
-                    let visible = String(content.characters)
-                        .trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n☐☑•."))
-                    if isCodeRabbit, visible == "❤️ Share" {
+        return protected.restore((isCodeRabbit ? withoutNotices(protected.source) : protected.source)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { line in
+                let content = MarkdownText.content(protected.restore(String(line)))
+                guard content.runs.contains(where: { run in
+                    run.presentationIntent?.components.contains { component in
+                        if case .codeBlock = component.kind {
+                            return true
+                        }
                         return false
-                    }
-                    return visible != "Review in Change Stack →" && ReviewBot.allCases.contains { bot in
-                        visible == "Comment @" + bot.login + " help to get the list of available commands"
-                            || visible == "Autofix · Keep fixing " + bot.displayName
-                            + " findings and required CI, and resolving merge conflicts"
-                    } == false
+                    } == true
+                }) == false else {
+                    return true
                 }
-                .joined(separator: "\n")))
+
+                let visible = String(content.characters)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \t\r\n☐☑•."))
+                if isCodeRabbit, visible == "❤️ Share" {
+                    return false
+                }
+                return visible != "Review in Change Stack →" && ReviewBot.allCases.contains { bot in
+                    visible == "Comment @" + bot.login + " help to get the list of available commands"
+                        || visible == "Autofix · Keep fixing " + bot.displayName
+                        + " findings and required CI, and resolving merge conflicts"
+                } == false
+            }
+            .joined(separator: "\n"))
     }
 }

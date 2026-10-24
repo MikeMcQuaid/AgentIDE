@@ -1,9 +1,45 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Foundation
 import Synchronization
 import Testing
 
 extension GitHubClientTests {
+    @Test(arguments: [
+        (#"{"merged":true,"autoMergeRequest":null,"mergeQueueEntry":null}"#, GitHubClient.MergeResult.merged),
+        (#"{"merged":false,"autoMergeRequest":{},"mergeQueueEntry":{"id":"entry"}}"#, .enqueued),
+        (#"{"merged":false,"autoMergeRequest":{},"mergeQueueEntry":null}"#, .pending),
+    ])
+    func `successful queue commands confirm GitHub state`(
+        state: String, outcome: GitHubClient.MergeResult,
+    ) async throws {
+        let runner = AsyncMergeRunner(responses: [(200, ""), (200, state)])
+        #expect(try await GitHubClient(runner: runner) { true }.merge(
+            repositoryPath: "/repo", number: 7, usingMergeQueue: true,
+        ) == outcome)
+        let calls = runner.calls.withLock { $0 }
+        #expect(calls.count == 2)
+        #expect(calls.first == ["gh", "pr", "merge", "7"])
+        #expect(calls.last?.contains("graphql") == true)
+        #expect(calls.last?.contains("number=7") == true)
+        let query = try #require(calls.last?.first { $0.hasPrefix("query=") })
+        #expect(query.contains("mergeQueueEntry"))
+        #expect(query.contains("autoMergeRequest"))
+    }
+
+    @Test(arguments: [#"{"merged":false,"autoMergeRequest":null,"mergeQueueEntry":null}"#, "", "null"])
+    func `unconfirmed queue commands fall back to async`(state: String) async throws {
+        let runner = AsyncMergeRunner(responses: [
+            (200, ""), (200, state), (200, #"{"status":"enqueued","details":{}}"#),
+        ])
+        #expect(try await GitHubClient(runner: runner) { true }.merge(
+            repositoryPath: "/repo", number: 7, usingMergeQueue: true,
+        ) == .enqueued)
+        let calls = runner.calls.withLock { $0 }
+        #expect(calls.count == 3)
+        #expect(calls.last?.contains("repos/{owner}/{repo}/pulls/7/merge-async") == true)
+    }
+
     @Test
     func `plain pull requests merge synchronously`() async throws {
         let runner = AsyncMergeRunner(responses: [(200, #"{"merged":true}"#)])
@@ -19,9 +55,9 @@ extension GitHubClientTests {
     func `synchronous merge failures fall back to async`(status: Int) async throws {
         let runner = AsyncMergeRunner(responses: [
             (status, #"{"message":"Use the async API"}"#),
-            (202, #"{"status":"pending","details":{}}"#),
+            (200, #"{"status":"enqueued","details":{}}"#),
         ])
-        #expect(try await GitHubClient(runner: runner) { true }.merge(repositoryPath: "/repo", number: 7) == .pending)
+        #expect(try await GitHubClient(runner: runner) { true }.merge(repositoryPath: "/repo", number: 7) == .enqueued)
         let calls = runner.calls.withLock { $0 }
         #expect(calls.count == 2)
         #expect(calls[0].contains("repos/{owner}/{repo}/pulls/7/merge"))
@@ -40,10 +76,10 @@ extension GitHubClientTests {
     @Test
     func `a synchronous transport failure falls back to async`() async throws {
         let runner = AsyncMergeRunner(
-            responses: [(202, #"{"status":"pending","details":{}}"#)],
+            responses: [(200, #"{"status":"enqueued","details":{}}"#)],
             firstFailure: URLError(.cannotConnectToHost),
         )
-        #expect(try await GitHubClient(runner: runner) { true }.merge(repositoryPath: "/repo", number: 7) == .pending)
+        #expect(try await GitHubClient(runner: runner) { true }.merge(repositoryPath: "/repo", number: 7) == .enqueued)
         #expect(runner.calls.withLock { $0.count } == 2)
     }
 
@@ -73,38 +109,63 @@ extension GitHubClientTests {
     }
 
     @Test(arguments: [202, 409])
-    func `pending merges return without polling`(status: Int) async throws {
+    func `pending queue requests are followed to admission`(status: Int) async throws {
         let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
             (status, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (200, #"{"status":"enqueued","details":{}}"#),
         ])
         let github = GitHubClient(runner: runner) { true }
-        #expect(try await github.merge(repositoryPath: "/repo", number: 7, asynchronously: true) == .pending)
+        #expect(try await github.merge(repositoryPath: "/repo", number: 7, usingMergeQueue: true) == .enqueued)
         let calls = runner.calls.withLock { $0 }
-        #expect(calls.count == 1)
-        #expect(calls.first?.contains("PUT") == true)
-        #expect(calls.first?.contains("repos/{owner}/{repo}/pulls/7/merge-async") == true)
-        #expect(calls.first?.contains("merge_method=rebase") == true)
-        #expect(calls.first?.contains("merge_action=default") == true)
-        #expect(calls.first?.contains("bypass_rules=true") == false)
+        #expect(calls.count == 3)
+        #expect(calls.first == ["gh", "pr", "merge", "7"])
+        #expect(calls[1].contains("PUT"))
+        #expect(calls[1].contains("repos/{owner}/{repo}/pulls/7/merge-async"))
+        #expect(calls[1].contains("merge_method=rebase") == false)
+        #expect(calls[1].contains("merge_action=default"))
+        #expect(calls[1].contains("bypass_rules=true") == false)
+        #expect(calls.last?.contains("GET") == true)
+        #expect(calls.last?.contains(
+            "repos/{owner}/{repo}/pulls/7/merge-async/630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42",
+        ) == true)
+    }
+
+    @Test
+    func `accepted requests report a later GitHub failure`() async {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (200, #"{"status":"failed","details":{"message":"Required checks have not passed."}}"#),
+        ])
+        let failure = await #expect(throws: Error.self) {
+            try await GitHubClient(runner: runner) { true }.merge(repositoryPath: "/repo", number: 7)
+        }
+        #expect(failure?.localizedDescription.contains("Required checks have not passed.") == true)
+        #expect(runner.calls.withLock { $0.count } == 3)
     }
 
     @Test(arguments: [GitHubClient.MergeResult.merged, .enqueued])
     func `completed merge requests need no polling`(outcome: GitHubClient.MergeResult) async throws {
-        let runner = AsyncMergeRunner(responses: [(200, #"{"status":"\#(outcome.rawValue)","details":{}}"#)])
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (200, #"{"status":"\#(outcome.rawValue)","details":{}}"#),
+        ])
         #expect(try await GitHubClient(runner: runner) { true }.merge(
-            repositoryPath: "/repo", number: 7, asynchronously: true,
+            repositoryPath: "/repo", number: 7, usingMergeQueue: true,
         ) == outcome)
-        #expect(runner.calls.withLock { $0.count } == 1)
+        #expect(runner.calls.withLock { $0.count } == 2)
     }
 
     @Test
     func `async merge failures report GitHub's reason`() async {
         let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
             (200, #"{"status":"failed","details":{"message":"Required checks have not passed."}}"#),
         ])
         let failure = await #expect(throws: Error.self) {
             try await GitHubClient(runner: runner) { true }.merge(
-                repositoryPath: "/repo", number: 7, asynchronously: true,
+                repositoryPath: "/repo", number: 7, usingMergeQueue: true,
             )
         }
         #expect(failure?.localizedDescription.contains("Required checks have not passed.") == true)
@@ -113,27 +174,112 @@ extension GitHubClientTests {
     @Test(arguments: [
         "{}",
         #"{"status":"unknown","details":{}}"#,
+        #"{"status":"pending","details":{}}"#,
+        #"{"status":"pending","details":{"uuid":"../other"}}"#,
         "not JSON",
     ])
     func `invalid merge responses never count as success`(body: String) async {
-        let runner = AsyncMergeRunner(responses: [(200, body)])
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#), (200, body),
+        ])
         await #expect(throws: Error.self) {
             try await GitHubClient(runner: runner) { true }.merge(
-                repositoryPath: "/repo", number: 7, asynchronously: true,
+                repositoryPath: "/repo", number: 7, usingMergeQueue: true,
             )
         }
-        #expect(runner.calls.withLock { $0.count } == 1)
+        #expect(runner.calls.withLock { $0.count } == 2)
+    }
+
+    @Test
+    func `requests that remain pending report an unconfirmed result`() async {
+        let runner = AsyncMergeRunner(responses: [(405, #"{"message":"Use the async API"}"#)] + Array(
+            repeating: (200, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            count: RefreshCadence.mergeResultTimeout / RefreshCadence.mergeResultSeconds + 2,
+        ))
+        let failure = await #expect(throws: Error.self) {
+            try await mergeClient(runner).merge(repositoryPath: "/repo", number: 7)
+        }
+        #expect(failure?.localizedDescription.contains("GitHub has not confirmed") == true)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("PUT") } == 2)
+    }
+
+    @Test(arguments: [(false, false), (true, true), (false, true)])
+    func `slow polling checks once more at the deadline`(visible: Bool, onBattery: Bool) async throws {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (200, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (200, #"{"status":"enqueued","details":{}}"#),
+        ])
+        let github = mergeClient(runner, interval: .seconds(RefreshCadence.pollSeconds(
+            setting: RefreshCadence.mergeResultSeconds, visible: visible, onBattery: onBattery,
+        )))
+        #expect(try await github.merge(repositoryPath: "/repo", number: 7) == .enqueued)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("GET") } == 2)
+    }
+
+    @Test
+    func `a failed result read retries without resubmitting the merge`() async throws {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (502, #"{"message":"Bad gateway"}"#),
+            (200, #"{"status":"enqueued","details":{}}"#),
+        ])
+        #expect(try await mergeClient(runner).merge(repositoryPath: "/repo", number: 7) == .enqueued)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("PUT") } == 2)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("GET") } == 2)
+    }
+
+    @Test
+    func `a result transport failure retries without resubmitting the merge`() async throws {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+            (200, #"{"status":"enqueued","details":{}}"#),
+        ], pollFailure: URLError(.networkConnectionLost))
+        #expect(try await mergeClient(runner).merge(repositoryPath: "/repo", number: 7) == .enqueued)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("PUT") } == 2)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("GET") } == 2)
+    }
+
+    @Test
+    func `repeated failed result reads end as unconfirmed`() async {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+        ] + Array(repeating: (502, #"{"message":"Bad gateway"}"#), count: 2))
+        let failure = await #expect(throws: Error.self) {
+            try await mergeClient(runner, interval: .seconds(60)).merge(repositoryPath: "/repo", number: 7)
+        }
+        #expect(failure?.localizedDescription.contains("GitHub has not confirmed") == true)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("PUT") } == 2)
+        #expect(runner.calls.withLock { $0 }.count { $0.contains("GET") } == 2)
+    }
+
+    @Test
+    func `cancelling a result read stops polling`() async {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#),
+            (202, #"{"status":"pending","details":{"uuid":"630b9d5e-3f2a-4f7e-8b0c-2d5f9a8c1e42"}}"#),
+        ], pollFailure: CancellationError())
+        await #expect(throws: CancellationError.self) {
+            try await mergeClient(runner).merge(repositoryPath: "/repo", number: 7)
+        }
+        #expect(runner.calls.withLock { $0.count } == 3)
     }
 
     @Test(arguments: [400, 403, 404, 409, 422])
-    func `rejected merge requests are not retried`(status: Int) async {
-        let runner = AsyncMergeRunner(responses: [(status, #"{"message":"Rejected"}"#)])
+    func `rejected fallbacks are not retried`(status: Int) async {
+        let runner = AsyncMergeRunner(responses: [
+            (405, #"{"message":"Use the async API"}"#), (status, #"{"message":"Rejected"}"#),
+        ])
         await #expect(throws: Error.self) {
             try await GitHubClient(runner: runner) { true }.merge(
-                repositoryPath: "/repo", number: 7, asynchronously: true,
+                repositoryPath: "/repo", number: 7, usingMergeQueue: true,
             )
         }
-        #expect(runner.calls.withLock { $0.count } == 1)
+        #expect(runner.calls.withLock { $0.count } == 2)
     }
 
     @Test
@@ -147,6 +293,20 @@ extension GitHubClientTests {
             ["gh", "pr", "merge", "7", "--disable-auto"],
         ])
     }
+
+    private func mergeClient(
+        _ runner: AsyncMergeRunner, interval: Duration = .seconds(RefreshCadence.mergeResultSeconds),
+    ) -> GitHubClient {
+        let instant = Mutex(ContinuousClock.now)
+        var github = GitHubClient(runner: runner) { true }
+        github.mergePolling.now = { instant.withLock { $0 } }
+        github.mergePolling.interval = { interval }
+        github.mergePolling.sleep = { duration in
+            try Task.checkCancellation()
+            instant.withLock { $0 += duration }
+        }
+        return github
+    }
 }
 
 // MARK: - AsyncMergeRunner
@@ -154,9 +314,10 @@ extension GitHubClientTests {
 private final class AsyncMergeRunner: ProcessRunner, Sendable {
     // MARK: Lifecycle
 
-    init(responses: [(Int, String)], firstFailure: any Error? = nil) {
+    init(responses: [(Int, String)], firstFailure: any Error? = nil, pollFailure: any Error? = nil) {
         self.responses = Mutex(responses)
         self.firstFailure = Mutex(firstFailure)
+        self.pollFailure = Mutex(pollFailure)
     }
 
     deinit {
@@ -182,6 +343,12 @@ private final class AsyncMergeRunner: ProcessRunner, Sendable {
             )
         }
         calls.withLock { $0.append(arguments) }
+        if arguments.contains("GET"), let failure = pollFailure.withLock({ failure in
+            defer { failure = nil }
+            return failure
+        }) {
+            throw failure
+        }
         if let failure = firstFailure.withLock({ failure in
             defer { failure = nil }
             return failure
@@ -192,7 +359,7 @@ private final class AsyncMergeRunner: ProcessRunner, Sendable {
         let failureStatus = 400
         return ProcessResult(
             status: status < failureStatus ? 0 : 1,
-            standardOutput: "HTTP/2.0 \(status) Response\r\n\r\n" + body,
+            standardOutput: (arguments.contains("--include") ? "HTTP/2.0 \(status) Response\r\n\r\n" : "") + body,
             standardError: status < failureStatus ? "" : "gh: Rejected (HTTP \(status))",
         )
     }
@@ -201,4 +368,5 @@ private final class AsyncMergeRunner: ProcessRunner, Sendable {
 
     private let responses: Mutex<[(Int, String)]>
     private let firstFailure: Mutex<any Error?>
+    private let pollFailure: Mutex<any Error?>
 }

@@ -9,6 +9,12 @@ import Foundation
 /// every tick that asks herdr is a `sudo` login shell, and a machine
 /// on battery with nothing happening should cost nothing.
 public enum RefreshCadence {
+    /// Result checks while a merge action waits for GitHub's async fallback.
+    public static let mergeResultSeconds = 2
+
+    /// How long the action waits before reporting an unconfirmed result.
+    public static let mergeResultTimeout = 30
+
     /// How long a requested merge keeps its branches on the faster cadence.
     public static let mergeRequestPatience: TimeInterval = 3_600
 
