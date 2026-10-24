@@ -4,19 +4,9 @@ import Testing
 
 struct ReviewCommitLinkTests {
     @Test
-    func `commit requests target one worktree and repeat`() throws {
-        let suite = "review-commit-test-" + UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+    func `commit listings accept literal hashes`() throws {
         let url = try #require(URL(string: "agentide-commit:d904c"))
-        #expect(ReviewCommitLink.open(url, worktreePath: "/repo/worktree", defaults: defaults))
-        #expect(ReviewCommitLink.requestedCommit(worktreePath: "/repo/worktree", defaults: defaults) == "d904c")
-        #expect(ReviewCommitLink.requestedCommit(worktreePath: "/repo/other", defaults: defaults) == nil)
-        #expect(defaults.string(forKey: UtilityTabTarget.key) == "review")
-        #expect(defaults.bool(forKey: UtilityTabTarget.visibilityKey))
-        #expect(defaults.integer(forKey: ReviewCommitLink.requestKey) == 1)
-        #expect(ReviewCommitLink.open(url, worktreePath: "/repo/worktree", defaults: defaults))
-        #expect(defaults.integer(forKey: ReviewCommitLink.requestKey) == 2)
+        #expect(ReviewCommitLink.hash(in: url) == "d904c")
     }
 
     @Test(arguments: [

@@ -37,7 +37,9 @@ struct MarkdownHTML {
             plain = []
             let children = element.getChildNodes()
             let summary = children.first { ($0 as? Element)?.tagName() == "summary" }
-            let title = protected.restore(render(summary?.getChildNodes() ?? []))
+            let titleSource = render(summary?.getChildNodes() ?? [])
+            let title = protected.restore((try? MarkdownHTMLCode(titleSource))
+                .map { $0.restore($0.source.replacing("**", with: "")) } ?? titleSource)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let body = children.filter { $0 !== summary }.map { (try? $0.outerHtml()) ?? "" }.joined()
             result.append(MarkdownText.Chunk(
@@ -148,16 +150,16 @@ struct MarkdownHTML {
         switch element.tagName() {
         case "b",
              "strong":
-            return "**" + body + "**"
+            return wrapped(body, in: "**")
 
         case "em",
              "i":
-            return "*" + body + "*"
+            return wrapped(body, in: "*")
 
         case "del",
              "s",
              "strike":
-            return "~~" + body + "~~"
+            return wrapped(body, in: "~~")
 
         case "code",
              "kbd":
@@ -177,6 +179,16 @@ struct MarkdownHTML {
         default:
             return body
         }
+    }
+
+    private func wrapped(_ body: String, in marker: String) -> String {
+        guard let start = body.firstIndex(where: { $0.isWhitespace == false }),
+              let end = body.lastIndex(where: { $0.isWhitespace == false })
+        else {
+            return body
+        }
+
+        return body[..<start] + marker + body[start ... end] + marker + body[body.index(after: end)...]
     }
 
     private func literalText(_ node: Node) -> String {

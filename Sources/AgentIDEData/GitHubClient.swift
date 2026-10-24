@@ -228,6 +228,7 @@ public struct GitHubClient: Sendable {
         "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt,reviewRequests,latestReviews"
 
     let runner: any ProcessRunner
+    var mergePolling: MergePolling = .init()
 
     /// A merge commit preferred, then rebase, then squash; an
     /// unreadable answer defaults to the merge commit, the one

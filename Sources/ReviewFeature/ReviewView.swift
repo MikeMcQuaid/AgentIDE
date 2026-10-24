@@ -118,7 +118,6 @@ public struct ReviewView: View {
             .onChange(of: findRequest) { showsFind = true }
             .onChange(of: findNextRequest) { model.moveFind(by: 1) }
             .onChange(of: findPreviousRequest) { model.moveFind(by: -1) }
-            .onChange(of: reviewCommitRequest) { showRequestedCommit(isBusy: localReview.isBusy) }
             // The menu bar's Commit Outstanding lands here through the
             // storage bus.
             .onChange(of: commitRequest) {
@@ -185,9 +184,6 @@ public struct ReviewView: View {
     /// The menu bar's commit signal.
     @AppStorage("commitRequest")
     private var commitRequest = 0
-
-    @AppStorage(ReviewCommitLink.requestKey)
-    private var reviewCommitRequest = 0
 
     /// The find menu items' counters on the storage bus.
     @AppStorage("reviewFindRequest")

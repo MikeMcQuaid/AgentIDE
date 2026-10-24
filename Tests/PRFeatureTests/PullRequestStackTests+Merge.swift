@@ -26,10 +26,7 @@ extension PullRequestStackTests {
             summaries: [fixtures.summary(1, head: "lower", base: "main")],
         )
 
-        // Nothing below it to wait on, and never the lone pull
-        // request's merge: on a merge queue gh joins the queue
-        // through automerge, which GitHub refuses for a stacked
-        // pull request, so queueing the bottom failed.
+        // Even the bottom entry must link the stack before merging.
         #expect(model.listedParent == nil)
         #expect(model.isInStack)
         #expect(model.canMergeStack)

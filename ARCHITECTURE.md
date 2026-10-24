@@ -1652,7 +1652,7 @@ steps.
   create a new stack or append only missing entries to an existing
   stack. Repeating a link leaves existing members in place; conflicting
   membership or order fails before mutation. No CLI extension is needed.
-  Stack merge uses the asynchronous merge API after linking,
+  Stack merge uses the shared merge action after linking,
   offered only when every pull request below is mergeable, green and
   approved. Standing (`2/3`) measures the remote stack from GitHub's
   REST metadata when available, otherwise the cached pull request chain,
@@ -1671,19 +1671,32 @@ steps.
   an asynchronous merge alone does not enable automerge.
   Stack automerge is rolling out without a documented API: a waiting
   stack says "Waiting" and explains why, while a ready stack
-  still merges or queues through the asynchronous API. Drafts say
+  still merges or queues through the shared merge action. Drafts say
   Ready, including in stacks. Cancellation remains available
   even when a stack is no longer ready. Labels stay one word,
   including while busy; hover help explains each action.
-- **Merge completion comes from GitHub.** Plain individual merges
+- **Merge completion comes from GitHub.** Direct merges
   submit `PUT /repos/{owner}/{repo}/pulls/{number}/merge` through
   `gh api`, using the repository's allowed merge method. A failed
   synchronous merge falls back once to the asynchronous `merge-async`
-  endpoint; stacks and merge queues use it immediately. Its default
-  action honours the merge queue without bypassing rules. An
-  asynchronous action returns as soon as GitHub accepts the request;
-  an existing pending request is accepted too, without following its
-  UUID. The usual poll reads requested or queued branches every minute
+  endpoint, including stacks. Queue requests first use `gh pr merge`,
+  falling back to `merge-async` only on failure. Neither queue attempt
+  specifies a merge method: the queue owns it and the asynchronous
+  API accepts `merge_method` only for direct merges. A successful CLI
+  command is followed by a GitHub state check: a merged pull request or
+  queue entry confirms completion, and enabled automerge confirms a
+  pending request. An unconfirmed command falls back to the async API.
+  The asynchronous API's default action honours the queue without
+  bypassing rules. The fallback follows the returned UUID until GitHub
+  confirms merging or queue admission, reports its failure reason or
+  reaches a 30-second deadline. An existing pending request is followed
+  the same way. Result checks slow while the window is hidden or on
+  battery, with a final check after a sleep capped by the deadline.
+  Failed result reads retain the last pending response and retry within
+  that deadline, logging their diagnostics without resubmitting the
+  merge. Confirmed failures stop immediately; a timeout says that the
+  result is still unconfirmed.
+  The usual poll reads requested or queued branches every minute
   and merge queues every half minute, slowing on battery or when the
   window is hidden. A requested merge keeps this cadence for up to an
   hour; queued pull requests keep it until they leave the queue. A
@@ -2361,21 +2374,25 @@ hidden with their surrounding callout or disclosure, preserving the
 surrounding Markdown source. With pretty printing disabled, SwiftSoup
 2.14.2 reuses original element source without normalising entity
 spellings; notice removal uses these original spans. Bot commit
-references link to Review. Automatic links need a hexadecimal letter, so
-ordinary numbers stay text. Code examples and existing links remain
+references remain as written. Code examples and existing links remain
 unchanged. This is cached presentation filtering: original events remain
 available to Copy all, review completion detection and autofix.
 Headers, timeline entries, native disclosures, separate review threads
 and scrolling code or table regions remain selection boundaries.
 SwiftSoup maps common HTML formatting into Markdown and keeps nested
-details as native disclosures with eight-point gaps; thematic breaks
-use the same 16-point margins as paragraphs. GitHub alerts remain
-labelled callouts, and YAML front matter remains a table. Unknown alert
-markers and code stay literal. HTML comments and executable content are
-omitted without leaving empty layout blocks around disclosures; no web
-view executes review HTML. Textual 0.5.0 is an explicitly approved
-exception to the dependency star threshold. Mermaid and maths extensions
-are not enabled.
+details as native disclosures with eight-point gaps. Disclosure labels
+drop redundant bold markers because the label already supplies its
+weight, preserving code spans; thematic breaks use the same 16-point
+margins as paragraphs.
+HTML bold, italic and strikethrough keep surrounding whitespace outside
+their Markdown delimiters so expanded review headings render as styled
+text, including when an icon without alternative text is omitted.
+GitHub alerts remain labelled callouts, and YAML front matter remains a
+table. Unknown alert markers and code stay literal. HTML comments and
+executable content are omitted without leaving empty layout blocks around
+disclosures; no web view executes review HTML. Textual 0.5.0 is an
+explicitly approved exception to the dependency star threshold. Mermaid
+and maths extensions are not enabled.
 Code protection maps parser locations against UTF-8 lines, recognising
 LF, CRLF and CR line endings. Locations are checked before slicing;
 unusable ranges leave the original text readable instead of crashing

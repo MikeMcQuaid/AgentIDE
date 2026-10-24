@@ -27,7 +27,7 @@ Their sessions live in a `herdr` server owned by the same sandbox user, so nothi
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
 - Scrolls the agent conversation under the pointer.
 - Switches between visited agents instantly, preserving their terminal size and content.
-- Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments and clickable bot commit references.
+- Reviews uncommitted changes, individual commits or whole branches as syntax-highlighted diffs with inline pull request comments.
 - Shows local AI findings beside matching code in Review and with captured code in PR conversations, and copies them together with GitHub comments using the existing conversation copy buttons.
 - Requests reviews from another agent or your choice of Copilot or CodeRabbit.
 - Reviews committed changes with their full commit messages without a diff size limit, while uncommitted review snapshots remain limited to 256 KiB.

@@ -73,6 +73,54 @@ struct MarkdownHTMLTests {
     }
 
     @Test
+    func `expanded review headings render bold without literal markers`() throws {
+        let source = """
+        <details><summary>Recent review info</summary>
+
+        <strong><img src="icon.svg"> Run configuration</strong>
+
+        - Source mode: Auto
+        - Repository: Unavailable
+
+        <strong> Commits</strong>
+
+        Reviewing files that changed from the base of the PR.
+
+        <strong> Files selected for processing: 1</strong>
+
+        - Library/Homebrew/test/sample_spec.rb
+
+        </details>
+        """
+        let chunk = try #require(MarkdownText.parsedChunks(
+            ReviewCommentText(source, author: "coderabbitai").text,
+        )
+        .first)
+        let content = MarkdownText.content(chunk.text)
+        #expect(String(content.characters).contains("**") == false)
+        for heading in ["Run configuration", "Commits", "Files selected for processing: 1"] {
+            #expect(content.runs.contains { run in
+                String(content[run.range].characters) == heading
+                    && run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+            })
+        }
+        #expect(MarkdownTestSupport.kinds(content).contains(.unorderedList))
+        #expect(String(content.characters).contains("Source mode: Auto"))
+        #expect(String(content.characters).contains("Library/Homebrew/test/sample_spec.rb"))
+    }
+
+    @Test(arguments: [
+        ("b", "**"), ("strong", "**"), ("em", "*"), ("i", "*"),
+        ("del", "~~"), ("s", "~~"), ("strike", "~~"),
+    ])
+    func `HTML formatting preserves surrounding spaces outside its markers`(tag: String, marker: String) {
+        let source = "Before<" + tag + "> styled </" + tag + ">after"
+        #expect(MarkdownText.strippingHTML(source) == "Before " + marker + "styled" + marker + " after")
+        #expect(String(MarkdownText.content(source).characters) == "Before styled after")
+        #expect(MarkdownText.strippingHTML("Before<" + tag + "> </" + tag + ">after") == "Before after")
+    }
+
+    @Test
     func `nested bot disclosures retain their own summaries and trailing content`() throws {
         let source = """
         <details><summary>Review <strong>details</strong></summary>
@@ -86,11 +134,30 @@ struct MarkdownHTMLTests {
         """
         let chunks = MarkdownText.parsedChunks(source)
         let outer = try #require(chunks.first)
-        #expect(outer.detailsSummary == "Review **details**")
+        #expect(outer.detailsSummary == "Review details")
         #expect(outer.text.contains("After"))
         let nested = MarkdownText.parsedChunks(outer.text)
         #expect(nested.contains { $0.detailsSummary == "file.swift (1)" && $0.text.contains("Finding") })
         #expect(chunks.last?.text.trimmingCharacters(in: .whitespacesAndNewlines) == "Tail")
+    }
+
+    @Test
+    func `disclosure labels drop redundant bold markers`() {
+        let source = """
+        <details><summary>Merge Risk: <strong> Low</strong> · up to 999b0</summary>Finding.</details>
+        <details><summary><strong> Recent review info</strong></summary>Metadata.</details>
+        <details><summary>** Recent review info**</summary>Metadata.</details>
+        """
+        let summaries = MarkdownText.parsedChunks(source).compactMap(\.detailsSummary)
+        #expect(summaries == ["Merge Risk:  Low · up to 999b0", "Recent review info", "Recent review info"])
+        #expect(MarkdownText.strippingHTML("<strong>Keep body bold</strong>") == "**Keep body bold**")
+    }
+
+    @Test
+    func `disclosure labels preserve literal asterisks in code`() {
+        let source = "<details><summary><strong>Files</strong>: <code>**/*.swift</code> and `**/*.md`</summary>"
+            + "Finding.</details>"
+        #expect(MarkdownText.parsedChunks(source).first?.detailsSummary == "Files: `**/*.swift` and `**/*.md`")
     }
 
     @Test

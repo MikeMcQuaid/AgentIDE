@@ -82,12 +82,11 @@ struct ReviewCommentTextTests {
         #expect(ReviewCommentText(example, author: "coderabbitai").text == example)
     }
 
-    @Test(arguments: ReviewBot.allCases, ["d904c", "`d904c`"])
-    func `bot commit references link to Review`(_ bot: ReviewBot, hash: String) {
+    @Test(arguments: ReviewBot.allCases, ["999b0", "`999b0`"])
+    func `bot commit references stay as written`(_ bot: ReviewBot, hash: String) {
         let body = "<details><summary>Commits reviewed up to " + hash + "</summary>Finding.</details>"
         let shown = ReviewCommentText(body, author: bot.login).text
-        #expect(shown.contains("[" + hash + "](agentide-commit:d904c)"))
-        #expect(MarkdownText.parsedChunks(shown).first?.detailsSummary?.contains("agentide-commit:d904c") == true)
+        #expect(shown == body)
         #expect(ReviewCommentText(body, author: "reviewer").text == body)
     }
 

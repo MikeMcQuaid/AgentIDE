@@ -85,23 +85,15 @@ public enum LinkOpener {
     /// and anything else is refused with a message. Handing those to
     /// the system opener produced an unhelpful "error -50" dialog
     /// for relative and schemeless links.
-    public static let action = action(worktreePath: nil)
-
-    /// Review links resolve only in the worktree of the containing pane.
-    public static func action(worktreePath: String?) -> OpenURLAction {
-        OpenURLAction { url in
-            MainActor.assumeIsolated {
-                if let worktreePath, ReviewCommitLink.open(url, worktreePath: worktreePath) {
-                    return .handled
-                }
-                guard isWeb(url) else {
-                    ErrorLog.shared.report("Not a web link, so not opened: " + url.absoluteString)
-                    return .discarded
-                }
-
-                open(url.absoluteString)
-                return .handled
+    public static let action = OpenURLAction { url in
+        MainActor.assumeIsolated {
+            guard isWeb(url) else {
+                ErrorLog.shared.report("Not a web link, so not opened: " + url.absoluteString)
+                return .discarded
             }
+
+            open(url.absoluteString)
+            return .handled
         }
     }
 
