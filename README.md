@@ -182,15 +182,11 @@ Choose **Connect** in the iPhone app to see the same sessions as your Mac.
 - `script/zip` and `script/package`: zip, sign and notarise a release
 - `script/attach`: attach this terminal to the sandboxed `herdr` session
 
-Project code treats compiler and linker warnings as errors, with Swift's strict concurrency and memory safety checks enabled.
-Xcode also runs Apple's static analyser during builds.
-`script/analyze` checks for dead code on the host, in the sandbox and in CI, with SwiftLint's additional analysis on the host and in CI.
-CI also builds the iPhone simulator app.
-CI runs the full test suite once with Thread Sanitizer, then checks terminal, rendering and parser tests with Address Sanitizer on macOS 27.
-CI uploads a Release app, signed and notarised when signing secrets are available.
+CI checks the Mac and iPhone apps for regressions and provides downloadable builds for testing.
+See [ARCHITECTURE.md](ARCHITECTURE.md#dependencies-and-toolchain) for build, testing and analysis details.
 
-Releases run the **Release** workflow from the Actions tab on `main` with a bare `MAJOR.MINOR.PATCH` version.
-Manual releases publish automatically after the packaged app passes startup checks on macOS Tahoe and macOS 27; release-related pushes only run the checks and upload a test artefact.
+To publish a release, run the **Release** workflow from the Actions tab on `main` with a bare `MAJOR.MINOR.PATCH` version.
+The workflow validates and publishes the app automatically; see the [release process](ARCHITECTURE.md#releases) for details.
 
 ## 🚧 Status
 

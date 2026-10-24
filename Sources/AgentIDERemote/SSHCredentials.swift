@@ -1,4 +1,4 @@
-import Crypto
+import CryptoKit
 import Foundation
 import NIOSSH
 import Security

@@ -2134,13 +2134,25 @@ indexes with Periphery. SwiftLint uses each platform's own build log
 and `.xcfilelist`, the extension its file-list reader requires, and
 excludes the other platform's font implementations: SourceKit's
 cursor lookup otherwise enters inactive branches with an unavailable SDK.
+File lists use absolute paths so SwiftLint can match them to compiler
+arguments; a full pass analysing zero files fails rather than reporting success.
+CI sets `AGENTIDE_ANALYZE_BASE` to the PR's base commit or the commit before
+a push to main, checking imports only in Swift files changed since that
+commit. Both events use the same scope, with no full scan after merging.
+Unchanged and deleted files are omitted; a platform with no matching
+compiled files needs no import check. Local analysis remains a full scan
+unless the same variable is set. Periphery always scans both complete indexes.
 Phone font styles use distinct concrete types behind the shared names
 so the combined index keeps both platforms' declarations.
 The iPhone app's Swift module is `AgentIDEiOS`, distinct from the Mac's
 `AgentIDE`, while both products remain named AgentIDE. SwiftTerm's
 generated plugin sources are excluded from indexing, not just reporting,
 so platform-specific copies cannot collide in the combined index.
-The clean builds keep SwiftLint's analysis complete on every run.
+The clean builds give SwiftLint current compiler arguments on every run.
+Host analysis defaults to Debug; CI sets `XCODE_CONFIGURATION=Release`
+so those same builds verify both distributable apps. `script/build`
+then finishes the Mac app's signing incrementally before packaging,
+reusing the build products without transferring them between runners.
 In the sandbox it builds app and test targets into a fresh
 `.build/analyze` index, exports the package description unsandboxed and
 passes both to Periphery without another build. SwiftPM's native build
@@ -2167,8 +2179,13 @@ Message-log tests own isolated logs so clearing or trimming entries
 cannot erase a service-status report another test is awaiting.
 CI (`.github/workflows/tests.yml`) runs style on every push and pull
 request, and build-and-test and analyze in parallel on the `xcode-27`
-image, each asserting Xcode 27 rather than skipping. The test job runs
-the full suite once with `script/test --sanitize thread`, then
+image, each asserting Xcode 27 rather than skipping. Analysis shares its
+clean Release builds with packaging; independent matrix jobs run each
+sanitizer, whose differently instrumented outputs cannot be shared.
+The stable `tests` check waits for analysis and every matrix job and
+fails if any failed, was cancelled or was skipped, preserving branch
+protection.
+The full suite runs once with `script/test --sanitize thread`, alongside
 `script/test --sanitize address --test-product TerminalUITests` for
 terminal lifecycle, rendering and native parser coverage. Selecting the
 test product also avoids compiling unrelated tests and feature targets;
@@ -2200,14 +2217,23 @@ both sanitizers; findings fail CI.
 `script/test` also checks build configuration, installation failure
 handling and missing packaging credentials with stub tools, without
 touching the installed app or the keychain.
+CI installs only each job's tools; `script/bootstrap [formula ...]`
+installs a named subset before generating the project, while no arguments
+keep the full Brewfile setup. Style needs no generated project or Git
+history beyond the checked-out commit.
 Normal CI builds and uploads a Release zip. The certificate secret alone
 decides whether to sign and notarise: unavailable secrets leave an
 ad hoc build, while a certificate with missing companion credentials
 fails in `script/package`. Every job that versions a build fetches full
 Git history.
-Tests, analysis and releases cache SwiftPM dependencies, including the
-Xcode package cache. Dependabot groups Actions and Swift updates weekly
-on Friday at 08:00 UTC, with a seven-day cooldown.
+Tests, analysis and releases cache SwiftPM's shared repository downloads
+once, rather than also archiving each build directory's copies and
+checkouts. Every build still resolves pinned versions and compiles its
+own outputs; static analysis retains clean builds and complete indexes.
+Metal is downloaded only when `xcrun metal --version` fails, and zipped
+app artefacts upload without another compression pass. Dependabot groups
+Actions and Swift updates weekly on Friday at 08:00 UTC, with a seven-day
+cooldown.
 
 ### Releases
 

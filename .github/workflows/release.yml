@@ -101,30 +101,24 @@ jobs:
           sudo xcode-select -s "${xcode}/Contents/Developer"
           xcodebuild -version
 
-      - name: Download Metal toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Ensure Metal toolchain
+        run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
 
       - name: Cache Swift package dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/Library/Caches/org.swift.swiftpm
-            .DerivedData/SourcePackages
-            .build/checkouts
-            .build/repositories
-          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
-          restore-keys: ${{ runner.os }}-swiftpm-
+          path: ~/Library/Caches/org.swift.swiftpm/repositories
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-repositories-
 
       - name: Bootstrap
-        run: script/bootstrap
+        run: script/bootstrap gh xcodegen
 
       - name: Build
         run: script/build
 
-      - name: Zip
-        run: script/zip
-
       - name: Sign and notarise
+        id: package
         # Human dry runs test the credentials too. Dependabot cannot
         # read Actions secrets, while a release must fail without them.
         if: github.event_name == 'workflow_dispatch' || github.actor != 'dependabot[bot]'
@@ -135,6 +129,10 @@ jobs:
           NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
           NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
         run: script/package
+
+      - name: Zip
+        if: steps.package.outcome == 'skipped'
+        run: script/zip
 
       - name: Upload the app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

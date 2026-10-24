@@ -26,7 +26,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878 # 2026.10.19.1
@@ -34,19 +33,19 @@ jobs:
           core: false
           cask: false
 
-      - name: Bootstrap
-        run: script/bootstrap
+      - name: Install style tools
+        run: brew install actionlint shellcheck shfmt swiftformat swiftlint zizmor
 
       - name: Check style
         run: script/style
 
-  tests:
+  build-and-test:
     runs-on: xcode-27
     timeout-minutes: 30
-    env:
-      # Forks and Dependabot have no secrets. Check only the certificate
-      # so script/package fails if the remaining credentials are missing.
-      HAS_SIGNING_SECRETS: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [thread, address]
     steps:
       - name: Set up Git repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,34 +69,101 @@ jobs:
           sudo xcode-select -s "${xcode}/Contents/Developer"
           xcodebuild -version
 
-      - name: Download Metal toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
+      - name: Ensure Metal toolchain
+        run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
 
       - name: Cache Swift package dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/Library/Caches/org.swift.swiftpm
-            .DerivedData/SourcePackages
-            .build/checkouts
-            .build/repositories
-          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
-          restore-keys: ${{ runner.os }}-swiftpm-
+          path: ~/Library/Caches/org.swift.swiftpm/repositories
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-repositories-
+
+      - name: Bootstrap tests
+        run: script/bootstrap gh herdr ripgrep swiftlint xcodegen
+
+      - name: Test with Thread Sanitizer
+        if: matrix.task == 'thread'
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: script/test --sanitize thread --scratch-path .build/thread-sanitizer
+
+      - name: Test terminal and parser integrations with Address Sanitizer
+        if: matrix.task == 'address'
+        env:
+          ASAN_OPTIONS: halt_on_error=1
+        run: script/test --sanitize address --scratch-path .build/address-sanitizer --test-product TerminalUITests
+
+  # Keep the required check's name stable and reject failed or skipped jobs.
+  tests:
+    if: always()
+    needs: [build-and-test, analyze]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check builds and sanitizers
+        env:
+          RESULT: ${{ needs.build-and-test.result }}
+          ANALYSIS_RESULT: ${{ needs.analyze.result }}
+        run: test "${RESULT}" = success && test "${ANALYSIS_RESULT}" = success
+
+  analyze:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      # Forks and Dependabot have no secrets. Check only the certificate
+      # so script/package fails if the remaining credentials are missing.
+      HAS_SIGNING_SECRETS: ${{ secrets.DEVELOPER_ID_APPLICATION_CERTIFICATE != '' }}
+      XCODE_CONFIGURATION: Release
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878 # 2026.10.19.1
+        with:
+          core: false
+          cask: false
+
+      - name: Select Xcode 27
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::Xcode 27 is not installed on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ensure Metal toolchain
+        run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Cache Swift package dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm/repositories
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-repositories-
 
       - name: Bootstrap
-        run: script/bootstrap
+        run: script/bootstrap periphery ripgrep swiftlint xcodegen
 
-      - name: Build
+      - name: Build and analyze both apps
+        env:
+          AGENTIDE_ANALYZE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          test -n "${AGENTIDE_ANALYZE_BASE}"
+          script/analyze
+
+      # Reuse analysis's clean Release build when finishing the signed app.
+      - name: Finish app build
         run: script/build
 
-      - name: Build iPhone app
-        run: >-
-          xcodebuild -project AgentIDE.xcodeproj -scheme AgentIDE-iOS
-          -configuration Release -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath .DerivedData-iOS -skipPackagePluginValidation
-          -disableAutomaticPackageResolution ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
-
       - name: Zip
+        if: env.HAS_SIGNING_SECRETS != 'true'
         run: script/zip
 
       - name: Sign and notarise
@@ -118,67 +184,6 @@ jobs:
           # The zip lives in a hidden directory, skipped by default.
           include-hidden-files: true
           if-no-files-found: error
+          compression-level: 0
 
-      - name: Test with Thread Sanitizer
-        env:
-          TSAN_OPTIONS: halt_on_error=1
-        run: script/test --sanitize thread --scratch-path .build/thread-sanitizer
-
-      - name: Test terminal and parser integrations with Address Sanitizer
-        env:
-          ASAN_OPTIONS: halt_on_error=1
-        run: script/test --sanitize address --scratch-path .build/address-sanitizer --test-product TerminalUITests
-
-  analyze:
-    runs-on: xcode-27
-    timeout-minutes: 30
-    steps:
-      - name: Set up Git repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878 # 2026.10.19.1
-        with:
-          core: false
-          cask: false
-
-      - name: Select Xcode 27
-        run: |
-          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
-          if [[ -z "${xcode}" ]]; then
-            echo "::error::Xcode 27 is not installed on this runner image."
-            exit 1
-          fi
-          sudo xcode-select -s "${xcode}/Contents/Developer"
-          xcodebuild -version
-
-      - name: Download Metal toolchain
-        run: xcodebuild -downloadComponent MetalToolchain
-
-      - name: Cache Swift package dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/Library/Caches/org.swift.swiftpm
-            .DerivedData/SourcePackages
-            .build/checkouts
-            .build/repositories
-          key: ${{ runner.os }}-swiftpm-${{ hashFiles('Package.resolved') }}
-          restore-keys: ${{ runner.os }}-swiftpm-
-
-      - name: Bootstrap
-        run: script/bootstrap
-
-      - name: Analyze
-        run: script/analyze
-
-# `style`, `tests` and `analyze` always run, so they are the required
-# checks in branch protection directly. If any job ever becomes
-# conditionally skipped (a job-level `if:`, a path filter, or a
-# matrix), add back an aggregating `check` job with `if: always()`
-# that fails unless every `needs` job succeeded and require that
-# instead: branch protection handles a skipped required-by-name check
-# poorly.
+# `style`, `tests` and `analyze` remain the required checks.
