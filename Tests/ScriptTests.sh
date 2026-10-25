@@ -1,5 +1,5 @@
 #!/bin/bash
-# Exercise build configuration and failures without touching the installed app.
+# Exercise development scripts without touching the installed app.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -7,6 +7,54 @@ mkdir -p .test-scratch
 scratch="$(mktemp -d "${PWD}/.test-scratch/scripts.XXXXXX")"
 trap 'rm -rf "${scratch}"' EXIT
 mkdir -p "${scratch}/script" "${scratch}/bin" "${scratch}/AgentIDE.xcodeproj"
+
+sed 's/families=(shell github_actions docs swift)/families=(docs)/' script/style >"${scratch}/script/style"
+touch "${scratch}/AGENTS.md"
+ln -s AGENTS.md "${scratch}/CLAUDE.md"
+markers=('-' '*' '+')
+for heading in 'Features' '✨ Features'; do
+  for count in 0 9 10 11; do
+    {
+      printf '%s\n' '## Requirements' '- Prerequisite' "## ${heading}"
+      for ((feature = 0; feature < count; feature++)); do
+        printf '%s Feature\n' "${markers[feature % 3]}"
+      done
+      printf '%s\n' '## Configuration' '- Setting'
+    } >"${scratch}/README.md"
+    result=0
+    bash "${scratch}/script/style" >"${scratch}/style.log" 2>&1 || result=$?
+    if [[ "${result}" -ne $((count > 10)) ]]; then
+      cat "${scratch}/style.log"
+      echo "README style check returned ${result} for ${count} bullets under ${heading}" >&2
+      exit 1
+    fi
+    if [[ "${count}" -gt 10 ]]; then
+      grep -q 'README.md:.*Features must contain at most 10 bullets' "${scratch}/style.log"
+    fi
+  done
+done
+for count in 179 180 181; do
+  for wrapped in 0 1; do
+    awk -v count="${count}" -v wrapped="${wrapped}" 'BEGIN {
+      for (line = 0; line < count; line++) {
+        printf "%-72s%s", "README text.", wrapped ? "\n" : ""
+      }
+      if (!wrapped) print ""
+    }' >"${scratch}/README.md"
+    result=0
+    bash "${scratch}/script/style" >"${scratch}/style.log" 2>&1 || result=$?
+    if [[ "${result}" -ne $((count > 180)) ]]; then
+      cat "${scratch}/style.log"
+      echo "README style check returned ${result} for ${count} wrapped lines (wrapped=${wrapped})" >&2
+      exit 1
+    fi
+    if [[ "${count}" -gt 180 ]]; then
+      grep -q 'README.md: 181 lines when wrapped at 72 columns (maximum 180)' "${scratch}/style.log"
+    fi
+  done
+done
+echo 'README style tests passed'
+
 printf '{"pins": [], "version": 3}\n' >"${scratch}/Package.resolved"
 cp script/bootstrap script/build script/install script/package script/analyze script/test script/project "${scratch}/script/"
 cat >"${scratch}/script/version" <<'VERSION'
