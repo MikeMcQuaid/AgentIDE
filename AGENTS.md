@@ -7,9 +7,13 @@ This repository is readme-driven: documentation leads, code follows.
 
 Keep `README.md` focused on capabilities users care about, with one
 concise sentence per feature and one sentence per Settings pane.
+Limit Features to at most ten bullets, enforced by `script/style`.
+The whole README is capped at 180 lines after wrapping its Markdown
+source to 72 columns, including blank lines, without changing the file.
 Keep it slim: add only actual new features, never bug-fix notes or
 regression histories.
 In `README.md`, put each sentence on its own line without wrapping.
+Keep user setup instructions in `README.md`.
 Describe user benefits there; keep implementation details and regression
 histories in `ARCHITECTURE.md` or the relevant platform notes.
 

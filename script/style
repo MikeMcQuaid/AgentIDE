@@ -41,6 +41,21 @@ docs_style() {
   # the run before.
   awk 'length > 72 { print FILENAME ":" FNR ": longer than 72 characters"; failed = 1 } END { exit failed }' \
     AGENTS.md || return 1
+  awk '
+    /^##[[:space:]]/ { features = /[[:space:]]Features[[:space:]]*$/ }
+    features && /^[[:space:]]*[-*+][[:space:]]/ && ++count > 10 {
+      print FILENAME ":" FNR ": Features must contain at most 10 bullets"
+      exit 1
+    }
+  ' README.md || return 1
+  fold -s -w 72 README.md | awk '
+    END {
+      if (NR > 180) {
+        print "README.md: " NR " lines when wrapped at 72 columns (maximum 180)"
+        exit 1
+      }
+    }
+  ' || return 1
   if [[ "$(readlink CLAUDE.md)" != "AGENTS.md" ]]; then
     echo "CLAUDE.md must be a symlink to AGENTS.md" >&2
     return 1

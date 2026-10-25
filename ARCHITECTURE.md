@@ -1988,33 +1988,9 @@ until the user chooses Connect. Host-key messages take precedence over
 the generic disconnected page. A failed connection does not enable
 automatic reconnection on the next visit.
 
-Sessions are reachable over SSH as the sandbox user.
-Two things are particular to sandvault and herdr, and
-`sshd` is otherwise hardened however you would harden it:
-
-1. Copy the public key from iPhone Settings to the Mac's clipboard,
-   for example with Universal Clipboard, and save it before installing.
-   The sandbox user's home is built from a template sandvault owns, so
-   the client's key goes into that template and the home is rebuilt. A
-   sandvault upgrade replaces the template, so keep this in your
-   dotfiles if it must stay automatic:
-
-   ```bash
-   printf '%s\n' "$(pbpaste)" >"${HOME}/Downloads/agentide-phone.pub"
-   guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
-   cat "${HOME}/Downloads/agentide-phone.pub" >>"${guest_keys}"
-   sv --rebuild build
-   ```
-
-2. `agentide new` needs the shared workspace named, which a login from
-   outside the sandbox does not inherit, in
-   `/etc/ssh/sshd_config.d/000-agentide.conf` with your own user name
-   and path, then Remote Login on for that account:
-
-   ```text
-   Match User sandvault-mike
-       SetEnv SHARED_WORKSPACE=/Users/Shared/sv-mike
-   ```
+Sessions are reachable over SSH as the sandbox user; the
+[iPhone setup instructions](README.md#-iphone-companion) cover building,
+installing the public key, naming the shared workspace and connecting.
 
 Aliasing the command in the sandbox user's shell configuration also
 names the session:
@@ -2137,6 +2113,10 @@ match their fixed format strings. Xcode enables compiler, linker and
 supported Clang analyser diagnostics, runs the analyser during builds
 and fails on its findings. Dependencies keep their own compiler settings.
 Style checks fail when any step fails, including a missing tool.
+`script/style` limits README's Features section to ten bullets and its
+whole Markdown source to 180 lines after `fold -s -w 72`, including blank
+lines, locally and in CI. The file keeps one sentence per line; wrapping
+is only for counting. Implementation details belong here.
 After applying fixes, both Swift linters check the resulting files.
 Workflow linting uses zizmor's strict collection, so an unreadable or
 invalid workflow cannot silently escape the checks.
