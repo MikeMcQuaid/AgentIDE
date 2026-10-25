@@ -20,6 +20,8 @@ on:
       - script/bootstrap
       - script/build
       - script/package
+      - script/testflight
+      - iOSApp/PrivacyInfo.xcprivacy
       - script/project
       - script/version
       - script/zip
@@ -189,7 +191,7 @@ jobs:
 
   release:
     if: github.event_name == 'workflow_dispatch'
-    needs: [build, smoke-test]
+    needs: [build, smoke-test, testflight]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -216,3 +218,62 @@ jobs:
           git push origin "refs/tags/${VERSION}"
           gh release create "${VERSION}" --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes \
             ".build/AgentIDE-${VERSION}.zip"
+
+  testflight:
+    name: TestFlight (iPhone)
+    if: github.actor != 'dependabot[bot]'
+    needs: [build, smoke-test]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878 # 2026.10.19.1
+        with:
+          core: false
+          cask: false
+
+      - name: Select Xcode 27
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          if [[ -z "${xcode}" ]]; then
+            echo "::error::Xcode 27 is not installed on this runner image."
+            exit 1
+          fi
+          sudo xcode-select -s "${xcode}/Contents/Developer"
+          xcodebuild -version
+
+      - name: Ensure Metal toolchain
+        run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
+
+      - name: Cache Swift package dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm/repositories
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-swiftpm-repositories-
+
+      - name: Bootstrap
+        run: script/bootstrap xcodegen
+
+      - name: Archive, sign and validate or upload
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+          APP_STORE_KEY: ${{ secrets.NOTARIZATION_KEY }}
+          APP_STORE_KEY_ID: ${{ secrets.NOTARIZATION_KEY_ID }}
+          APP_STORE_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
+          APP_STORE_CERTIFICATES: ${{ secrets.APP_STORE_CERTIFICATES }}
+          APP_STORE_CERTIFICATES_PASSWORD: ${{ secrets.APP_STORE_CERTIFICATES_PASSWORD }}
+          APP_STORE_IOS_PROFILE: ${{ secrets.AGENTIDE_APP_STORE_IOS_PROFILE }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
+            script/testflight --dry-run
+          else
+            script/testflight
+          fi

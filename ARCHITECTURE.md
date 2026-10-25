@@ -2292,19 +2292,65 @@ ARM64 `macos-26` and `xcode-27` images. Each job checks the actual OS and
 architecture and fails if the app exits within ten seconds. This
 catches startup crashes and linking failures without needing Xcode 27
 on Tahoe; it does not exercise sessions or UI interactions. Only after
-both checks pass does a separate publishing job automatically recreate
-the tag at the original commit, push it and create a release with
-generated notes and that exact zip attached.
+both checks pass and the TestFlight upload succeeds does a separate
+publishing job automatically recreate the tag at the original commit,
+push it and create a release with generated notes and that exact zip
+attached.
 
-A push that touches the workflow, packaging scripts or metadata uses
-`9999.0.0` as a reserved local-only version and repeats the build,
+A push that touches release or signing inputs uses `9999.0.0` as a
+reserved local-only version and repeats the build,
 signing, notarisation and startup checks as a dry run, uploading the
 test artefact but pushing no tag or release. Dependabot cannot read
-Actions secrets, so its dry runs skip signing and notarisation.
+Actions secrets, so its dry runs skip signing, notarisation and
+TestFlight validation.
 Nothing here bumps the cask: the `agentide` cask in
 Homebrew/homebrew-cask is open source and Homebrew's own autobump reads
 each release through `brew livecheck` and opens the pull request
 itself, so the release needs no GitHub token of its own.
+
+#### iPhone TestFlight
+
+Before pushing the GitHub tag or publishing release binaries, the
+workflow archives the `AgentIDE-iOS` scheme in Release and uploads it
+to App Store Connect.
+Human push dry runs run the same archive with distribution signing,
+export a signed IPA and call `altool --validate-app` using the same API
+key. They do not upload a TestFlight build. The job runs despite the
+publishing job being skipped on pushes, and missing credentials or
+failed validation fail the workflow. Dependabot skips it.
+
+`script/testflight [--dry-run]` imports `APP_STORE_CERTIFICATES`, the
+base64 of an `Apple-Distribution.p12` export including its private key,
+using `APP_STORE_CERTIFICATES_PASSWORD`. Both can be shared with other
+apps on the same team. GitHub's `AGENTIDE_APP_STORE_IOS_PROFILE`
+supplies the base64 App Store Connect distribution profile as
+`APP_STORE_IOS_PROFILE`. It must match `com.mikemcquaid.AgentIDE` and
+the exported certificate; there is no Watch app or Watch profile. The
+script reads the Team ID from the profile, uses a temporary keychain and
+restores the keychain search list while removing its temporary
+credentials and profile on exit. If the original keychain search list
+cannot be read, it stops before changing keychains. Credentials and
+signed iPhone products are never cached.
+
+Upload and validation reuse the existing `NOTARIZATION_KEY`,
+`NOTARIZATION_KEY_ID` and `NOTARIZATION_ISSUER_ID` secrets, passed as
+`APP_STORE_KEY`, `APP_STORE_KEY_ID` and `APP_STORE_ISSUER_ID`. The team
+API key needs Developer, App Manager or Admin access. The app must
+already have an iOS record in App Store Connect. The release version and
+`run_number.run_attempt` build number are passed explicitly, so retrying
+failed jobs uses a new build number. Failed uploads prevent the GitHub
+tag and release from being published; use **Re-run failed jobs**, not
+another dispatch of its version.
+
+The phone app implements SSH using SwiftNIO SSH and swift-crypto, so
+complete Apple's encryption questions for its actual use before making
+a build available to testers. No non-exempt encryption declaration is
+assumed by the build. Apple's processing, internal tester groups and
+external beta review remain in App Store Connect. Internal groups can
+automatically distribute future builds; each TestFlight build expires
+after 90 days. The workflow does not publish a public App Store release
+or restrict builds to internal-only testing. Public iOS distribution
+can use the same bundle ID and signing setup later.
 
 The release contract is also the cask contract: the tag is the bare
 version, the zip is `AgentIDE-<version>.zip` and the app's
