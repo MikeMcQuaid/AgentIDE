@@ -437,3 +437,5 @@ for sanitizer in address thread; do
   done
 done
 echo 'Analysis and sanitizer script tests passed'
+
+bash Tests/TestFlightTests.sh

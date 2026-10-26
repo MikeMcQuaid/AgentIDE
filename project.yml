@@ -75,6 +75,9 @@ targets:
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         SWIFT_STRICT_CONCURRENCY: complete
         CODE_SIGN_STYLE: Automatic
+      configs:
+        Release:
+          PROVISIONING_PROFILE_SPECIFIER: $(IOS_PROFILE_UUID)
   AgentIDEApp:
     type: application
     platform: macOS

@@ -43,16 +43,9 @@ Bring your own agent CLI and sandboxed non-admin user; no marketplace, bundled m
 brew install --cask agentide
 ```
 
-Releases are signed and notarised; update with `brew upgrade`.
+Update with `brew upgrade`, or unzip a signed [release](https://github.com/MikeMcQuaid/AgentIDE/releases) into /Applications.
 
-Or download a [release](https://github.com/MikeMcQuaid/AgentIDE/releases), unzip it and move `AgentIDE.app` to /Applications.
-
-To run the current source instead:
-
-```bash
-script/bootstrap
-script/install
-```
+To run the current source, use `script/bootstrap` then `script/install`.
 
 ## ⚙️ Configuration
 
@@ -79,12 +72,8 @@ fi
 
 ## 🛠️ Development
 
-- `script/build`: build Release, or Debug with `XCODE_CONFIGURATION=Debug`.
-- `script/test [--sanitize address|thread]`: run tests.
-- `script/style [--fix]`: lint code, workflows and documentation.
-- `script/analyze`: check static analysis and dead code.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md#dependencies-and-toolchain) for development details and the [release process](ARCHITECTURE.md#releases) for publishing.
+Use `script/build`, `script/test`, `script/style --fix` and `script/analyze` for [development](ARCHITECTURE.md#dependencies-and-toolchain).
+See the [release process](ARCHITECTURE.md#releases) for publishing.
 
 ## 📱 iPhone companion
 
@@ -115,6 +104,14 @@ Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Ma
    Use port `22` unless changed and select `agentide` for the installed app or `agentide-dev` for development.
    Choose **Connect** and verify the host key against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on your Mac.
    A changed key must be explicitly replaced in Settings.
+
+### TestFlight releases
+
+Create an iOS record and App Store Connect profile for `com.mikemcquaid.AgentIDE` with your Apple Distribution certificate.
+Base64-encode it as secret `AGENTIDE_APP_STORE_IOS_PROFILE`; reuse `APP_STORE_CERTIFICATES`, `APP_STORE_CERTIFICATES_PASSWORD` and `NOTARIZATION_*`.
+Push a change to `script/testflight` or another Release `push.paths` input for a dry run.
+Once it passes, merge and run **Release** on `main` with a new version.
+After Apple's checks, join an internal TestFlight group.
 
 ## 🚧 Status
 
