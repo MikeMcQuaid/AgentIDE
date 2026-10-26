@@ -20,7 +20,7 @@ AgentIDE replaces all four with one app designed around the same workflow.
 - Reviews syntax-highlighted diffs with inline comments and AI feedback from another agent, Copilot or CodeRabbit.
 - Runs review and autofix loops for local findings, GitHub feedback and failing CI, with automatic pushing off by default.
 - Edits code with syntax highlighting, search and change tracking alongside multiple shell tabs per worktree.
-- Commits, signs and publishes changes as pull requests, with stacked branches, automerge and cleanup after merging.
+- Commits changes and opens pull requests with rebasing, signing and pushing as needed, plus stacks, automerge and merge cleanup.
 - Starts and steers work through Shortcuts, Siri and an [iPhone companion](#-iphone-companion).
 
 ## 🚫 Out of Scope

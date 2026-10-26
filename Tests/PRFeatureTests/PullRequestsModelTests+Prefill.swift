@@ -6,7 +6,7 @@ import Testing
 extension PullRequestsModelTests {
     @Test(arguments: ["untouched", "whitespace", "title", "body", "cleared"])
     func `revisiting an unopened entry refreshes only unedited commit defaults`(edit: String) async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 1, path: "/worktrees/prefill-" + edit)])
+        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
         model.stacking.facts = { _ in
             StackFacts(stack: BranchStack(base: "main", branches: ["lower", "feature"], checkedOut: "feature"))
         }

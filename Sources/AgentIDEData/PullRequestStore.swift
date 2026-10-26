@@ -139,9 +139,11 @@ public struct PullRequestStore: Sendable {
                 number: number,
                 requiredChecks: requiredChecksReader(repositoryPath: repositoryPath),
             )
-            guard fetched != nil else {
+            guard let summary = fetched else {
                 return store.load().enrichedSummaryCache[key]?.summary
             }
+
+            fetched = await withStateChange(summary, previous: cached, repositoryPath: repositoryPath)
 
             store.update { metadata in
                 fetched = fetched.map { Self.painted($0, repositoryPath: repositoryPath, in: &metadata) }
@@ -203,7 +205,7 @@ public struct PullRequestStore: Sendable {
         // allow under the floor while something is queued.
         let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
         var answers = [String: Set<Int>]()
-        for path in repositoryPaths where due.contains(path) == false {
+        for path in repositoryPaths {
             answers[path] = Set(queued[path] ?? [])
         }
         guard due.isEmpty == false else {
@@ -223,6 +225,12 @@ public struct PullRequestStore: Sendable {
         }
         for (path, numbers) in fetched {
             answers[path] = numbers
+            for summary in cachedQueueSummaries(repositoryPath: path)
+                where Set(queued[path] ?? []).symmetricDifference(numbers).contains(summary.number)
+            {
+                invalidateBranch(repositoryPath: path, branch: summary.headBranch)
+                store.update { $0.fetchedAt[Self.summaryKey(repositoryPath: path, number: summary.number)] = nil }
+            }
         }
         return answers
     }

@@ -44,8 +44,4 @@ struct StackWork {
     /// Restacks the worktree, given the busy worktrees to leave alone.
     var restack: (Worktree, Set<String>) async throws -> [String] = { _, _ in [] }
     var push: (Worktree) async throws -> [String] = { _ in [] }
-
-    var needsRestack: Bool {
-        outOfPlaceBranches.isEmpty == false
-    }
 }

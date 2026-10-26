@@ -64,12 +64,25 @@ key="${scratch}/notarization.p8"
 (umask 077 && printf '%s\n' "${NOTARIZATION_KEY}" >"${key}")
 credentials=(--key "${key}" --key-id "${NOTARIZATION_KEY_ID}" --issuer "${NOTARIZATION_ISSUER_ID}")
 result="${scratch}/notarization.plist"
-xcrun notarytool submit "${zip}" "${credentials[@]}" --wait --timeout 30m \
-  --output-format plist >"${result}"
+xcrun notarytool submit "${zip}" "${credentials[@]}" --no-wait --output-format plist >"${result}"
+submission="$(/usr/libexec/PlistBuddy -c 'Print id' "${result}")"
+for attempt in 1 2 3; do
+  if xcrun notarytool wait "${submission}" "${credentials[@]}" --timeout 10m --output-format plist >"${result}"; then
+    break
+  fi
+  status="$(/usr/libexec/PlistBuddy -c 'Print status' "${result}" 2>/dev/null || true)"
+  [[ "${status}" != Invalid && "${status}" != Rejected ]] || break
+  if [[ "${attempt}" == 3 ]]; then
+    echo "Notarisation wait failed for submission ${submission} after three attempts" >&2
+    exit 1
+  fi
+  echo "Notarisation wait interrupted; retrying submission ${submission}" >&2
+  sleep "$((attempt * 5))"
+done
 status="$(/usr/libexec/PlistBuddy -c 'Print status' "${result}")"
 if [[ "${status}" != "Accepted" ]]; then
   echo "Notarisation ${status}:" >&2
-  xcrun notarytool log "$(/usr/libexec/PlistBuddy -c 'Print id' "${result}")" "${credentials[@]}" >&2
+  xcrun notarytool log "${submission}" "${credentials[@]}" >&2
   exit 1
 fi
 xcrun stapler staple "${app}"

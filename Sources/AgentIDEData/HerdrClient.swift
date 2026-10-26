@@ -29,6 +29,9 @@ public struct HerdrPane: Sendable {
 
     /// The pane's current working directory.
     public let currentPath: String
+
+    /// First observation of a changed state, absent on the initial listing.
+    public var stateChangedAt: Date?
 }
 
 // MARK: - PaneConfirmations

@@ -17,12 +17,12 @@ extension PullRequestsModel {
         defer { isBranchActionRunning = false }
         // What it is about to do, before doing it moves the stack
         // and leaves nothing to read it from.
-        let onlySigns = stacking.needsRestack == false
+        let onlySigns = needsStackRebase == false
         do {
             let (moved, pushed) = try await restackUntilSigned(worktree)
             // Done means Push agrees; reporting success with the
             // stack still unsigned took a second press to notice.
-            if let unsigned = stacking.unsignedBranches.first {
+            if let unsigned = unsignedStackBranches.first {
                 report("Restacked twice, but `" + unsigned + "`'s tip still reads unsigned; "
                     + "check the signing key")
                 return false
@@ -64,11 +64,11 @@ extension PullRequestsModel {
         let shouldPush = unpushedBelow == nil
         var (moved, pushed) = try await restackAndPush(worktree, shouldPush: shouldPush)
         await readStack()
-        if stacking.unsignedBranches.isEmpty == false {
+        if unsignedStackBranches.isEmpty == false {
             try? await Task.sleep(for: .milliseconds(Self.signatureSettleMilliseconds))
             await readStack()
         }
-        if stacking.unsignedBranches.isEmpty == false {
+        if unsignedStackBranches.isEmpty == false {
             let again = try await restackAndPush(worktree, shouldPush: shouldPush)
             moved += again.moved.filter { moved.contains($0) == false }
             pushed += again.pushed.filter { pushed.contains($0) == false }

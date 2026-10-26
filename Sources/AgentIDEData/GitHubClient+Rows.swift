@@ -33,6 +33,7 @@ extension GitHubClient {
         let isDraft: Bool?
         let autoMergeRequest: AutoMergeRow?
         let closedAt: Date?
+        let updatedAt: Date?
         // Absent from the JSON when a pull request has no checks.
         // swiftlint:disable:next discouraged_optional_collection
         let statusCheckRollup: [CheckRow]?

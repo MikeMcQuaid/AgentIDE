@@ -104,7 +104,8 @@ extension PullRequestsModel {
     /// otherwise never be pushed, since Push waits for the signature
     /// only this can give it.
     var canRebase: Bool {
-        branchItem != nil && isBranchActionRunning == false && rebaseNeed != SessionService.RebaseNeed.nothing
+        branchItem != nil && isBranchActionRunning == false && queuedBranchBlocker == nil
+            && rebaseNeed != SessionService.RebaseNeed.nothing
     }
 
     func rebaseSigned() async -> Bool {
@@ -299,26 +300,12 @@ extension PullRequestsModel {
         // One branch action at a time: a push pressed while a rebase
         // still runs failed against the branch mid-move.
         guard branchItem != nil, isBranchActionRunning == false, isGuardedDefaultBranch == false,
-              isPushed == false, tipSignature == .signed
+              isPushed == false, tipSignature == .signed, queuedBranchBlocker == nil
         else {
             return false
         }
 
         return hasUnpushedCommits
-    }
-
-    /// Whether the entry in view is the repository's own default
-    /// branch.
-    var isDefaultBranch: Bool {
-        listedBranch != nil && listedBranch == defaultBranch
-    }
-
-    /// Whether the entry in view is a default branch that refuses a
-    /// push: one GitHub protects, or wants a pull request or passing
-    /// checks on, which is most shared repositories. A repository of
-    /// your own with none of that takes the push, and Push runs.
-    var isGuardedDefaultBranch: Bool {
-        isDefaultBranch && acceptsDefaultPushes == false
     }
 
     /// Whether the listed branch has commits the remote lacks: the
@@ -336,6 +323,9 @@ extension PullRequestsModel {
     /// with nothing to push that is the whole story, and signing
     /// only matters once commits are waiting.
     var pushHelp: String {
+        if let queuedBranchBlocker {
+            return queuedBranchBlocker
+        }
         if isInStack {
             return pushStackHelp
         }

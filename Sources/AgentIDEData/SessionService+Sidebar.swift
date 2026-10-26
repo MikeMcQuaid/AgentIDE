@@ -42,6 +42,7 @@ public extension SessionService {
             }
         let activity = spool.activity()
         let metadata = store.load()
+        let reading = SidebarReading(panes: panes, activity: activity, metadata: metadata)
         let keptByPath = Dictionary(kept.map { ($0.repository.path, $0) }) { first, _ in first }
         // Every repository is read at once, and every worktree within
         // one at once: each is a handful of git processes that share
@@ -54,7 +55,7 @@ public extension SessionService {
                 // the live session state, which is a pane listing
                 // already in hand, brought up to date.
                 if scope.includes(repository.path) == false, let previous = keptByPath[repository.path] {
-                    tasks.addTask { (index, Self.refreshingSessions(of: previous, panes: panes)) }
+                    tasks.addTask { (index, refreshingSessions(of: previous, reading: reading)) }
                     continue
                 }
                 tasks.addTask {
@@ -166,7 +167,7 @@ public extension SessionService {
         }
 
         lastPanes.remember(panes)
-        return panes
+        return lastPanes.last()
     }
 
     /// The repository's own checkout as a worktree: its branch is
@@ -185,23 +186,10 @@ public extension SessionService {
     /// A kept group with each row's session re-read from the pane
     /// listing: what runs where can change between full readings,
     /// and the listing is free.
-    private static func refreshingSessions(of group: RepositoryGroup, panes: [HerdrPane]) -> RepositoryGroup {
+    private func refreshingSessions(of group: RepositoryGroup, reading: SidebarReading) -> RepositoryGroup {
         var refreshed = group
         refreshed.items = group.items.map { item in
-            let pane = panes.first { pane in
-                SessionName.isAgentIDE(pane.sessionName)
-                    && (pane.sessionName == item.session?.name || pane.currentPath == item.worktree.path)
-            }
-            return item.with(session: pane.map { pane in
-                AgentSession(
-                    name: pane.sessionName,
-                    agent: item.session?.agent ?? .claudeCode,
-                    status: pane.isFinished ? .finished : .running,
-                    paneID: pane.paneID,
-                    activity: pane.activity,
-                    version: item.session?.version,
-                )
-            })
+            item.with(session: liveSession(of: item.worktree, reading: reading))
         }
         return refreshed
     }
@@ -345,13 +333,28 @@ public extension SessionService {
                 && (pane.sessionName == recorded || pane.currentPath == worktree.path)
         }
         return pane.map { pane in
-            AgentSession(
+            let agent = agentKind(of: pane.sessionName)
+            var lastActivity = [reading.activity[pane.sessionName], pane.stateChangedAt].compactMap(\.self).max()
+            if let agent {
+                let resumeID = reading.metadata.resumeIDs[pane.sessionName]
+                if let modifiedAt = sessionsInDirectories(of: worktree.path, liveSession: nil)
+                    .filter({ $0.agent == agent && (resumeID == nil || $0.resumeID == resumeID) })
+                    .map(\.modifiedAt)
+                    .max()
+                {
+                    lastActivity = max(
+                        lastActivity ?? .distantPast, Date(timeIntervalSince1970: TimeInterval(modifiedAt)),
+                    )
+                }
+            }
+            return AgentSession(
                 name: pane.sessionName,
-                agent: agentKind(of: pane.sessionName),
+                agent: agent,
                 status: pane.isFinished ? .finished : .running,
                 paneID: pane.paneID,
                 activity: pane.activity,
                 version: reading.metadata.agentVersions[pane.sessionName],
+                lastActivityAt: lastActivity,
             )
         }
     }

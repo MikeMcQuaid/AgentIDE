@@ -30,7 +30,17 @@ final class LastPanes: Sendable {
     /// Records what herdr answered, empty answers included: nothing
     /// running is a fact when the reading itself succeeded.
     func remember(_ panes: [HerdrPane], at moment: Date = Date()) {
-        held.withLock { $0 = Held(panes: panes, answeredAt: moment) }
+        held.withLock { previous in
+            let dated = panes.map { pane in
+                var dated = pane
+                if let old = previous.panes.first(where: { $0.paneID == pane.paneID }) {
+                    dated.stateChangedAt = old.activity == pane.activity && old.isFinished == pane.isFinished
+                        ? old.stateChangedAt : moment
+                }
+                return dated
+            }
+            previous = Held(panes: dated, answeredAt: moment)
+        }
     }
 
     /// What to show for a reading that failed: the last answer while

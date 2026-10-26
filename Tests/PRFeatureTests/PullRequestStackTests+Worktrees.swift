@@ -28,7 +28,7 @@ extension PullRequestStackTests {
         )
         let model = fixtures.makeModel(
             items: [fixtures.item(branch: "middle", ahead: 1), holder],
-            worktreePath: "/worktrees/middle",
+            worktreePath: fixtures.worktreesPath + "/middle",
         )
         model.fetchCurrentBranch = { _ in "middle" }
         model.stacking.facts = { _ in
@@ -67,7 +67,7 @@ extension PullRequestStackTests {
                 fixtures.item(branch: "feature", ahead: 1),
                 fixtures.item(branch: "lower", ahead: 1, session: session),
             ],
-            worktreePath: "/worktrees/feature",
+            worktreePath: fixtures.worktreesPath + "/feature",
         )
         model.stacking.facts = { _ in
             StackFacts(
@@ -80,7 +80,7 @@ extension PullRequestStackTests {
 
         model.stacking.selected = "lower"
         let busy = activity == .working || activity == .blocked
-        #expect(model.busyWorktrees == (busy ? ["/worktrees/lower"] : []))
+        #expect(model.busyWorktrees == (busy ? [fixtures.worktreesPath + "/lower"] : []))
         #expect(model.restackBlocker == (busy ? "`lower`'s agent is busy; rebase once it is idle or done" : nil))
         #expect(model.canRestack == !busy)
         #expect(model.canPushStack == !busy)
@@ -97,7 +97,7 @@ extension PullRequestStackTests {
                 repositoryName: "repo",
                 repositoryPath: "/repo",
                 branch: "lower",
-                path: "/worktrees/lower",
+                path: fixtures.worktreesPath + "/lower",
             ),
             session: nil,
             isDirty: true,
@@ -106,7 +106,7 @@ extension PullRequestStackTests {
         )
         let model = fixtures.makeModel(
             items: [fixtures.item(branch: "feature", ahead: 1), dirty],
-            worktreePath: "/worktrees/feature",
+            worktreePath: fixtures.worktreesPath + "/feature",
         )
         model.stacking.facts = { _ in
             StackFacts(

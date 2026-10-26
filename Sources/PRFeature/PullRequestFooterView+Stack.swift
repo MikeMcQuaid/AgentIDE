@@ -13,13 +13,17 @@ extension PullRequestFooterView {
                 done: model.pushDoneTitle,
             ),
             busy: "Preparing and Pushing",
-            disabled: model.canPublish == false,
+            disabled: model.canPublish == false || model.isOpening,
         ) {
             if await model.publish() == false {
                 utilityTab = UtilityTabTarget.errors
             }
         }
         .hoverHelp(model.publishHelp, shortcut: "⇧⌘P")
+    }
+
+    func openingTitle(_ title: String) -> String {
+        actionTitle(title, arrow: Self.upArrow, count: model.isFullyPushed ? "" : pushCount, active: true, done: nil)
     }
 
     private var pushCount: String {

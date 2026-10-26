@@ -1,9 +1,33 @@
 @testable import AgentIDEData
 import AgentIDEDomain
+import AppKit
 @testable import DashboardFeature
+import Foundation
 import Testing
 
 extension SessionNavigationTests {
+    @Test
+    func `manual repository refresh reloads its required jobs`() async {
+        _ = NSApplication.shared
+        let fixture = Fixture()
+        defer { fixture.close() }
+        let model = fixture.model
+        let path = fixture.repository.path
+        model.store.update { metadata in
+            for repository in [path, path + "-other"] {
+                let key = PullRequestStore.requiredChecksKey(repositoryPath: repository, branch: "main")
+                metadata.requiredChecksCache[key] = ["old-job"]
+                metadata.fetchedAt[key] = Date()
+            }
+        }
+        #expect(await model.pullRequests.requiredChecks(repositoryPath: path, branch: "main") == ["old-job"])
+
+        await model.refreshRepository(path: path)
+
+        #expect(await model.pullRequests.requiredChecks(repositoryPath: path, branch: "main")?.isEmpty == true)
+        #expect(await model.pullRequests.requiredChecks(repositoryPath: path + "-other", branch: "main") == ["old-job"])
+    }
+
     @Test
     func `the sidebar follows a replacement PR and queue changes from the shared store`() async throws {
         let fixture = Fixture()

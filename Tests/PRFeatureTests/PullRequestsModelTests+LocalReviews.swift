@@ -7,7 +7,7 @@ import Testing
 extension PullRequestsModelTests {
     @Test
     func `conversation copies include local findings without enabling autofix`() async {
-        let path = "/worktrees/feature"
+        let path = worktreesPath + "/feature"
         let model = makeModel(items: [item(branch: "feature", ahead: 0)], worktreePath: path)
         let selected = summary(7, head: "feature")
         let local = ReviewThread(

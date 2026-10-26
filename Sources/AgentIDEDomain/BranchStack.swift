@@ -51,6 +51,15 @@ public struct BranchStack: Hashable, Sendable, Codable {
         branches.count > 1
     }
 
+    /// A queued branch and everything beneath it form a fixed base.
+    public func mutableBranches(queued: Set<String>) -> [String] {
+        guard let last = branches.lastIndex(where: queued.contains) else {
+            return branches
+        }
+
+        return Array(branches.dropFirst(last + 1))
+    }
+
     /// Publishes through the selected branch and updates published branches above it.
     public func branchesToPush(through branch: String) -> [String] {
         guard let index = branches.firstIndex(of: branch) else {

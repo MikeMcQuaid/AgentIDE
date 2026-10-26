@@ -26,6 +26,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         unresolvedComments: Int = 0,
         isQueued: Bool = false,
         closedAt: Date? = nil,
+        updatedAt: Date? = nil,
+        stateChangedAt: Date? = nil,
         headCommit: String? = nil,
         awaitsCopilotReview: Bool = false,
         copilotReviewedAt: Date? = nil,
@@ -54,6 +56,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.unresolvedComments = unresolvedComments
         self.isQueued = isQueued
         self.closedAt = closedAt
+        self.updatedAt = updatedAt
+        self.stateChangedAt = stateChangedAt ?? closedAt
         self.headCommit = headCommit
         self.awaitsCopilotReview = awaitsCopilotReview
         self.copilotReviewedAt = copilotReviewedAt
@@ -88,6 +92,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         unresolvedComments = try container.decodeIfPresent(Int.self, forKey: .unresolvedComments) ?? 0
         isQueued = try container.decodeIfPresent(Bool.self, forKey: .isQueued) ?? false
         closedAt = try container.decodeIfPresent(Date.self, forKey: .closedAt)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        stateChangedAt = try container.decodeIfPresent(Date.self, forKey: .stateChangedAt) ?? closedAt
         headCommit = try container.decodeIfPresent(String.self, forKey: .headCommit)
         awaitsCopilotReview = try container.decodeIfPresent(Bool.self, forKey: .awaitsCopilotReview) ?? false
         copilotReviewedAt = try container.decodeIfPresent(Date.self, forKey: .copilotReviewedAt)
@@ -160,6 +166,13 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// branch is a coincidence rather than its work; optional so
     /// summaries cached by earlier releases still decode.
     public let closedAt: Date?
+
+    /// Invalidates the state-event lookup, without making comments
+    /// or reviews themselves compete for the sidebar icon.
+    public let updatedAt: Date?
+
+    /// The last PR state transition, excluding comments, reviews and CI.
+    public var stateChangedAt: Date?
 
     /// The commit GitHub last reported as the head, which is how a
     /// listing fetched after a push is told from one fetched before
@@ -268,6 +281,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             unresolvedComments: unresolvedComments,
             isQueued: isQueued,
             closedAt: closedAt,
+            updatedAt: updatedAt,
+            stateChangedAt: stateChangedAt,
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
             copilotReviewedAt: copilotReviewedAt,
@@ -305,6 +320,8 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             unresolvedComments: unresolvedComments,
             isQueued: isQueued,
             closedAt: closedAt,
+            updatedAt: updatedAt,
+            stateChangedAt: stateChangedAt,
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
             copilotReviewedAt: copilotReviewedAt,

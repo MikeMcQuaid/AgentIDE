@@ -81,6 +81,7 @@ public extension PullRequestStore {
             metadata.fetchedAt = metadata.fetchedAt.filter { entry in
                 entry.key != "labels#" + repositoryPath
                     && entry.key.hasPrefix(Self.requiredChecksKey(repositoryPath: repositoryPath, branch: "")) == false
+                    && entry.key.hasPrefix("summary#" + repositoryPath + "#") == false
             }
         }
     }

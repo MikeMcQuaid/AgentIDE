@@ -161,6 +161,7 @@ public extension SessionService {
     /// signing always happens here on the host.
     @discardableResult
     func rebaseSigned(worktree: Worktree) async throws -> String {
+        try await requireNotQueued(worktree)
         let branch = worktree.branch
         let held = await git.currentBranch(worktreePath: worktree.path)
         if let held, held != branch {

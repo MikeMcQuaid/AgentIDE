@@ -145,7 +145,8 @@ extension PullRequestsModel {
         let threads = metadata.threadsCache[key]?.threads ?? []
         var stamped = summary
         stamped.unresolvedComments = threads.count { $0.isResolved == false }
-        stamped.isQueued = metadata.queuedCache[repository.path]?.contains(summary.number) ?? summary.isQueued
+        stamped.isQueued = summary.state == "OPEN"
+            && (metadata.queuedCache[repository.path]?.contains(summary.number) ?? summary.isQueued)
         return stamped
     }
 
@@ -209,8 +210,7 @@ extension PullRequestsModel {
     }
 
     /// Whether every local commit is already on the remote; Open
-    /// stays dimmed until then, since a pull request opened now
-    /// would not carry what has not gone up. The reading is the
+    /// prepares and pushes the branch first when needed. The reading is the
     /// listed entry's own (a stack's entries each have their own,
     /// and the worktree's count is the checked-out branch's), or
     /// the mark this tab's own push left, which survives a count

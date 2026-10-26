@@ -21,5 +21,7 @@ struct PullRequestSummaryDecodingTests {
         #expect(summary.copilotReviewedAt == nil)
         #expect(summary.stackStanding == nil)
         #expect(summary.checkDetails == nil)
+        #expect(summary.updatedAt == nil)
+        #expect(summary.stateChangedAt == nil)
     }
 }

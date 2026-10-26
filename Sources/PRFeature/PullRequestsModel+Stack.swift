@@ -63,13 +63,13 @@ extension PullRequestsModel {
     /// this button while Push waited on exactly this.
     var canRestack: Bool {
         stack.stackingBlocker == nil && restackBlocker == nil && isBranchActionRunning == false
-            && (stacking.needsRestack || stacking.unsignedBranches.isEmpty == false)
+            && (needsStackRebase || unsignedStackBranches.isEmpty == false)
     }
 
     /// Why a branch held by another worktree cannot be rebased yet:
     /// its agent is busy or it has uncommitted changes.
     var restackBlocker: String? {
-        restackBlocker(in: stack.branches)
+        restackBlocker(in: mutableStackBranches)
     }
 
     private func restackBlocker(in branches: [String]) -> String? {
@@ -112,7 +112,7 @@ extension PullRequestsModel {
     }
 
     private var stackPushBranches: [String] {
-        listedBranch.map { stack.branchesToPush(through: $0) } ?? []
+        (listedBranch.map { stack.branchesToPush(through: $0) } ?? []).filter(mutableStackBranches.contains)
     }
 
     var unpushedStackBranches: [String] {
@@ -329,7 +329,9 @@ extension PullRequestsModel {
 
     /// The first lower branch that must be pushed before this entry.
     var unpushedBelow: String? {
-        stackThroughListed.dropLast().first(where: stacking.unpushedBranches.contains)
+        stackThroughListed.dropLast().first { branch in
+            mutableStackBranches.contains(branch) && stacking.unpushedBranches.contains(branch)
+        }
     }
 
     /// The first lower branch that needs an open pull request.

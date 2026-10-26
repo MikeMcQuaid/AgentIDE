@@ -23,6 +23,7 @@ public extension SessionService {
     /// (a local hook enforces the same), and the combined publish action
     /// signs before pushing.
     func push(worktree: Worktree) async throws -> PushDestination {
+        try await requireNotQueued(worktree)
         if AppSettings.requiresSignedCommits,
            await git.isCommitSigned(worktreePath: worktree.path, ref: worktree.branch) == false
         {

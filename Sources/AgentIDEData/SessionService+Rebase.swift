@@ -39,6 +39,22 @@ final class OverwriteTips: Sendable {
 /// What the rebase button would do and where its rebase lands,
 /// split from the sources file for length.
 public extension SessionService {
+    internal func requireNotQueued(_ worktree: Worktree) async throws {
+        let queued = try await pullRequests.queuedBranches(
+            repositoryPath: worktree.repositoryPath,
+        )
+        guard queued.isEmpty == false else {
+            return
+        }
+
+        let stack = await stack(for: worktree)
+        let fixed = stack.branches.contains(worktree.branch)
+            && stack.mutableBranches(queued: queued).contains(worktree.branch) == false
+        guard queued.contains(worktree.branch) == false, fixed == false else {
+            throw SessionServiceError("`" + worktree.branch + "` is queued or below queued work; wait for it to merge")
+        }
+    }
+
     /// Rebases onto the target; when integrating a remote tip this
     /// branch has never seen conflicts, the remote's version is set
     /// aside instead: the branch rebases onto origin/HEAD as it
@@ -78,6 +94,12 @@ public extension SessionService {
     /// itself fetches first, so a stale answer only mislabels until
     /// the next reload.
     func rebaseNeed(worktree: Worktree) async -> RebaseNeed {
+        guard pullRequests.cachedQueuedBranches(repositoryPath: worktree.repositoryPath)
+            .contains(worktree.branch) == false
+        else {
+            return .nothing
+        }
+
         // The caller's branch, which for a stack is the entry being
         // looked at rather than whichever one the worktree holds.
         let branch = worktree.branch

@@ -3,8 +3,7 @@ import Foundation
 /// The merge queue, which only the queue itself can answer: no `gh
 /// pr` field reports membership. `isInMergeQueue` does not exist and
 /// `mergeStateStatus` has no queued state, so both questions here go
-/// to GraphQL, and a failure answers "not queued" rather than taking
-/// a pull request listing down with it.
+/// to GraphQL, and a failed read leaves the last known membership intact.
 public extension GitHubClient {
     /// Removes a queued pull request; disabling automerge is a separate action.
     func dequeue(repositoryPath: String, number: Int) async throws {
@@ -53,7 +52,7 @@ public extension GitHubClient {
         let byAlias = Self.queuedNumbers(fromAliasedJSON: result?.standardOutput ?? "")
         var queued = [String: Set<Int>]()
         for (alias, path) in aliases {
-            queued[path] = byAlias[alias] ?? []
+            queued[path] = byAlias[alias]
         }
         return queued
     }
@@ -69,8 +68,8 @@ extension GitHubClient {
             return [:]
         }
 
-        return decoded.data.mapValues { repository in
-            Set((repository?.mergeQueue?.entries?.nodes ?? []).compactMap(\.pullRequest?.number))
+        return decoded.data.compactMapValues { repository in
+            repository.map { Set(($0.mergeQueue?.entries?.nodes ?? []).compactMap(\.pullRequest?.number)) }
         }
     }
 
@@ -139,7 +138,7 @@ private struct MergeQueue: Decodable {
 
 private struct QueueEntries: Decodable {
     /// Not optional: an answer missing its nodes fails to decode,
-    /// which reads as nothing queued, exactly as null nodes would.
+    /// which preserves the last known queue membership.
     let nodes: [QueueNode]
 }
 

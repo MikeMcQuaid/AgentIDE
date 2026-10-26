@@ -219,6 +219,7 @@ public extension DashboardModel {
             report("Refreshing pull requests needs the network, and there is no route to the network right now.")
         }
         pullRequests.invalidateListings(repositoryPath: path)
+        pullRequests.forgetRepositorySettings(repositoryPath: path)
         await refresh(forcing: path)
     }
 }

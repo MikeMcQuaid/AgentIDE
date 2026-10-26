@@ -372,7 +372,6 @@ struct PullRequestStoreTests {
         #expect(runner.calls == 4)
         // A refresh forgets them with the rest of the settings.
         store.forgetRepositorySettings(repositoryPath: "/repo")
-        store.invalidate(repositoryPath: "/repo", number: 7)
         _ = try await store.summary(repositoryPath: "/repo", number: 7)
         #expect(runner.calls == 7)
     }

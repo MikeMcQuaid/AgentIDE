@@ -34,7 +34,7 @@ public struct SessionStatusIcon: View {
         switch status {
         case .finished:
             Appearance(
-                symbol: "stop.circle",
+                symbol: "xmark.circle",
                 colour: .secondary,
                 help: "The agent's process exited; the conversation stays resumable",
             )
@@ -49,20 +49,20 @@ public struct SessionStatusIcon: View {
                 )
 
             case .working:
-                Appearance(symbol: "play.circle.fill", colour: .green, help: "The agent is working on its turn")
+                Appearance(symbol: "play.circle.fill", colour: .blue, help: "The agent is working on its turn")
 
             case .done:
                 Appearance(
-                    symbol: "checkmark.circle.fill",
+                    symbol: "stop.circle.fill",
                     colour: .green,
                     help: "The turn is done; the answer is waiting",
                 )
 
             case .idle:
                 Appearance(
-                    symbol: "pause.circle",
+                    symbol: "stop.circle",
                     colour: .secondary,
-                    help: "At rest: nothing asked, or the turn was interrupted",
+                    help: "At rest: nothing asked, interrupted or completed over 24 hours ago without further input",
                 )
 
             case nil:

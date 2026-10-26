@@ -7,6 +7,13 @@ import TerminalUI
 /// so what the form opens is on the row before any poll. Split from
 /// the actions for length.
 extension PullRequestsModel {
+    var canOpenPullRequest: Bool {
+        isOpening == false && isBranchActionRunning == false && isDefaultBranch == false
+            && branchItem != nil && (isInStack == false || stack.stackingBlocker == nil) && unopenedBelow == nil
+            && prTitle.trimmingCharacters(in: .whitespaces).isEmpty == false && templateUnedited == false
+            && (isFullyPushed || canPublish)
+    }
+
     /// Paints the pushed branches' pull requests as awaiting their
     /// checks, in the caches every row and pane read and in what
     /// this tab already holds, so the state shows the moment the
@@ -52,11 +59,11 @@ extension PullRequestsModel {
 
     /// Opens the pull request from the form's title and body, with
     /// the template appended below the body after an empty line;
-    /// false opens the errors surface. The button dims until the
-    /// branch is pushed, so nothing pushes implicitly here.
+    /// false opens the errors surface. Unpublished commits go through
+    /// the shared preparation and push action before creation.
     func createPullRequest() async -> Bool {
-        guard let worktree = listedWorktree else {
-            return false
+        guard isOpening == false, isBranchActionRunning == false, let worktree = listedWorktree else {
+            return true
         }
 
         if let below = unopenedBelow {
@@ -71,11 +78,24 @@ extension PullRequestsModel {
         }
 
         let body = Self.joined(body: prBody, template: prTemplate)
+        let labels = prLabels
+        let isDraft = prIsDraft
         isOpening = true
         defer { isOpening = false }
+        if isFullyPushed == false {
+            guard canPublish else {
+                setStatus("Not opened.", detail: publishHelp)
+                return true
+            }
+            guard await publish() else {
+                return false
+            }
+            guard isFullyPushed else {
+                return true
+            }
+        }
         do {
-            let url = try await performCreate(worktree, title, body, prLabels, prIsDraft)
-            await assignClosingIssues(pullRequestURL: url)
+            let url = try await performCreate(worktree, title, body, labels, isDraft)
             // A stack is built one pull request at a time: each one
             // links what is open into the stack, and failing to link
             // never takes the pull request that opened with it.
@@ -84,41 +104,48 @@ extension PullRequestsModel {
             } catch {
                 report("Stacking on GitHub failed: " + error.localizedDescription)
             }
-            pullRequests.invalidateListings(repositoryPath: repository.path)
-            UtilityTabTarget.requestSidebarRefresh()
-            await reload(keepingSelection: true)
-            // Straight into what was just opened: the listing has it
-            // by number, and its conversation is what the form was
-            // for. Only once it is showing does the form let go of
-            // the text, so nothing blank is ever on screen.
-            // The sidebar reads the same per-branch cache, so what
-            // was just opened is on its row now rather than at the
-            // next poll: GitHub's own answer when the listing has
-            // caught up, otherwise what the form knows.
-            let created = Self.created(
-                url: url,
-                title: title,
-                worktree: worktree,
-                base: defaultBranch,
-                listed: summaries,
-                isDraft: prIsDraft,
-            )
-            if let created {
-                cacheCreated(created, branch: worktree.branch)
-                select(created)
+            await finishOpening(url: url, title: title, worktree: worktree, isDraft: isDraft)
+            Task {
+                await assignClosingIssues(pullRequestURL: url)
             }
-            loadingDraft = true
-            prTitle = ""
-            prLabels = []
-            prBody = ""
-            prTemplate = originalTemplate
-            loadingDraft = false
-            clearDraft()
             return true
         } catch {
             report(error.localizedDescription)
             return false
         }
+    }
+
+    private func finishOpening(url: String, title: String, worktree: Worktree, isDraft: Bool) async {
+        pullRequests.invalidateListings(repositoryPath: repository.path)
+        UtilityTabTarget.requestSidebarRefresh()
+        await reload(keepingSelection: true)
+        // Straight into what was just opened: the listing has it
+        // by number, and its conversation is what the form was
+        // for. Only once it is showing does the form let go of
+        // the text, so nothing blank is ever on screen.
+        // The sidebar reads the same per-branch cache, so what
+        // was just opened is on its row now rather than at the
+        // next poll: GitHub's own answer when the listing has
+        // caught up, otherwise what the form knows.
+        let created = Self.created(
+            url: url,
+            title: title,
+            worktree: worktree,
+            base: defaultBranch,
+            listed: summaries,
+            isDraft: isDraft,
+        )
+        if let created {
+            cacheCreated(created, branch: worktree.branch)
+            select(created)
+        }
+        loadingDraft = true
+        prTitle = ""
+        prLabels = []
+        prBody = ""
+        prTemplate = originalTemplate
+        loadingDraft = false
+        clearDraft()
     }
 
     private func assignClosingIssues(pullRequestURL: String) async {
