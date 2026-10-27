@@ -1,3 +1,5 @@
+import Foundation
+
 // MARK: - AgentActivity
 
 /// What a running agent is doing, as herdr's lifecycle detection
@@ -62,6 +64,8 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         paneID: String? = nil,
         activity: AgentActivity? = nil,
         version: String? = nil,
+        lastActivityAt: Date? = nil,
+        now: Date = Date(),
     ) {
         self.version = version
         self.name = name
@@ -69,6 +73,10 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         self.status = status
         self.paneID = paneID
         self.activity = activity
+        self.lastActivityAt = lastActivityAt
+        sidebarActivity = status == .running && activity == .done
+            && lastActivityAt.map { now.timeIntervalSince($0) > Self.completedTurnLifetime } == true
+            ? .idle : activity
     }
 
     // MARK: Public
@@ -89,6 +97,13 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     /// What the agent is doing right now, when herdr can tell.
     public let activity: AgentActivity?
 
+    /// Completed turns age into idle in the sidebar without changing
+    /// the state used by herdr waits, notifications or automation.
+    public let sidebarActivity: AgentActivity?
+
+    /// The latest agent event, independent of viewing or refreshing it.
+    public let lastActivityAt: Date?
+
     /// The agent CLI version this session started with, when it was
     /// recorded; upgrading the CLI does not change it, which is the
     /// point of showing it.
@@ -98,4 +113,21 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var id: String {
         name
     }
+
+    /// Event recency decides the shared slot; priority breaks ties
+    /// and readings whose clocks are unavailable.
+    public func precedes(_ pullRequest: PullRequestSummary?) -> Bool {
+        guard let pullRequest else {
+            return true
+        }
+
+        if let lastActivityAt, let changedAt = pullRequest.stateChangedAt, lastActivityAt != changedAt {
+            return lastActivityAt > changedAt
+        }
+        return status == .running && sidebarActivity.map { [.blocked, .working, .done].contains($0) } == true
+    }
+
+    // MARK: Private
+
+    private static let completedTurnLifetime: TimeInterval = 86_400
 }

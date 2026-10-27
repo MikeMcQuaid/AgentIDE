@@ -40,6 +40,9 @@ public extension SessionService {
             + checkedOut + (baseRef ?? "") + excluded.sorted().joined(separator: ",")
             + (GitClient.configModified(at: path)?.timeIntervalSinceReferenceDate.description ?? "")
             + "#published-branches" // Invalidate stacks without remote branch state.
+            + "#queued:" + pullRequests.cachedQueuedBranches(repositoryPath: worktree.repositoryPath)
+            .sorted()
+            .joined(separator: ",")
         return StackReading(
             path: path,
             checkedOut: checkedOut,
@@ -226,7 +229,13 @@ public extension SessionService {
         // only worth rebasing onto if the remote is current.
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
         let stack = try await requireStackable(stack(for: worktree))
-        let holders = try await quietHolders(of: stack, in: worktree, busyWorktrees: busyWorktrees)
+        let queued = try await pullRequests.queuedBranches(repositoryPath: worktree.repositoryPath)
+        let branches = stack.mutableBranches(queued: queued)
+        guard branches.isEmpty == false else {
+            return []
+        }
+
+        let holders = try await quietHolders(of: branches, in: worktree, busyWorktrees: busyWorktrees)
         guard let base = await stackBaseRef(in: stack, worktreePath: path) else {
             throw stackError("No default branch to stack on", in: path)
         }
@@ -241,28 +250,22 @@ public extension SessionService {
 
         var moved = [String]()
         do {
-            for branch in stack.branches {
-                let parent = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
+            for branch in branches {
+                let parentBranch = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
+                let parent = await queued.contains(parentBranch)
+                    ? remoteBranchRef(worktreePath: path, branch: parentBranch) : parentBranch
                 // Already on its parent: leave every commit's name
                 // alone rather than rewriting them to say so —
                 // unless its tip is unsigned while signing is
                 // required, since this rebase is the only thing
                 // that can sign it and Push waits on exactly that.
-                if await git.isAncestor(parent, of: branch, worktreePath: path) {
-                    let signed =
-                        if AppSettings.requiresSignedCommits {
-                            await git.isCommitSigned(worktreePath: path, ref: branch)
-                        } else {
-                            true
-                        }
-                    if signed {
-                        continue
-                    }
+                if await stackBranchIsReady(branch, parent: parent, worktreePath: path) {
+                    continue
                 }
                 // Where it forked from, recorded before anything
                 // moved: without it the replay takes the parent's
                 // own commits along a second time.
-                guard let forkedFrom = tips[parent] else {
+                guard let forkedFrom = tips[parentBranch] else {
                     continue
                 }
 

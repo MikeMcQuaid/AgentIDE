@@ -10,22 +10,18 @@ extension SessionService {
     }
 
     func pushStack(worktree: Worktree, stack: BranchStack, pinned: PinnedBranchPush? = nil) async throws -> [String] {
-        if stack.isStacked {
-            try requireStackable(stack)
-        }
-        guard let index = stack.branches.firstIndex(of: worktree.branch) else {
-            throw stackError("The selected branch is no longer in the stack", in: worktree.path)
-        }
-
-        if let pinned, index > 0,
-           await git.isAncestor(stack.branches[index - 1], of: pinned.commit, worktreePath: worktree.path) == false
-        {
-            throw SessionServiceError("The stack's base changed; restack and review before automatic pushing")
-        }
-
+        let queued = try await pullRequests.queuedBranches(repositoryPath: worktree.repositoryPath)
+        let (index, branches) = try await stackPushSelection(
+            worktree: worktree, stack: stack, pinned: pinned, queued: queued,
+        )
         var pushed = [String]()
         var parent: (branch: String, previousTip: String)?
-        for branch in stack.branchesToPush(through: worktree.branch).dropFirst(pinned == nil ? 0 : index) {
+        for branch in branches {
+            if parent == nil, let below = stack.parent(of: branch), queued.contains(below),
+               let tip = await git.tip(of: below, worktreePath: worktree.path)
+            {
+                parent = await (remoteBranchRef(worktreePath: worktree.path, branch: below), tip)
+            }
             let selected = branch == worktree.branch ? pinned : nil
             let remote: String
             let previousTip: String?
@@ -64,5 +60,31 @@ extension SessionService {
             pullRequests.markChecksPending(repositoryPath: worktree.repositoryPath, branches: [branch])
         }
         return pushed
+    }
+
+    private func stackPushSelection(
+        worktree: Worktree, stack: BranchStack, pinned: PinnedBranchPush?, queued: Set<String>,
+    ) async throws -> (Int, [String]) {
+        if stack.isStacked {
+            try requireStackable(stack)
+        }
+        guard let index = stack.branches.firstIndex(of: worktree.branch) else {
+            throw stackError("The selected branch is no longer in the stack", in: worktree.path)
+        }
+
+        let movable = stack.mutableBranches(queued: queued)
+        if pinned != nil, movable.contains(worktree.branch) == false {
+            throw SessionServiceError("The autofix branch is queued or below queued work; wait for it to merge")
+        }
+
+        if let pinned, index > 0,
+           await git.isAncestor(stack.branches[index - 1], of: pinned.commit, worktreePath: worktree.path) == false
+        {
+            throw SessionServiceError("The stack's base changed; restack and review before automatic pushing")
+        }
+
+        return (index, stack.branchesToPush(through: worktree.branch)
+            .dropFirst(pinned == nil ? 0 : index)
+            .filter(movable.contains))
     }
 }

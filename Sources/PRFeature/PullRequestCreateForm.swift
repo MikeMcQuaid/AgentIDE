@@ -162,7 +162,7 @@ struct PullRequestCreateForm: View {
                 Button("Fill template", systemImage: "checklist") { model.tickTemplateBoxes() }
                     .buttonStyle(.glass)
                     .controlSize(.small)
-                    .disabled(isGenerating || model.prTemplate.contains("[ ]") == false)
+                    .disabled(isGenerating || isBlocked || model.prTemplate.contains("[ ]") == false)
                     .hoverHelp(
                         "Tick every unticked checkbox, and where the template asks about AI, name the "
                             + "harness and model that wrote this branch and that you reviewed and tested it",

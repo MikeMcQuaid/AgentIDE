@@ -81,10 +81,6 @@ struct WorktreeRowView: View {
         item.worktree.path == item.worktree.repositoryPath
     }
 
-    /// A worktree with a pull request leads with its state; anything
-    /// else leads with what is running, or with the branch itself,
-    /// green on a repository's own checkout since that branch is
-    /// where merged work lands rather than something to open.
     /// A directory of your own is named by where it is, since its
     /// branch is not why it is listed.
     private var title: String {
@@ -184,6 +180,9 @@ struct WorktreeRowView: View {
         } else if let failure {
             Octicon("exclamationmark.triangle.fill", colour: .red)
                 .hoverHelp("The agent did not start: " + failure.message)
+        } else if let session = item.session, session.precedes(pullRequest) {
+            SessionStatusIcon(status: session.status, activity: session.sidebarActivity)
+                .font(nameStyle.small)
         } else if let pullRequest {
             Octicon(
                 ChecksStyle.stateOcticonName(
@@ -199,15 +198,10 @@ struct WorktreeRowView: View {
             )
             .hoverHelp(stateHelp(for: pullRequest))
         } else {
-            if let session = item.session {
-                SessionStatusIcon(status: session.status, activity: session.activity)
-                    .font(nameStyle.small)
-            } else {
-                Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
-                    .hoverHelp(isMainCheckout
-                        ? "The repository's own checkout, where merged work lands"
-                        : "A worktree with no session running")
-            }
+            Octicon("octicon-git-branch", colour: isMainCheckout ? .green : .secondary)
+                .hoverHelp(isMainCheckout
+                    ? "The repository's own checkout, where merged work lands"
+                    : "A worktree with no session running")
         }
     }
 

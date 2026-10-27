@@ -55,7 +55,7 @@ struct NotificationsSettingsPane: View {
     private func statusIcon(for event: NotificationPreferences.Event) -> some View {
         switch event {
         case .done:
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: "stop.circle.fill")
                 .foregroundStyle(.green)
                 .accessibilityHidden(true)
                 .hoverHelp("The sidebar's turn-done icon")

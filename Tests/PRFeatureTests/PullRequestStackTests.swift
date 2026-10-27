@@ -300,6 +300,10 @@ struct PullRequestStackTests {
         model.stacking.push = { worktree in
             #expect(worktree.branch == "lower")
             done.withLock { $0.append("push") }
+            // Another test selects a branch while this action awaits its refresh.
+            StackSelection.remember(
+                "upper", for: PullRequestsModelTests().item(branch: "feature", ahead: 1).worktree.path,
+            )
             return ["lower"]
         }
         await model.reload()

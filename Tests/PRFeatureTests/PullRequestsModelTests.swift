@@ -9,6 +9,9 @@ import Testing
 /// and button availability through its fetch seams, so the tab's
 /// behaviour tests without GitHub or a window.
 struct PullRequestsModelTests {
+    // swiftformat:disable:next testSuiteAccessControl -- Shared with fixtures and tests in other files.
+    let worktreesPath = "/worktrees/" + UUID().uuidString
+
     @Test
     func `stack depth follows base branches through listed heads`() async {
         let model = makeModel()
@@ -158,7 +161,7 @@ struct PullRequestsModelTests {
     }
 
     @Test
-    func `creating a pull request appends the template, never pushes`() async {
+    func `opening a pushed branch appends the template without pushing again`() async {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         var pushed = false
         model.performPush = { _ in

@@ -244,6 +244,7 @@ for missing in DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD NOTARIZATION_KEY NO
   [[ ! -e "${scratch}/keychain-accessed" ]] || exit 1
 done
 echo 'Build and packaging script tests passed'
+bash Tests/PackageTests.sh
 
 mkdir -p "${scratch}/Tests" "${scratch}/.build"
 printf 'only_rules: [trailing_newline]\nanalyzer_rules: [unused_import]\n' >"${scratch}/.swiftlint.yml"

@@ -14,10 +14,7 @@ extension PullRequestsModelTests {
         metadataFile: String? = nil,
         worktreePath: String? = nil,
     ) -> PullRequestsModel {
-        // The entry a worktree was last looking at lives in the
-        // defaults, which every test in the process shares: without
-        // this, one test's `show(branch:)` chose the branch the next
-        // one opened on.
+        // Clear earlier models in this fixture; other tests use distinct paths.
         for item in items {
             StackSelection.remember(nil, for: item.worktree.path)
         }
@@ -133,7 +130,7 @@ extension PullRequestsModelTests {
                 repositoryName: "repo",
                 repositoryPath: "/repo",
                 branch: branch,
-                path: path ?? "/worktrees/" + branch,
+                path: path ?? worktreesPath + "/" + branch,
             ),
             session: session,
             isDirty: false,

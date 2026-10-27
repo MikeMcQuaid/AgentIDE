@@ -204,7 +204,7 @@ struct PullRequestFooterView: View {
     /// which without saying what a click would do.
     var openDraftButton: some View {
         BusyButton(
-            "Draft",
+            openingTitle("Draft"),
             busy: "Opening",
             disabled: openDisabled,
             // The spinner says it is opening; a wider word would
@@ -216,7 +216,7 @@ struct PullRequestFooterView: View {
                 utilityTab = UtilityTabTarget.errors
             }
         }
-        .hoverHelp("Open it as a draft: work to read rather than work to merge")
+        .hoverHelp("Rebase, sign and push as needed, then open a draft pull request")
     }
 
     /// Opening a pull request, and Draft either way: before one
@@ -266,27 +266,18 @@ struct PullRequestFooterView: View {
     private static let padding: CGFloat = 8
 
     /// What stops either button opening anything: a title of spaces
-    /// dims rather than failing on click, the push comes first, and
+    /// dims rather than failing on click, preparation must be available, and
     /// a template still reading exactly as the repository wrote it
     /// helps nobody as a pull request body.
     private var openDisabled: Bool {
-        model.prTitle.trimmingCharacters(in: .whitespaces).isEmpty
-            || model.isFullyPushed == false
-            || model.templateUnedited
-            || model.unopenedBelow != nil
+        model.canOpenPullRequest == false
     }
 
     private var openButton: some View {
         BusyButton(
-            "Open",
+            openingTitle("Open"),
             busy: "Opening",
             prominent: true,
-            // Trimmed like the validation, so a title of spaces
-            // dims the button rather than failing on click; the
-            // push comes first, explicitly. A body drafted or typed
-            // is enough on its own, but a template still reading
-            // exactly as the repository wrote it is not: opening
-            // with its placeholders intact helps nobody.
             disabled: openDisabled,
         ) {
             model.prIsDraft = false
@@ -299,7 +290,7 @@ struct PullRequestFooterView: View {
             model.unopenedBelow.map { "Open a pull request for `" + $0 + "` below this branch first" }
                 ?? (model.templateUnedited
                     ? "Fill in the template before opening: it still reads as the repository wrote it"
-                    : "Open the pull request with the form's title and body; dimmed until pushed"),
+                    : "Rebase, sign and push as needed, then open the pull request with the form's title and body"),
             shortcut: "⌘↩",
         )
     }

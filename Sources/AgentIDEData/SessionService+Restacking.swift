@@ -2,6 +2,17 @@ import AgentIDEDomain
 import Foundation
 
 extension SessionService {
+    func stackBranchIsReady(_ branch: String, parent: String, worktreePath: String) async -> Bool {
+        guard await git.isAncestor(parent, of: branch, worktreePath: worktreePath) else {
+            return false
+        }
+        guard AppSettings.requiresSignedCommits else {
+            return true
+        }
+
+        return await git.isCommitSigned(worktreePath: worktreePath, ref: branch)
+    }
+
     func stackBaseRef(in stack: BranchStack, worktreePath: String) async -> String? {
         guard let base = stack.base else {
             return nil

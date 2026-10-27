@@ -5,6 +5,7 @@ extension SessionService {
     /// Pushes the verified fix and updates its published stack branches.
     func pushAutofix(target: AutofixDriver.Target, summary: PullRequestSummary, commit: String) async throws -> String {
         let worktree = target.worktree
+        try await requireNotQueued(worktree)
         let repository = Repository(name: worktree.repositoryName, path: worktree.repositoryPath)
         guard let defaultBranch = await defaultBranchName(of: repository), worktree.branch != defaultBranch,
               summary.headBranch == worktree.branch, let head = summary.headCommit, head != commit,

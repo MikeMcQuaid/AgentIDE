@@ -7,7 +7,7 @@ extension SessionService {
     /// The other worktrees holding the stack's branches, by branch;
     /// throws while any is busy or dirty.
     func quietHolders(
-        of stack: BranchStack,
+        of branches: [String],
         in worktree: Worktree,
         busyWorktrees: Set<String>,
     ) async throws -> [String: String] {
@@ -15,7 +15,7 @@ extension SessionService {
         let busy = Set(busyWorktrees.map(Self.resolved))
         let all = await git.branchHolders(worktreePath: worktree.path)
         var holders = [String: String]()
-        for branch in stack.branches {
+        for branch in branches {
             guard let holder = all[branch], Self.resolved(holder) != here else {
                 continue
             }

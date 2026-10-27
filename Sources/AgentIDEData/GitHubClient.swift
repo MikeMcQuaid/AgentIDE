@@ -225,7 +225,7 @@ public struct GitHubClient: Sendable {
     /// open pull request timed out (HTTP 504) on busy repositories,
     /// so the open scope skips them and rows enrich on selection.
     static let statusFields =
-        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt,reviewRequests,latestReviews"
+        "mergeable,reviewDecision,statusCheckRollup,autoMergeRequest,closedAt,updatedAt,reviewRequests,latestReviews"
 
     let runner: any ProcessRunner
     var mergePolling: MergePolling = .init()
@@ -353,6 +353,7 @@ public struct GitHubClient: Sendable {
             author: row.author?.login,
             body: row.body,
             closedAt: row.closedAt,
+            updatedAt: row.updatedAt,
             headCommit: row.headRefOid,
             awaitsCopilotReview: (row.reviewRequests ?? []).contains { Self.isCopilot($0.login) },
             copilotReviewedAt: (row.latestReviews ?? [])

@@ -227,7 +227,7 @@ extension PullRequestsModelTests {
     }
 
     @Test
-    func `open waits for the entry's own commits to be pushed`() async {
+    func `publication checks the entry's own unpushed commits`() async {
         // A stack's entries each have their own reading: the
         // worktree's count is the checked-out branch's, and reading
         // it for an entry above offered Open on a branch nothing
@@ -293,7 +293,7 @@ extension PullRequestsModelTests {
     func `a rebase detaching HEAD leaves the creation form alone`() async {
         let model = makeModel(
             items: [item(branch: "feature", ahead: 0)],
-            worktreePath: "/worktrees/feature",
+            worktreePath: worktreesPath + "/feature",
         )
         await model.reload()
         #expect(model.needsCreateForm)
@@ -303,7 +303,7 @@ extension PullRequestsModelTests {
         // detached worktree reports its directory's name as its
         // branch. The tab follows the worktree, so the form it was
         // showing stays exactly where it was.
-        model.items = [item(branch: "pr-77", ahead: nil, path: "/worktrees/feature")]
+        model.items = [item(branch: "pr-77", ahead: nil, path: worktreesPath + "/feature")]
         #expect(model.branchItem != nil)
         #expect(model.listedBranch == "feature")
         #expect(model.needsCreateForm)

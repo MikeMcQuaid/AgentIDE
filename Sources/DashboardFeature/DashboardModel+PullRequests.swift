@@ -64,7 +64,8 @@ extension DashboardModel {
         let key = AppMetadata.threadsKey(repositoryPath: repositoryPath, number: summary.number)
         let threads = store.load().threadsCache[key]?.threads ?? []
         let unresolved = threads.count { $0.isResolved == false }
-        let queued = store.load().queuedCache[repositoryPath]?.contains(summary.number) ?? summary.isQueued
+        let queued = summary.state == "OPEN"
+            && (store.load().queuedCache[repositoryPath]?.contains(summary.number) ?? summary.isQueued)
         // Copied rather than rebuilt field by field: a rebuild
         // silently drops whatever field it forgets, as it did with
         // the date a pull request closed.

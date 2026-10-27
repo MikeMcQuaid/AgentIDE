@@ -833,6 +833,25 @@ shows a different branch from the one checked out.
   tried twice the same way (`ErrorLog.attemptingTwice`). A
   conversation that fell back to REST is a recovery that worked, and
   goes only to the messages log.
+  Working agents use a blue filled play circle and completed turns a
+  green filled stop circle in the shared sidebar status icon.
+  A completed turn with no further input for over 24 hours uses the
+  idle outlined stop circle; exited processes use an outlined cross
+  circle. Its clock comes from the live conversation, hook events
+  and observed lifecycle changes, never viewing or Git activity, and is
+  checked on existing refreshes even when Git reads are skipped.
+  This affects sidebar presentation only; herdr's state still drives
+  notifications, automation and event waits.
+  On worktree rows, the shared slot shows the newer agent event or
+  PR state change. PR timestamps come from opening, draft changes,
+  reopening, queue entry or removal, merging and closing, never
+  comments, reviews or CI. Unchanged readings keep their timestamps.
+  Initial agent listings do not count as new events.
+  Equal or unavailable timestamps fall back to priority: questions,
+  working turns and recent completed turns precede PR states, while
+  idle, unknown and exited agents yield. Host directories and launch
+  failures stay first. The PR state-event lookup is cached until the
+  PR or its queue membership changes.
   Notifications fire for a finished turn and for input
   needed, each with its own toggle and chime: any audio file, played
   in the app's own process through `NSSound`, the way a Mac app plays
@@ -1273,6 +1292,9 @@ steps.
   conversation, asks the sidebar for a git reading forced on this
   repository, and tells the conversation pane (which holds its
   threads in its own state, keyed by number) to read them again.
+  Manual refreshes in the PR pane and sidebar also reload the
+  repository's required jobs, expiring its summaries so their next
+  reading uses the current requirements.
   Everything a refresh is pressed for -- checks finishing,
   mergeability, a review or comment arriving, unpushed counts --
   changes with nothing happening in the app, so the intervals that
@@ -1292,10 +1314,9 @@ steps.
   is kept with the rest of the form's draft, so leaving the tab and
   coming back finds the same intention, and the row the creation
   paints carries the draft glyph before any fetch has been near it.
-  Both wait for the listed entry's own commits to be on the remote:
-  a stack's entries each have their own count, and reading the
-  worktree's (the checked-out branch's) offered to open a pull
-  request for a branch nothing had pushed.
+  Both prepare and push the listed entry before creating its pull
+  request, using that entry's own counts rather than the checked-out
+  branch's.
 - **Nothing is stat'd that macOS would ask permission for.** A
   directory of your own can be anywhere: inside Documents, on a
   network volume, on a disk that is not mounted. macOS asks the user
@@ -1494,8 +1515,16 @@ steps.
 - **One action prepares and pushes a branch.** The PR footer offers
   Sign and Push, Rebase and Push or Push according to the work needed,
   for standalone branches and stacks alike. Signing and rebasing finish
-  before pushing; a failure stops the sequence. Open PR then enables
-  for the pushed tip. The Worktree menu and Shift-Cmd-P use this same
+  before pushing; a failure stops the sequence. Open and Draft run
+  this same preparation when the branch is not yet fully pushed,
+  then create the pull request only after a confirmed push. The form
+  stays locked throughout and retains its text on failure.
+  Handled publication refusals keep their status on the creation form;
+  only reported failures switch to Errors.
+  Open and Draft append `↑<count>` when they will push, sharing the
+  push button's commit count for a lone branch or branch count for a
+  stack; the suffix disappears once the selected branch is pushed.
+  The Worktree menu and Shift-Cmd-P use this same
   action. The rebase label includes the commits behind the default
   branch, and a newer base enables the action even when all local
   commits are already pushed. Sidebar changes to either remote count
@@ -1536,10 +1565,14 @@ steps.
   pull request merges.
 - **The creation form** shows when the branch has no open pull request:
   title, body and template as fields, with drafts saved as typed.
-  After creation, GitHub's closing issue references identify issues
+  Creation selects the new pull request and unlocks the form before
+  assigning its closing issues in a background task.
+  GitHub's closing issue references identify issues
   to assign to the authenticated user through `gh issue edit` with
   `--add-assignee @me`, preserving existing assignees. Issue URLs keep
   fork and cross-repository references pointed at their own repository.
+  An initially empty reference list is read again after short delays,
+  allowing GitHub to finish linking a newly created pull request.
   GitHub interprets closing keywords for PRs targeting the default
   branch. Assignment failures leave the new pull request open and
   report the failed follow-up without repeating creation.
@@ -1565,6 +1598,16 @@ steps.
 - **A stack rebases as one.** Rebasing any layer, the bottom included,
   restacks the whole stack and then pushes through the selected entry
   and any higher branches already on the remote, bottom first.
+  Queued pull requests are fixed: neither rebasing, signing nor
+  pushing may change their branches. When a stack has queued members,
+  those members and the branches beneath the last one stay untouched;
+  only the branches above them can move. The first movable branch
+  rebases onto the queued parent's remote tip, never origin's default
+  branch. A lone queued branch waits until it leaves the queue.
+  Readiness follows the shared queue cache even when no git ref moved,
+  and actions refresh queue membership through the existing store.
+  A queued pull request whose branch cannot be identified blocks
+  rebasing, signing and pushing until its identity can be resolved.
   Publication waits until every lower branch has been pushed.
   The single branch action restacks before pushing when a branch being
   published needs rebasing or signing. Unpublished work above it does
@@ -1585,7 +1628,7 @@ steps.
   Every local stack entry can be selected and drafted in PRs, even
   before lower branches are published. Push waits until every lower
   branch is pushed; Open and Draft wait until every lower branch has
-  an open pull request and the selected branch is fully pushed.
+  an open pull request, then prepare and push the selected branch.
 - **Forks cannot publish stacks across repositories.** Local ancestry
   stays inspectable, with counts and twin selection using each
   branch's own remote. A stack containing a fork disables creation,
@@ -2170,6 +2213,8 @@ holds the repository lock, including deliberately delayed commands;
 a whole-test timeout releases the paused cleanup if work deadlocks.
 Message-log tests own isolated logs so clearing or trimming entries
 cannot erase a service-status report another test is awaiting.
+Pull request model fixtures use distinct worktree paths so parallel
+tests cannot change each other's remembered stack selection.
 CI (`.github/workflows/tests.yml`) runs style on every push and pull
 request, and build-and-test and analyze in parallel on the `xcode-27`
 image, each asserting Xcode 27 rather than skipping. Analysis shares its
@@ -2276,9 +2321,13 @@ so that only the last needs credentials:
   timestamp, and restores the user's keychain list on exit.
   `NOTARIZATION_KEY`, the contents of an App Store Connect API key's
   `.p8` file, `NOTARIZATION_KEY_ID` and `NOTARIZATION_ISSUER_ID` send
-  the zip to `notarytool`. The script waits for Apple's verdict, prints
-  its log on failure, staples the accepted ticket, asks Gatekeeper to
-  assess the app and remakes the zip around the stapled app.
+  the zip to `notarytool`. The script saves the submission ID before
+  waiting for Apple's verdict, with up to three wait attempts against
+  that same submission, without uploading again.
+  Each wait allows ten minutes. A rejected submission prints its log
+  and fails without retrying. Acceptance staples the ticket, asks
+  Gatekeeper to assess the app and remakes the zip around the stapled
+  app.
 
 The Release workflow (`.github/workflows/release.yml`) requires a bare
 `MAJOR.MINOR.PATCH` version such as `0.1.0` on `workflow_dispatch` and

@@ -57,7 +57,7 @@ struct GitHubClientTests {
         let queued = GitHubClient.queuedNumbers(fromAliasedJSON: json)
         #expect(queued["r0"] == [4])
         #expect(queued["r1"]?.isEmpty == true)
-        #expect(queued["r2"]?.isEmpty == true)
+        #expect(queued["r2"] == nil)
     }
 
     @Test

@@ -58,7 +58,7 @@ struct PullRequestDisclosureTests {
         }
         // A default launch writes no flags: the arguments are empty.
         var metadata = model.store.load()
-        metadata.sessionsByWorktree["/worktrees/feature"] = "agentide--repo--feature--claude"
+        metadata.sessionsByWorktree[fixtures.worktreesPath + "/feature"] = "agentide--repo--feature--claude"
         metadata.arguments["agentide--repo--feature--claude"] = ""
         model.store.update { $0 = metadata }
 

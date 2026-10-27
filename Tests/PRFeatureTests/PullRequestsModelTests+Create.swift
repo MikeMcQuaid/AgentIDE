@@ -14,12 +14,17 @@ extension PullRequestsModelTests {
         let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         var actions = [String]()
         var assignedURL: String?
+        let (assignments, assigned) = AsyncStream<Void>.makeStream()
+        defer { assigned.finish() }
         model.performCreate = { _, _, body, _, _ in
             #expect(body == "Fixes #24324")
             actions.append("create")
             return "https://github.com/o/r/pull/42"
         }
         model.performAssignClosingIssues = { url in
+            #expect(model.isOpening == false)
+            #expect(model.selected?.number == 42)
+            assigned.yield()
             actions.append("assign")
             assignedURL = url
             if fails {
@@ -31,10 +36,44 @@ extension PullRequestsModelTests {
         model.prBody = "Fixes #24324"
 
         #expect(await model.createPullRequest())
-        #expect(actions == (fails ? ["create", "assign", "assign", "stack"] : ["create", "assign", "stack"]))
+        var iterator = assignments.makeAsyncIterator()
+        for _ in 0 ..< (fails ? 2 : 1) {
+            _ = await iterator.next()
+        }
+        #expect(actions == (fails ? ["create", "stack", "assign", "assign"] : ["create", "stack", "assign"]))
         #expect(assignedURL == "https://github.com/o/r/pull/42")
         #expect(model.selected?.number == 42)
         #expect(model.prTitle.isEmpty)
+    }
+
+    @Test
+    func `slow issue assignment leaves the created pull request usable`() async {
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
+        let (started, start) = AsyncStream<Void>.makeStream()
+        let (waiting, release) = AsyncStream<Void>.makeStream()
+        defer {
+            start.finish()
+            release.finish()
+        }
+        model.performCreate = { _, _, _, _, _ in "https://github.com/o/r/pull/42" }
+        model.performAssignClosingIssues = { _ in
+            start.yield()
+            for await _ in waiting {
+                break
+            }
+        }
+        model.prTitle = "A change"
+        let opening = Task {
+            await model.createPullRequest()
+        }
+        var iterator = started.makeAsyncIterator()
+        _ = await iterator.next()
+
+        #expect(model.isOpening == false)
+        #expect(model.selected?.number == 42)
+        #expect(model.prTitle.isEmpty)
+        release.yield()
+        #expect(await opening.value)
     }
 
     @Test
@@ -93,7 +132,7 @@ extension PullRequestsModelTests {
 
     @Test
     func `the listing's own answer beats the one the form assembled`() async {
-        let model = makeModel(items: [item(branch: "feature", ahead: 1)])
+        let model = makeModel(items: [item(branch: "feature", ahead: 0)])
         model.performCreate = { _, _, _, _, _ in "https://github.com/o/r/pull/42" }
         // GitHub has it already: its answer carries the checks and
         // mergeability the form could not know.

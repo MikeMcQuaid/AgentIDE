@@ -1,4 +1,5 @@
 @testable import AgentIDEData
+import AgentIDEDomain
 import Foundation
 import Testing
 
@@ -62,14 +63,32 @@ struct LastPanesTests {
         #expect(held.hasAnswered)
     }
 
+    @Test
+    func `only a changed agent state receives a new observation time`() {
+        let held = LastPanes()
+        let first = Date(timeIntervalSince1970: 100)
+        held.remember([Self.pane("agent", activity: .working)], at: first)
+        #expect(held.last().first?.stateChangedAt == nil)
+        let completed = first.addingTimeInterval(1)
+        held.remember([Self.pane("agent", activity: .done)], at: completed)
+        #expect(held.last().first?.stateChangedAt == completed)
+        held.remember([Self.pane("agent", activity: .done)], at: completed.addingTimeInterval(1))
+        #expect(held.last().first?.stateChangedAt == completed)
+        let exited = completed.addingTimeInterval(2)
+        held.remember([Self.pane("agent", activity: .done, isFinished: true)], at: exited)
+        #expect(held.last().first?.stateChangedAt == exited)
+    }
+
     // MARK: Private
 
-    private static func pane(_ sessionName: String) -> HerdrPane {
+    private static func pane(
+        _ sessionName: String, activity: AgentActivity? = nil, isFinished: Bool = false,
+    ) -> HerdrPane {
         HerdrPane(
             sessionName: sessionName,
             paneID: "w1:p1",
-            isFinished: false,
-            activity: nil,
+            isFinished: isFinished,
+            activity: activity,
             foregroundCommand: nil,
             currentPath: "/tmp",
         )

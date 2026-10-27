@@ -2,6 +2,20 @@
 import Testing
 
 extension GitHubClientTests {
+    @Test
+    func `closing issue assignment waits for GitHub to link a new pull request`() async throws {
+        let runner = IssueAssignmentRunner(output: "https://github.com/Homebrew/brew/issues/24359\n", emptyReads: 2)
+        let client = GitHubClient(runner: runner) { true }
+        try await client.assignClosingIssues(
+            repositoryPath: "/repo", pullRequestURL: "https://github.com/Homebrew/brew/pull/24360",
+        )
+        let commands = await runner.commands
+        #expect(commands.count == 4)
+        #expect(commands.last == [
+            "gh", "issue", "edit", "https://github.com/Homebrew/brew/issues/24359", "--add-assignee", "@me",
+        ])
+    }
+
     @Test(arguments: [
         "", "https://github.com/o/r/issues/24324\nhttps://github.com/other/repo/issues/7\n"
             + "https://github.com/o/r/issues/24324\n",
@@ -11,11 +25,12 @@ extension GitHubClientTests {
         let client = GitHubClient(runner: runner) { true }
         try await client.assignClosingIssues(repositoryPath: "/repo", pullRequestURL: "https://github.com/o/r/pull/42")
         let commands = await runner.commands
+        #expect(commands.count == 3)
         #expect(commands.first == [
             "gh", "pr", "view", "https://github.com/o/r/pull/42", "--json", "closingIssuesReferences",
             "--jq", ".closingIssuesReferences[].url",
         ])
-        #expect(Array(commands.dropFirst()) == (output.isEmpty ? [] : [
+        #expect(commands.filter { $0.contains("edit") } == (output.isEmpty ? [] : [
             ["gh", "issue", "edit", "https://github.com/o/r/issues/24324", "--add-assignee", "@me"],
             ["gh", "issue", "edit", "https://github.com/other/repo/issues/7", "--add-assignee", "@me"],
         ]))
@@ -43,15 +58,17 @@ extension GitHubClientTests {
 private actor IssueAssignmentRunner: ProcessRunner {
     // MARK: Lifecycle
 
-    init(output: String, failing: String = "") {
+    init(output: String, failing: String = "", emptyReads: Int = 0) {
         self.output = output
         self.failing = failing
+        self.emptyReads = emptyReads
     }
 
     // MARK: Internal
 
     let output: String
     let failing: String
+    var emptyReads: Int
     var commands: [[String]] = []
 
     func run(
@@ -62,6 +79,10 @@ private actor IssueAssignmentRunner: ProcessRunner {
     ) -> ProcessResult {
         #expect(workingDirectory == "/repo")
         commands.append(arguments)
+        if arguments.contains("view"), emptyReads > 0 {
+            emptyReads -= 1
+            return ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
         return ProcessResult(
             status: arguments.contains(failing) ? 1 : 0,
             standardOutput: arguments.contains("view") ? output : "",

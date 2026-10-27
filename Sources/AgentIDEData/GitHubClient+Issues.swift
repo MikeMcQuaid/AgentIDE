@@ -17,15 +17,26 @@ struct PullRequestDetail {
 public extension GitHubClient {
     /// Adds the authenticated user to the issues GitHub says this PR closes.
     func assignClosingIssues(repositoryPath: String, pullRequestURL: String) async throws {
-        let result = try await gh(
-            [
-                "pr", "view", pullRequestURL, "--json", "closingIssuesReferences",
-                "--jq", ".closingIssuesReferences[].url",
-            ],
-            in: repositoryPath,
-        )
+        var urls = Set<String>()
+        // GitHub may not have linked the issues when creation returns.
+        for attempt in 0 ..< Self.closingIssueAttempts {
+            if attempt > 0 {
+                try await Task.sleep(for: .seconds(attempt))
+            }
+            let result = try await gh(
+                [
+                    "pr", "view", pullRequestURL, "--json", "closingIssuesReferences",
+                    "--jq", ".closingIssuesReferences[].url",
+                ],
+                in: repositoryPath,
+            )
+            urls = Set(result.standardOutput.split(separator: "\n").map(String.init))
+            if urls.isEmpty == false {
+                break
+            }
+        }
         var failures = [String]()
-        for url in Set(result.standardOutput.split(separator: "\n").map(String.init)).sorted() {
+        for url in urls.sorted() {
             do {
                 try await gh(["issue", "edit", url, "--add-assignee", "@me"], in: repositoryPath)
             } catch {
@@ -135,6 +146,8 @@ public extension GitHubClient {
 // MARK: - Private
 
 private extension GitHubClient {
+    static let closingIssueAttempts = 3
+
     struct TitledBody: Decodable {
         let title: String
         let body: String?

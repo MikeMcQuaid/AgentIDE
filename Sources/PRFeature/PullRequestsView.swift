@@ -126,7 +126,9 @@ public struct PullRequestsView: View {
         // storage bus, acting on whichever worktree the pane shows.
         .onChange(of: pushRequest) {
             Task {
-                _ = await model.publish()
+                if model.isOpening == false {
+                    _ = await model.publish()
+                }
             }
         }
     }

@@ -33,11 +33,13 @@ public extension SessionService {
 
         PerformanceLog.record(cacheHit: false, "stack-facts#" + reading.path)
         let stack = await stack(from: reading)
+        let queued = pullRequests.cachedQueuedBranches(repositoryPath: worktree.repositoryPath)
+        let branches = stack.mutableBranches(queued: queued)
         let facts = await StackFacts(
             stack: stack,
-            outOfPlace: outOfPlace(in: stack, path: reading.path),
-            unpushed: unpushed(in: stack, path: reading.path),
-            unsigned: unsigned(in: stack, path: reading.path),
+            outOfPlace: outOfPlace(in: stack, queued: queued, path: reading.path),
+            unpushed: unpushed(in: branches, path: reading.path),
+            unsigned: unsigned(in: branches, path: reading.path),
         )
         await StackCache.shared.remember(facts, for: reading.path, derivedFrom: key)
         store.update { metadata in
@@ -53,14 +55,16 @@ public extension SessionService {
     /// The branches a restack would actually move: those not
     /// already sitting on the one below them. Empty means the stack
     /// is in order and the button has nothing to do.
-    private func outOfPlace(in stack: BranchStack, path: String) async -> [String] {
+    private func outOfPlace(in stack: BranchStack, queued: Set<String>, path: String) async -> [String] {
         guard let base = await stackBaseRef(in: stack, worktreePath: path) else {
             return []
         }
 
         var pending = [String]()
-        for branch in stack.branches {
-            let parent = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
+        for branch in stack.mutableBranches(queued: queued) {
+            let parentBranch = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
+            let parent = await queued.contains(parentBranch)
+                ? remoteBranchRef(worktreePath: path, branch: parentBranch) : parentBranch
             if await git.isAncestor(parent, of: branch, worktreePath: path) == false {
                 pending.append(branch)
             }
@@ -70,9 +74,9 @@ public extension SessionService {
 
     /// The branches a stack push would actually send: those with
     /// commits the remote does not carry, or no remote branch yet.
-    private func unpushed(in stack: BranchStack, path: String) async -> [String] {
+    private func unpushed(in branches: [String], path: String) async -> [String] {
         var pending = [String]()
-        for branch in stack.branches {
+        for branch in branches {
             let remote = await remoteBranchRef(worktreePath: path, branch: branch)
             guard await git.refExists(worktreePath: path, ref: remote) else {
                 pending.append(branch)
@@ -89,13 +93,13 @@ public extension SessionService {
     /// The stack's branches whose tip is not signed, so the button
     /// that would push them can dim the way a branch's own does
     /// rather than failing on the first one.
-    private func unsigned(in stack: BranchStack, path: String) async -> [String] {
+    private func unsigned(in branches: [String], path: String) async -> [String] {
         guard AppSettings.requiresSignedCommits else {
             return []
         }
 
         var unsigned = [String]()
-        for branch in stack.branches where await git.isCommitSigned(worktreePath: path, ref: branch) == false {
+        for branch in branches where await git.isCommitSigned(worktreePath: path, ref: branch) == false {
             unsigned.append(branch)
         }
         return unsigned

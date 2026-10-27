@@ -2,8 +2,24 @@ import AgentIDEData
 
 /// The single preparation and push action shared by the footer and shortcuts.
 extension PullRequestsModel {
+    /// Whether the entry in view is the repository's own default
+    /// branch.
+    var isDefaultBranch: Bool {
+        listedBranch != nil && listedBranch == defaultBranch
+    }
+
+    /// Whether the entry in view is a default branch that refuses a
+    /// push: one GitHub protects, or wants a pull request or passing
+    /// checks on, which is most shared repositories. A repository of
+    /// your own with none of that takes the push, and Push runs.
+    var isGuardedDefaultBranch: Bool {
+        isDefaultBranch && acceptsDefaultPushes == false
+    }
+
     var canPublish: Bool {
-        guard branchItem != nil, isBranchActionRunning == false, isGuardedDefaultBranch == false else {
+        guard branchItem != nil, isBranchActionRunning == false, isGuardedDefaultBranch == false,
+              queuedBranchBlocker == nil
+        else {
             return false
         }
 
@@ -14,14 +30,14 @@ extension PullRequestsModel {
     }
 
     var publishTitle: String {
-        let behind = branchItem?.behindDefault ?? 0
+        let behind = isInStack && mutableStackBranches != stack.branches ? 0 : branchItem?.behindDefault ?? 0
         let rebase = "Rebase" + (behind > 0 ? " ↓" + String(behind) : "") + " and Push"
         if isInStack {
             guard needsRestackBeforePush else {
                 return "Push"
             }
 
-            return stacking.needsRestack ? rebase : "Sign and Push"
+            return needsStackRebase ? rebase : "Sign and Push"
         }
         guard rebaseNeed != .nothing || tipSignature == .unsigned else {
             return "Push"
@@ -31,6 +47,9 @@ extension PullRequestsModel {
     }
 
     var publishHelp: String {
+        if let queuedBranchBlocker {
+            return queuedBranchBlocker
+        }
         if isInStack {
             if needsRestackBeforePush, canPublish {
                 return "Rebase and sign as needed, then push the listed branch and published branches above it"
