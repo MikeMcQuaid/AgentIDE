@@ -255,6 +255,7 @@ printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/ps"
 cat >"${scratch}/bin/swift" <<'SWIFT'
 #!/bin/bash
 printf '%s\n' "$@" >swift-arguments
+printf '%s\n' "${TSAN_OPTIONS:-}" >thread-sanitizer-options
 case "$*" in
   *--show-bin-path*) echo "${PWD}/.build/analyze/debug" ;;
   package*) echo '{}' ;;
@@ -428,13 +429,18 @@ fi
 for sanitizer in address thread; do
   for status in 0 66; do
     result=0
-    env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID=fixture SCRIPT_TEST_STATUS="${status}" \
+    env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID=fixture SCRIPT_TEST_STATUS="${status}" TSAN_OPTIONS=halt_on_error=1 \
       "${scratch}/script/test" --sanitize "${sanitizer}" --scratch-path ".build/${sanitizer}-sanitizer" \
-      >"${scratch}/test.log" 2>&1 || result=$?
+      &>"${scratch}/test.log" || result=$?
     [[ "${result}" == "${status}" ]] || exit 1
     grep -qx -- --force-resolved-versions "${scratch}/swift-arguments"
     grep -A 1 '^--sanitize$' "${scratch}/swift-arguments" | grep -qx "${sanitizer}"
     grep -A 1 '^--scratch-path$' "${scratch}/swift-arguments" | grep -qx ".build/${sanitizer}-sanitizer"
+    if [[ "${sanitizer}" == thread ]]; then
+      grep -qx 'halt_on_error=1:strip_env=0' "${scratch}/thread-sanitizer-options"
+    else
+      grep -qx 'halt_on_error=1' "${scratch}/thread-sanitizer-options"
+    fi
   done
 done
 echo 'Analysis and sanitizer script tests passed'

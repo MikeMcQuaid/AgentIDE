@@ -56,7 +56,7 @@ public struct ReviewView: View {
             )
         }
         makeModel = {
-            let created = ReviewModel(
+            ReviewModel(
                 worktreePath: worktree.path,
                 repositoryName: worktree.repositoryName,
                 git: git,
@@ -65,8 +65,6 @@ public struct ReviewView: View {
                 fetchThreads: fetchThreads,
                 setThreadResolved: setThreadResolved,
             )
-            created.configureResolveOnPush(worktree: worktree, git: git, pullRequests: pullRequests)
-            return created
         }
         _model = State(initialValue: makeModel())
         makeLocalReview = { localReviews.model(worktreePath: worktree.path) }
@@ -93,6 +91,7 @@ public struct ReviewView: View {
                     return
                 }
 
+                model.configureResolveOnPush(worktree: worktree, pullRequests: service.pullRequestReads)
                 let fresh = await service.stack(for: worktree)
                 guard Task.isCancelled == false else {
                     return

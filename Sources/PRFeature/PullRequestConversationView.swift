@@ -29,7 +29,7 @@ struct PullRequestConversationPane: View {
     let reloadToken: Int
 
     let onBack: () -> Void
-    let onCopyComments: @MainActor () async -> Void
+    let onCopyComments: @MainActor () -> Void
     let onOpenChecks: @MainActor () async -> Void
     let onResolvedChanged: @MainActor () async -> Void
 
@@ -210,6 +210,8 @@ struct PullRequestConversationView: View {
 
     @AppStorage(UtilityTabTarget.pullRequestCacheKey)
     private var automationGeneration = 0
+    @AppStorage(UtilityTabTarget.resolutionMarksKey)
+    private var resolutionGeneration = 0
 
     @State private var description = ""
     @State private var events: [ReviewComment] = []
@@ -269,7 +271,7 @@ struct PullRequestConversationView: View {
                     FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: repositoryPath)
                 },
                 onToggleResolved: { await toggleResolved(thread) },
-                onToggleResolveOnPush: { await toggleResolveOnPush(thread) },
+                onToggleResolveOnPush: { toggleResolveOnPush(thread) },
                 isPendingResolution: pendingResolution(thread),
             )
         }
@@ -328,6 +330,7 @@ struct PullRequestConversationView: View {
 
     private func pendingResolution(_ thread: ReviewThread) -> Bool {
         _ = automationGeneration
+        _ = resolutionGeneration
         return pullRequests.pendingResolution(
             repositoryPath: repositoryPath,
             threadID: thread.resolveID,
@@ -335,12 +338,12 @@ struct PullRequestConversationView: View {
         )
     }
 
-    private func toggleResolveOnPush(_ thread: ReviewThread) async {
+    private func toggleResolveOnPush(_ thread: ReviewThread) {
         do {
-            try await pullRequests.toggleResolveOnPush(
-                repositoryPath: repositoryPath, number: number, threadID: thread.resolveID,
+            try pullRequests.toggleResolveOnPush(
+                repositoryPath: repositoryPath, summary: summary, thread: thread,
             )
-            automationGeneration += 1
+            UtilityTabTarget.resolutionMarksChanged()
         } catch {
             ErrorLog.shared.report(error.localizedDescription)
         }

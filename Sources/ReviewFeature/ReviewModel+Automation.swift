@@ -15,29 +15,32 @@ extension ReviewModel {
         hasLoaded = true
     }
 
-    func toggleResolveOnPush(_ thread: ReviewThread) async {
+    func toggleResolveOnPush(_ thread: ReviewThread) {
         do {
-            try await resolveOnPush?(thread)
+            try resolveOnPush?(thread)
+            UtilityTabTarget.resolutionMarksChanged()
         } catch {
             report(error.localizedDescription)
         }
     }
 
-    func configureResolveOnPush(worktree: Worktree, git: GitClient, pullRequests: PullRequestStore) {
-        resolveOnPush = { thread in
-            let branch = await git.currentBranch(worktreePath: worktree.path) ?? worktree.branch
-            let listed = try await pullRequests.listing(
-                repositoryPath: worktree.repositoryPath,
-                scope: .branch(branch),
-            )
-            guard let number = listed.first(where: { $0.state == "OPEN" })?.number else {
+    func configureResolveOnPush(worktree: Worktree, pullRequests: PullRequestStore) {
+        resolveOnPush = { [weak self] thread in
+            guard let summary = pullRequests.cachedListing(
+                repositoryPath: worktree.repositoryPath, scope: .branch(worktree.branch),
+            )?
+                .first(where: { $0.state == "OPEN" })
+            else {
+                self?.report("The pull request is still loading. Try marking this conversation again shortly.")
                 return
             }
 
-            try await pullRequests.toggleResolveOnPush(
-                repositoryPath: worktree.repositoryPath, number: number, threadID: thread.resolveID,
+            try pullRequests.toggleResolveOnPush(
+                repositoryPath: worktree.repositoryPath,
+                summary: pullRequests.cachedSummary(repositoryPath: worktree.repositoryPath, number: summary.number)
+                    ?? summary,
+                thread: thread,
             )
-            UtilityTabTarget.pullRequestCacheChanged()
         }
         pendingResolution = { thread in
             pullRequests.pendingResolution(repositoryPath: worktree.repositoryPath, threadID: thread.resolveID)

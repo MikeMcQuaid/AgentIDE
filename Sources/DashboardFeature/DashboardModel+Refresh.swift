@@ -203,6 +203,11 @@ public extension DashboardModel {
         await readPaneLoads()
         await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: forces)
+        await refreshWorkBlocks(force: forces.isEmpty == false)
+        if isStatusMode {
+            startStatusDetailsRefresh()
+        }
+        cacheSidebar(groups)
         if await service.refreshPullRequestAutomation(groups: groups) {
             UtilityTabTarget.pullRequestCacheChanged()
         }

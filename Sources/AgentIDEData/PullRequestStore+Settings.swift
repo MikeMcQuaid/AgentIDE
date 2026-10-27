@@ -14,18 +14,20 @@ public extension PullRequestStore {
     /// and nothing known is a no.
     func acceptsDefaultPushes(repositoryPath: String, branch: String) async -> Bool {
         let key = "push-capability#" + repositoryPath
-        if let known = store.load().directPushCapability[repositoryPath] {
-            PerformanceLog.record(cacheHit: true, key)
-            return known
-        }
+        return await (try? Self.capabilityReads.run(key: [store.file, key]) {
+            if let known = store.load().directPushCapability[repositoryPath] {
+                PerformanceLog.record(cacheHit: true, key)
+                return known
+            }
 
-        PerformanceLog.record(cacheHit: false, key)
-        guard let rules = await github.branchRules(repositoryPath: repositoryPath, branch: branch) else {
-            return false
-        }
+            PerformanceLog.record(cacheHit: false, key)
+            guard let rules = await github.branchRules(repositoryPath: repositoryPath, branch: branch) else {
+                return false
+            }
 
-        store.update { $0.directPushCapability[repositoryPath] = rules.takesPushes }
-        return rules.takesPushes
+            store.update { $0.directPushCapability[repositoryPath] = rules.takesPushes }
+            return rules.takesPushes
+        }) ?? false
     }
 
     /// The status checks a pull request into a branch must pass,
@@ -40,18 +42,20 @@ public extension PullRequestStore {
         // swiftlint:disable:next discouraged_optional_collection - Nil preserves an unreadable configuration.
     ) async -> Set<String>? {
         let key = Self.requiredChecksKey(repositoryPath: repositoryPath, branch: branch)
-        let known = store.load().requiredChecksCache[key].map { Set($0) }
-        guard due(key, interval: interval),
-              let rules = await github.branchRules(repositoryPath: repositoryPath, branch: branch)
-        else {
-            return known
-        }
+        return try? await Self.requiredChecksReads.run(key: [store.file, key]) {
+            let known = store.load().requiredChecksCache[key].map { Set($0) }
+            guard due(key, interval: interval),
+                  let rules = await github.branchRules(repositoryPath: repositoryPath, branch: branch)
+            else {
+                return known
+            }
 
-        store.update { metadata in
-            metadata.requiredChecksCache[key] = rules.requiredChecks.sorted()
-            metadata.fetchedAt[key] = Date()
+            store.update { metadata in
+                metadata.requiredChecksCache[key] = rules.requiredChecks.sorted()
+                metadata.fetchedAt[key] = Date()
+            }
+            return rules.requiredChecks
         }
-        return rules.requiredChecks
     }
 
     /// The repository's labels, asked for once a day: they change
@@ -59,16 +63,18 @@ public extension PullRequestStore {
     /// every visit. An answer GitHub could not give keeps the last.
     func labels(repositoryPath: String, interval: TimeInterval = capabilityInterval) async -> [String] {
         let key = "labels#" + repositoryPath
-        let known = store.load().labelsCache[repositoryPath] ?? []
-        guard due(key, interval: interval), let fetched = await github.labels(repositoryPath: repositoryPath) else {
-            return known
-        }
+        return await (try? Self.labelReads.run(key: [store.file, key]) {
+            let known = store.load().labelsCache[repositoryPath] ?? []
+            guard due(key, interval: interval), let fetched = await github.labels(repositoryPath: repositoryPath) else {
+                return known
+            }
 
-        store.update { metadata in
-            metadata.labelsCache[repositoryPath] = fetched
-            metadata.fetchedAt[key] = Date()
-        }
-        return fetched
+            store.update { metadata in
+                metadata.labelsCache[repositoryPath] = fetched
+                metadata.fetchedAt[key] = Date()
+            }
+            return fetched
+        }) ?? []
     }
 
     /// Forgets what was read of the repository's settings, whether

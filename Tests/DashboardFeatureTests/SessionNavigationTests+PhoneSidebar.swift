@@ -8,7 +8,7 @@ extension SessionNavigationTests {
     func `phone sidebar publishes public owners and ordered worktrees only when changed`() throws {
         let fixture = Fixture()
         defer { fixture.close() }
-        let original = try #require(fixture.model.groups.first)
+        let original = try #require(fixture.model.groups.first?.items.first)
         let host = WorktreeItem(
             worktree: Worktree(
                 repositoryName: "repo",
@@ -24,15 +24,27 @@ extension SessionNavigationTests {
         )
         let groups = [
             RepositoryGroup(
-                repository: Repository(name: "repo", path: fixture.repository.path, fullName: "Homebrew/repo"),
-                items: original.items + [host],
+                repository: Repository(name: "repo", path: fixture.repository.path, fullName: "Homebrew/remote-name"),
+                items: [original, host],
+                defaultBranch: "main",
             ),
         ]
+        fixture.model.groups = groups
         fixture.model.cacheSidebar(groups)
         let file = fixture.root + "/shared/agentide/sidebar-agentide-dev.json"
-        let data = try Data(contentsOf: URL(filePath: file))
-        #expect(try JSONDecoder().decode([SidebarRepository].self, from: data) == [
-            SidebarRepository(name: "repo", owner: "Homebrew", worktrees: [fixture.repository.path]),
+        #expect(try JSONDecoder().decode([SidebarRepository].self, from: Data(contentsOf: URL(filePath: file))) == [
+            SidebarRepository(
+                name: "repo",
+                owner: "Homebrew",
+                worktrees: [fixture.repository.path],
+                entries: [
+                    SidebarEntry(
+                        target: SidebarTarget(original.worktree), status: .defaultBranch, activity: nil, block: nil,
+                    ),
+                ],
+                fullName: "Homebrew/remote-name",
+                defaultBranch: "main",
+            ),
         ])
         #expect(FileManager.default.fileExists(
             atPath: fixture.root + "/shared/agentide/sidebar-agentide.json",

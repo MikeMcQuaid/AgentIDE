@@ -61,7 +61,7 @@ public final class MobileModel {
     var publicKey = ""
     private(set) var sessions: [MobileSession] = []
     private(set) var repositories: [String] = []
-    private(set) var sidebar: [SidebarRepository] = []
+    var sidebar: [SidebarRepository] = []
     private(set) var defaults: [String: String] = [:]
     var selection: MobileSession?
     private(set) var isConnected = false

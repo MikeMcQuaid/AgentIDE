@@ -10,6 +10,17 @@ struct StartupRegressionTests {
         #expect(ProcessEnvironment.scrubbed()["PATH"]?.split(separator: ":").contains("/usr/local/bin") == true)
     }
 
+    @Test(arguments: [
+        ("/toolchain/libclang_rt.tsan_osx_dynamic.dylib", nil),
+        ("/toolchain/libclang_rt.tsan_osx_dynamic.dylib:/other.dylib", "/other.dylib"),
+        ("/first.dylib:/toolchain/libclang_rt.tsan_osx_dynamic.dylib:/last.dylib", "/first.dylib:/last.dylib"),
+        ("/other.dylib", "/other.dylib"),
+    ] as [(String, String?)])
+    func `external tools omit the test sanitizer and keep other preloads`(libraries: String, expected: String?) {
+        #expect(ProcessEnvironment.scrubbed(merging: ["DYLD_INSERT_LIBRARIES": libraries])["DYLD_INSERT_LIBRARIES"]
+            == expected)
+    }
+
     @Test
     func `sandbox launches never ask for a sudo password`() {
         let command = SandvaultLauncher(hostUser: "test").command(

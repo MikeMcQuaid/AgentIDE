@@ -1,3 +1,5 @@
+import Foundation
+
 /// A git worktree belonging to a repository, holding one branch.
 public struct Worktree: Identifiable, Hashable, Sendable {
     // MARK: Lifecycle
@@ -40,5 +42,11 @@ public struct Worktree: Identifiable, Hashable, Sendable {
     /// The stable identity, the worktree path.
     public var id: String {
         path
+    }
+
+    /// Legacy worktree directories encode slashes; decode only this fallback, never a Git ref.
+    public static func directoryBranch(at path: String) -> String {
+        let name = URL(filePath: path).lastPathComponent
+        return name.removingPercentEncoding ?? name
     }
 }

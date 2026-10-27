@@ -108,6 +108,9 @@ public actor RemoteHerdr {
 
     // MARK: Internal
 
+    let configuration: SSHConfiguration
+    let connection: SSHConnection = .init()
+
     static func helpCommand(_ command: String) -> [String] {
         ["/bin/sh", "-c", SSHConfiguration.quote(command) + " --help 2>&1 || true"]
     }
@@ -137,8 +140,6 @@ public actor RemoteHerdr {
     private static let preferenceFieldCount = 2
     private static let command = "/Applications/AgentIDE.app/Contents/Resources/bin/agentide"
 
-    private let configuration: SSHConfiguration
-    private let connection: SSHConnection = .init()
     private var worktrees: [String: RemoteWorktree] = [:]
 }
 

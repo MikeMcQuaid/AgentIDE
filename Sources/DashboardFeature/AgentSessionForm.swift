@@ -45,32 +45,15 @@ struct AgentSessionForm: View {
     let onSubmit: @MainActor (Submission) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
-            Picker("Source", selection: $source) {
-                ForEach(PromptSource.allCases, id: \.self) { source in
-                    Text(source.title).tag(source)
+        Group {
+            if isStarting {
+                if let progress = model.launchProgresses[worktreePath ?? model.selection?.id ?? ""] {
+                    LaunchProgressView("Starting the agent…", progress: progress)
+                } else {
+                    LaunchProgressView("Preparing the agent launch…", waitingOn: "the launch to begin")
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .hoverHelp(
-                "Where the prompt comes from: typed text, an open issue or pull request,"
-                    + " or a security advisory in triage or draft",
-            )
-            AgentOptionPickers(
-                agent: agent,
-                model: $agentModel,
-                effort: $agentEffort,
-            ) { model.launchChoices(for: $0) }
-            sourceFields
-            HStack {
-                Spacer()
-                if isStarting {
-                    ProgressView()
-                        .controlSize(.small)
-                        .hoverHelp("Creating the worktree and starting the agent")
-                }
-                submitButton
+            } else {
+                form
             }
         }
         .task(id: repository?.id ?? "") { await reloadSources() }
@@ -168,6 +151,32 @@ struct AgentSessionForm: View {
             "Start " + String(pickedNumbers.count) + " agents"
         } else {
             submitTitle
+        }
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            Picker("Source", selection: $source) {
+                ForEach(PromptSource.allCases, id: \.self) { source in
+                    Text(source.title).tag(source)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .hoverHelp(
+                "Where the prompt comes from: typed text, an open issue or pull request,"
+                    + " or a security advisory in triage or draft",
+            )
+            AgentOptionPickers(
+                agent: agent,
+                model: $agentModel,
+                effort: $agentEffort,
+            ) { model.launchChoices(for: $0) }
+            sourceFields
+            HStack {
+                Spacer()
+                submitButton
+            }
         }
     }
 

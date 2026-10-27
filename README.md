@@ -15,7 +15,7 @@ AgentIDE replaces all four with one app designed around the same workflow.
 - Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
 - Starts tasks from prompts, GitHub issues, pull requests or security advisories.
 - Schedules repository prompts daily, weekly or monthly while AgentIDE is open.
-- Tracks agents, pull requests, CI and uncommitted changes in one sidebar, notifying you when agents finish or need input.
+- Tracks agents, pull requests and blockers by repository or status, with bulk worktree actions and completion notifications.
 - Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
 - Reviews syntax-highlighted diffs with inline comments and AI feedback from another agent, Copilot or CodeRabbit.
 - Runs review and autofix loops for local findings, GitHub feedback and failing CI, with automatic pushing off by default.
@@ -52,7 +52,7 @@ To run the current source, use `script/bootstrap` then `script/install`.
 Settings (Cmd-,) controls:
 
 - **General**: Choose session defaults, signing and the browser.
-- **Schedules**: Manage recurring prompts and agents per repository.
+- **Schedules**: Manage recurring repository jobs or start them now.
 - **Sessions**: Inspect and stop agents and browser pages.
 - **Review**: Choose reviewers, models, effort and review or fix prompts.
 - **Notifications**: Choose notifications, Dock badges and sounds.
@@ -78,7 +78,7 @@ See the [release process](ARCHITECTURE.md#releases) for publishing.
 ## 📱 iPhone companion
 
 - Views and steers running agents on your Mac over SSH.
-- Starts new tasks in existing repositories from your iPhone.
+- Starts tasks and manages blockers from your iPhone.
 
 Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Mac, then choose a signing team in Xcode and build `AgentIDE-iOS`.
 

@@ -102,6 +102,13 @@ enum ProcessEnvironment {
             environment[variable] = nil
         }
         environment.merge(extra) { _, new in new }
+        // Exit tests need TSan preloaded; uninstrumented external tools do not.
+        if let preloads = environment["DYLD_INSERT_LIBRARIES"] {
+            let libraries = preloads.split(separator: ":").filter { library in
+                library.split(separator: "/").last != "libclang_rt.tsan_osx_dynamic.dylib"
+            }
+            environment["DYLD_INSERT_LIBRARIES"] = libraries.isEmpty ? nil : libraries.joined(separator: ":")
+        }
         return environment
     }
 }

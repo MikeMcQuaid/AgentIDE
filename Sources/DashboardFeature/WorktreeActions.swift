@@ -26,6 +26,7 @@ struct WorktreeActions: View {
     /// The worktree picking another branch; the sidebar owns this
     /// popover too.
     @Binding var pendingBranchSwitch: WorktreeItem?
+    @Binding var pendingBlock: WorktreeBlockSelection?
 
     var body: some View {
         Button("Refresh") {
@@ -86,6 +87,11 @@ struct WorktreeActions: View {
             }
         }
         .hoverHelp("Show the unread dot until this worktree is next viewed")
+        Button(model.block(for: item) == nil ? "Block…" : "Edit block…") {
+            pendingBlock = WorktreeBlockSelection(items: [item], model: model)
+        }
+        .disabled(item.isPlaceholder)
+        .hoverHelp("Wait for another worktree, issue or pull request, or record a manual blocker")
         // Cleanup is the merge-time tidy, offered by hand for merges
         // the poll has not noticed yet or made outside GitHub; on the
         // main checkout it only makes sense off the default branch.

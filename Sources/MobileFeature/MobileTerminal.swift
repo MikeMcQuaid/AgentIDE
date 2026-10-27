@@ -196,6 +196,7 @@
             let view = PhoneTerminalView(frame: .zero, font: style.uiKitFont)
             applyAppearance(to: view)
             view.changeScrollback(nil)
+            view.inputAccessoryView = PhoneKeyboard(terminal: view)
             view.terminalDelegate = context.coordinator
             view.onPaste = { [weak coordinator = context.coordinator] text in
                 coordinator?.sendBytes(HerdrTerminal.pasteBytes(text))
@@ -247,6 +248,12 @@
 
         var onPaste: ((String) -> Void)?
         var onSize: (() -> Void)?
+        var shiftModifier = false
+
+        override func insertText(_ text: String) {
+            super.insertText(shiftModifier ? text.uppercased() : text)
+            resetModifiers()
+        }
 
         override func layoutSubviews() {
             super.layoutSubviews()
@@ -257,6 +264,12 @@
             if let text = UIPasteboard.general.string {
                 onPaste?(text)
             }
+        }
+
+        func resetModifiers() {
+            controlModifier = false
+            shiftModifier = false
+            (inputAccessoryView as? PhoneKeyboard)?.updateModifiers()
         }
     }
 #endif

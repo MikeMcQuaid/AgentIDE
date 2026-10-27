@@ -25,7 +25,11 @@ while [[ $# -gt 0 ]]; do
   esac
   case "${sanitizer}" in
     address) xcode_args[1]=YES ;;
-    thread) xcode_args[3]=YES ;;
+    thread)
+      xcode_args[3]=YES
+      # Exit tests respawn XCTest and must preload the sanitizer.
+      export TSAN_OPTIONS="${TSAN_OPTIONS:+${TSAN_OPTIONS}:}strip_env=0"
+      ;;
     *)
       echo "usage: script/test [--sanitize address|thread] [swift test options]" >&2
       exit 1

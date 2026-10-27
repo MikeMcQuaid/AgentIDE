@@ -38,8 +38,8 @@ public extension GitHubClient {
                 asynchronously: false,
             )
             .outcome
-        } catch is CancellationError {
-            throw CancellationError()
+        } catch where error is CancellationError || error is GitHubAuthenticationError {
+            throw error
         } catch {
             try Task.checkCancellation()
             synchronousFailure = error.localizedDescription
@@ -57,8 +57,8 @@ public extension GitHubClient {
                 arguments: arguments,
                 repositoryPath: repositoryPath,
             )
-        } catch is CancellationError {
-            throw CancellationError()
+        } catch where error is CancellationError || error is GitHubAuthenticationError {
+            throw error
         } catch {
             try Task.checkCancellation()
             throw MergeError(message: "Synchronous merge failed: " + synchronousFailure

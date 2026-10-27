@@ -750,6 +750,11 @@ time zone recorded when the schedule was created. Monthly dates absent
 from a month are skipped; a missing daylight-saving time runs at the
 next valid time, and a repeated time runs once. Schedules can be edited,
 paused or deleted, and show their next run and last launch result.
+Start launches the saved job immediately, including while paused, using
+its saved prompt, agent, model and effort. Future scheduled times stay
+unchanged; starting an overdue enabled job consumes that occurrence.
+Only one schedule launches at a time, and manual starts share the same
+persistence, retry and result handling as automatic runs.
 
 One timer waits for the next enabled schedule, rearmed on edits and
 clock changes and checked on wake. AgentIDE must be open: reopening or
@@ -977,6 +982,85 @@ shows a different branch from the one checked out.
   follows `InterfaceStyle` in both face and size; only a branch name
   within it, and the state icon beside the name, follow `NameStyle`.
 
+### Sidebar modes and blockers
+
+The Mac sidebar and phone repository list begin with a remembered
+Repository / Status selector. Its backing follows the native control's
+outline; the Mac uses a contrasting system control background and border.
+The top new-session menu stays in place in both modes, showing owner
+avatars beside repository names with separators between owners.
+Owners and their repositories are ordered alphabetically in that menu.
+With no saved choices, Repository mode and Recent activity sorting are
+selected.
+Repository adds an icon-only sort menu offering recent activity,
+highest-priority status and owner/repository name.
+Each device remembers its own choice; removed
+sort choices fall back to Recent activity. Priority uses the
+highest-priority visible row in each group; ties use owner/repository
+name. Name sorting shows full names in the headers. Recent activity
+uses recorded worktree activity, counting the
+main checkout only while it has a session, with unknown activity last.
+Status groups the same entries across repositories, showing the owner
+avatar and repository name on each row and retaining selection when an
+entry moves.
+Within each status, the existing repository and worktree order stands.
+When Git cannot name a branch, directory-derived labels decode percent
+escapes once; names read from Git and filesystem paths stay literal.
+Each status header has a disclosure caret and keeps its count visible
+when collapsed; each device remembers collapsed groups independently.
+Both platforms use Domain's status classification and priority:
+launch failures, agent questions, working turns, PRs ready to merge,
+completed turns, then other pull request states, Idle agents, Worktree,
+Branch and exited sessions. Idle agents contain a running recognised
+agent; idle entries without one group as Worktree for linked worktrees,
+Branch for the main checkout on another or unknown branch and Default
+branch for the main checkout on its recorded default. On your Mac,
+Blocked and Default branch are the final groups in that order. The
+existing latest-event rule still decides whether an agent or its pull
+request speaks for an entry.
+Open pull requests distinguish failing required CI, requested changes,
+unaddressed comments, ready to merge, running CI and waiting for review,
+alongside queued, draft and ordinary open states. Ready to merge needs
+confirmed passing checks, approval and mergeability, with no unresolved
+review conversations; missing information never claims readiness.
+
+A row's Block action applies to its worktree or current branch and
+records either a note or a dependency on another worktree, open issue
+or open pull request, including those in another listed repository.
+Notes remain until explicitly removed. Issues and pull requests unblock
+only after a successful reading confirms closure or merger; a missing
+or failed answer keeps the block. Worktree dependencies clear when
+their captured branch's pull request closes or merges, or the worktree
+is removed. Blocks label and group work without stopping agents or
+changing automation. Host metadata owns blocks across restarts.
+
+Cmd-click on the Mac adds or removes worktrees from a selection without
+switching the current pane. The selection survives sorting and status
+changes; an ordinary click returns to one worktree. Its shared menu can
+apply or remove blockers, fetch, fetch and reset, clean up after merge
+or refresh. Block edits validate every captured target before one
+metadata write. Fetch and refresh run once per repository; fetch and
+reset applies only to selected main checkouts, keeping the existing
+hard-reset behaviour. Cleanup retains dirty or unmerged worktrees and
+reports why. Counts name the affected items, and batch actions lock
+the selection until they finish.
+
+Status mode enriches open PRs through the shared pull request store,
+reusing the summary and conversation caches across panes in one
+background pass; launches never wait for that enrichment. Start forms
+immediately yield to the shared launch progress view while work runs.
+The phone requests that background refresh once a minute while Status
+is visible. The Mac acknowledges it immediately, keeping block edits
+responsive while GitHub is slow, then publishes the enriched projection.
+The existing phone sidebar projection also carries statuses, blockers,
+recorded repository activity and each repository's default branch so a
+shell pane or a live branch switch keeps the same grouping on the phone.
+The phone sends bounded, typed requests through a shared request spool
+for source choices and block edits; the Mac validates targets against
+its current repositories and worktrees before changing host metadata.
+No GitHub credentials cross SSH. A missing Mac app leaves an edit
+unconfirmed and visible for retry, never presented as a successful save.
+
 ### Review
 
 The Review pane shows local findings beneath their matching hunks alongside
@@ -998,6 +1082,11 @@ both tabs' counts without a GitHub request. Existing results without code
 excerpts remain readable and copyable; legacy results without branch
 identity join a PR only when their recorded revision still matches its
 checked-out worktree.
+Copying reviews uses the loaded conversation and local findings without
+waiting for GitHub. Resolve on push records the displayed thread and
+known head locally; the existing push-time checks still require a new
+remote head and unchanged comments before resolving anything. A separate
+local mark signal redraws both review panes without starting a refresh.
 The feedback-loop icon is Review's single review toolbar entry point.
 Its Review action opens the selected diff's editable review prompt and
 findings in a sheet, independently of the local feedback checkbox. Both
@@ -1462,10 +1551,25 @@ steps.
   The sidebar reads branch identity and queue membership directly from
   the shared store, without a second cache. Shared listing changes also
   repaint the PR pane's rows, including newly opened pull requests.
+  Concurrent readers share repository settings, summaries and
+  conversations across worktrees and panes. Overlapping queue reads
+  share the current batch and fetch only repositories still due.
   Shorter reads update returned rows without discarding cached later
   pages. A read covering all cached rows or an explicit refresh can
   replace the listing, including with an empty result.
   A selection missing from the refreshed listing closes its conversation.
+  Authentication failures pause GitHub requests across repositories.
+  Before recovery, AgentIDE removes `GH_TOKEN` and `GITHUB_TOKEN` from
+  its own process environment application-wide, so later commands across
+  repositories and panes inherit the stored-login fallback.
+  One shared, non-interactive `gh auth status` check lets the CLI refresh
+  expiring credentials; only read-only requests may be retried after it.
+  A failed recovery reports once and checks again at the shared
+  authentication cadence while requests are pending. It never asks the
+  user to unset variables or relaunch the app. Cached content remains
+  visible. AgentIDE never captures or caches a token.
+  Host Git network commands clear `GH_TOKEN` and `GITHUB_TOKEN` overrides
+  so the credential helper uses the stored, refreshable login.
 - **A guarded default branch is not pushed from here.** Whether the
   default branch takes a push is GitHub's to say: the branch's own
   summary says whether classic protection is on it, and the rules
@@ -1854,7 +1958,7 @@ steps.
 | Code, branches, diffs, worktrees | git in the shared workspace | operate host-side, hardened |
 | Conversation history | agent transcripts | read-only |
 | Pull request, CI and review state | GitHub via `gh` | poll, cache with timestamps |
-| Unread markers, prompt history, per-repository settings, session names and resume ids, drafts, last sidebar snapshot | metadata store | sole owner |
+| Unread markers, prompt history, per-repository settings, session names and resume ids, drafts, blockers, last sidebar snapshot | metadata store | sole owner |
 | Window frame, display and fullscreen state | `UserDefaults` | sole owner |
 
 The window's own shape is the exception to the metadata store.
@@ -1977,15 +2081,18 @@ including after reconnecting. Activity subscriptions name each current
 pane and are replaced when that list changes, followed by another
 snapshot. A pane-list change during subscription opening discards that
 channel and subscribes again with the latest panes before reading events.
-Only existing repositories are offered, with those containing
-sessions first. Compact rows have no separators, and empty repositories
-occupy a single row. Repository headers match the Mac's primary title,
-secondary count and adjacent primary-coloured plus for session creation.
+Only existing repositories are offered. The repository list hides those
+without sessions; the top new-session menu still offers every repository.
+Repository and Status use the same compact row insets without separators.
+Repository headers show owner/repository names, with the Mac's primary
+title colour, secondary count and adjacent primary-coloured plus for
+session creation.
 The whole header is a touch target at least 44 points high, with a
 44-by-44-point Liquid Glass circle around the body-sized plus and
 20-point avatars that scale with the headline's Dynamic Type size.
 Both platforms' plus icons use the same primary colour as the Mac's
-disclosure caret.
+disclosure caret. Settings presentation is separate from the session
+list so opening it does not rebuild that list.
 The Mac publishes repository owners and ordered worktree paths to
 `agentide/sidebar-agentide.json` or `sidebar-agentide-dev.json` in the
 shared workspace, only when that projection changes. The phone reads it
@@ -1994,15 +2101,17 @@ accordingly and keeps new or unlisted sessions accessible. Without a
 snapshot it retains the sessions-first listing. This optional snapshot
 never grants access to repositories absent from the command's listing.
 Both platforms share `OwnerAvatar` and its per-owner memory and disk
-cache. Avatars load from GitHub's public `/<owner>.png?size=64` endpoint
-without credentials, falling back to a folder when unavailable; no host
-GitHub access or additional sandbox privileges are involved.
+cache with the new-session menu. Menus preload avatars before opening
+and use native image labels. Avatars load from GitHub's public
+`/<owner>.png?size=64` endpoint without credentials, falling back to a
+folder when unavailable; no host GitHub access or additional sandbox
+privileges are involved.
 Transport failures leave an owner eligible for the next avatar load;
 HTTP misses and undecodable images are cached for the process lifetime.
 Rows share the Mac sidebar's `AgentIcon`, `SessionStatusIcon` and Git
 change summaries. A batched request computes the branch name, local
 upstream counts and dirty flag on the Mac for each distinct pane
-directory. Only those four fields cross SSH, in request order;
+directory. That Git response contains only those four fields, in request order;
 filenames, file records and repeated directory paths stay off the wire.
 Each response row stays the same size regardless of how many files
 changed. Failed Git readings leave an empty row so other worktrees
@@ -2013,8 +2122,10 @@ GitHub and need no additional sandbox privileges. They refresh on
 connection, manual refresh and changes to a pane's agent or activity;
 unchanged panes reuse the last result. Detached heads use the worktree
 directory name, as on the Mac. Session labels and herdr IDs remain
-internal. Repository counts count worktrees with sessions; GitHub badges
-and host-only feedback-loop, load and unread state are not inferred.
+internal. Repository counts count worktrees with sessions. Status mode
+reads the host-provided PR classification and blockers through the shared
+sidebar snapshot; it never queries GitHub inside the sandbox. Host-only
+feedback-loop, load and unread state are not inferred.
 Repository listings omit symlinked aliases, matching the desktop and
 creation's physical-path check. Creation accepts listed names, including
 spaces and non-ASCII characters, but rejects path separators and traversal.
@@ -2030,6 +2141,16 @@ Requests are not replayed after an ambiguous connection failure.
 The selected terminal uses the same JSON frames and commands as the Mac
 through SwiftTerm's UIKit view. Its light/dark button matches the palette
 of the existing agent without following the phone’s appearance changes.
+The phone's keyboard accessory keeps Escape, Ctrl, Shift, Tab and arrows
+beside the extra-keyboard toggle. Ctrl and Shift apply to the next key
+and combine for modified arrows. The extra keyboard gives navigation
+keys such as PgDn wider buttons with inset labels. It replaces
+SwiftTerm's accessory and symbol keyboard through their public view
+properties; input still uses SwiftTerm's sender. Keys send once on
+semantic activation, including assistive controls; physical touches send
+immediately and only held arrows repeat. Mouse reporting has no
+toggle because herdr's frames omit the remote mouse modes; swipes keep
+scrolling through herdr.
 Attaching takes control; leaving the pane releases it without stopping
 the agent. App switches retain an established SSH connection, its event
 subscription and the selected terminal controller. Returning reuses them
@@ -2043,8 +2164,11 @@ losing the eventual process-exit notification; either reattach action
 clears the handoff state. The phone retries interrupted connections and
 remembers a successful connection across foregrounding and app restarts.
 The desktop's review, editor, GitHub and historical-conversation surfaces
-are outside this companion's scope. The main screen's top-right icon
-offers Connect or Disconnect. Connect is blue on the disconnected page;
+are outside this companion's scope. The main screen keeps Settings and
+Connect or Disconnect at the top left in separate native glass buttons,
+with a fixed toolbar spacer between them. The new-session menu is alone
+at the top right in both sidebar modes.
+Connect is blue on the disconnected page;
 Disconnect keeps its neutral colour. The disconnected page shows only
 its title and instruction, with the Connect icon inline. An explicit
 disconnect clears the selection and the saved connection state, so
@@ -2260,6 +2384,11 @@ deadlines. The limit uses Swift 6.4's experimental parallelisation option;
 Memory errors and data races fail CI. Each uses its own build directory
 under `.build` and stops on its first finding. Extra `swift test`
 options such as `--scratch-path` affect only package tests.
+Thread Sanitizer preserves its preload environment for Swift Testing's
+exit-test subprocesses, which otherwise abort before their tests run.
+The shared process environment removes that runtime from external tool
+launches, including test teardown, so uninstrumented shells do not run
+under the test runner's sanitizer; other preloaded libraries are kept.
 Both sanitizers instrument package tests and, when signing is configured,
 the App Intents tests. These require macOS 27 for
 AppIntentsTesting; `script/test` skips it on older systems.

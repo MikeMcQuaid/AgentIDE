@@ -22,6 +22,9 @@ struct WorktreeRowView: View {
 
     /// A launch that failed here, which outranks every other state.
     let failure: LaunchFailure?
+    var block: WorkBlock?
+    var repositoryName: String?
+    var repositoryOwner: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: Self.spacing) {
@@ -30,6 +33,13 @@ struct WorktreeRowView: View {
             VStack(alignment: .leading, spacing: 1) {
                 titleLine
                 detailLine
+                if let block {
+                    Text("Blocked: " + block.dependency.label)
+                        .interfaceFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .hoverHelp(block.dependency.label)
+                }
             }
         }
         // A row never wraps: what does not fit runs under the
@@ -153,6 +163,12 @@ struct WorktreeRowView: View {
 
     private var worktreeDetailLine: some View {
         HStack(spacing: Self.spacing) {
+            if let repositoryName {
+                OwnerAvatar(owner: repositoryOwner, size: Self.agentIconSize)
+                Text(repositoryName)
+                    .lineLimit(1)
+                    .hoverHelp(repositoryOwner.map { $0 + "/" + repositoryName } ?? repositoryName)
+            }
             if let agent = item.session?.agent {
                 // The brand mark, monochrome so it reads as detail
                 // beside the counts rather than shouting colour.
@@ -180,6 +196,8 @@ struct WorktreeRowView: View {
         } else if let failure {
             Octicon("exclamationmark.triangle.fill", colour: .red)
                 .hoverHelp("The agent did not start: " + failure.message)
+        } else if let block {
+            Octicon("hand.raised.fill", colour: .orange).hoverHelp("Blocked: " + block.dependency.label)
         } else if let session = item.session, session.precedes(pullRequest) {
             SessionStatusIcon(status: session.status, activity: session.sidebarActivity)
                 .font(nameStyle.small)

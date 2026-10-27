@@ -16,7 +16,7 @@ struct PullRequestHeaderRow: View {
     /// Nil in the list, where there is nothing to go back to.
     let onBack: (() -> Void)?
 
-    let onCopyComments: @MainActor () async -> Void
+    let onCopyComments: @MainActor () -> Void
     let onOpenChecks: @MainActor () async -> Void
 
     /// Starts an agent on the pull request, in the list alone.

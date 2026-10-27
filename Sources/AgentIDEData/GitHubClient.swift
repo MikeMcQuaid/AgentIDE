@@ -297,14 +297,22 @@ public struct GitHubClient: Sendable {
             throw OfflineError(doing: "gh " + arguments.prefix(Self.loggedWords).joined(separator: " "))
         }
 
-        // `gh` is the app's network: the process funnel already
-        // times it, and this line says which calls were GitHub's.
-        let result = try await PerformanceLog.time(
-            .network,
-            "gh " + arguments.prefix(Self.loggedWords).joined(separator: " "),
-            context: directory ?? "",
-        ) {
-            try await runner.run(["gh"] + arguments, workingDirectory: directory, environment: [:])
+        var attempt = try await authentication.permit(using: runner)
+        var result = try await runGitHub(arguments, in: directory)
+        if GitHubAuthentication.rejected(result) {
+            let recovered = try await authentication.recover(after: attempt, using: runner)
+            guard Self.isReadOnly(arguments) else {
+                throw GitHubAuthenticationError(recovered: true)
+            }
+
+            attempt = recovered
+            result = try await runGitHub(arguments, in: directory)
+            if GitHubAuthentication.rejected(result) {
+                throw await authentication.reject(after: recovered)
+            }
+        }
+        if result.succeeded {
+            await authentication.succeeded(after: attempt)
         }
         guard result.succeeded || allowFailure else {
             throw CommandError(command: "gh " + arguments.joined(separator: " "), result: result)
@@ -316,6 +324,7 @@ public struct GitHubClient: Sendable {
     // MARK: Private
 
     private let isOnline: @Sendable () -> Bool
+    private let authentication: GitHubAuthentication = .init()
 
     private static func rows(fromJSON json: String) -> [PullRequestRow] {
         guard let data = json.data(using: .utf8) else {

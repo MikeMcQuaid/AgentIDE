@@ -1,3 +1,4 @@
+// swiftformat:disable testSuiteAccessControl -- Helpers are shared with manual start tests.
 import AgentIDEData
 import AgentIDEDomain
 @testable import DashboardFeature
@@ -6,8 +7,6 @@ import Testing
 
 @Suite(.serialized)
 struct ScheduledPromptsModelTests {
-    // MARK: Internal
-
     @Test
     func `overdue schedules catch up once and claim before launch`() async {
         let fixture = SessionNavigationTests.Fixture()
@@ -108,8 +107,8 @@ struct ScheduledPromptsModelTests {
         #expect(launches == 1)
     }
 
-    @Test
-    func `a failed durable claim never launches and can be retried after repair`() async throws {
+    @Test(arguments: [false, true])
+    func `a failed durable claim never launches and can be retried after repair`(manual: Bool) async throws {
         let fixture = SessionNavigationTests.Fixture()
         defer { fixture.close() }
         let prompt = prompt()
@@ -123,18 +122,24 @@ struct ScheduledPromptsModelTests {
             launches += 1
             return "after-repair"
         }
-        await model.runDue()
+        if manual {
+            await model.start(prompt)
+        } else {
+            await model.runDue()
+        }
         #expect(launches == 0)
         #expect(model.error != nil)
         try FileManager.default.removeItem(atPath: file)
-        await model.runDue()
+        if manual {
+            await model.start(prompt)
+        } else {
+            await model.runDue()
+        }
         #expect(launches == 1)
         #expect(model.error == nil)
     }
 
-    // MARK: Private
-
-    private func prompt() -> ScheduledPrompt {
+    func prompt() -> ScheduledPrompt {
         var prompt = ScheduledPrompt(repositoryPath: "/repository")
         prompt.name = "Daily review"
         prompt.prompt = "Check recent changes"
@@ -143,7 +148,7 @@ struct ScheduledPromptsModelTests {
         return prompt
     }
 
-    private func makeModel(_ fixture: SessionNavigationTests.Fixture) -> ScheduledPromptsModel {
+    func makeModel(_ fixture: SessionNavigationTests.Fixture) -> ScheduledPromptsModel {
         let model = ScheduledPromptsModel(store: fixture.model.store, service: fixture.model.service)
         model.now = { Date(timeIntervalSince1970: 1_893_686_400) }
         return model

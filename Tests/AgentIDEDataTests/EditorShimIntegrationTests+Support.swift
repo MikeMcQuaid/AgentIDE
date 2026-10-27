@@ -43,7 +43,7 @@ extension EditorShimIntegrationTests {
             // Fake tools first, so a recording `open` answers.
             environment["PATH"] = toolDirectory + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
         }
-        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+        process.environment = ProcessEnvironment.scrubbed(merging: environment)
         try process.run()
         return process
     }

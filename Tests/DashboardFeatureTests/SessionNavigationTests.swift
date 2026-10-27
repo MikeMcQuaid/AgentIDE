@@ -24,7 +24,7 @@ struct SessionNavigationTests {
             let github = GitHubClient(runner: runner) { true }
             let service = SessionService(
                 paths: paths,
-                git: GitClient(runner: runner),
+                git: GitClient(runner: runner) { true },
                 herdr: HerdrClient(
                     runner: runner,
                     launcher: SandvaultLauncher(hostUser: "test"),
@@ -112,9 +112,7 @@ struct SessionNavigationTests {
             try? FileManager.default.removeItem(atPath: root)
         }
 
-        // MARK: Private
-
-        private func textView(in view: NSView) -> NSTextView? {
+        func textView(in view: NSView) -> NSTextView? {
             (view as? NSTextView) ?? view.subviews.lazy.compactMap { textView(in: $0) }.first
         }
     }
@@ -177,6 +175,8 @@ struct SessionNavigationTests {
         }
         try #require(submitted == "First prompt")
         #expect(defaults.string(forKey: AgentSessionForm.promptKey)?.isEmpty == true)
+        host.layoutSubtreeIfNeeded()
+        #expect(fixture.textView(in: host) == nil)
 
         host.rootView = AnyView(EmptyView())
         host.layoutSubtreeIfNeeded()

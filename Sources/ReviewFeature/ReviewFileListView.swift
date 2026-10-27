@@ -67,6 +67,8 @@ struct ReviewFileListView: View {
 
     @AppStorage(UtilityTabTarget.pullRequestCacheKey)
     private var automationGeneration = 0
+    @AppStorage(UtilityTabTarget.resolutionMarksKey)
+    private var resolutionGeneration = 0
 
     private var conversations: [ReviewThread] {
         model.threads + (localReview.review?.threads ?? [])
@@ -109,13 +111,14 @@ struct ReviewFileListView: View {
             thread: thread,
             onEdit: { FileOpener.open(relativePath: thread.path, line: thread.line, worktreePath: worktreePath) },
             onToggleResolved: { await model.toggleResolved(thread) },
-            onToggleResolveOnPush: { await model.toggleResolveOnPush(thread) },
+            onToggleResolveOnPush: { model.toggleResolveOnPush(thread) },
             isPendingResolution: pendingResolution(thread),
         )
     }
 
     private func pendingResolution(_ thread: ReviewThread) -> Bool {
         _ = automationGeneration
+        _ = resolutionGeneration
         return model.pendingResolution(thread)
     }
 

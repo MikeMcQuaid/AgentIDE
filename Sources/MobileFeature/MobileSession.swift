@@ -1,5 +1,4 @@
 import AgentIDEDomain
-import Foundation
 
 /// One running terminal in the phone's repository navigation.
 struct MobileSession: Identifiable, Hashable {
@@ -47,7 +46,7 @@ struct MobileSession: Identifiable, Hashable {
                     name: workspace.label,
                     repository: SessionName.repositorySlug(of: workspace.label) ?? workspace.label,
                     branch: pane.directory.flatMap { worktrees[$0]?.branch }
-                        ?? worktreeDirectory.map { URL(filePath: $0).lastPathComponent }
+                        ?? worktreeDirectory.map { Worktree.directoryBranch(at: $0) }
                         ?? "Unknown branch",
                     agent: pane.agent.flatMap(AgentKind.init(rawValue:)),
                     activity: AgentActivity(herdrStatus: pane.agentStatus),

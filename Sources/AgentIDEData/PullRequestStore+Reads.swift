@@ -6,6 +6,12 @@ extension PullRequestStore {
     static let listingReads: PullRequestReads<[PullRequestSummary]?> = .init()
     static let summaryReads: PullRequestReads<PullRequestSummary?> = .init()
     static let conversationReads: PullRequestReads<PullRequestConversation> = .init()
+    static let capabilityReads: PullRequestReads<Bool> = .init()
+    // Nil keeps an unreadable ruleset distinct from an empty one.
+    // swiftlint:disable:next discouraged_optional_collection
+    static let requiredChecksReads: PullRequestReads<Set<String>?> = .init()
+    static let labelReads: PullRequestReads<[String]> = .init()
+    static let queueReads: PullRequestReads<[String]> = .init()
 }
 
 // MARK: - PullRequestReads
@@ -19,10 +25,10 @@ actor PullRequestReads<Value: Sendable> {
             return try await running.value
         }
         let task = Task {
-            try await read()
+            defer { pending[key] = nil }
+            return try await read()
         }
         pending[key] = task
-        defer { pending[key] = nil }
         return try await task.value
     }
 

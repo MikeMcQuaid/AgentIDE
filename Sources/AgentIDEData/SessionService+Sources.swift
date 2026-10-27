@@ -191,8 +191,8 @@ public extension SessionService {
     /// always count, the main checkout only while a session runs in
     /// it, so resuming on the repository page bumps the repository
     /// without its everyday churn reordering anything. Here rather
-    /// than the main file for length; internal, unlike the extension.
-    internal static func repositoryActivity(of group: RepositoryGroup) -> Int {
+    /// than the main file for length, shared with the sidebar views.
+    static func repositoryActivity(of group: RepositoryGroup) -> Int {
         let worktrees = group.items.dropFirst().map(\.lastActivityAt).max() ?? 0
         guard let main = group.items.first, main.session != nil else {
             return worktrees

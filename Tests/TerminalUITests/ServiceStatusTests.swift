@@ -1,3 +1,4 @@
+@testable import AgentIDEData
 import Foundation
 @testable import TerminalUI
 import Testing
@@ -73,6 +74,17 @@ struct ServiceStatusTests {
         )
         #expect(ErrorLog.shared.entries.count == before)
         #expect(status.isUnavailable == false)
+    }
+
+    @Test
+    func `a recovered-then-rejected sign-in is reported once across readers`() {
+        let failure = GitHubAuthenticationError()
+        let before = ErrorLog.shared.entries.count
+        for operation in ["Listing one", "Listing two", "Reading comments"] {
+            ServiceStatus.shared.record(failure: failure, doing: operation)
+        }
+        #expect(ErrorLog.shared.entries.count == before + 1)
+        #expect(ErrorLog.shared.entries.last?.message == failure.localizedDescription)
     }
 
     // MARK: Private

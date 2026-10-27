@@ -44,6 +44,9 @@ public enum UtilityTabTarget {
     /// rather than on their next poll.
     public static let pullRequestCacheKey = "pullRequestCacheGeneration"
 
+    /// Local resolution marks redraw both review panes without fetching GitHub.
+    public static let resolutionMarksKey = "resolutionMarksGeneration"
+
     /// Bumped by the menu bar's Refresh and by every action of the
     /// app's own that moves a branch (a push, a rebase, a commit, an
     /// amend), so the sidebar reads git now rather than on its next
@@ -59,6 +62,11 @@ public enum UtilityTabTarget {
     /// of them changed.
     public static func pullRequestCacheChanged() {
         bump(pullRequestCacheKey)
+    }
+
+    /// Repaints pending marks without invalidating remote data.
+    public static func resolutionMarksChanged() {
+        bump(resolutionMarksKey)
     }
 
     // MARK: Private
