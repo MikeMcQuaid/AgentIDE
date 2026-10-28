@@ -208,8 +208,8 @@ private struct AdvancedSettingsPane: View {
                 fallback: shared + "/worktrees",
             )
             Text("Where checkouts and worktrees live; the defaults are the shared "
-                + "workspace's own directories. Takes effect on the next refresh; the "
-                + "bundled agentide command keeps the defaults.")
+                + "workspace's own directories. Takes effect on the next refresh, which "
+                + "is also when the agentide command and the iPhone follow them.")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }

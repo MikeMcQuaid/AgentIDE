@@ -65,8 +65,9 @@ $(bold 'agentide') [-w|--wait] <file>...
 
 $(bold 'agentide') <directory>
     Select that worktree or repository in the app. Only a checkout
-    under \$SHARED_WORKSPACE/repositories or a worktree under
-    \$SHARED_WORKSPACE/worktrees is accepted.
+    or worktree in the Repositories and Worktrees directories set in
+    the app's Settings (by default \$SHARED_WORKSPACE/repositories
+    and /worktrees) is accepted.
 
 $(bold 'agentide new')
     Start a session: asks for the repository, agent, effort, model
@@ -81,7 +82,9 @@ $(bold 'agentide new') --repository <name> --agent <claude|codex>
     workspace as JSON. Only existing repositories are accepted.
 
 $(bold 'agentide repositories')
-    List existing repository names, one per line.
+    List existing repository names, one per line, from the
+    Repositories directory set in the app's Settings (by default
+    \$SHARED_WORKSPACE/repositories).
 USAGE
   exit "${1:-64}"
 }
@@ -98,6 +101,18 @@ defaults_file() {
 default_for() {
   [ -f "$2" ] || return 0
   sed -n "s/^$1=//p" "$2" | head -1
+}
+
+# Where the app keeps checkouts and worktrees: Settings can move
+# them, and only the app can read Settings, so it publishes them.
+repositories_directory() {
+  published="$(default_for repositories-directory "$(defaults_file "$1")")"
+  printf '%s' "${published:-$1/repositories}"
+}
+
+worktrees_directory() {
+  published="$(default_for worktrees-directory "$(defaults_file "$1")")"
+  printf '%s' "${published:-$1/worktrees}"
 }
 
 # Writes choices back into the defaults file, keeping every other
@@ -349,20 +364,21 @@ agentide_new() {
   # not, so the host user's name is read off this account's own.
   shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
   defaults="$(defaults_file "${shared}")"
+  repositories_root="$(repositories_directory "${shared}")"
 
   if [ -n "${no_attach}" ]; then
-    repository_path="${shared}/repositories/${repository}"
+    repository_path="${repositories_root}/${repository}"
     [ -d "${repository_path}/.git" ] || [ -f "${repository_path}/.git" ] ||
       fail "no repository at ${repository_path}" 66
-    root="$(cd "${shared}/repositories" && pwd -P)"
+    root="$(cd "${repositories_root}" && pwd -P)"
     [ "$(cd "${repository_path}" && pwd -P)" = "${root}/${repository}" ] ||
       fail "repository must be inside ${root}" 66
     prompt="$(cat)"
     [ -n "${prompt}" ] || fail "a prompt is required"
   else
     repositories="$(default_for repositories "${defaults}")"
-    if [ -z "${repositories}" ] && [ -d "${shared}/repositories" ]; then
-      for entry in "${shared}"/repositories/*/; do
+    if [ -z "${repositories}" ] && [ -d "${repositories_root}" ]; then
+      for entry in "${repositories_root}"/*/; do
         [ -d "${entry}" ] || continue
         repositories="${repositories}$(basename "${entry}") "
       done
@@ -370,7 +386,7 @@ agentide_new() {
 
     # shellcheck disable=SC2086
     repository="$(ask_choice Repository "$(default_for repository "${defaults}")" ${repositories})"
-    [ -n "${repository}" ] || fail "no repository to choose from in ${shared}/repositories" 66
+    [ -n "${repository}" ] || fail "no repository to choose from in ${repositories_root}" 66
 
     agent="$(ask_choice Agent "$(default_for agent "${defaults}")" claude codex)"
     [ -n "${agent}" ] || agent=claude
@@ -385,7 +401,7 @@ agentide_new() {
     prompt="$(ask_text Prompt)"
   fi
 
-  repository_path="${shared}/repositories/${repository}"
+  repository_path="${repositories_root}/${repository}"
   branch="$(branch_from_prompt "${prompt}")"
 
   # Branch names are unique, as the app makes them: an existing one
@@ -402,7 +418,7 @@ agentide_new() {
   fi
 
   label="agentide--$(slug "${repository}")--$(slug "${branch}")--${agent}"
-  worktree="${shared}/worktrees/${repository}/$(printf '%s' "${branch}" | tr '/' '-')"
+  worktree="$(worktrees_directory "${shared}")/${repository}/$(printf '%s' "${branch}" | tr '/' '-')"
   prompt_file="${shared}/agentide/prompts/${label}.md"
 
   # The launch flags the app would pass for the chosen model and
@@ -473,7 +489,7 @@ fi
 
 if [ "${1:-}" = "repositories" ]; then
   shared="${SHARED_WORKSPACE:-/Users/Shared/sv-$(printf '%s' "${USER}" | sed 's/^sandvault-//')}"
-  for entry in "${shared}"/repositories/*/; do
+  for entry in "$(repositories_directory "${shared}")"/*/; do
     [ -L "${entry%/}" ] && continue
     [ -d "${entry}.git" ] || [ -f "${entry}.git" ] || continue
     printf '%s\n' "$(basename "${entry}")"
@@ -552,12 +568,17 @@ for file in "$@"; do
     # Both sides physical, since a temporary directory or a home on
     # a symlink would otherwise never match its own workspace.
     shared="$(cd "${shared}" 2>/dev/null && pwd -P || printf '%s' "${shared}")"
+    repositories_root="$(repositories_directory "${shared}")"
+    repositories_root="$(cd "${repositories_root}" 2>/dev/null && pwd -P || printf '%s' "${repositories_root}")"
+    worktrees_root="$(worktrees_directory "${shared}")"
+    worktrees_root="$(cd "${worktrees_root}" 2>/dev/null && pwd -P || printf '%s' "${worktrees_root}")"
     path="$(cd "${path}" && pwd -P)"
-    # A checkout is one name under `repositories`, a worktree two
-    # under `worktrees`, and those are the rows the app can select.
-    # Anywhere inside one counts as it: `agentide .` deep in a tree
-    # is how you get back to the window, so the path walks up until
-    # it is a row or has left the workspace.
+    # A checkout is one name under the repositories directory, a
+    # worktree two under the worktrees directory, and those are the
+    # rows the app can select. Anywhere inside one counts as it:
+    # `agentide .` deep in a tree is how you get back to the window,
+    # so the path walks up until it is a row or has left the
+    # workspace.
     row=""
     candidate="${path}"
     listed_file="${shared}/agentide/host-directories"
@@ -575,27 +596,25 @@ for file in "$@"; do
         done <"${listed_file}"
       fi
       [ -z "${row}" ] || break
+      # Worktrees first, since Settings can put them inside the
+      # repositories directory; anything deeper walks up to its row.
       case "${candidate}" in
-        "${shared}/"*) rest="${candidate#"${shared}/"}" ;;
-        *) rest="" ;;
-      esac
-      case "${rest}" in
-        repositories/* | worktrees/*/*)
-          # A checkout is one name under `repositories`, a worktree
-          # two under `worktrees`; anything deeper walks up to it.
-          case "${rest}" in
-            repositories/*/* | worktrees/*/*/*) ;;
-            *)
-              row="${candidate}"
-              break
-              ;;
-          esac
+        "${worktrees_root}" | "${repositories_root}") break ;;
+        "${worktrees_root}/"*/*/*) ;;
+        "${worktrees_root}/"*/*)
+          row="${candidate}"
+          break
           ;;
-        "")
-          # Outside the workspace: only a listed directory above can
-          # make this a row.
+        "${worktrees_root}/"*) break ;;
+        "${repositories_root}/"*/*) ;;
+        "${repositories_root}/"*)
+          row="${candidate}"
+          break
           ;;
-        *) break ;;
+        # Anywhere else inside the workspace is no row; outside it,
+        # only a listed directory above can make this one.
+        "${shared}/"*) break ;;
+        *) ;;
       esac
       candidate="$(dirname "${candidate}")"
     done

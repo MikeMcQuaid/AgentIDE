@@ -3,13 +3,14 @@ import Foundation
 
 extension DashboardModel {
     /// Hands `agentide new` what only the app can know: which
-    /// repositories exist and what each agent offers. What was last
-    /// chosen is not published here, since the command chooses too
-    /// and its choice must survive the next poll.
+    /// repositories exist, where Settings keeps them and their
+    /// worktrees, and what each agent offers. What was last chosen
+    /// is not published here, since the command chooses too and its
+    /// choice must survive the next poll.
     func publishSessionChoices() {
         var values: [(key: String, value: String)] = [
             ("repositories", repositories.map(\.name).joined(separator: " ")),
-        ]
+        ] + service.locationChoices
         for agent in AgentKind.allCases {
             let choices = launchChoices(for: agent)
             values.append((agent.rawValue + "-models", choices.models.joined(separator: " ")))

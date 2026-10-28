@@ -10,34 +10,50 @@ public extension SessionService {
         EditorShim(paths: paths).environment
     }
 
+    /// Where Settings keeps checkouts and worktrees, for the
+    /// published choices: only the host user can read Settings, and
+    /// `agentide` looks wherever the app does. Always the resolved
+    /// path, so clearing an override replaces the one it left.
+    var locationChoices: [(key: String, value: String)] {
+        [
+            ("repositories-directory", publishedLocation(paths.repositoriesDirectory)),
+            ("worktrees-directory", publishedLocation(paths.worktreesDirectory)),
+        ]
+    }
+
+    /// A location agents can run in, or empty, which the command
+    /// reads as unset: outside the shared workspace setup reports the
+    /// location and no agent launches there, so the command keeps to
+    /// the defaults rather than making worktrees nothing can use.
+    internal func publishedLocation(_ directory: String) -> String {
+        if (try? requireSandboxWorkspace(directory)) == nil {
+            ""
+        } else {
+            directory
+        }
+    }
+
     /// Publishes what a session was last started with, so
     /// `agentide new` offers the same repositories, agents, models
     /// and efforts with the last ones already chosen. Written as
     /// `key=value` lines because the sandbox has no JSON tool and
     /// the command reading them is a shell script, and merged with
     /// what is there: the file is one memory shared with that
-    /// command, which writes its own choices into it.
+    /// command, which writes its own choices into it. A value
+    /// holding a newline cannot be one line, so its key is dropped
+    /// and the command falls back to its own default. Every refresh
+    /// publishes, so an unchanged file is left alone, and the sandbox
+    /// can write the file, so it is read and replaced as a
+    /// `SandboxFile`.
     func publishSessionChoices(_ values: [(key: String, value: String)]) {
-        let file = paths.agentideDirectory + "/session-defaults"
-        var merged = [String]()
-        var replaced = Set(values.map(\.key))
-        for line in (try? String(contentsOfFile: file, encoding: .utf8))?.split(separator: "\n") ?? [] {
-            let key = String(line.prefix { $0 != "=" })
-            if replaced.contains(key) == false {
-                merged.append(String(line))
-            }
+        let replaced = Set(values.map(\.key))
+        SandboxFile.update("session-defaults", in: paths.agentideDirectory) { existing in
+            let kept = (existing?.split(separator: "\n") ?? [])
+                .filter { replaced.contains(String($0.prefix { $0 != "=" })) == false }
+                .map(String.init)
+            let published = values.filter { $0.value.contains("\n") == false }.map { $0.key + "=" + $0.value }
+            return (kept + published).sorted().joined(separator: "\n") + "\n"
         }
-        replaced = []
-        merged += values.map { $0.key + "=" + $0.value }
-        try? FileManager.default.createDirectory(
-            atPath: paths.agentideDirectory,
-            withIntermediateDirectories: true,
-        )
-        try? (merged.sorted().joined(separator: "\n") + "\n").write(
-            toFile: file,
-            atomically: true,
-            encoding: .utf8,
-        )
     }
 
     /// Every file a command is waiting on, in the order they were

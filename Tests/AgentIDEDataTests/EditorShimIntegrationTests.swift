@@ -189,6 +189,35 @@ struct EditorShimIntegrationTests {
     }
 
     @Test
+    func `a relocated checkout is selected from inside it, and the default directory is not`() async throws {
+        let root = try TestSupport.temporaryDirectory("shim-relocated")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let shim = shim(root: root)
+        let spool = ExternalEditSpool(directory: paths(root: root).editsDirectory)
+        let shared = paths(root: root).sharedWorkspace
+        let checkout = shared + "/projects/repo"
+        let abandoned = shared + "/repositories/repo"
+        for directory in [checkout + "/sub/dir", abandoned, shared + "/agentide"] {
+            try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        }
+        try ("repositories-directory=" + shared + "/projects\n").write(
+            toFile: shared + "/agentide/session-defaults",
+            atomically: true,
+            encoding: .utf8,
+        )
+
+        let selecting = try run(shim, arguments: [checkout + "/sub/dir"], in: root, sharedWorkspace: shared)
+        try await exit(of: selecting)
+        #expect(selecting.terminationStatus == 0)
+        #expect(spool.pending().first?.path == checkout)
+
+        let refused = try run(shim, arguments: [abandoned], in: root, sharedWorkspace: shared)
+        try await exit(of: refused)
+        #expect(refused.terminationStatus == 66)
+        #expect(spool.pending().count == 1)
+    }
+
+    @Test
     func `a directory of your own is selected from anywhere inside it`() async throws {
         let root = try TestSupport.temporaryDirectory("shim-listed")
         defer { try? FileManager.default.removeItem(atPath: root) }
