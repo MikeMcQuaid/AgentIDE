@@ -32,7 +32,7 @@ Bring your own agent CLI and sandboxed non-admin user; no marketplace, bundled m
 
 - An Apple silicon Mac running macOS Tahoe (26) or later.
 - [Homebrew](https://brew.sh), with Git, [`gh`](https://cli.github.com), [`herdr`](https://herdr.dev) and [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
-- [sandvault](https://github.com/webcoyote/sandvault), which creates the sandbox user and the shared workspace.
+- [sandvault](https://github.com/webcoyote/sandvault) 1.29 or later, which creates the sandbox user and the shared workspace.
 - [`gh`](https://cli.github.com) authenticated as you; it stays with your user and agents never see it.
 - Claude Code or Codex CLI installed and signed in inside sandvault.
 - Xcode 27 or later, only to build from source.
@@ -85,13 +85,12 @@ Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Ma
 1. Copy the public key from iPhone Settings to your Mac's clipboard, then install it for the sandbox user:
 
    ```bash
-   printf '%s\n' "$(pbpaste)" >"${HOME}/Downloads/agentide-phone.pub"
-   guest_keys="$(brew --prefix sandvault)/libexec/guest/home/.ssh/authorized_keys"
-   cat "${HOME}/Downloads/agentide-phone.pub" >>"${guest_keys}"
-   sv --rebuild build
+   mkdir -p ~/.config/codeofhonor/sandvault/authorized_keys.d
+   pbpaste >~/.config/codeofhonor/sandvault/authorized_keys.d/agentide-phone
+   sv build
    ```
 
-   Keep this in your dotfiles: sandvault upgrades replace the template.
+   This needs sandvault 1.29 or later; deleting that file and running `sv build` again revokes the key.
 
 2. Add this to `/etc/ssh/sshd_config.d/000-agentide.conf`, replacing `<you>` with your username and adjusting the workspace path, then enable Remote Login for `sandvault-<you>`:
 
