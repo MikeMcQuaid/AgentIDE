@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
+import SanductorData
+import SanductorDomain
 import SwiftUI
 
 /// The shared workflow lives beside the diff and PR, separate from the local reviewer.

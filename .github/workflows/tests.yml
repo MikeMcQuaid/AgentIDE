@@ -153,9 +153,9 @@ jobs:
 
       - name: Build and analyze both apps
         env:
-          AGENTIDE_ANALYZE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SANDUCTOR_ANALYZE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          test -n "${AGENTIDE_ANALYZE_BASE}"
+          test -n "${SANDUCTOR_ANALYZE_BASE}"
           script/analyze
 
       # Reuse analysis's clean Release build when finishing the signed app.
@@ -179,8 +179,8 @@ jobs:
       - name: Upload the app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: AgentIDE
-          path: .build/AgentIDE-*.zip
+          name: Sanductor
+          path: .build/Sanductor-*.zip
           # The zip lives in a hidden directory, skipped by default.
           include-hidden-files: true
           if-no-files-found: error

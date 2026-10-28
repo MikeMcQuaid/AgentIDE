@@ -1,7 +1,7 @@
-import AgentIDEDomain
 import DashboardFeature
 import Foundation
 import ReviewFeature
+import SanductorDomain
 
 // MARK: - Editor slot routing
 

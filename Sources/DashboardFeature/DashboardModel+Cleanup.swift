@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// Cleanup after a merge, split from the model body for length: the

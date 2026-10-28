@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build AgentIDE.app, update the repository-root symlink and print its path.
+# Build Sanductor.app, update the repository-root symlink and print its path.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 } < <(script/version)
 script/version --xcconfig .build/version.xcconfig
 
-[[ -d AgentIDE.xcodeproj ]] || script/bootstrap
+[[ -d Sanductor.xcodeproj ]] || script/bootstrap
 
 # A new source file is invisible to the generated project until
 # XcodeGen runs again; the sandbox gate builds with SwiftPM, which
@@ -31,8 +31,8 @@ JOBS="$(sysctl -n hw.ncpu)"
 configuration="${XCODE_CONFIGURATION:-Release}"
 
 ARGS=(
-  -project AgentIDE.xcodeproj
-  -scheme AgentIDEApp
+  -project Sanductor.xcodeproj
+  -scheme SanductorApp
   -configuration "${configuration}"
   -destination "${XCODE_DESTINATION:-platform=macOS,arch=arm64}"
   -derivedDataPath .DerivedData
@@ -49,7 +49,7 @@ ACTIONS=(build)
 # build tool plugin under `sandbox-exec`, which cannot nest, so
 # `xcodebuild` cannot get past it here however its flags are set.
 # `swift build` runs the same plugin unsandboxed and compiles every
-# target, `App` included, through the `AgentIDEAppSources` target
+# target, `App` included, through the `SanductorAppSources` target
 # that exists for exactly this. What it cannot make is the bundle:
 # the app itself is built on the host and by CI. Nothing xcodebuild
 # needs is prepared first: the sandbox user's preferences daemon has
@@ -77,9 +77,9 @@ ARGS+=(-skipPackagePluginValidation)
 
 xcodebuild "${ARGS[@]}" "${ACTIONS[@]}"
 
-app=".DerivedData/Build/Products/${configuration}/AgentIDE.app"
+app=".DerivedData/Build/Products/${configuration}/Sanductor.app"
 codesign --verify --deep --strict "${app}"
-ln -sfn "${app}" AgentIDE.app
+ln -sfn "${app}" Sanductor.app
 # Icon caches key on the bundle's modification time; bump it so the
 # Dock and Finder notice icon changes.
 touch "${app}"

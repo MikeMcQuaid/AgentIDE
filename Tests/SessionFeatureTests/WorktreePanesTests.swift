@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import AppKit
 import Observation
+import SanductorDomain
 import SessionFeature
 import SwiftUI
 import Testing

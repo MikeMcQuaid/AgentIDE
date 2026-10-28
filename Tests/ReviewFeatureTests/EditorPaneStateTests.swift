@@ -1,6 +1,6 @@
-import AgentIDEData
 import AppKit
 @testable import ReviewFeature
+import SanductorData
 import SwiftUI
 import TerminalUI
 import Testing

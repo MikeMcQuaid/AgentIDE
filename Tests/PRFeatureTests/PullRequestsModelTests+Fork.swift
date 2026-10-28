@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// Working in someone else's repository: the branch goes to a fork
@@ -59,7 +59,7 @@ extension PullRequestsModelTests {
         // draft the other reads.
         let metadataFile = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-draft-" + UUID().uuidString + ".json")
+            .appendingPathComponent("sanductor-draft-" + UUID().uuidString + ".json")
             .path
         defer { try? FileManager.default.removeItem(atPath: metadataFile) }
         let model = makeModel(items: [item(branch: "feature", ahead: 2)], metadataFile: metadataFile)

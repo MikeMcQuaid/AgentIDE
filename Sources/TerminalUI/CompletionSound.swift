@@ -117,5 +117,5 @@ public enum CompletionSound {
     private nonisolated static let pollSeconds: TimeInterval = 0.05
 
     /// One sound at a time, away from the main thread.
-    private static let queue: DispatchQueue = .init(label: "agentide.chime", qos: .userInitiated)
+    private static let queue: DispatchQueue = .init(label: "sanductor.chime", qos: .userInitiated)
 }

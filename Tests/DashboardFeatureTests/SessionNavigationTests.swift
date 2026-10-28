@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 @testable import DashboardFeature
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import Synchronization
 import Testing

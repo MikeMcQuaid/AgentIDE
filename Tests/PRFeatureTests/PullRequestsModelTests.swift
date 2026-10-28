@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Synchronization
 import Testing
 
@@ -129,7 +129,7 @@ struct PullRequestsModelTests {
     func `the cached listing paints when the fetch fails`() async {
         let file = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-prmodel-" + UUID().uuidString + ".json")
+            .appendingPathComponent("sanductor-prmodel-" + UUID().uuidString + ".json")
             .path
         defer { try? FileManager.default.removeItem(atPath: file) }
 

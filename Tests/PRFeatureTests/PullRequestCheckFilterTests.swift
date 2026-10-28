@@ -1,5 +1,5 @@
-import AgentIDEDomain
 @testable import PRFeature
+import SanductorDomain
 import Testing
 
 struct PullRequestCheckFilterTests {

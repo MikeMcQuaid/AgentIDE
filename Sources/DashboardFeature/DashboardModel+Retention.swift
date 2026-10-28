@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 
 /// Keeping rows that a single reading of the system lost.
 public extension DashboardModel {

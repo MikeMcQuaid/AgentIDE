@@ -4,6 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# shellcheck source=bin/environment.sh
+. bin/environment.sh
+
 bash Tests/ScriptTests.sh
 
 # SwiftPM otherwise signs resource-only bundles as executables and
@@ -41,7 +44,7 @@ done
 # The tests run every process the app does, and with the performance
 # log switched on they wrote thousands of scratch-repository lines
 # into the real one; they log into their own scratch instead.
-export AGENTIDE_PERFORMANCE_LOG_DIRECTORY="${PWD}/.test-scratch/performance"
+export SANDUCTOR_PERFORMANCE_LOG_DIRECTORY="${PWD}/.test-scratch/performance"
 
 # Stops the herdr servers a killed run left behind. Each test server
 # is bound to a socket under this checkout's .test-scratch, which is
@@ -100,16 +103,16 @@ swift test "${swift_args[@]}"
 # The App Intents run through the system's own runtime from a UI
 # testing bundle, which only xcodebuild can build and run: host and
 # CI on macOS 27 or later, never the sandbox.
-# AGENTIDE_SKIP_INTENT_TESTS=1 leaves them out.
+# SANDUCTOR_SKIP_INTENT_TESTS=1 leaves them out.
 # The framework refuses a runner signed differently from the app
 # ("does not have permission to perform this"), so both sign with one
 # real team, named in the environment; without one the bundle is left
 # out, which is what CI has.
 if [[ "$(sw_vers -productVersion | cut -d. -f1)" -lt 27 ]]; then
   echo "AppIntentsTesting requires macOS 27: skipping the App Intents tests" >&2
-elif [[ -z "${AGENTIDE_DEVELOPMENT_TEAM:-}" ]]; then
-  echo "AGENTIDE_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
-elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
+elif [[ -z "${SANDUCTOR_DEVELOPMENT_TEAM:-}" ]]; then
+  echo "SANDUCTOR_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
+elif [[ -z "${SANDUCTOR_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
   script/project
   # Quiet, so the build's noise stays out, but a failure's reasons
   # come back out of the result bundle: xcodebuild -quiet names the
@@ -118,9 +121,9 @@ elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/nu
   rm -rf "${results}"
   if ! xcodebuild test \
     "${xcode_args[@]}" \
-    -project AgentIDE.xcodeproj \
-    -scheme AgentIDEApp \
-    -only-testing:AgentIDEIntentTests \
+    -project Sanductor.xcodeproj \
+    -scheme SanductorApp \
+    -only-testing:SanductorIntentTests \
     -skipPackagePluginValidation \
     -onlyUsePackageVersionsFromResolvedFile \
     -clonedSourcePackagesDirPath .build \
@@ -128,7 +131,7 @@ elif [[ -z "${AGENTIDE_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/nu
     ARCHS=arm64 \
     CODE_SIGN_STYLE=Automatic \
     CODE_SIGN_IDENTITY="Apple Development" \
-    DEVELOPMENT_TEAM="${AGENTIDE_DEVELOPMENT_TEAM}" \
+    DEVELOPMENT_TEAM="${SANDUCTOR_DEVELOPMENT_TEAM}" \
     -quiet; then
     xcrun xcresulttool get test-results summary --path "${results}" 2>/dev/null |
       python3 -c '

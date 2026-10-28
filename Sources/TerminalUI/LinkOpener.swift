@@ -170,7 +170,7 @@ public enum FileOpener {
     // MARK: Public
 
     /// Shows a file that belongs to no worktree in whichever one is
-    /// on screen: `agentide` can be handed anything readable, and
+    /// on screen: `sanductor` can be handed anything readable, and
     /// refusing it would be less useful than showing it.
     @preconcurrency
     @MainActor

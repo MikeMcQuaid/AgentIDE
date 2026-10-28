@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 
 extension DashboardModel {
     var selectedItems: [WorktreeItem] {

@@ -7,10 +7,15 @@ import Testing
 struct TerminalKeyRoutingTests {
     // MARK: Internal
 
-    @Test(arguments: [false, true], [UInt16(126), 125])
+    @Test(arguments: [false, true], [
+        (("\u{F700}", UInt16(126)), ("\u{1B}[1;3A", "\u{1B}\u{1B}[A")),
+        (("\u{F701}", 125), ("\u{1B}[1;3B", "\u{1B}\u{1B}[B")),
+        (("\u{F702}", 123), ("\u{1B}[1;3D", "\u{1B}b")),
+        (("\u{F703}", 124), ("\u{1B}[1;3C", "\u{1B}f")),
+    ])
     func `agent option arrows keep their modifiers without local keyboard modes`(
         herdrBacked: Bool,
-        keyCode: UInt16,
+        key: (input: (character: String, code: UInt16), output: (agent: String, shell: String)),
     ) throws {
         let pane = try Self.focusedPane(herdrBacked: herdrBacked)
         defer { pane.window.close() }
@@ -21,10 +26,10 @@ struct TerminalKeyRoutingTests {
             timestamp: 0,
             windowNumber: pane.window.windowNumber,
             context: nil,
-            characters: keyCode == 126 ? "\u{F700}" : "\u{F701}",
-            charactersIgnoringModifiers: keyCode == 126 ? "\u{F700}" : "\u{F701}",
+            characters: key.input.character,
+            charactersIgnoringModifiers: key.input.character,
             isARepeat: false,
-            keyCode: keyCode,
+            keyCode: key.input.code,
         ))
 
         if let forwarded = pane.view.routeKey(event) {
@@ -32,7 +37,7 @@ struct TerminalKeyRoutingTests {
         }
 
         #expect(String(bytes: pane.capture.bytes, encoding: .utf8)
-            == (herdrBacked ? "\u{1B}[1;3" : "\u{1B}\u{1B}[") + (keyCode == 126 ? "A" : "B"))
+            == (herdrBacked ? key.output.agent : key.output.shell))
     }
 
     /// The keypad digits, the separator and the operators, against a

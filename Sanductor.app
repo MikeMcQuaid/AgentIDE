@@ -1,0 +1,1 @@
+.DerivedData/Build/Products/Release/Sanductor.app

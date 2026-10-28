@@ -1,6 +1,6 @@
-import AgentIDERemote
 import Foundation
 @testable import MobileFeature
+import SanductorRemote
 import Testing
 
 extension MobileConnectionTests {

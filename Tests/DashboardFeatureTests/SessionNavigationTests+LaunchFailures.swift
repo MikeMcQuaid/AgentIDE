@@ -1,8 +1,8 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 @testable import DashboardFeature
 import Foundation
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import Testing
 

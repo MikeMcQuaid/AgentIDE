@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import Foundation
 @testable import MobileFeature
+import SanductorDomain
 import Testing
 
 struct MobileBranchNameTests {
@@ -11,7 +11,7 @@ struct MobileBranchNameTests {
         ))
         let snapshot = try HerdrSnapshot.decode(Data(#"""
         {"result":{"snapshot":{
-          "workspaces":[{"workspace_id":"w1","label":"agentide--repo--work--claude"}],
+          "workspaces":[{"workspace_id":"w1","label":"sanductor--repo--work--claude"}],
           "panes":[{"workspace_id":"w1","pane_id":"w1:p1","cwd":"\#(directory)"}]
         }}}
         """#.utf8))

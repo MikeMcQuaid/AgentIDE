@@ -1,4 +1,4 @@
-import AgentIDERemote
+import SanductorRemote
 
 extension MobileModel {
     func terminal(paneID: String) async throws -> SSHCommand {

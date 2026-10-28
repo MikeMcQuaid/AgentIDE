@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 
 /// The creation form's draft persistence and template helpers, split
 /// from the model body for length: a branch's unfinished title, body

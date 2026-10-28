@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import DashboardFeature
 import Foundation
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 import Testing

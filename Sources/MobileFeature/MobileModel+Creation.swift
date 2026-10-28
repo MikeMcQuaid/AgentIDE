@@ -1,5 +1,5 @@
-import AgentIDEDomain
-import AgentIDERemote
+import SanductorDomain
+import SanductorRemote
 
 /// Session creation is never replayed after an ambiguous disconnect.
 extension MobileModel {

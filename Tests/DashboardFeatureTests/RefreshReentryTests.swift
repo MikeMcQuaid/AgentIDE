@@ -1,6 +1,6 @@
-import AgentIDEData
 @testable import DashboardFeature
 import Foundation
+import SanductorData
 import Testing
 
 /// A reading that asks for a reading must not wait for one: the one
@@ -49,7 +49,7 @@ struct RefreshReentryTests {
         let runner = FoundationProcessRunner()
         let base = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-dashboard-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-dashboard-" + UUID().uuidString, isDirectory: true)
             .path
         let paths = WorkspacePaths(
             hostUser: "test",

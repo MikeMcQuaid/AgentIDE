@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// What the review pane says about its own work, in the footer and

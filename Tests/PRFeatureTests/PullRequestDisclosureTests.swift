@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// The AI disclosure the pull request form writes into a template's
@@ -46,7 +46,7 @@ struct PullRequestDisclosureTests {
     func `a session started on the picker's defaults discloses those defaults`() {
         let file = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-disclosure-" + UUID().uuidString + ".json")
+            .appendingPathComponent("sanductor-disclosure-" + UUID().uuidString + ".json")
             .path
         defer { try? FileManager.default.removeItem(atPath: file) }
         let fixtures = PullRequestsModelTests()
@@ -58,8 +58,8 @@ struct PullRequestDisclosureTests {
         }
         // A default launch writes no flags: the arguments are empty.
         var metadata = model.store.load()
-        metadata.sessionsByWorktree[fixtures.worktreesPath + "/feature"] = "agentide--repo--feature--claude"
-        metadata.arguments["agentide--repo--feature--claude"] = ""
+        metadata.sessionsByWorktree[fixtures.worktreesPath + "/feature"] = "sanductor--repo--feature--claude"
+        metadata.arguments["sanductor--repo--feature--claude"] = ""
         model.store.update { $0 = metadata }
 
         #expect(model.disclosure == "Claude with Fable 5.1 at High effort, with local review and testing.")
@@ -73,7 +73,7 @@ struct PullRequestDisclosureTests {
         // took the whole button away.
         let fixtures = PullRequestsModelTests()
         let running = AgentSession(
-            name: "agentide--repo--feature--claude",
+            name: "sanductor--repo--feature--claude",
             agent: .claudeCode,
             status: .running,
             paneID: "p1",

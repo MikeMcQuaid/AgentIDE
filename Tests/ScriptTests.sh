@@ -6,7 +6,45 @@ cd "$(dirname "$0")/.."
 mkdir -p .test-scratch
 scratch="$(mktemp -d "${PWD}/.test-scratch/scripts.XXXXXX")"
 trap 'rm -rf "${scratch}"' EXIT
-mkdir -p "${scratch}/script" "${scratch}/bin" "${scratch}/AgentIDE.xcodeproj"
+[[ "$(readlink bin/agentide)" == sanductor ]]
+mkdir -p "${scratch}/workspace/repositories/example/.git"
+for command in sanductor agentide; do
+  SHARED_WORKSPACE="${scratch}/workspace" "bin/${command}" repositories \
+    >"${scratch}/${command}.out" 2>"${scratch}/${command}.err"
+  [[ "$(cat "${scratch}/${command}.out")" == example ]]
+done
+[[ ! -s "${scratch}/sanductor.err" ]]
+grep -qx "Warning: 'agentide' is deprecated; use 'sanductor' instead." "${scratch}/agentide.err"
+echo 'Deprecated command compatibility tests passed'
+
+mkdir -p "${scratch}/public-bin"
+ln -s "${PWD}/bin/sanductor" "${scratch}/public-bin/sanductor"
+SHARED_WORKSPACE="${scratch}/workspace" "${scratch}/public-bin/sanductor" repositories \
+  >"${scratch}/linked.out" 2>"${scratch}/linked.err"
+[[ "$(cat "${scratch}/linked.out")" == example && ! -s "${scratch}/linked.err" ]]
+
+env -u SANDUCTOR_EDITS AGENTIDE_EDITS="${scratch}/legacy-edits" \
+  bin/sanductor "${scratch}/file" >"${scratch}/legacy.out" 2>"${scratch}/legacy.err"
+[[ ! -s "${scratch}/legacy.out" ]]
+grep -qx 'Warning: AGENTIDE_EDITS is deprecated; use SANDUCTOR_EDITS instead.' "${scratch}/legacy.err"
+[[ -n "$(find "${scratch}/legacy-edits" -name '*.request' -print)" ]]
+# shellcheck disable=SC2016 # Deliberate literal shell syntax tests injection resistance.
+legacy_value='$(touch should-not-exist)`touch should-not-exist` with spaces'
+# shellcheck disable=SC2016 # Only the child shell expands the variable.
+env -u SANDUCTOR_EDITS AGENTIDE_EDITS="${legacy_value}" /bin/sh -c \
+  '. bin/environment.sh; printf "%s" "${SANDUCTOR_EDITS}"' \
+  >"${scratch}/literal.out" 2>"${scratch}/literal.err"
+[[ "$(cat "${scratch}/literal.out")" == "${legacy_value}" ]]
+[[ ! -e should-not-exist ]]
+# shellcheck disable=SC2016 # Only the child shell expands the variable.
+SANDUCTOR_EDITS='' AGENTIDE_EDITS=old /bin/sh -c \
+  '. bin/environment.sh; printf "%s" "${SANDUCTOR_EDITS}"' \
+  >"${scratch}/canonical.out" 2>"${scratch}/canonical.err"
+[[ ! -s "${scratch}/canonical.out" && ! -s "${scratch}/canonical.err" ]]
+echo 'Legacy environment compatibility tests passed'
+
+mkdir -p "${scratch}/script" "${scratch}/bin" "${scratch}/Sanductor.xcodeproj"
+cp bin/environment.sh "${scratch}/bin/"
 
 sed 's/families=(shell github_actions docs swift)/families=(docs)/' script/style >"${scratch}/script/style"
 touch "${scratch}/AGENTS.md"
@@ -77,20 +115,20 @@ if [[ " $* " != *' ARCHS=arm64 '* ]]; then
   exit 1
 fi
 case "$*" in
-  *'-scheme AgentIDEApp'*)
-    echo "/usr/bin/swiftc -module-name AgentIDE ${PWD}/Sources/Interface/macOS/Font.swift"
+  *'-scheme SanductorApp'*)
+    echo "/usr/bin/swiftc -module-name Sanductor ${PWD}/Sources/Interface/macOS/Font.swift"
     ;;
-  *'-scheme AgentIDE-iOS'*)
-    echo "/usr/bin/swiftc -module-name AgentIDEiOS ${PWD}/Sources/Interface/iOS/Font.swift"
+  *'-scheme Sanductor-iOS'*)
+    echo "/usr/bin/swiftc -module-name SanductoriOS ${PWD}/Sources/Interface/iOS/Font.swift"
     ;;
 esac
-for source in "${PWD}"/Sources/*.swift; do
+for source in "${PWD}"/Sources/*.swift "${PWD}"/Sources/SanductorDomain/*.swift; do
   [[ -f "${source}" ]] || continue
   printf '/usr/bin/swiftc -module-name Shared %q\n' "${source}"
 done
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == -configuration ]]; then
-    mkdir -p ".DerivedData/Build/Products/$2/AgentIDE.app"
+    mkdir -p ".DerivedData/Build/Products/$2/Sanductor.app"
     break
   fi
   shift
@@ -103,13 +141,13 @@ echo 'Build complete'
 SWIFT
 cat >"${scratch}/bin/ditto" <<'DITTO'
 #!/bin/bash
-[[ -d "$1" && "$2" == /Applications/AgentIDE.app && ! -e app-running ]] || exit 1
+[[ -d "$1" && "$2" == /Applications/Sanductor.app && ! -e app-running ]] || exit 1
 printf '%s\n' "$1" >installed-app
 echo copy >>installation-events
 DITTO
 cat >"${scratch}/bin/osascript" <<'QUIT'
 #!/bin/bash
-[[ "$*" == *'quit app "AgentIDE"'* ]] || exit 1
+[[ "$*" == *'quit app "Sanductor"'* ]] || exit 1
 echo quit >>installation-events
 # Quitting the app closes its shell panes and hangs up their commands.
 kill -HUP "${PPID}"
@@ -117,19 +155,19 @@ kill -HUP "${PPID}"
 QUIT
 cat >"${scratch}/bin/pgrep" <<'PGREP'
 #!/bin/bash
-[[ "$*" == "-u $(id -u) -x AgentIDE" ]] || exit 99
+[[ "$*" == "-u $(id -u) -x Sanductor" ]] || exit 99
 [[ -e app-running ]]
 PGREP
 cat >"${scratch}/bin/pkill" <<'PKILL'
 #!/bin/bash
-[[ "$*" == "-KILL -u $(id -u) -x AgentIDE" ]] || exit 99
+[[ "$*" == "-KILL -u $(id -u) -x Sanductor" ]] || exit 99
 echo kill >>installation-events
 [[ "${INSTALL_TEST_UNKILLABLE:-}" == 1 ]] || /bin/rm -f app-running
 PKILL
 printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/sleep"
 cat >"${scratch}/bin/open" <<'OPEN'
 #!/bin/bash
-[[ "$1" == /Applications/AgentIDE.app && ! -e app-running ]] || exit 1
+[[ "$1" == /Applications/Sanductor.app && ! -e app-running ]] || exit 1
 echo open >>installation-events
 OPEN
 printf '#!/bin/bash\ntouch installation-started\necho replace >>installation-events\n' >"${scratch}/bin/rm"
@@ -163,11 +201,11 @@ for configuration in Release Debug; do
   override="${configuration/Release/}"
   env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= XCODE_CONFIGURATION="${override}" \
     "${scratch}/script/build" >"${scratch}/build.log" 2>&1
-  app=".DerivedData/Build/Products/${configuration}/AgentIDE.app"
+  app=".DerivedData/Build/Products/${configuration}/Sanductor.app"
   [[ "$(tail -1 "${scratch}/build.log")" == "${app}" ]] || exit 1
-  [[ "$(readlink "${scratch}/AgentIDE.app")" == "${app}" ]] || exit 1
-  cmp "${scratch}/Package.resolved" "${scratch}/AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-  touch -t 200001010000 "${scratch}/AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  [[ "$(readlink "${scratch}/Sanductor.app")" == "${app}" ]] || exit 1
+  cmp "${scratch}/Package.resolved" "${scratch}/Sanductor.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+  touch -t 200001010000 "${scratch}/Sanductor.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
   grep -qx -- -onlyUsePackageVersionsFromResolvedFile "${scratch}/xcode-arguments"
   grep -A 1 '^-clonedSourcePackagesDirPath$' "${scratch}/xcode-arguments" | grep -qx .build
   for stream in stdout stderr; do
@@ -182,7 +220,7 @@ for configuration in Release Debug; do
   done
   [[ "$(cat "${scratch}/installed-app")" == "${app}" ]] || exit 1
   [[ "$(cat "${scratch}/installation-events")" == $'quit\nreplace\ncopy\nopen' ]] || exit 1
-  [[ "$(stat -f %Sm -t %Y "${scratch}/AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")" == 2000 ]] || exit 1
+  [[ "$(stat -f %Sm -t %Y "${scratch}/Sanductor.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")" == 2000 ]] || exit 1
 
   env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID=fixture XCODE_CONFIGURATION="${override}" \
     "${scratch}/script/build" >"${scratch}/sandbox.log" 2>&1
@@ -281,7 +319,7 @@ if [[ "${ANALYZE_TEST_EMPTY:-}" == 1 ]]; then
 fi
 "${SCRIPT_TEST_SWIFTLINT}" "$@" --config .swiftlint.yml >swiftlint.log 2>&1
 cat swiftlint.log
-if [[ -z "${AGENTIDE_ANALYZE_BASE:-}" ]]; then
+if [[ -z "${SANDUCTOR_ANALYZE_BASE:-}" ]]; then
   grep -q "Analyzing 'Font.swift' (1/1)" swiftlint.log
 fi
 exit "${ANALYZE_TEST_SWIFTLINT_STATUS:-${ANALYZE_TEST_STATUS:-0}}"
@@ -307,10 +345,10 @@ for sandbox in fixture ''; do
       "${scratch}/periphery-arguments" | grep -Fxq '**/BuildToolPluginIntermediates/**'
     if [[ -z "${sandbox}" ]]; then
       grep -q -- '-configuration Debug' "${scratch}/xcode-invocations"
-      grep -q -- '-scheme AgentIDEApp' "${scratch}/xcode-invocations"
-      grep -q -- '-scheme AgentIDE-iOS' "${scratch}/xcode-invocations"
+      grep -q -- '-scheme SanductorApp' "${scratch}/xcode-invocations"
+      grep -q -- '-scheme Sanductor-iOS' "${scratch}/xcode-invocations"
       grep -q -- 'generic/platform=iOS Simulator' "${scratch}/xcode-invocations"
-      grep -qx 'AgentIDE-iOS' "${scratch}/periphery-arguments"
+      grep -qx 'Sanductor-iOS' "${scratch}/periphery-arguments"
       grep -q -- '--compiler-log-path .build/analyze-build.log' "${scratch}/swiftlint-invocations"
       grep -q -- '--compiler-log-path .build/analyze-ios-build.log' "${scratch}/swiftlint-invocations"
       grep -Fxq "${scratch}/Sources/Interface/macOS/Font.swift" "${scratch}/.build/analyze-mac-sources.xcfilelist"
@@ -337,14 +375,17 @@ fi
 git -C "${scratch}" init --quiet --initial-branch=fixture
 git -C "${scratch}" config user.name 'Script Tests'
 git -C "${scratch}" config user.email 'tests@example.invalid'
+mkdir -p "${scratch}/Sources/SanductorDomain"
+touch "${scratch}/Sources/SanductorDomain/Core.swift"
 touch "${scratch}/README.md" "${scratch}/Sources/Shared File.swift"
 git -C "${scratch}" add -- README.md Sources Tests .swiftlint.yml Package.resolved
 git -C "${scratch}" -c commit.gpgsign=false commit --quiet --no-verify -m 'Add analysis fixtures'
-for change in docs shared mac ios rename delete configuration uncompiled; do
+for change in docs shared domain conditional-domain mac ios rename delete configuration uncompiled; do
   base="$(git -C "${scratch}" rev-parse HEAD)"
   case "${change}" in
     docs) file=README.md ;;
     shared) file='Sources/Shared File.swift' ;;
+    domain | conditional-domain) file=Sources/SanductorDomain/Core.swift ;;
     mac) file=Sources/Interface/macOS/Font.swift ;;
     ios) file=Sources/Interface/iOS/Font.swift ;;
     rename)
@@ -359,18 +400,24 @@ for change in docs shared mac ios rename delete configuration uncompiled; do
     uncompiled) file=Tests/Uncompiled.swift ;;
     *) exit 1 ;;
   esac
-  [[ "${change}" == delete ]] || printf '\n' >>"${scratch}/${file}"
+  if [[ "${change}" == conditional-domain ]]; then
+    printf '#if os(iOS)\n#endif\n' >>"${scratch}/${file}"
+  elif [[ "${change}" != delete ]]; then
+    printf '\n' >>"${scratch}/${file}"
+  fi
   git -C "${scratch}" add --all -- README.md Sources Tests .swiftlint.yml
   git -C "${scratch}" -c commit.gpgsign=false commit --quiet --no-verify -m 'Change analysis fixture'
   : >"${scratch}/swiftlint-invocations"
   rm "${scratch}/periphery-arguments"
-  env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE="${base}" \
+  env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= SANDUCTOR_ANALYZE_BASE="${base}" \
     SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
     "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1
   [[ -s "${scratch}/periphery-arguments" ]] || exit 1
   for platform in mac ios; do
     case "${change}:${platform}" in
-      shared:* | rename:* | mac:mac | ios:ios | uncompiled:mac) expected="${scratch}/${file}" ;;
+      shared:* | rename:* | domain:mac | conditional-domain:* | mac:mac | ios:ios | uncompiled:mac)
+        expected="${scratch}/${file}"
+        ;;
       *) expected="" ;;
     esac
     [[ "$(cat "${scratch}/.build/analyze-${platform}-sources.xcfilelist")" == "${expected}" ]] || {
@@ -389,7 +436,7 @@ for change in docs shared mac ios rename delete configuration uncompiled; do
   fi
   if [[ "${change}" == shared ]]; then
     rm "${scratch}/periphery-arguments"
-    if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE="${base}" \
+    if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= SANDUCTOR_ANALYZE_BASE="${base}" \
       ANALYZE_TEST_SWIFTLINT_STATUS=1 SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
       "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
       echo 'Changed-file analysis ignored a SwiftLint failure' >&2
@@ -399,7 +446,7 @@ for change in docs shared mac ios rename delete configuration uncompiled; do
   fi
 done
 : >"${scratch}/xcode-invocations"
-if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= AGENTIDE_ANALYZE_BASE=missing-commit \
+if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= SANDUCTOR_ANALYZE_BASE=missing-commit \
   SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
   "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
   echo 'Analysis accepted an invalid base commit' >&2
@@ -414,7 +461,7 @@ import sys
 targets = json.load(sys.stdin)["targets"]
 modules = [
     targets[name]["settings"]["base"].get("PRODUCT_MODULE_NAME", targets[name]["settings"]["base"]["PRODUCT_NAME"])
-    for name in ["AgentIDEApp", "AgentIDE-iOS"]
+    for name in ["SanductorApp", "Sanductor-iOS"]
 ]
 assert len(set(modules)) == len(modules), "App targets share a Swift module name"
 '

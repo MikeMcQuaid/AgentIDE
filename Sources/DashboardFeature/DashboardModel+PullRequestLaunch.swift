@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 
 /// Starting an agent from the Pull requests tab, which has no form of
 /// its own; split from the sessions file for length.

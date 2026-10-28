@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorDomain
 
 /// The app-wide message log: every surface reports failures and
 /// noteworthy statuses here, so they collect in one copyable pane

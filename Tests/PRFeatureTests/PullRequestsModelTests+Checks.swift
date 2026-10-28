@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// What the tab says about a pull request's checks around a push.

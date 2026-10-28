@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 @testable import ReviewFeature
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import Testing
 

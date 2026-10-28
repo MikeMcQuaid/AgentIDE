@@ -1,5 +1,5 @@
-import AgentIDEData
 import AppKit
+import SanductorData
 
 /// Tints the Dock icon for non-production flavours, so a dev build
 /// is never mistaken for the installed app.

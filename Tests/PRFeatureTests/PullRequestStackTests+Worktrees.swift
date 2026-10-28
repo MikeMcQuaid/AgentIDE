@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// A stack whose lower branch another worktree holds.

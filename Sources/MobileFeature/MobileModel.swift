@@ -1,8 +1,8 @@
-import AgentIDEDomain
-import AgentIDEInterface
-import AgentIDERemote
 import Foundation
 import Observation
+import SanductorDomain
+import SanductorInterface
+import SanductorRemote
 
 // MARK: - MobileModel
 

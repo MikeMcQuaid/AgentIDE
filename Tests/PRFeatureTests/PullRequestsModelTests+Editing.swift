@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// Editing an open pull request's title and body in the form.

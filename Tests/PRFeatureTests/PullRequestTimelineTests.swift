@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import AppKit
 @testable import PRFeature
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 import Testing

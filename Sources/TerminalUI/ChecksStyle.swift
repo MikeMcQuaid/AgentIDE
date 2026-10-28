@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 // MARK: - Octicon

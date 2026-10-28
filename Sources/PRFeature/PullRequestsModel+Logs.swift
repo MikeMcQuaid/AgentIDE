@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
+import SanductorData
+import SanductorDomain
 
 /// Copying the head and tail of every failing Actions run's log,
 /// the raw material a fix prompt needs, condensed so no token is

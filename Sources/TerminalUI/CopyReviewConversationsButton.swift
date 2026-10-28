@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import AppKit
+import SanductorDomain
 import SwiftUI
 
 /// The same manual copy action beside local and GitHub conversations.

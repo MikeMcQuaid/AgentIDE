@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import ReviewFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 @MainActor

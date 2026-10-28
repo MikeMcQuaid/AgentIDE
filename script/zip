@@ -1,11 +1,11 @@
 #!/bin/bash
-# Zip the Release build as .build/AgentIDE-<version>.zip, with
-# AgentIDE.app as the zip's only top-level entry, and print its path.
+# Zip the Release build as .build/Sanductor-<version>.zip, with
+# Sanductor.app as the zip's only top-level entry, and print its path.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-app=.DerivedData/Build/Products/Release/AgentIDE.app
+app=.DerivedData/Build/Products/Release/Sanductor.app
 [[ -d "${app}" ]] || {
   echo "Run XCODE_CONFIGURATION=Release script/build first: ${app} is missing" >&2
   exit 1
@@ -17,7 +17,7 @@ version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "${app}
   echo "${app} has no CFBundleShortVersionString to name the zip by" >&2
   exit 1
 }
-zip=".build/AgentIDE-${version}.zip"
+zip=".build/Sanductor-${version}.zip"
 rm -f "${zip}"
 ditto -c -k --sequesterRsrc --keepParent "${app}" "${zip}"
 echo "${zip}"

@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 extension MobileModel {
     func repositoryNames(sortedBy sort: RepositorySort) -> [String] {

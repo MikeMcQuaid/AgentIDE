@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 /// Agent state as events. herdr's `agent wait` answers the moment a
 /// pane's agent changes state, where the poll noticed within its

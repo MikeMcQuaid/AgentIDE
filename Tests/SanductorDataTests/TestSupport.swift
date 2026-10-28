@@ -1,0 +1,325 @@
+import Darwin
+import Foundation
+@testable import SanductorData
+import SanductorDomain
+
+// MARK: - TestSupport
+
+/// Shared helpers for integration tests that exercise real git,
+/// herdr and filesystem behaviour in isolated temporary locations.
+enum TestSupport {
+    // MARK: Internal
+
+    /// A fresh temporary directory, fully resolved via `realpath` so
+    /// its path matches what git and herdr report for it.
+    static func temporaryDirectory(_ label: String) throws -> String {
+        try make(label)
+    }
+
+    /// A herdr config home, named as briefly as it can be: a Unix
+    /// socket path cannot exceed 104 bytes, and this root, the name
+    /// and the `herdr/herdr-client.sock` herdr appends stay inside
+    /// that. Handed over as named rather than resolved: nothing
+    /// compares it, and `realpath` puts `/private` in front of a
+    /// temporary-directory root, eight bytes a fitting root cannot
+    /// spare.
+    static func configHome() throws -> String {
+        try make("h", resolved: false)
+    }
+
+    /// The fully resolved path, matching git and herdr output.
+    static func canonical(_ path: String) -> String {
+        guard let resolved = unsafe realpath(path, nil) else {
+            return path
+        }
+
+        defer { unsafe free(resolved) }
+        return unsafe String(cString: resolved)
+    }
+
+    /// Runs a command, throwing on failure.
+    @discardableResult
+    static func run(_ arguments: [String], in directory: String? = nil) async throws -> ProcessResult {
+        let result = try await FoundationProcessRunner()
+            .run(arguments, workingDirectory: directory, environment: [:])
+        guard result.succeeded else {
+            throw CommandError(command: arguments.joined(separator: " "), result: result)
+        }
+
+        return result
+    }
+
+    /// Reproduces sudo's login-shell escaping without sudo or a nested sandbox.
+    /// https://github.com/sudo-project/sudo/blob/main/src/parse_args.c
+    static func sudoLoginArguments(_ arguments: [String]) -> [String] {
+        [
+            "/bin/zsh", "-fc", arguments.lazy
+                .map { argument in
+                    argument.map { character in
+                        character.isASCII && (character.isLetter || character.isNumber || "_-$".contains(character))
+                            ? String(character) : "\\" + String(character)
+                    }
+                    .joined()
+                }
+                .joined(separator: " "),
+        ]
+    }
+
+    /// Runs fixture git without hooks, signing or automatic maintenance.
+    @discardableResult
+    static func runGit(_ arguments: [String], in directory: String) async throws -> ProcessResult {
+        try await run(
+            ["git", "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "maintenance.auto=false"]
+                + arguments,
+            in: directory,
+        )
+    }
+
+    /// Initialises a git repository with an identity and one commit.
+    static func makeRepository(at path: String) async throws {
+        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        try await runGit(["init", "-q", "-b", "main"], in: path)
+        try await runGit(["config", "user.email", "test@example.com"], in: path)
+        try await runGit(["config", "user.name", "Test"], in: path)
+        try await runGit(["config", "commit.gpgsign", "false"], in: path)
+        try await runGit(["config", "core.hooksPath", "/dev/null"], in: path)
+        try "hello\n".write(toFile: path + "/README.md", atomically: true, encoding: .utf8)
+        try await runGit(["add", "-A"], in: path)
+        try await runGit(["commit", "-q", "-m", "Initial commit"], in: path)
+    }
+
+    /// A herdr client on its own private config home, so tests never
+    /// touch the real server; the home comes back for
+    /// `stopServerSync` in teardown.
+    static func makeHerdrClient() throws -> (client: HerdrClient, configHome: String) {
+        let home = try configHome()
+        let client = HerdrClient(
+            runner: FoundationProcessRunner(),
+            launcher: SandvaultLauncher(hostUser: "test"),
+            isInsideSandbox: true,
+            configHome: home,
+        )
+        return (client, home)
+    }
+
+    /// Stops a test server and removes its config home,
+    /// synchronously: a fire-and-forget Task raced process exit and
+    /// leaked servers.
+    static func stopServerSync(configHome: String) {
+        runSync(["herdr", "server", "stop"], environment: ["XDG_CONFIG_HOME": configHome])
+        try? FileManager.default.removeItem(atPath: configHome)
+    }
+
+    /// Runs a command to completion, discarding output; teardown
+    /// must finish before the process exits, so it cannot await.
+    static func runSync(_ argv: [String], environment: [String: String]) {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/env")
+        process.arguments = argv
+        process.environment = ProcessEnvironment.scrubbed(merging: environment)
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+    }
+
+    /// Polls a condition until it holds or the timeout passes.
+    static func poll(timeout: Double = 20, until condition: () async -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if await condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return await condition()
+    }
+
+    // MARK: Private
+
+    /// Every test's scratch under one swept, gitignored directory in
+    /// the checkout, so what a run leaves behind is visible where the
+    /// work is rather than loose in a shared temporary directory: a
+    /// test that crashes cannot tidy up after itself, and strays were
+    /// piling up in `/tmp` a run at a time. A checkout far enough
+    /// down the filesystem to overrun a herdr socket's 104-byte path
+    /// (a worktree named for its branch is) falls back to this user's
+    /// own temporary directory as macOS names it, never `TMPDIR`: a
+    /// tool running the tests had pointed that at a per-session
+    /// directory deep enough to overrun the socket just the same.
+    private static let root: String = {
+        let candidates = [checkoutRoot + "/" + scratchName, userTemporaryDirectory + scratchName]
+        let path = candidates.first { $0.count + socketBudget <= socketLimit } ?? candidates[1]
+        try? FileManager.default.createDirectory(
+            atPath: path,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700],
+        )
+        sweep(path)
+        return path
+    }()
+
+    /// The checkout this file belongs to: `Tests/<target>/` up.
+    private static let checkoutRoot = URL(filePath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .path()
+
+    private static let scratchName = ".test-scratch"
+
+    /// What a socket path needs beyond the root: `/h-XXXXXXXX` and
+    /// the `/herdr/herdr-client.sock` herdr appends inside it.
+    private static let socketBudget = 36
+
+    /// The Unix socket path limit, which a scratch root has to leave
+    /// room inside.
+    private static let socketLimit = 104
+
+    /// How long a leftover is left alone: long enough that another
+    /// test process still using its scratch is never robbed of it,
+    /// short enough that nothing survives the next run but the run
+    /// before it.
+    private static let staleSeconds: TimeInterval = 600
+
+    /// Enough of a UUID to be unique within a run, short enough to
+    /// keep socket paths inside their limit.
+    private static let idLength = 8
+
+    /// This user's temporary directory as macOS names it
+    /// (`DARWIN_USER_TEMP_DIR`), which `NSTemporaryDirectory()` is
+    /// not once something has set `TMPDIR`.
+    private static var userTemporaryDirectory: String {
+        var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+        let length = unsafe confstr(_CS_DARWIN_USER_TEMP_DIR, &buffer, buffer.count)
+        guard length > 0, length <= buffer.count else {
+            return NSTemporaryDirectory()
+        }
+
+        let bytes = buffer.prefix(length - 1).map { UInt8(bitPattern: $0) }
+        return String(bytes: bytes, encoding: .utf8) ?? NSTemporaryDirectory()
+    }
+
+    /// Creates a scratch directory under the swept root, named for
+    /// what it holds. The name is short so socket paths stay inside
+    /// their length limit; `resolved` runs the result through
+    /// `realpath`, which git and herdr report paths as.
+    private static func make(_ label: String, resolved: Bool = true) throws -> String {
+        let path = root + "/" + label + "-" + String(UUID().uuidString.prefix(Self.idLength))
+        try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        return resolved ? canonical(path) : path
+    }
+
+    /// Removes what earlier runs left behind.
+    private static func sweep(_ path: String) {
+        let manager = FileManager.default
+        let cutoff = Date().addingTimeInterval(-staleSeconds)
+        for name in (try? manager.contentsOfDirectory(atPath: path)) ?? [] {
+            let entry = path + "/" + name
+            let attributes = try? manager.attributesOfItem(atPath: entry)
+            guard let modified = attributes?[.modificationDate] as? Date, modified < cutoff else {
+                continue
+            }
+
+            try? manager.removeItem(atPath: entry)
+        }
+    }
+}
+
+// MARK: - World
+
+/// One temporary world: workspace, repository, herdr and service.
+struct World {
+    let root: String
+    let paths: WorkspacePaths
+    let repository: Repository
+    let service: SessionService
+    let herdr: HerdrClient
+    let configHome: String
+
+    static func make() async throws -> Self {
+        let base = try TestSupport.temporaryDirectory("world")
+        let workspace = WorkspacePaths(
+            hostUser: "test",
+            sharedWorkspace: base + "/shared",
+            sandboxHome: base + "/home",
+            metadataFile: base + "/state.json",
+        )
+        let repoPath = workspace.repositoriesDirectory + "/repo"
+        try await TestSupport.makeRepository(at: repoPath)
+        let runner = FoundationProcessRunner()
+        let home = try TestSupport.configHome()
+        let herdrClient = HerdrClient(
+            runner: runner,
+            launcher: SandvaultLauncher(hostUser: "test"),
+            isInsideSandbox: true,
+            configHome: home,
+        )
+        let sessionService = SessionService(
+            paths: workspace,
+            git: GitClient(runner: runner),
+            herdr: herdrClient,
+            github: GitHubClient(runner: runner),
+            transcripts: TranscriptReader(),
+            spool: EventSpool(directory: workspace.eventsDirectory),
+            store: MetadataStore(file: workspace.metadataFile),
+            runners: [PromptCaptureRunner()],
+            // Disabled so branch names always come from the
+            // deterministic prompt fallback, whatever this machine's
+            // Apple Intelligence state.
+            summariser: FoundationModelClient(isEnabled: false),
+        )
+        return Self(
+            root: base,
+            paths: workspace,
+            repository: Repository(name: "repo", path: repoPath),
+            service: sessionService,
+            herdr: herdrClient,
+            configHome: home,
+        )
+    }
+
+    func service(herdr: HerdrClient, git: GitClient? = nil) -> SessionService {
+        SessionService(
+            paths: paths,
+            git: git ?? service.git,
+            herdr: herdr,
+            github: service.github,
+            transcripts: service.transcripts,
+            spool: service.spool,
+            store: service.store,
+            runners: [],
+        )
+    }
+
+    /// Synchronous, so the server dies before the test process can.
+    func tearDown() {
+        TestSupport.stopServerSync(configHome: configHome)
+        try? FileManager.default.removeItem(atPath: root)
+    }
+}
+
+// MARK: - RecordingRunner
+
+/// Records every command and answers success.
+final class RecordingRunner: ProcessRunner, @unchecked Sendable {
+    // MARK: Lifecycle
+
+    deinit {
+        // Nothing to clean up.
+    }
+
+    // MARK: Internal
+
+    private(set) var commands: [[String]] = []
+
+    func run(
+        _ arguments: [String],
+        workingDirectory _: String?,
+        environment _: [String: String],
+        outputLimit _: Int?,
+    ) -> ProcessResult {
+        commands.append(arguments)
+        return ProcessResult(status: 0, standardOutput: "", standardError: "")
+    }
+}

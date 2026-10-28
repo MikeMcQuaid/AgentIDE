@@ -5,6 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 xcodegen generate --use-cache "$@"
-mkdir -p AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-resolved=AgentIDE.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+mkdir -p Sanductor.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+resolved=Sanductor.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 cmp -s Package.resolved "${resolved}" || cp Package.resolved "${resolved}"

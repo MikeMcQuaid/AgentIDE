@@ -11,14 +11,14 @@ let approachableConcurrency: [SwiftSetting] = [
 let mainActorByDefault = approachableConcurrency + [.defaultIsolation(MainActor.self)]
 
 let package = Package(
-    name: "AgentIDE",
+    name: "Sanductor",
     platforms: [.macOS("26.0"), .iOS("26.0")],
     products: [
-        .library(name: "AgentIDEDomain", targets: ["AgentIDEDomain"]),
-        .library(name: "AgentIDEInterface", targets: ["AgentIDEInterface"]),
-        .library(name: "AgentIDERemote", targets: ["AgentIDERemote"]),
+        .library(name: "SanductorDomain", targets: ["SanductorDomain"]),
+        .library(name: "SanductorInterface", targets: ["SanductorInterface"]),
+        .library(name: "SanductorRemote", targets: ["SanductorRemote"]),
         .library(name: "MobileFeature", targets: ["MobileFeature"]),
-        .library(name: "AgentIDEData", targets: ["AgentIDEData"]),
+        .library(name: "SanductorData", targets: ["SanductorData"]),
         .library(name: "DashboardFeature", targets: ["DashboardFeature"]),
         .library(name: "SessionFeature", targets: ["SessionFeature"]),
         .library(name: "ReviewFeature", targets: ["ReviewFeature"]),
@@ -76,7 +76,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "AgentIDEiOSAppSources",
+            name: "SanductoriOSAppSources",
             dependencies: ["MobileFeature"],
             path: "iOSApp",
             exclude: ["PrivacyInfo.xcprivacy"],
@@ -91,10 +91,10 @@ let package = Package(
         // so inside the sandbox `swift build` is the only build
         // there is, and this is how it reaches `App`.
         .target(
-            name: "AgentIDEAppSources",
+            name: "SanductorAppSources",
             dependencies: [
-                "AgentIDEData",
-                "AgentIDEInterface",
+                "SanductorData",
+                "SanductorInterface",
                 "DashboardFeature",
                 "PRFeature",
                 "ReviewFeature",
@@ -102,22 +102,22 @@ let package = Package(
                 "TerminalUI",
             ],
             path: "App",
-            exclude: ["AgentIDE.entitlements", "Assets.xcassets", "Credits.html"],
+            exclude: ["Sanductor.entitlements", "Assets.xcassets", "Credits.html"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
-            name: "AgentIDEDomain",
+            name: "SanductorDomain",
             swiftSettings: approachableConcurrency,
         ),
         .target(
-            name: "AgentIDEInterface",
-            dependencies: ["AgentIDEDomain"],
+            name: "SanductorInterface",
+            dependencies: ["SanductorDomain"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
-            name: "AgentIDERemote",
+            name: "SanductorRemote",
             dependencies: [
-                "AgentIDEDomain",
+                "SanductorDomain",
                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
@@ -128,14 +128,14 @@ let package = Package(
         .target(
             name: "MobileFeature",
             dependencies: [
-                "AgentIDERemote", "AgentIDEInterface", "AgentIDEDomain",
+                "SanductorRemote", "SanductorInterface", "SanductorDomain",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
             ],
             swiftSettings: mainActorByDefault,
         ),
         .target(
-            name: "AgentIDEData",
-            dependencies: ["AgentIDEDomain"],
+            name: "SanductorData",
+            dependencies: ["SanductorDomain"],
             swiftSettings: approachableConcurrency,
             linkerSettings: [
                 // CI's runners boot an older macOS than the 27.0 SDK
@@ -148,30 +148,30 @@ let package = Package(
         ),
         .target(
             name: "DashboardFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "AgentIDEInterface", "TerminalUI"],
+            dependencies: ["SanductorDomain", "SanductorData", "SanductorInterface", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "SessionFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
+            dependencies: ["SanductorDomain", "SanductorData", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "ReviewFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "AgentIDEInterface", "TerminalUI"],
+            dependencies: ["SanductorDomain", "SanductorData", "SanductorInterface", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "PRFeature",
-            dependencies: ["AgentIDEDomain", "AgentIDEData", "TerminalUI"],
+            dependencies: ["SanductorDomain", "SanductorData", "TerminalUI"],
             swiftSettings: mainActorByDefault,
         ),
         .target(
             name: "TerminalUI",
             dependencies: [
-                "AgentIDEInterface",
-                "AgentIDEDomain",
-                "AgentIDEData",
+                "SanductorInterface",
+                "SanductorDomain",
+                "SanductorData",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Markdown", package: "swift-markdown"),
                 .product(name: "Textual", package: "textual"),
@@ -197,8 +197,8 @@ let package = Package(
             swiftSettings: mainActorByDefault,
         ),
         .testTarget(
-            name: "AgentIDERemoteTests",
-            dependencies: ["AgentIDERemote"],
+            name: "SanductorRemoteTests",
+            dependencies: ["SanductorRemote"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(
@@ -207,13 +207,13 @@ let package = Package(
             swiftSettings: mainActorByDefault,
         ),
         .testTarget(
-            name: "AgentIDEDomainTests",
-            dependencies: ["AgentIDEDomain"],
+            name: "SanductorDomainTests",
+            dependencies: ["SanductorDomain"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(
-            name: "AgentIDEDataTests",
-            dependencies: ["AgentIDEData", "AgentIDERemote"],
+            name: "SanductorDataTests",
+            dependencies: ["SanductorData", "SanductorRemote"],
             swiftSettings: approachableConcurrency,
         ),
         .testTarget(

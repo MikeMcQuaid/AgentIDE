@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 @testable import SessionFeature
 import Testing
 
@@ -84,7 +84,7 @@ struct RepositorySessionsModelTests {
         let runner = FoundationProcessRunner()
         let base = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-sessionsmodel-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-sessionsmodel-" + UUID().uuidString, isDirectory: true)
             .path
         let paths = WorkspacePaths(
             hostUser: "test",

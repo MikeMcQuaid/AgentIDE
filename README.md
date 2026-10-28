@@ -1,27 +1,30 @@
-# 🪪 AgentIDE
+# 🪪 Sanductor
 
-![The worktree sidebar, an agent's terminal and its review beside it](docs/screenshot.png)
-
-AgentIDE runs sandboxed AI coding agents in parallel `git` worktrees, from prompt to merged pull request, in one native macOS app.
-Built with SwiftUI on top of [sandvault](https://github.com/webcoyote/sandvault), [`herdr`](https://herdr.dev) and the [`gh`](https://cli.github.com) CLI.
+Sanductor is a native macOS workspace for maintainers to run coding agents, review their work and ship pull requests.
+[sandvault](https://github.com/webcoyote/sandvault) runs all agents under a separate non-admin macOS user with a clean environment, keeping your home directory, GitHub credentials and inherited secrets out of reach even in YOLO mode.
 
 ## 💡 Motivation
 
-My agentic coding setup, described in [Sandboxes and Worktrees: My secure Agentic AI Setup](https://mikemcquaid.com/sandboxed-agent-worktrees-my-coding-and-ai-setup-in-2026/), spanned four apps: an agent and worktree manager, a `git` GUI, a code editor and a terminal.
-AgentIDE replaces all four with one app designed around the same workflow.
+I lead [Homebrew](https://brew.sh), so protecting my GitHub credentials and signing keys is part of my responsibility to its users.
+I treat agent code as untrusted and run it under a separate macOS user.
+My [secure agentic coding workflow](https://mikemcquaid.com/sandboxed-agent-worktrees-my-coding-and-ai-setup-in-2026/) now fits in one app, from prompt to reviewed, signed and merged pull request.
+macOS enforces the sandbox; GitHub access and pushes use my account, with automatic pushing off by default.
+No Sanductor account, subscription or hosted relay is required.
+
+![The worktree sidebar, an agent's terminal and its review beside it](docs/screenshot.png)
 
 ## ✨ Features
 
-- Runs Claude Code or Codex CLI in parallel worktrees, sandboxed away from your personal files and credentials.
-- Starts tasks from prompts, GitHub issues, pull requests or security advisories.
-- Schedules repository prompts daily, weekly or monthly while AgentIDE is open.
-- Tracks agents, pull requests and blockers by repository or status, with bulk worktree actions and completion notifications.
-- Keeps agents running when the app closes and conversations browsable and resumable after their worktrees are deleted.
-- Reviews syntax-highlighted diffs with inline comments and AI feedback from another agent, Copilot or CodeRabbit.
-- Runs review and autofix loops for local findings, GitHub feedback and failing CI, with automatic pushing off by default.
-- Edits code with syntax highlighting, search and change tracking alongside multiple shell tabs per worktree.
-- Commits changes and opens pull requests with rebasing, signing and pushing as needed, plus stacks, automerge and merge cleanup.
-- Starts and steers work through Shortcuts, Siri and an [iPhone companion](#-iphone-companion).
+- Runs Claude Code or Codex CLI in parallel worktrees, directly on macOS without containers or virtual machines.
+- Reviews diffs with comments and a second agent, Copilot or CodeRabbit.
+- Runs fix loops for local reviews, GitHub feedback and required CI, with automatic pushing off by default.
+- Opens pull requests with commit signing, rebasing, stack pushes, automerge and merge cleanup.
+- Keeps agents running when the app closes and conversations browsable and resumable after worktree deletion.
+- Starts from prompts, issues, PRs or unpublished security advisories.
+- Schedules repository prompts daily, weekly or monthly while open.
+- Tracks agents, PRs and blockers by repository or status, with bulk worktree actions and notifications.
+- Edits code with highlighting and search alongside worktree shell tabs.
+- Starts tasks and checks blockers through Shortcuts and Siri, with an [iPhone companion](#-iphone-companion).
 
 ## 🚫 Out of Scope
 
@@ -40,12 +43,21 @@ Bring your own agent CLI and sandboxed non-admin user; no marketplace, bundled m
 ## 📦 Installation
 
 ```bash
-brew install --cask agentide
+brew install --cask sanductor
 ```
 
-Update with `brew upgrade`, or unzip a signed [release](https://github.com/MikeMcQuaid/AgentIDE/releases) into /Applications.
+Update with `brew upgrade`, or unzip a signed [release](https://github.com/MikeMcQuaid/Sanductor/releases) into /Applications.
 
 To run the current source, use `script/bootstrap` then `script/install`.
+
+### Upgrading from AgentIDE
+
+Mac settings, conversations and herdr sessions migrate automatically on first launch; agents can keep running.
+Keep the old herdr session directories and shared `agentide/` directory, which migrated sessions and archived prompts still use.
+
+1. Update custom app paths, shell aliases and environment variables to `Sanductor.app`, `sanductor` and `SANDUCTOR_*`, using `sanductor` or `sanductor-dev` for explicit `HERDR_SESSION` values.
+2. Replace AgentIDE Dock items and Shortcuts actions, and grant any macOS permissions requested by Sanductor.
+3. For the iPhone app, repeat the [connection and SSH key setup](#-iphone-companion); after connecting successfully, remove the old phone key from sandvault's authorised keys and run `sv build`.
 
 ## ⚙️ Configuration
 
@@ -60,12 +72,12 @@ Settings (Cmd-,) controls:
 - **Editor**: Choose the external editor opened with Cmd-click.
 - **Advanced**: Set paths, refresh intervals, idle sleep and logging.
 
-Use `agentide .` to select a worktree or `agentide /some/file` to open a file.
-To use AgentIDE as your editor inside its shell panes, add this to your shell configuration:
+Use `sanductor .` to select a worktree or `sanductor /some/file` to open a file.
+To use Sanductor as your editor inside its shell panes, add this to your shell configuration:
 
 ```bash
-if [ -n "${AGENTIDE}" ]; then
-  export EDITOR="$(command -v agentide) --wait"
+if [ -n "${SANDUCTOR}" ]; then
+  export EDITOR="$(command -v sanductor) --wait"
   export VISUAL="${EDITOR}"
 fi
 ```
@@ -77,22 +89,22 @@ See the [release process](ARCHITECTURE.md#releases) for publishing.
 
 ## 📱 iPhone companion
 
-- Views and steers running agents on your Mac over SSH.
+- Views and steers your Mac's agents over SSH, without a hosted relay.
 - Starts tasks and manages blockers from your iPhone.
 
-Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Mac, then choose a signing team in Xcode and build `AgentIDE-iOS`.
+Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Mac, then choose a signing team in Xcode and build `Sanductor-iOS`.
 
 1. Copy the public key from iPhone Settings to your Mac's clipboard, then install it for the sandbox user:
 
    ```bash
    mkdir -p ~/.config/codeofhonor/sandvault/authorized_keys.d
-   pbpaste >~/.config/codeofhonor/sandvault/authorized_keys.d/agentide-phone
+   pbpaste >~/.config/codeofhonor/sandvault/authorized_keys.d/sanductor-phone
    sv build
    ```
 
    This needs sandvault 1.29 or later; deleting that file and running `sv build` again revokes the key.
 
-2. Add this to `/etc/ssh/sshd_config.d/000-agentide.conf`, replacing `<you>` with your username and adjusting the workspace path, then enable Remote Login for `sandvault-<you>`:
+2. Add this to `/etc/ssh/sshd_config.d/000-sanductor.conf`, replacing `<you>` with your username and adjusting the workspace path, then enable Remote Login for `sandvault-<you>`:
 
    ```text
    Match User sandvault-<you>
@@ -100,30 +112,12 @@ Requires iOS 26 or later; run `script/bootstrap` and `script/install` on your Ma
    ```
 
 3. In the iPhone app, enter your Mac's address and username; it adds `sandvault-` automatically.
-   Use port `22` unless changed and select `agentide` for the installed app or `agentide-dev` for development.
+   Use port `22` unless changed and select `sanductor` for the installed app or `sanductor-dev` for development.
    Choose **Connect** and verify the host key against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on your Mac.
    A changed key must be explicitly replaced in Settings.
 
-### TestFlight releases
+## 📄 Licence and contact
 
-Create an iOS record and App Store Connect profile for `com.mikemcquaid.AgentIDE` with your Apple Distribution certificate.
-Base64-encode it as secret `AGENTIDE_APP_STORE_IOS_PROFILE`; reuse `APP_STORE_CERTIFICATES`, `APP_STORE_CERTIFICATES_PASSWORD` and `NOTARIZATION_*`.
-Push a change to `script/testflight` or another Release `push.paths` input for a dry run.
-Once it passes, merge and run **Release** on `main` with a new version.
-After Apple's checks, join an internal TestFlight group.
-
-## 🚧 Status
-
-Stable but changing regularly.
-AgentIDE is being designed exclusively for [@MikeMcQuaid](https://github.com/MikeMcQuaid)'s personal workflow; nothing here promises to suit anyone else's, interfaces and behaviour may break without notice and there is no support.
-
-## 📮 Contact
-
-[Mike McQuaid](mailto:mike@mikemcquaid.com)
-
-## 📄 Licence
-
-[AGPL-3.0](LICENSE).
-If you reuse or adapt the source the AGPL terms apply, including the network-use clause.
-
+[AGPL-3.0](LICENSE); personal software without support or compatibility guarantees.
+[Contact Mike McQuaid](mailto:mike@mikemcquaid.com).
 [Octicons](https://github.com/primer/octicons) are vendored in `App/Assets.xcassets` and licensed under the [MIT License](https://github.com/primer/octicons/blob/main/LICENSE).

@@ -43,7 +43,7 @@ struct MarkdownHTMLCode {
         try visit(Document(parsing: text))
         var escaped = text
         var saved = [(String, String)]()
-        let prefix = "AGENTIDE" + UUID().uuidString
+        let prefix = "SANDUCTOR" + UUID().uuidString
         for (index, entry) in ranges.reversed().enumerated() {
             let (range, replacement) = entry
             if let replacement {

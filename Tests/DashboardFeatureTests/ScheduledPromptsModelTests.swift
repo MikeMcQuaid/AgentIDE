@@ -1,8 +1,9 @@
-// swiftformat:disable testSuiteAccessControl -- Helpers are shared with manual start tests.
-import AgentIDEData
-import AgentIDEDomain
 @testable import DashboardFeature
 import Foundation
+
+// swiftformat:disable testSuiteAccessControl -- Helpers are shared with manual start tests.
+import SanductorData
+import SanductorDomain
 import Testing
 
 @Suite(.serialized)

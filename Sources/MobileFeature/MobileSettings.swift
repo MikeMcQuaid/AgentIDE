@@ -1,6 +1,6 @@
 #if os(iOS)
-    import AgentIDEInterface
-    import AgentIDERemote
+    import SanductorInterface
+    import SanductorRemote
     import SwiftUI
 
     struct MobileSettings: View {
@@ -63,11 +63,11 @@
                 }
                 Section {
                     Picker("Herdr session", selection: $configuration.session) {
-                        Text("agentide").tag("agentide")
-                        Text("agentide-dev").tag("agentide-dev")
+                        Text("sanductor").tag("sanductor")
+                        Text("sanductor-dev").tag("sanductor-dev")
                     }
                     .pickerStyle(.menu)
-                } footer: { Text("Use agentide for the installed Mac app, or agentide-dev for a development build.") }
+                } footer: { Text("Use sanductor for the installed Mac app, or sanductor-dev for a development build.") }
                 Section {
                     Text(model.publicKey).font(nameStyle.font).textSelection(.enabled)
                     ShareLink("Share public key", item: model.publicKey)

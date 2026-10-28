@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import DashboardFeature
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 
@@ -38,7 +38,7 @@ struct ReviewSettingsPane: View {
                     }
                 }
                 FeedbackPromptEditor(kind: prompt).id(prompt)
-                Text("Applies to the next prompt. AgentIDE adds the captured feedback and result instructions "
+                Text("Applies to the next prompt. Sanductor adds the captured feedback and result instructions "
                     + "and handles pushing itself when enabled.")
                     .interfaceFont(.caption)
                     .foregroundStyle(.secondary)

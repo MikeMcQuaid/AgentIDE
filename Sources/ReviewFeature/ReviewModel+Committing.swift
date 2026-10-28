@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// Which files the next or amended commit carries; split from the

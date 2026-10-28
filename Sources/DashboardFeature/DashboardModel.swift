@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 // MARK: - DashboardModel

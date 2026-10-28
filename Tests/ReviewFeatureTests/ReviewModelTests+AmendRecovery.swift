@@ -1,6 +1,6 @@
-import AgentIDEData
 import Foundation
 @testable import ReviewFeature
+import SanductorData
 import TerminalUI
 import Testing
 

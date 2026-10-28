@@ -1,6 +1,6 @@
-import AgentIDEDomain
 @testable import DashboardFeature
 import Foundation
+import SanductorDomain
 import Testing
 
 extension ScheduledPromptsModelTests {

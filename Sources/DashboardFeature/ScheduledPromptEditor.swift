@@ -1,5 +1,5 @@
-import AgentIDEDomain
-import AgentIDEInterface
+import SanductorDomain
+import SanductorInterface
 import SwiftUI
 
 /// Familiar repeat, day and time controls beside the shared agent pickers.

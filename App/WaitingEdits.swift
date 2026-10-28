@@ -1,9 +1,9 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 import DashboardFeature
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// The files commands outside the app are waiting to have edited,
@@ -94,7 +94,7 @@ final class WaitingEdits {
     /// shows it in the editor. Anything outside every worktree says
     /// so in the messages pane rather than silently doing nothing.
     private func act(on edit: ExternalEdit, dashboard: DashboardModel) {
-        // `agentide .` in a terminal means "take me there": the
+        // `sanductor .` in a terminal means "take me there": the
         // window mutating behind another app helped nobody.
         NSApp.activate()
         let items = dashboard.groups.flatMap(\.items)
@@ -108,7 +108,7 @@ final class WaitingEdits {
             guard edit.kind == .open, FileManager.default.isReadableFile(atPath: edit.path),
                   let showing = dashboard.selection
             else {
-                ErrorLog.shared.report("Not a worktree AgentIDE knows: " + edit.path)
+                ErrorLog.shared.report("Not a worktree Sanductor knows: " + edit.path)
                 return
             }
 

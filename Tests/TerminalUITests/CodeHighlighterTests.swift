@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 @testable import TerminalUI
 import Testing
 

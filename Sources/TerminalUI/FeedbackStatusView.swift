@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import SwiftUI
 
 /// Active work alone earns space beneath the toolbar.

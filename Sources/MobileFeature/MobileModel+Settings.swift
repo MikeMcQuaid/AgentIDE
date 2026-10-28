@@ -1,5 +1,5 @@
-import AgentIDERemote
 import Foundation
+import SanductorRemote
 
 extension MobileModel {
     /// Restores the destination and loads the phone’s public key.

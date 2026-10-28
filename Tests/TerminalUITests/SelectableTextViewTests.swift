@@ -5,7 +5,7 @@ import Testing
 struct SelectableTextViewTests {
     @Test
     func `local document links reach their action instead of opening a browser`() throws {
-        let group = try #require(URL(string: "agentide-log-group://2"))
+        let group = try #require(URL(string: "sanductor-log-group://2"))
         var clicked: URL?
         let view = SelectableTextView(text: NSAttributedString(string: "Group")) { url in
             clicked = url

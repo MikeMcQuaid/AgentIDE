@@ -1,5 +1,5 @@
-import AgentIDEInterface
 import AppKit
+import SanductorInterface
 import SwiftUI
 
 struct LocalReviewPromptView: View {

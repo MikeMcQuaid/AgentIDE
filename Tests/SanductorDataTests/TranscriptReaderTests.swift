@@ -1,0 +1,142 @@
+import Foundation
+import SanductorData
+import SanductorDomain
+import Testing
+
+/// Exercises transcript reading against fixture JSONL files.
+struct TranscriptReaderTests {
+    @Test
+    func `finds the newest transcript and its final assistant message`() throws {
+        let directory = try TestSupport.temporaryDirectory("transcripts")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let older = directory + "/11111111-aaaa.jsonl"
+        let newer = directory + "/22222222-bbbb.jsonl"
+        let lines = """
+        {"type":"user","message":{"content":[{"type":"text","text":"hi"}]}}
+        not even json
+        {"type":"assistant","message":{"content":[{"type":"text","text":"first"},{"type":"text","text":"second"}]}}
+        {"type":"system"}
+        """
+        try "{}\n".write(toFile: older, atomically: true, encoding: .utf8)
+        try lines.write(toFile: newer, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1)],
+            ofItemAtPath: older,
+        )
+
+        let reader = TranscriptReader()
+        let latest = try #require(reader.latestTranscript(in: directory))
+        #expect(latest.lastPathComponent == "22222222-bbbb.jsonl")
+        #expect(reader.resumeID(of: latest) == "22222222-bbbb")
+    }
+
+    @Test
+    func `lists sessions newest first with prompt titles`() throws {
+        let directory = try TestSupport.temporaryDirectory("sessions")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let older = directory + "/aaaa.jsonl"
+        let newer = directory + "/bbbb.jsonl"
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"fix the\ncrash"}]}}"#
+            .write(toFile: older, atomically: true, encoding: .utf8)
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"add tests"}]}}"#
+            .write(toFile: newer, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1)],
+            ofItemAtPath: older,
+        )
+
+        let sessions = TranscriptReader().sessions(in: directory, agent: .claudeCode)
+        #expect(sessions.map(\.id) == ["bbbb", "aaaa"])
+        #expect(sessions.first?.title == "add tests")
+        #expect(sessions.last?.title == "fix the crash")
+        #expect(sessions.allSatisfy { $0.agent == .claudeCode })
+    }
+
+    @Test
+    func `a rewritten transcript retitles once its file changes`() throws {
+        let directory = try TestSupport.temporaryDirectory("session-titles")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let transcript = directory + "/eeee.jsonl"
+        let reader = TranscriptReader()
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"first title"}]}}"#
+            .write(toFile: transcript, atomically: true, encoding: .utf8)
+        // Explicit stamps: the cache is keyed by whole seconds, and
+        // a rewrite inside the same second must not serve the old
+        // title, so the rewrite moves the clock.
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 100)],
+            ofItemAtPath: transcript,
+        )
+        #expect(reader.sessions(in: directory, agent: .claudeCode).first?.title == "first title")
+
+        try #"{"type":"user","message":{"content":[{"type":"text","text":"second title"}]}}"#
+            .write(toFile: transcript, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 200)],
+            ofItemAtPath: transcript,
+        )
+        #expect(reader.sessions(in: directory, agent: .claudeCode).first?.title == "second title")
+    }
+
+    @Test
+    func `parses a conversation into log entries with tool commands`() throws {
+        let directory = try TestSupport.temporaryDirectory("entries")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let transcript = directory + "/cccc.jsonl"
+        let lines = """
+        {"type":"user","message":{"content":[{"type":"text","text":"do it"}]}}
+        {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash",\
+        "input":{"command":"git status"}}]}}
+        {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read",\
+        "input":{"file_path":"/tmp/a.txt"}}]}}
+        garbage line
+        {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Task"}]}}
+        {"type":"assistant","message":{"content":[{"type":"text","text":"done"}]}}
+        """
+        try lines.write(toFile: transcript, atomically: true, encoding: .utf8)
+
+        let entries = TranscriptReader().entries(in: URL(fileURLWithPath: transcript))
+        #expect(entries.map(\.role) == [.user, .tool, .tool, .tool, .assistant])
+        #expect(entries.map(\.text) == ["do it", "Bash: git status", "Read: /tmp/a.txt", "Task", "done"])
+    }
+
+    @Test
+    func `parses codex rollout payloads into log entries`() throws {
+        let directory = try TestSupport.temporaryDirectory("codex-entries")
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let transcript = directory + "/rollout-dddd.jsonl"
+        // The first half is the current rollout generation, the
+        // second the older flat one; both stay readable.
+        let lines = """
+        {"type":"session_meta","payload":{"cwd":"/worktrees/one","id":"session-1"}}
+        {"type":"response_item","payload":{"type":"message","role":"developer",\
+        "content":[{"type":"input_text","text":"skills preamble"}]}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"# AGENTS.md instructions for /w\\ninjected"}]}}
+        {"type":"response_item","payload":{"type":"message","role":"user",\
+        "content":[{"type":"input_text","text":"fix it"}]}}
+        {"type":"event_msg","payload":{"type":"user_message","message":"fix it"}}
+        {"type":"response_item","payload":{"type":"custom_tool_call","name":"exec",\
+        "input":"pwd && ls\\nsecond line"}}
+        {"type":"response_item","payload":{"type":"custom_tool_call_output","output":"files"}}
+        {"type":"response_item","payload":{"type":"message","role":"assistant",\
+        "content":[{"type":"output_text","text":"done"}]}}
+        {"type":"response_item","payload":{"type":"reasoning"}}
+        {"type":"event_msg","payload":{"type":"token_count"}}
+        {"type":"response_item","payload":{"type":"user_message","message":"legacy prompt"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"shell",\
+        "arguments":"ls"}}
+        {"type":"response_item","payload":{"type":"function_call","name":"noargs",\
+        "arguments":""}}
+        {"type":"response_item","payload":{"type":"agent_message","message":"legacy done"}}
+        """
+        try lines.write(toFile: transcript, atomically: true, encoding: .utf8)
+
+        let entries = TranscriptReader().entries(in: URL(fileURLWithPath: transcript))
+        #expect(entries.map(\.role) == [.user, .tool, .assistant, .user, .tool, .tool, .assistant])
+        #expect(entries.map(\.text) == [
+            "fix it", "exec: pwd && ls", "done",
+            "legacy prompt", "shell: ls", "noargs", "legacy done",
+        ])
+    }
+}

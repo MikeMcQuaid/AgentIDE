@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 
 /// Shares each worktree's review across pane and worktree switches.
 @preconcurrency

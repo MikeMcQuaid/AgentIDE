@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 
 /// Putting back or throwing away the working files the uncommitted
 /// diff shows. Split from the model body for length.

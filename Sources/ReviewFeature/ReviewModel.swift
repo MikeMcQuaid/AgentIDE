@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 
 /// Loads a worktree's diff, tracks per-line selections and applies
 /// rejections and amendments.

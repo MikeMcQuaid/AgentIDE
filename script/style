@@ -99,7 +99,7 @@ swift_style() {
 # status to a file and keeps its output whole in a log printed as one
 # block, so nothing interleaves and no exit code has to survive the
 # trip through a background job.
-scratch="$(mktemp -d -t agentide-style)"
+scratch="$(mktemp -d -t sanductor-style)"
 trap 'rm -rf "${scratch}"' EXIT
 run_family() {
   # Direct calls, so shellcheck sees every family invoked.

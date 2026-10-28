@@ -1,7 +1,7 @@
 #if os(iOS)
-    import AgentIDEDomain
-    import AgentIDEInterface
-    import AgentIDERemote
+    import SanductorDomain
+    import SanductorInterface
+    import SanductorRemote
     import SwiftTerm
     import SwiftUI
     import UIKit

@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 
 /// What the model's GitHub and service seams do when they are the
 /// real ones, split from the initialiser for length.

@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// Session creation: every entry point funnels through one runner

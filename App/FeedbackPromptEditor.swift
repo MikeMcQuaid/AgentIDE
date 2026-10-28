@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEInterface
+import SanductorData
+import SanductorInterface
 import SwiftUI
 
 struct FeedbackPromptEditor: View {

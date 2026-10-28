@@ -1,2 +1,2 @@
 // Preserve the shared controls exposed by TerminalUI.
-@_exported import AgentIDEInterface
+@_exported import SanductorInterface

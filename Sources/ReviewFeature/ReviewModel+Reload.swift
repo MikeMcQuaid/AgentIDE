@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 
 /// Async reads check their generation before publishing any result.
 extension ReviewModel {

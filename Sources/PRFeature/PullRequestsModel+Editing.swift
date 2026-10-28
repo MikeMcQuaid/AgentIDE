@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 /// Editing an open pull request's title and body in the creation
 /// form: the same fields, the same drafting from the commits and the

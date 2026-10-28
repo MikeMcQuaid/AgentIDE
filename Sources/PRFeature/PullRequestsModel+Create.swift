@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 import TerminalUI
 
 /// Opening a pull request, and telling both surfaces about it at
