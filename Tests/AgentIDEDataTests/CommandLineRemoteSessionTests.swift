@@ -103,7 +103,66 @@ struct CommandLineRemoteSessionTests {
         #expect(result.standardOutput == "repo\n")
     }
 
+    @Test
+    func `listing and creation follow the directories the app published`() async throws {
+        let shared = try TestSupport.temporaryDirectory("phone")
+        defer { try? FileManager.default.removeItem(atPath: shared) }
+        try await TestSupport.makeRepository(at: shared + "/projects/repo")
+        try await TestSupport.makeRepository(at: shared + "/repositories/stale")
+        try publish(
+            ["repositories-directory=" + shared + "/projects", "worktrees-directory=" + shared + "/trees"],
+            in: shared,
+        )
+
+        let listing = try await run("repositories", input: "", shared: shared)
+        #expect(listing.standardOutput == "repo\n")
+        let result = try await run("new --repository repo --agent codex --no-attach", input: "A prompt", shared: shared)
+        #expect(result.succeeded)
+        #expect(result.standardOutput.contains("worktree=" + shared + "/trees/repo/a_prompt\n"))
+        let stale = try await run("new --repository stale --agent codex --no-attach", input: "A prompt", shared: shared)
+        #expect(stale.succeeded == false)
+    }
+
+    @Test(arguments: [".", "..", "../outside", "/outside", "repo/../outside", "missing"])
+    func `relocated creation refuses anything except an existing repository`(repository: String) async throws {
+        let shared = try TestSupport.temporaryDirectory("phone")
+        defer { try? FileManager.default.removeItem(atPath: shared) }
+        // Every traversal lands on a real checkout, so only the
+        // containment check can refuse it.
+        for checkout in ["/projects/repo", "/projects/outside", "/outside"] {
+            try await TestSupport.makeRepository(at: shared + checkout)
+        }
+        try publish(["repositories-directory=" + shared + "/projects"], in: shared)
+        let result = try await run(
+            "new --repository " + repository.shellQuoted + " --agent claude --no-attach",
+            input: "A prompt",
+            shared: shared,
+        )
+        #expect(result.succeeded == false)
+    }
+
+    @Test
+    func `without published directories the shared workspace's own are used`() async throws {
+        let shared = try TestSupport.temporaryDirectory("phone")
+        defer { try? FileManager.default.removeItem(atPath: shared) }
+        try await TestSupport.makeRepository(at: shared + "/repositories/repo")
+        try publish(["agent=codex", "repositories=repo"], in: shared)
+
+        let listing = try await run("repositories", input: "", shared: shared)
+        #expect(listing.standardOutput == "repo\n")
+        let result = try await run("new --repository repo --agent codex --no-attach", input: "A prompt", shared: shared)
+        #expect(result.standardOutput.contains("worktree=" + shared + "/worktrees/repo/a_prompt\n"))
+    }
+
     // MARK: Private
+
+    /// Writes the lines the app would publish for the command.
+    private func publish(_ lines: [String], in shared: String) throws {
+        try FileManager.default.createDirectory(atPath: shared + "/agentide", withIntermediateDirectories: true)
+        try (lines.joined(separator: "\n") + "\n").write(
+            toFile: shared + "/agentide/session-defaults", atomically: true, encoding: .utf8,
+        )
+    }
 
     private func run(_ arguments: String, input: String, shared: String) async throws -> ProcessResult {
         let command = URL(filePath: #filePath)

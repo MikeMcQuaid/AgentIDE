@@ -1213,7 +1213,9 @@ any bundle (the shared workspace's, for SSH) skips it. A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
 spool. `AGENTIDE=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
-selects the worktree holding it, and `agentide new` starts a session.
+selects the worktree holding it, and `agentide new` starts a session;
+both, and `agentide repositories`, look in the directories the app
+published to `session-defaults`.
 Explicit absolute file paths may belong to no worktree and open beside
 the current selection; relative paths remain confined to their worktree.
 
@@ -1896,9 +1898,26 @@ Two directories in the shared workspace are the app's own: `user/`, the
 template sandvault syncs into the sandbox home, where the agent hooks
 live and where your keys and shell configuration go, and `agentide/`,
 holding prompts, hook events and `session-defaults`, which remembers
-what the new session form and `agentide new` last chose. The app also
-keeps `[worktrees] directory` in herdr's own configuration pointed at
-its layout, so `herdr worktree create` lands where the sidebar looks.
+what the new session form and `agentide new` last chose. Every refresh
+also publishes the Repositories and Worktrees directories there, as
+Settings resolves them (`repositories-directory`,
+`worktrees-directory`), since only the host user can read Settings; the
+command falls back to the shared workspace's own directories when they
+are missing or empty, and the app never reads them back. A location
+outside the shared workspace is published empty: setup already reports
+it and no agent launches there, so the command keeps to the defaults
+rather than making worktrees nothing can run in. A path holding a
+newline cannot be a line of either published file, so it is left out,
+and a refresh that would write what is already there writes nothing. The
+sandbox can write `agentide/`, so the app reads and replaces
+`session-defaults` and `host-directories` as a `SandboxFile`, as it
+reads an autofix result: the directory and the file are opened without
+following links, anything but a regular file with one name counts as
+absent, and the new contents are renamed over the name. Read through a
+planted link, the merge would have published a host-only file where the
+sandbox reads. The app also keeps `[worktrees] directory` in herdr's own
+configuration pointed at its layout, so `herdr worktree create` lands
+where the sidebar looks.
 
 The variables shell files and scripts can read or set:
 

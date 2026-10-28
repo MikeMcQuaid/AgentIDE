@@ -96,7 +96,6 @@ public extension DashboardModel {
         // on the last list at once and take the fresh one when it
         // lands, where waiting on the sandbox took twenty seconds.
         await discoverModels()
-        publishSessionChoices()
         while Task.isCancelled == false {
             await refresh(readingPanes: false)
             let interval = RefreshCadence.pollSeconds(
@@ -198,6 +197,9 @@ public extension DashboardModel {
         // herdr has answered, so nothing is waiting on it any more.
         awaitedSessions = []
         cacheSidebar(listed)
+        // Settings can move the directories at any moment, and the
+        // command learns of it only from here.
+        publishSessionChoices()
         await readPaneLoads()
         await refreshStacks(of: listed)
         await refreshStalePullRequests(forcing: forces)
