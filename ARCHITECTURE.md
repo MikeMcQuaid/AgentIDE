@@ -866,7 +866,10 @@ shows a different branch from the one checked out.
   volume and the accessibility flash no longer apply. Nothing is
   played into a machine that has announced sleep, and what is
   mid-play stops then. An exit posts nothing. The Dock badge counts worktrees
-  needing attention, each contribution behind a toggle.
+  needing attention, each contribution behind a toggle. Authorisation
+  asks for badges beside alerts and sounds: macOS hides an app's
+  `dockTile` badge, and offers no toggle to show it, until the app
+  has asked for badges.
 - **Git reads are driven by the file system.** One FSEvents stream
   over the repository and worktree roots (`WorkspaceWatcher`) remembers
   what changed, and a reading asks git only about repositories
