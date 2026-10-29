@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import Foundation
 
 public extension PullRequestStore {
     /// Maps the shared queue membership to branch names without another read.
@@ -41,5 +42,29 @@ public extension PullRequestStore {
             + metadata.pullRequestListsCache
             .filter { $0.key.hasPrefix("list#" + repositoryPath + "#") }
             .flatMap(\.value.summaries)
+    }
+
+    internal func readQueuedNumbers(repositoryPaths: [String], interval: TimeInterval) async {
+        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
+        guard due.isEmpty == false else {
+            return
+        }
+
+        let queued = store.load().queuedCache
+        let fetched = await github.queuedNumbers(repositoryPaths: due)
+        store.update { metadata in
+            for (path, numbers) in fetched {
+                metadata.queuedCache[path] = numbers.sorted()
+                metadata.fetchedAt["queue#" + path] = Date()
+            }
+        }
+        for (path, numbers) in fetched {
+            for summary in cachedQueueSummaries(repositoryPath: path)
+                where Set(queued[path] ?? []).symmetricDifference(numbers).contains(summary.number)
+            {
+                invalidateBranch(repositoryPath: path, branch: summary.headBranch)
+                store.update { $0.fetchedAt[Self.summaryKey(repositoryPath: path, number: summary.number)] = nil }
+            }
+        }
     }
 }

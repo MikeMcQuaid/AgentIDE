@@ -54,6 +54,7 @@ public struct AppMetadata: Codable, Equatable, Sendable {
             .decodeIfPresent([String: [String]].self, forKey: .hostDirectories) ?? [:]
         stackExclusions = try container
             .decodeIfPresent([String: [String]].self, forKey: .stackExclusions) ?? [:]
+        workBlocks = try container.decodeIfPresent([WorkBlock].self, forKey: .workBlocks) ?? []
         fetchedAt = try container.decodeIfPresent([String: Date].self, forKey: .fetchedAt) ?? [:]
         queuedCache = try container.decodeIfPresent([String: [Int]].self, forKey: .queuedCache) ?? [:]
         mergeQueueCapability = try container
@@ -159,6 +160,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// that an old branch sharing history is nothing to do with the
     /// work in hand; this is where saying so is remembered.
     public var stackExclusions: [String: [String]] = [:]
+
+    /// Manual and dependency blocks, shared by both devices through the host.
+    public var workBlocks: [WorkBlock] = []
 
     /// When each session was last seen by the user, for unread state.
     public var lastSeen: [String: Date] = [:]

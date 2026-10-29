@@ -23,7 +23,6 @@ extension PullRequestsModelTests {
         model.fetchSummary = { _ in nil }
         model.fetchHasMergeQueue = { false }
         model.fetchAcceptsDefaultPushes = { false }
-        model.fetchThreads = { _ in [] }
         model.performCreate = { _, _, _, _, _ in "" }
         model.performAssignClosingIssues = { _ in
             // Succeeds without side effects.

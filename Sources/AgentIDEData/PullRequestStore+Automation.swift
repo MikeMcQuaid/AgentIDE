@@ -23,22 +23,18 @@ public extension PullRequestStore {
         }
     }
 
-    /// Marks fresh GitHub state, never a cached head predating an unseen push.
-    func toggleResolveOnPush(repositoryPath: String, number: Int, threadID: String) async throws {
-        if let entry = store.load().pullRequestAutomation.first(where: { entry in
-            entry.value.repositoryPath == repositoryPath && entry.value.number == number
-        }), entry.value.resolutions[threadID] != nil {
-            try store.updatePersisting { $0.pullRequestAutomation[entry.key]?.resolutions[threadID] = nil }
+    /// Records the displayed conversation locally; resolution verifies GitHub after a push.
+    func toggleResolveOnPush(repositoryPath: String, summary: PullRequestSummary, thread: ReviewThread) throws {
+        let threadID = thread.resolveID
+        let key = PullRequestAutomation.key(for: summary.url)
+        if store.load().pullRequestAutomation[key]?.resolutions[threadID] != nil {
+            try store.updatePersisting { $0.pullRequestAutomation[key]?.resolutions[threadID] = nil }
             return
         }
-        guard let summary = try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number),
-              summary.state == "OPEN", let head = summary.headCommit,
-              let thread = try await github.reviewThreads(repositoryPath: repositoryPath, number: number)
-                  .first(where: { $0.resolveID == threadID }),
-              thread.isResolved == false, let latest = thread.comments.last?.id,
-              try await github.pullRequestSummary(repositoryPath: repositoryPath, number: number)?.headCommit == head
+        guard summary.state == "OPEN", let head = summary.headCommit, head.isEmpty == false,
+              threadID.isEmpty == false, thread.isResolved == false, let latest = thread.comments.last?.id
         else {
-            throw SessionServiceError("The pull request changed. Refresh before marking this conversation.")
+            throw SessionServiceError("The pull request is still loading. Try marking this conversation again shortly.")
         }
 
         try updateAutomation(repositoryPath: repositoryPath, summary: summary) { state in

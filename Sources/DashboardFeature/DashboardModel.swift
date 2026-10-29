@@ -27,6 +27,7 @@ public final class DashboardModel {
         self.github = github
         self.launchProgress = launchProgress
         notifiedFeedback = store.load().pullRequestAutomation
+        workBlocks = store.load().workBlocks
         watcher = service.makeWorkspaceWatcher()
         watcher.start()
         restoreCachedSidebar()
@@ -39,11 +40,6 @@ public final class DashboardModel {
     }
 
     // MARK: Public
-
-    /// The grouped worktrees per repository.
-    /// Written by refresh and, for the placeholder row a new session
-    /// shows while it is created, the sessions extension.
-    public internal(set) var groups: [RepositoryGroup] = []
 
     /// The step log the current launch narrates into, shown by the
     /// pane covering the split while a session is created or resumed.
@@ -116,6 +112,13 @@ public final class DashboardModel {
     /// at the mercy of the machine it runs on.
     public var isOnBattery: () -> Bool = { false }
 
+    /// The grouped worktrees per repository.
+    /// Written by refresh and, for the placeholder row a new session
+    /// shows while it is created, the sessions extension.
+    public internal(set) var groups: [RepositoryGroup] = [] {
+        didSet { selectedWorktreePaths?.formIntersection(groups.flatMap(\.items).map(\.id)) }
+    }
+
     /// Whether the new session page is shown; the middle-pane pages
     /// are mutually exclusive, so showing one cancels the other.
     public var showsNewSession = false {
@@ -144,6 +147,7 @@ public final class DashboardModel {
                 return
             }
 
+            selectedWorktreePaths = nil
             // A creation placeholder is selected for seconds only and
             // must not become the worktree the next launch restores.
             if selection.isPlaceholder == false {
@@ -288,6 +292,15 @@ public final class DashboardModel {
     static let selectedWorktreeKey = "selectedWorktreePath"
 
     @ObservationIgnored var publishedSidebar: [SidebarRepository] = []
+    var workBlocks: [WorkBlock]
+    var isStatusMode = false
+    // nil follows the open pane; an empty set explicitly selects nothing.
+    // swiftlint:disable:next discouraged_optional_collection
+    var selectedWorktreePaths: Set<String>?
+    var batchAction: WorktreeBatchAction?
+    var batchProgress: String?
+    @ObservationIgnored var blocksReadAt: Date = .distantPast
+    @ObservationIgnored var statusDetailsTask: Task<Void, Never>?
 
     /// A draft waiting for its form to show.
     var launchRetry: LaunchRetry?

@@ -12,6 +12,7 @@ public extension DashboardModel {
 
     /// Explicit navigation reveals the row; background readings do not.
     internal func reveal(_ item: WorktreeItem) {
+        selectedWorktreePaths = nil
         let defaults = UserDefaults.standard
         let collapsed = defaults.string(forKey: "collapsedRepositories") ?? ""
         let repositoryPath = groups.group(holding: item)?.repository.path ?? item.worktree.repositoryPath

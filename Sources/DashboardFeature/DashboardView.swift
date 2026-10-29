@@ -1,5 +1,7 @@
 import AgentIDEData
 import AgentIDEDomain
+import AgentIDEInterface
+import AppKit
 import SwiftUI
 import TerminalUI
 
@@ -25,39 +27,144 @@ public struct DashboardView: View {
     /// The grouped rows with status badges per worktree.
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.rowSpacing) {
-                ForEach(model.groups) { group in
-                    header(for: group)
-                    if isExpanded(group.repository.path) {
-                        ForEach(group.items) { item in
-                            row(for: item)
-                        }
-                    }
-                }
-                NewRepositoryRow { model.showsRepositoryFinder = true }
-                    .padding(.trailing, Self.scrollbarClearance)
-            }
-            .padding([.leading, .vertical], Self.listPadding)
-            .padding(.trailing, Self.listTrailingPadding)
+            sidebarContent
         }
         // The traffic lights occupy the top-left band; the inset
         // keeps the first repository row beneath it. Opening a
         // repository lives at the list's end as its last row, not
         // floating up here.
         .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: isFullScreen ? Self.listPadding : Self.titlebarClearance)
+            VStack(spacing: 0) {
+                Color.clear.frame(height: isFullScreen ? Self.listPadding : Self.titlebarClearance)
+                modePicker
+                selectionBar
+            }
         }
+        .sheet(item: $pendingBlock) { selection in
+            WorktreeBlockSheet(selection: selection, model: model) { pendingBlock = nil }
+                .frame(width: Self.blockEditorWidth)
+        }
+        .task(id: mode) {
+            model.isStatusMode = mode == .status
+            if mode == .status {
+                await model.refreshStatusDetails()
+            }
+        }
+        .task { await model.listenForSidebarRequests() }
+    }
+
+    // MARK: Internal
+
+    static let listPadding: CGFloat = 6
+    static let listTrailingPadding: CGFloat = 2
+    static let scrollbarClearance: CGFloat = 16
+    static let rowSpacing: CGFloat = 1
+    static let headerVerticalPadding: CGFloat = 4
+
+    // swiftformat:disable privateSwiftUIDynamicProperties -- Shared with the sidebar extension.
+    @AppStorage("sidebarMode")
+    var mode: SidebarMode = .repository
+
+    @AppStorage("sidebarRepositorySort")
+    var repositorySort: RepositorySort = .activity
+
+    // Shared with the selection extension.
+    // swiftlint:disable:next private_swiftui_state
+    @State var pendingBlock: WorktreeBlockSelection?
+
+    // swiftformat:enable privateSwiftUIDynamicProperties
+
+    let model: DashboardModel
+
+    /// The disclosure button and the adjacent new-session plus are
+    /// siblings: a button nested inside another button never
+    /// receives its clicks.
+    func header(for group: RepositoryGroup) -> some View {
+        HStack(spacing: Self.statusPadding) {
+            Button {
+                toggleExpansion(of: group.repository.path)
+            } label: {
+                headerLabel(for: group)
+            }
+            .buttonStyle(.plain)
+            .hoverHelp((isExpanded(group.repository.path) ? "Collapse " : "Expand ") + group.repository.name)
+            Button {
+                model.openNewSession(for: group.repository)
+            } label: {
+                SidebarIcon(systemName: "plus", verticalPadding: Self.headerVerticalPadding)
+                    .foregroundStyle(.primary)
+            }
+            .buttonStyle(.plain)
+            .fixedSize()
+            .accessibilityLabel("New session in " + group.repository.name)
+            .hoverHelp("Start a new agent session in this repository")
+            Spacer(minLength: 0)
+        }
+        .padding(.trailing, Self.scrollbarClearance)
+        .modifier(RepositoryMenu(group: group, model: model))
+    }
+
+    /// Selected rows use the system selection colours, which follow
+    /// the user's highlight choice and grey out when the window is
+    /// not key, the way every native sidebar's selection does; the
+    /// literal accent-and-white pair stayed saturated in inactive
+    /// windows and fell below contrast on light accents.
+    func row(for item: WorktreeItem) -> some View {
+        let isSelected = model.isSelected(item)
+        let isEmphasised = isSelected && controlActiveState != .inactive
+        return Button {
+            model.selectSidebar(item, extending: NSEvent.modifierFlags.contains(.command))
+        } label: {
+            rowLabel(for: item)
+                // Deleting takes a moment; the row fades the instant the
+                // click lands so the click visibly took.
+                .opacity(model.deletingPaths.contains(item.worktree.path) ? Self.deletingOpacity : 1)
+                .padding(.vertical, Self.rowVerticalPadding)
+                .padding(.horizontal, Self.rowHorizontalPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(model.batchAction != nil)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .foregroundStyle(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.primary)
+        .tint(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.accentColor)
+        .background(RoundedRectangle(cornerRadius: Self.rowCornerRadius)
+            .fill(selectionFill(isSelected: isSelected, isEmphasised: isEmphasised)))
+        .padding(.leading, Self.rowIndent)
+        .contextMenu { contextActions(for: item).disabled(model.batchAction != nil) }
+        .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
+            StackPopover(item: item, model: model) { pendingStack = nil }
+        }
+        .popover(isPresented: pendingBinding($pendingBranchSwitch, for: item), arrowEdge: .trailing) {
+            BranchSwitchPopover(item: item, model: model) { pendingBranchSwitch = nil }
+        }
+        .confirmationDialog(
+            forceDeleteTitle(for: item),
+            isPresented: forceDeleteBinding(for: item),
+            titleVisibility: .visible,
+        ) {
+            Button("Delete worktree and branch", role: .destructive) {
+                pendingForceDelete = nil
+                Task {
+                    await model.delete(item: item)
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingForceDelete = nil }
+        } message: {
+            Text(forceDeleteMessage(for: item))
+        }
+    }
+
+    func isExpanded(_ path: String) -> Bool {
+        collapsedRepositories.split(separator: "\n").map(String.init).contains(path) == false
     }
 
     // MARK: Private
 
+    private static let blockEditorWidth: CGFloat = 460
     private static let statusPadding: CGFloat = 4
-    private static let listPadding: CGFloat = 6
-    private static let listTrailingPadding: CGFloat = 2
-    private static let scrollbarClearance: CGFloat = 16
-    private static let rowSpacing: CGFloat = 1
     private static let rowVerticalPadding: CGFloat = 3
-    private static let headerVerticalPadding: CGFloat = 4
     private static let deletingOpacity = 0.35
     private static let rowHorizontalPadding: CGFloat = 6
     private static let rowIndent: CGFloat = 12
@@ -89,39 +196,10 @@ public struct DashboardView: View {
     @State private var pendingStack: WorktreeItem?
     @State private var pendingBranchSwitch: WorktreeItem?
 
-    private let model: DashboardModel
     private var repositoryStyle: RepositoryStyle = .init()
 
     /// Whether the window is fullscreen, with the lights hidden.
     private let isFullScreen: Bool
-
-    /// The disclosure button and the adjacent new-session plus are
-    /// siblings: a button nested inside another button never
-    /// receives its clicks.
-    private func header(for group: RepositoryGroup) -> some View {
-        HStack(spacing: Self.statusPadding) {
-            Button {
-                toggleExpansion(of: group.repository.path)
-            } label: {
-                headerLabel(for: group)
-            }
-            .buttonStyle(.plain)
-            .hoverHelp((isExpanded(group.repository.path) ? "Collapse " : "Expand ") + group.repository.name)
-            Button {
-                model.openNewSession(for: group.repository)
-            } label: {
-                SidebarIcon(systemName: "plus", verticalPadding: Self.headerVerticalPadding)
-                    .foregroundStyle(.primary)
-            }
-            .buttonStyle(.plain)
-            .fixedSize()
-            .accessibilityLabel("New session in " + group.repository.name)
-            .hoverHelp("Start a new agent session in this repository")
-            Spacer(minLength: 0)
-        }
-        .padding(.trailing, Self.scrollbarClearance)
-        .modifier(RepositoryMenu(group: group, model: model))
-    }
 
     private func headerLabel(for group: RepositoryGroup) -> some View {
         HStack(spacing: Self.statusPadding) {
@@ -134,9 +212,7 @@ public struct DashboardView: View {
             .padding(.horizontal, -Self.statusPadding)
             .padding(.vertical, -Self.headerVerticalPadding)
             avatar(for: group.repository)
-            // The avatar already names the owner, so the text keeps
-            // to the repository name alone.
-            Text(group.repository.name)
+            Text(repositorySort == .name ? group.repository.fullName ?? group.repository.name : group.repository.name)
                 .font(repositoryStyle.font)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -156,70 +232,13 @@ public struct DashboardView: View {
         .padding(.leading, -Self.listPadding)
     }
 
-    /// Selected rows use the system selection colours, which follow
-    /// the user's highlight choice and grey out when the window is
-    /// not key, the way every native sidebar's selection does; the
-    /// literal accent-and-white pair stayed saturated in inactive
-    /// windows and fell below contrast on light accents.
-    private func row(for item: WorktreeItem) -> some View {
-        let isSelected = model.selection?.id == item.id
-        let isEmphasised = isSelected && controlActiveState != .inactive
-        return Button {
-            // A worktree mid-deletion cannot be re-entered; the row
-            // only becomes selectable again if the deletion fails.
-            if model.deletingPaths.contains(item.worktree.path) == false {
-                model.select(item)
-            }
-        } label: {
-            WorktreeRowView(
-                item: item,
-                pullRequest: model.pullRequest(for: item),
-                standing: model.stackStanding(for: item),
-                load: model.paneLoads[item.worktree.path],
-                feedbackStatus: model.feedbackStatus(for: item),
-                failure: model.launchFailure(for: item),
-            )
-            // Deleting takes a moment; the row fades the instant the
-            // click lands so the click visibly took.
-            .opacity(model.deletingPaths.contains(item.worktree.path) ? Self.deletingOpacity : 1)
-            .padding(.vertical, Self.rowVerticalPadding)
-            .padding(.horizontal, Self.rowHorizontalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.primary)
-        .tint(isEmphasised ? Color(nsColor: .alternateSelectedControlTextColor) : Color.accentColor)
-        .background(RoundedRectangle(cornerRadius: Self.rowCornerRadius)
-            .fill(selectionFill(isSelected: isSelected, isEmphasised: isEmphasised)))
-        .padding(.leading, Self.rowIndent)
-        .contextMenu { contextActions(for: item) }
-        .popover(isPresented: pendingBinding($pendingStack, for: item), arrowEdge: .trailing) {
-            StackPopover(item: item, model: model) { pendingStack = nil }
-        }
-        .popover(isPresented: pendingBinding($pendingBranchSwitch, for: item), arrowEdge: .trailing) {
-            BranchSwitchPopover(item: item, model: model) { pendingBranchSwitch = nil }
-        }
-        .confirmationDialog(
-            forceDeleteTitle(for: item),
-            isPresented: forceDeleteBinding(for: item),
-            titleVisibility: .visible,
-        ) {
-            Button("Delete worktree and branch", role: .destructive) {
-                pendingForceDelete = nil
-                Task {
-                    await model.delete(item: item)
-                }
-            }
-            Button("Cancel", role: .cancel) { pendingForceDelete = nil }
-        } message: {
-            Text(forceDeleteMessage(for: item))
-        }
-    }
-
     @ViewBuilder
     private func contextActions(for item: WorktreeItem) -> some View {
-        if item.worktree.isHostDirectory {
+        if model.actionItems(for: item).count > 1 {
+            WorktreeBatchActions(items: model.actionItems(for: item), model: model) {
+                pendingBlock = WorktreeBlockSelection(items: model.actionItems(for: item), model: model)
+            }
+        } else if item.worktree.isHostDirectory {
             HostDirectoryActions(item: item, model: model)
         } else {
             WorktreeActions(
@@ -229,6 +248,7 @@ public struct DashboardView: View {
                 pendingForceDelete: $pendingForceDelete,
                 pendingStack: $pendingStack,
                 pendingBranchSwitch: $pendingBranchSwitch,
+                pendingBlock: $pendingBlock,
             )
         }
     }
@@ -307,10 +327,6 @@ public struct DashboardView: View {
             : Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
     }
 
-    private func isExpanded(_ path: String) -> Bool {
-        collapsedRepositories.split(separator: "\n").map(String.init).contains(path) == false
-    }
-
     /// Collapsed repositories persist across launches as a
     /// newline-joined path list. The rows animate in and out rather
     /// than popping.
@@ -333,7 +349,7 @@ public struct DashboardView: View {
 /// row of the list rather than a button floating above it, with the
 /// adjacent plus saying it adds rather than selects; its own view
 /// for the sidebar's type length.
-private struct NewRepositoryRow: View {
+struct NewRepositoryRow: View {
     // MARK: Internal
 
     let onOpen: () -> Void

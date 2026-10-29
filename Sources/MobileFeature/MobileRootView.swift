@@ -52,20 +52,10 @@
         // MARK: Private
 
         private static let titleSpacing: CGFloat = 6
-        private static let rowSpacing: CGFloat = 3
-        private static let rowInset: CGFloat = 8
-        private static let agentIconSize: CGFloat = 14
-        private static let minimumTouchSize: CGFloat = 44
-        private static let avatarCornerRadius: CGFloat = 4
-
-        @ScaledMetric(relativeTo: .headline)
-        private var avatarSize = 20.0
 
         @Bindable private var model: MobileModel
         @State private var showsSettings = false
         @State private var newRepository: Repository?
-
-        private var nameStyle: NameStyle = .init()
 
         @ToolbarContentBuilder private var toolbar: some ToolbarContent {
             ToolbarItem(placement: .principal) {
@@ -77,7 +67,8 @@
             ToolbarItem(placement: .topBarLeading) {
                 Button("Settings", systemImage: "gearshape") { showsSettings = true }
             }
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarSpacer(.fixed, placement: .topBarLeading)
+            ToolbarItem(placement: .topBarLeading) {
                 if model.isConnected || model.isConnecting {
                     Button("Disconnect", systemImage: "network.slash") { model.disconnect() }
                         .labelStyle(.iconOnly)
@@ -86,6 +77,17 @@
                         .disabled(model.isCreating)
                 } else {
                     connectButton
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if model.isConnected {
+                    NewSessionMenu(repositories: model.repositories.map { name in
+                        Repository(
+                            name: name,
+                            path: name,
+                            fullName: model.sidebar.first { $0.name == name && $0.owner != nil }?.fullName,
+                        )
+                    }) { newRepository = $0 }
                 }
             }
         }
@@ -141,106 +143,8 @@
                     LaunchProgressView("Connecting", progress: model.progress)
                 }
             } else {
-                repositoryList
+                MobileSidebar(model: model, newRepository: $newRepository)
             }
-        }
-
-        private var repositoryList: some View {
-            List {
-                if model.repositories.isEmpty {
-                    ContentUnavailableView(
-                        "No repositories",
-                        systemImage: "folder",
-                        description: Text("Add a repository on your Mac first."),
-                    )
-                }
-                ForEach(
-                    MobileSession.sortedRepositories(
-                        model.repositories, sessions: model.sessions, sidebar: model.sidebar,
-                    ),
-                    id: \.self,
-                ) { repository in
-                    let sessions = MobileSession.sortedSessions(
-                        model.sessions.filter { $0.repository == SessionName.slug(repository) },
-                        worktrees: model.sidebar.first { $0.name == repository }?.worktrees ?? [],
-                    )
-                    newSessionButton(repository, count: Set(sessions.map { $0.directory ?? $0.name }).count)
-                    ForEach(sessions) { session in
-                        sessionButton(session)
-                    }
-                }
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(
-                    top: Self.rowSpacing,
-                    leading: Self.rowInset,
-                    bottom: Self.rowSpacing,
-                    trailing: Self.rowInset,
-                ))
-            }
-            .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 0)
-            .refreshable { await model.refresh() }
-        }
-
-        private func sessionButton(_ session: MobileSession) -> some View {
-            Button { model.selection = session } label: {
-                HStack(alignment: .top, spacing: Self.titleSpacing) {
-                    SessionStatusIcon(status: .running, activity: session.activity)
-                        .interfaceFont(.callout)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(session.branch).font(nameStyle.font).lineLimit(1)
-                        HStack(spacing: Self.titleSpacing) {
-                            if let agent = session.agent {
-                                AgentIcon(agent, size: Self.agentIconSize)
-                            } else {
-                                Image(systemName: "terminal").accessibilityLabel("Shell")
-                            }
-                            if let status = session.gitStatus {
-                                Text(status.summary).help(GitWorktreeStatus.countsHelp)
-                            }
-                        }
-                        .interfaceFont(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.primary)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, Self.rowInset)
-        }
-
-        private func newSessionButton(_ repository: String, count: Int = 0) -> some View {
-            Button {
-                newRepository = Repository(name: repository, path: repository)
-            } label: {
-                HStack(spacing: Self.titleSpacing) {
-                    OwnerAvatar(owner: model.sidebar.first { $0.name == repository }?.owner, size: avatarSize)
-                        .clipShape(RoundedRectangle(cornerRadius: Self.avatarCornerRadius))
-                    Text(repository)
-                        .interfaceFont(.headline, weight: .semibold)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    if count > 0 {
-                        Text("(" + String(count) + ")")
-                            .interfaceFont(.callout)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel(String(count) + " worktrees with sessions")
-                    }
-                    Image(systemName: "plus")
-                        .interfaceFont(.body, weight: .semibold)
-                        .foregroundStyle(.primary)
-                        .frame(minWidth: Self.minimumTouchSize, minHeight: Self.minimumTouchSize)
-                        .glassEffect(.regular.interactive(), in: Circle())
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: Self.minimumTouchSize)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .textCase(nil)
-            .accessibilityLabel("New session in " + repository)
         }
     }
 

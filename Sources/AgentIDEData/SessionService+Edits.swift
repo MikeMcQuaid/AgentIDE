@@ -150,7 +150,7 @@ public extension SessionService {
     /// A wake rung whenever the spool directory's listing changes;
     /// nil when the directory cannot be opened for watching. The
     /// source lives as long as the wake does.
-    private static func directoryChanges(in directory: String) -> DirectoryWake? {
+    internal static func directoryChanges(in directory: String) -> DirectoryWake? {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let descriptor = unsafe open(directory, O_EVTONLY)
         guard descriptor >= 0 else {

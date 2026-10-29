@@ -116,16 +116,7 @@ enum TestSupport {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/env")
         process.arguments = argv
-        var merged = ProcessInfo.processInfo.environment
-        // Inherited herdr variables (tests running inside a herdr
-        // pane) would aim these teardown stops at the surrounding
-        // production server.
-        merged["HERDR_SESSION"] = nil
-        merged["HERDR_SOCKET_PATH"] = nil
-        for (key, value) in environment {
-            merged[key] = value
-        }
-        process.environment = merged
+        process.environment = ProcessEnvironment.scrubbed(merging: environment)
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try? process.run()

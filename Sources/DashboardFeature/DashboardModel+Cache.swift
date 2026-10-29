@@ -166,11 +166,26 @@ extension DashboardModel {
             return cached
         }
         store.update { $0.cachedSidebar = cached }
+        publishSidebar(real)
+    }
+
+    private func publishSidebar(_ real: [RepositoryGroup]) {
         let sidebar = real.map { group in
             SidebarRepository(
                 name: group.repository.name,
                 owner: group.repository.owner,
                 worktrees: group.items.filter { $0.worktree.isHostDirectory == false }.map(\.worktree.path),
+                entries: group.items.filter { $0.worktree.isHostDirectory == false }.map { item in
+                    SidebarEntry(
+                        target: SidebarTarget(item.worktree),
+                        status: sidebarStatus(for: item),
+                        activity: item.session?.activity,
+                        block: block(for: item),
+                    )
+                },
+                lastActivityAt: SessionService.repositoryActivity(of: group),
+                fullName: group.repository.fullName,
+                defaultBranch: group.defaultBranch,
             )
         }
         if sidebar != publishedSidebar, service.publishSidebar(sidebar) {

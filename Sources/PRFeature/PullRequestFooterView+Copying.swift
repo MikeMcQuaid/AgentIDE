@@ -17,21 +17,21 @@ extension PullRequestFooterView {
         // the count how much there is; none of it dims the button
         // to the word alone, which is the same fact the count
         // would have reported.
-        BusyButton(
-            label: copyLabel("Reviews", count: count),
-            accessibilityLabel: Self.copyTitle("Reviews", count: count),
-            busy: "Copying",
-            disabled: count == 0,
-        ) {
+        Button {
             // Both buttons read the modifier at the click, as
             // `LinkOpener` does: Cmd goes to the browser, Shift to
             // the Browser tab, a plain click to the clipboard.
             if NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]) == false {
                 model.openReviews(selected)
             } else {
-                await model.copyUnresolvedComments(selected)
+                model.copyUnresolvedComments(selected)
             }
+        } label: {
+            copyLabel("Reviews", count: count)
         }
+        .buttonStyle(.glass)
+        .accessibilityLabel(Self.copyTitle("Reviews", count: count))
+        .disabled(count == 0)
         .hoverHelp("Copy unresolved local AI and GitHub conversations; Cmd-click opens GitHub reviews "
             + "in your browser, Shift-click in the Browser tab; dimmed while none is unresolved")
         let checks = PullRequestsModel.copyableFailingChecks(in: selected)
@@ -57,9 +57,7 @@ extension PullRequestFooterView {
     func rawFeedbackMenu(for selected: PullRequestSummary) -> some View {
         Menu("Copy unfiltered feedback") {
             Button("All unresolved reviews") {
-                Task {
-                    await model.copyUnresolvedComments(selected)
-                }
+                model.copyUnresolvedComments(selected)
             }
             .disabled(reviewCount(for: selected) == 0)
             Button("Failing CI logs") {

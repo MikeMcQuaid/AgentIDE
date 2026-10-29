@@ -182,16 +182,18 @@ public struct PullRequestStore: Sendable {
         interval: TimeInterval = capabilityInterval,
     ) async -> Bool {
         let key = "queue-capability#" + repositoryPath
-        guard due(key, interval: interval) else {
-            return store.load().mergeQueueCapability[repositoryPath] ?? false
-        }
+        return await (try? Self.capabilityReads.run(key: [store.file, key]) {
+            guard due(key, interval: interval) else {
+                return store.load().mergeQueueCapability[repositoryPath] ?? false
+            }
 
-        let answer = await github.hasMergeQueue(repositoryPath: repositoryPath)
-        store.update { metadata in
-            metadata.mergeQueueCapability[repositoryPath] = answer
-            metadata.fetchedAt[key] = Date()
-        }
-        return answer
+            let answer = await github.hasMergeQueue(repositoryPath: repositoryPath)
+            store.update { metadata in
+                metadata.mergeQueueCapability[repositoryPath] = answer
+                metadata.fetchedAt[key] = Date()
+            }
+            return answer
+        }) ?? false
     }
 
     /// Every repository's merge queue, those due asked for in one
@@ -200,39 +202,21 @@ public struct PullRequestStore: Sendable {
         repositoryPaths: [String],
         interval: TimeInterval = minimumInterval,
     ) async -> [String: Set<Int>] {
+        var remaining = Set(repositoryPaths.filter { path in
+            due("queue#" + path, interval: interval, floor: Self.inFlightFloor)
+        })
+        while remaining.isEmpty == false {
+            let paths = remaining.sorted()
+            let read = await (try? Self.queueReads.run(key: [store.file]) {
+                await readQueuedNumbers(repositoryPaths: paths, interval: interval)
+                return paths
+            }) ?? paths
+            // A pane can join the sidebar's batch; repositories absent
+            // from that batch are checked once it has finished.
+            remaining.subtract(read)
+        }
         let queued = store.load().queuedCache
-        // One batched query for every repository is cheap enough to
-        // allow under the floor while something is queued.
-        let due = repositoryPaths.filter { due("queue#" + $0, interval: interval, floor: Self.inFlightFloor) }
-        var answers = [String: Set<Int>]()
-        for path in repositoryPaths {
-            answers[path] = Set(queued[path] ?? [])
-        }
-        guard due.isEmpty == false else {
-            return answers
-        }
-
-        // Every repository at once, since the query is one process
-        // however many it names: asked repository by repository as
-        // each fell due, the same question ran three times in five
-        // minutes for answers that arrive together.
-        let fetched = await github.queuedNumbers(repositoryPaths: repositoryPaths)
-        store.update { metadata in
-            for (path, numbers) in fetched {
-                metadata.queuedCache[path] = numbers.sorted()
-                metadata.fetchedAt["queue#" + path] = Date()
-            }
-        }
-        for (path, numbers) in fetched {
-            answers[path] = numbers
-            for summary in cachedQueueSummaries(repositoryPath: path)
-                where Set(queued[path] ?? []).symmetricDifference(numbers).contains(summary.number)
-            {
-                invalidateBranch(repositoryPath: path, branch: summary.headBranch)
-                store.update { $0.fetchedAt[Self.summaryKey(repositoryPath: path, number: summary.number)] = nil }
-            }
-        }
-        return answers
+        return Dictionary(uniqueKeysWithValues: Set(repositoryPaths).map { ($0, Set(queued[$0] ?? [])) })
     }
 
     /// Forgets when one pull request was last asked about, so the

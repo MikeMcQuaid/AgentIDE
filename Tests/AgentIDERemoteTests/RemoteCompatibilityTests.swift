@@ -22,6 +22,7 @@ struct RemoteCompatibilityTests {
         let output = Pipe()
         process.executableURL = URL(filePath: "/bin/sh")
         process.arguments = ["-c", SSHConfiguration().command(RemoteHerdr.helpCommand(command.path))]
+        process.environment = ["PATH": "/usr/bin:/bin"]
         process.standardOutput = output
         try process.run()
         let data = output.fileHandleForReading.readDataToEndOfFile()

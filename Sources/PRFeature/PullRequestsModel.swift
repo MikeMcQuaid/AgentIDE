@@ -57,9 +57,6 @@ final class PullRequestsModel {
         fetchAcceptsDefaultPushes = {
             await Self.acceptsDefaultPushes(gate: gate, repository: repository, defaultBranch: defaultBranch)
         }
-        fetchThreads = { number in
-            await Self.threads(of: number, gate: gate, repository: repository)
-        }
         restoreLocalReviewIdentity = { path, summary in
             await service.restoreLocalReviewIdentity(
                 worktreePath: path, repositoryPath: repository.path, summary: summary,
@@ -277,7 +274,6 @@ final class PullRequestsModel {
 
     var fetchAcceptsDefaultPushes: () async -> Bool
     var acceptsDefaultPushes = false
-    var fetchThreads: (Int) async -> [ReviewThread]
     var restoreLocalReviewIdentity: (String, PullRequestSummary) async -> Bool
     var performCreate: (Worktree, String, String, [String], Bool) async throws -> String
     var performAssignClosingIssues: (String) async throws -> Void

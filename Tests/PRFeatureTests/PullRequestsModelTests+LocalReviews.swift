@@ -6,7 +6,7 @@ import Testing
 
 extension PullRequestsModelTests {
     @Test
-    func `conversation copies include local findings without enabling autofix`() async {
+    func `conversation copies include local findings without enabling autofix`() {
         let path = worktreesPath + "/feature"
         let model = makeModel(items: [item(branch: "feature", ahead: 0)], worktreePath: path)
         let selected = summary(7, head: "feature")
@@ -36,8 +36,10 @@ extension PullRequestsModelTests {
             isResolved: false,
             comments: [ReviewThreadComment(author: "copilot", body: "Remote finding")],
         )
-        model.fetchThreads = { _ in [remote] }
-        await model.copyUnresolvedComments(selected)
+        model.store.update { metadata in
+            metadata.threadsCache[AppMetadata.threadsKey(repositoryPath: "/repo", number: 7)] = .init(threads: [remote])
+        }
+        model.copyUnresolvedComments(selected)
         #expect(NSPasteboard.general.string(forType: .string) == ReviewThread.digest(of: [remote, local]))
     }
 
@@ -73,7 +75,7 @@ extension PullRequestsModelTests {
     }
 
     @Test
-    func `local resolution changes copy counts and cannot change a replacement review`() async {
+    func `local resolution changes copy counts and cannot change a replacement review`() {
         let model = makeModel()
         let review = localReview()
         let path = "/worktrees/feature"
@@ -83,11 +85,11 @@ extension PullRequestsModelTests {
         model.toggleLocalResolved("R1", review: review, path: path)
         #expect(model.reviewCount(for: selected) == 0)
         #expect(model.localReview(for: selected)?.review.threads.first?.codeContext == "captured code")
-        await model.copyUnresolvedComments(selected)
+        model.copyUnresolvedComments(selected)
         #expect(NSPasteboard.general.string(forType: .string)?.isEmpty == true)
         model.toggleLocalResolved("R1", review: review, path: path)
         #expect(model.reviewCount(for: selected) == 1)
-        await model.copyUnresolvedComments(selected)
+        model.copyUnresolvedComments(selected)
         #expect(NSPasteboard.general.string(forType: .string) == ReviewThread.digest(of: review.threads))
         let replacement = localReview()
         model.store.update { $0.localReviews[path] = replacement }
@@ -96,17 +98,16 @@ extension PullRequestsModelTests {
     }
 
     @Test
-    func `copies read current local decisions after remote comments finish loading`() async {
+    func `copies use local decisions without restoring reviews or fetching GitHub`() {
         let model = makeModel()
         let review = localReview()
         model.store.update { $0.localReviews["/worktrees/feature"] = review }
-        model.fetchThreads = { _ in
-            #expect(NSPasteboard.general.string(forType: .string) == nil)
-            model.toggleLocalResolved("R1", review: review, path: "/worktrees/feature")
-            return []
+        model.restoreLocalReviewIdentity = { _, _ in
+            Issue.record("Copy must not restore reviews")
+            return false
         }
-        await model.copyUnresolvedComments(summary(7, head: "feature"))
-        #expect(NSPasteboard.general.string(forType: .string)?.isEmpty == true)
+        model.copyUnresolvedComments(summary(7, head: "feature"))
+        #expect(NSPasteboard.general.string(forType: .string) == ReviewThread.digest(of: review.threads))
     }
 
     private func localReview() -> LocalReview {

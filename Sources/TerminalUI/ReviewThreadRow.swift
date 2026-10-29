@@ -17,7 +17,7 @@ public struct ReviewThreadRow: View {
         localReviewer: AgentKind? = nil,
         onMakeFix: (@MainActor () async -> Void)? = nil,
         onToggleResolved: (@MainActor () async -> Void)? = nil,
-        onToggleResolveOnPush: (@MainActor () async -> Void)? = nil,
+        onToggleResolveOnPush: (@MainActor () -> Void)? = nil,
         isPendingResolution: Bool = false,
         allowsActions: Bool = true,
         allowsFix: Bool = true,
@@ -65,7 +65,7 @@ public struct ReviewThreadRow: View {
                         .hoverHelp("Prepare an editable fix prompt for this finding to copy into the main agent pane")
                     }
                 }
-                .disabled(allowsActions == false || isUpdatingResolution)
+                .disabled(allowsActions == false)
             }
         }
         .padding(Self.padding)
@@ -94,7 +94,6 @@ public struct ReviewThreadRow: View {
     /// Overrides per row once toggled; resolved and pending conversations
     /// otherwise start minimised.
     @State private var expandOverrides: [Bool] = []
-    @State private var isUpdatingResolution = false
 
     private let thread: ReviewThread
     private let onEdit: (@MainActor () -> Void)?
@@ -103,7 +102,7 @@ public struct ReviewThreadRow: View {
     private let allowsActions: Bool
     private let allowsFix: Bool
     private let showsCodeContext: Bool
-    private let onToggleResolveOnPush: (@MainActor () async -> Void)?
+    private let onToggleResolveOnPush: (@MainActor () -> Void)?
     private let isPendingResolution: Bool
     private let onToggleResolved: (@MainActor () async -> Void)?
 
@@ -167,7 +166,7 @@ public struct ReviewThreadRow: View {
         // A REST-fallback thread carries no id to resolve.
         if thread.resolveID.isEmpty == false || localReviewer != nil,
            isPendingResolution == false || thread.isResolved,
-           isUpdatingResolution == false, let onToggleResolved
+           let onToggleResolved
         {
             BusyButton(
                 localReviewer == nil
@@ -187,15 +186,12 @@ public struct ReviewThreadRow: View {
 
     @ViewBuilder private var resolveOnPushButton: some View {
         if thread.isResolved == false, thread.resolveID.isEmpty == false, let onToggleResolveOnPush {
-            BusyButton(isPendingResolution ? "Cancel" : "Resolve on push", busy: "Updating") {
-                isUpdatingResolution = true
-                defer { isUpdatingResolution = false }
-                await onToggleResolveOnPush()
-            }
-            .controlSize(.small)
-            .hoverHelp(isPendingResolution
-                ? "Cancel resolution on the next push"
-                : "Resolve this conversation after GitHub confirms the next push")
+            Button(isPendingResolution ? "Cancel" : "Resolve on push", action: onToggleResolveOnPush)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .hoverHelp(isPendingResolution
+                    ? "Cancel resolution on the next push"
+                    : "Resolve this conversation after GitHub confirms the next push")
         }
     }
 

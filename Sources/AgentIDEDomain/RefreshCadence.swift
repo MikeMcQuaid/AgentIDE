@@ -9,6 +9,12 @@ import Foundation
 /// every tick that asks herdr is a `sudo` login shell, and a machine
 /// on battery with nothing happening should cost nothing.
 public enum RefreshCadence {
+    /// Credentials have no shared change event; failed GitHub requests allow one recovery check per minute.
+    public static let githubAuthenticationSeconds: TimeInterval = 60
+
+    /// GitHub state has no herdr event; the phone refreshes its host projection while Status is visible.
+    public static let sidebarStatusSeconds = 60
+
     /// Result checks while a merge action waits for GitHub's async fallback.
     public static let mergeResultSeconds = 2
 

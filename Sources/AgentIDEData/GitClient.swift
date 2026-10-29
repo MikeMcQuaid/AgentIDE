@@ -90,7 +90,7 @@ public struct GitClient: Sendable {
                 // dropped the worktree from the sidebar mid-rebase,
                 // and taking its row away killed the shell running
                 // in it.
-                branch: branch ?? URL(fileURLWithPath: currentPath).lastPathComponent,
+                branch: branch ?? Worktree.directoryBranch(at: currentPath),
                 path: currentPath,
             ))
         }
@@ -338,8 +338,15 @@ public struct GitClient: Sendable {
         // reading the worktree must go on working without one,
         // since a stale answer beats no answer while the route is
         // gone.
-        if let remoteWork = arguments.first, Self.remoteCommands.contains(remoteWork), isOnline() == false {
-            throw OfflineError(doing: "git " + remoteWork)
+        var environment = environment
+        if let remoteWork = arguments.first, Self.remoteCommands.contains(remoteWork) {
+            guard isOnline() else {
+                throw OfflineError(doing: "git " + remoteWork)
+            }
+
+            // Empty overrides let gh's credential helper use its refreshable stored login.
+            environment["GH_TOKEN"] = ""
+            environment["GITHUB_TOKEN"] = ""
         }
 
         // `--no-optional-locks` so a read never takes the index

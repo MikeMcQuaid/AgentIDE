@@ -76,42 +76,26 @@ public final class ScheduledPromptsModel {
             else {
                 continue
             }
-            guard persist({ prompts in
-                guard let index = prompts.firstIndex(where: { $0.id == id }) else {
-                    return
-                }
 
-                prompts[index].nextRun = prompt.schedule.nextRun(after: now())
-                prompts[index].lastRun = now()
-                prompts[index].lastSession = nil
-                prompts[index].lastError = "Launch interrupted before its result was recorded."
-            }) else {
+            await run(prompt, due: due, advancesSchedule: true)
+            if error != nil {
                 return
             }
-
-            runningID = id
-            var session: String?
-            var failure: String?
-            _ = await ErrorLog.shared.attemptingTwice("Scheduled prompt “" + prompt.name + "”") {
-                do {
-                    session = try await self.launch(prompt, due)
-                    failure = nil
-                } catch {
-                    failure = error.localizedDescription
-                    throw error
-                }
-            }
-            _ = persist { prompts in
-                guard let index = prompts.firstIndex(where: { $0.id == id }) else {
-                    return
-                }
-
-                prompts[index].lastSession = session
-                prompts[index].lastError = failure
-            }
-            runningID = nil
-            UtilityTabTarget.requestSidebarRefresh()
         }
+    }
+
+    /// Starts the latest saved job without moving a future occurrence or unpausing it.
+    public func start(_ savedPrompt: ScheduledPrompt) async {
+        guard runningID == nil, let prompt = prompts.first(where: { $0.id == savedPrompt.id }), prompt.isValid else {
+            return
+        }
+
+        let due = max(now(), (prompt.lastRun ?? .distantPast).addingTimeInterval(1))
+        await run(
+            prompt,
+            due: due,
+            advancesSchedule: prompt.isEnabled && (prompt.nextRun ?? .distantFuture) <= now(),
+        )
     }
 
     // MARK: Internal
@@ -125,6 +109,47 @@ public final class ScheduledPromptsModel {
 
     private let store: MetadataStore
     private var timer: Timer?
+
+    private func run(_ prompt: ScheduledPrompt, due: Date, advancesSchedule: Bool) async {
+        runningID = prompt.id
+        timer?.invalidate()
+        defer { runningID = nil; armTimer() }
+        guard persist({ prompts in
+            guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else {
+                return
+            }
+
+            if advancesSchedule {
+                prompts[index].nextRun = prompt.schedule.nextRun(after: now())
+            }
+            prompts[index].lastRun = max(now(), due)
+            prompts[index].lastSession = nil
+            prompts[index].lastError = "Launch interrupted before its result was recorded."
+        }) else {
+            return
+        }
+
+        var session: String?
+        var failure: String?
+        _ = await ErrorLog.shared.attemptingTwice("Scheduled prompt “" + prompt.name + "”") {
+            do {
+                session = try await self.launch(prompt, due)
+                failure = nil
+            } catch {
+                failure = error.localizedDescription
+                throw error
+            }
+        }
+        _ = persist { prompts in
+            guard let index = prompts.firstIndex(where: { $0.id == prompt.id }) else {
+                return
+            }
+
+            prompts[index].lastSession = session
+            prompts[index].lastError = failure
+        }
+        UtilityTabTarget.requestSidebarRefresh()
+    }
 
     private func persist(_ change: (inout [ScheduledPrompt]) -> Void) -> Bool {
         var firstFailure: String?

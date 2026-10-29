@@ -70,6 +70,16 @@ public final class ServiceStatus {
         guard hasNetwork, GitHubOutage.isOffline(error) == false else {
             return
         }
+
+        if let authentication = error as? GitHubAuthenticationError {
+            guard authenticationFailure != authentication.id else {
+                return
+            }
+
+            authenticationFailure = authentication.id
+            ErrorLog.shared.report(authentication.localizedDescription)
+            return
+        }
         guard GitHubOutage.isLikely(error) else {
             let description = error.localizedDescription
             guard let earlier = release(what) else {
@@ -155,6 +165,7 @@ public final class ServiceStatus {
     /// Failures held while the next read has its go, by what was
     /// being done, and the deadline each is reported at regardless.
     private var held: [String: String] = [:]
+    private var authenticationFailure: UUID?
     private var deadlines: [String: Task<Void, Never>] = [:]
 
     /// A rough human duration; the exact seconds of an outage are

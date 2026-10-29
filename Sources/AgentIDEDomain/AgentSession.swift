@@ -4,7 +4,7 @@ import Foundation
 
 /// What a running agent is doing, as herdr's lifecycle detection
 /// reports it.
-public enum AgentActivity: Hashable, Sendable {
+public enum AgentActivity: Codable, Hashable, Sendable {
     /// The agent is actively running a turn.
     case working
     /// The agent is at rest without a completed turn: never asked,

@@ -152,7 +152,7 @@ public extension SessionService {
             return Worktree(
                 repositoryName: repository.name,
                 repositoryPath: owner,
-                branch: GitClient.headFileBranch(worktreePath: path) ?? name,
+                branch: GitClient.headFileBranch(worktreePath: path) ?? Worktree.directoryBranch(at: path),
                 path: path,
             )
         }

@@ -1,4 +1,5 @@
 import AgentIDEDomain
+import AgentIDEInterface
 import SwiftUI
 import TerminalUI
 
@@ -124,6 +125,7 @@ public struct ScheduledPromptsView: View {
                 .hoverHelp("Remove this schedule; existing sessions and worktrees are kept")
         }
         .padding(.vertical)
+        .disabled(model.runningID == prompt.id)
     }
 
     private func details(_ prompt: ScheduledPrompt) -> some View {
@@ -151,6 +153,10 @@ public struct ScheduledPromptsView: View {
             } else {
                 Text("Paused").interfaceFont(.caption).foregroundStyle(.secondary)
             }
+            BusyButton("Start", busy: "Starting…", disabled: model.runningID != nil || prompt.isValid == false) {
+                await model.start(prompt)
+            }
+            .hoverHelp("Start this saved job now without changing its future schedule")
         }
     }
 }
