@@ -90,7 +90,7 @@ public extension DashboardModel {
         // discovery and the notification prompt take seconds, and
         // the window showed "no worktree selected" while they ran.
         await refresh()
-        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
         // Each CLI is asked its models beside the others, not one
         // after another, and the answers are kept: the pickers open
         // on the last list at once and take the fresh one when it
