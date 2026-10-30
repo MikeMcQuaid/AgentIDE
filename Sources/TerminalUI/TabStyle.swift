@@ -1,5 +1,5 @@
-import AgentIDEData
 import AppKit
+import SanductorData
 import SwiftUI
 
 /// Utility tabs keep their system defaults until Fonts settings changes them.

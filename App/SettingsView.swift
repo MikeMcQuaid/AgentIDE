@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 import DashboardFeature
+import SanductorData
+import SanductorDomain
 import SessionFeature
 import SwiftUI
 import TerminalUI
@@ -209,7 +209,7 @@ private struct AdvancedSettingsPane: View {
             )
             Text("Where checkouts and worktrees live; the defaults are the shared "
                 + "workspace's own directories. Takes effect on the next refresh, which "
-                + "is also when the agentide command and the iPhone follow them.")
+                + "is also when the sanductor command and the iPhone follow them.")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
         }

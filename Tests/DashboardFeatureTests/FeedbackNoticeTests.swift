@@ -1,5 +1,5 @@
-@testable import AgentIDEData
 @testable import DashboardFeature
+@testable import SanductorData
 import Testing
 
 @MainActor

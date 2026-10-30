@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 /// The numbering drawn beside each diff line, and a hunk's text as
 /// the file holds it. Split from the view body for length.

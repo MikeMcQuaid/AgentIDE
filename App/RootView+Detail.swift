@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import DashboardFeature
+import SanductorDomain
 import SessionFeature
 import SwiftUI
 import TerminalUI

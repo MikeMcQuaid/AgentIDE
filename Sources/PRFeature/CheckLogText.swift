@@ -1,5 +1,5 @@
-import AgentIDEData
 import AppKit
+import SanductorData
 
 /// Renders groups in the shared selectable document without interpreting log output as markup.
 enum CheckLogText {
@@ -36,7 +36,7 @@ enum CheckLogText {
             }
             if line.endIndex != nil {
                 title = (collapsedGroups.contains(index) ? "▸ " : "▾ ") + title
-                attributes[.link] = URL(string: "agentide-log-group://" + String(index))
+                attributes[.link] = URL(string: "sanductor-log-group://" + String(index))
                 attributes[.toolTip] = (collapsedGroups.contains(index) ? "Expand " : "Collapse ") + line.text
             }
             if offset > 0 {

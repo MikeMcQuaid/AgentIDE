@@ -1,5 +1,5 @@
-@testable import AgentIDEInterface
 import Foundation
+@testable import SanductorInterface
 import Testing
 
 @MainActor

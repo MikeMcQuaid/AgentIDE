@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// A review body without the bots' command advertisements.

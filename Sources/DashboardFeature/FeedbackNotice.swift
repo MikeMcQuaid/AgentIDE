@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 
 /// Routine waits stay quiet; a person is needed for terminal failures or manual steps.
 enum FeedbackNotice {

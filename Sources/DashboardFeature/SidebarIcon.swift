@@ -1,4 +1,4 @@
-import AgentIDEInterface
+import SanductorInterface
 import SwiftUI
 
 /// Sidebar icons share a highlight on hover and keyboard focus.

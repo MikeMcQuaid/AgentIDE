@@ -65,7 +65,7 @@ cat >"${scratch}/bin/xcrun" <<'VALIDATOR'
 #!/bin/bash
 set -euo pipefail
 [[ "$1" == altool && "$2" == --validate-app ]]
-[[ "$3" == */export/AgentIDE.ipa ]]
+[[ "$3" == */export/Sanductor.ipa ]]
 [[ "$4" == --api-key && "$5" == KEY1234567 ]]
 [[ "$6" == --api-issuer && "$7" == issuer ]]
 [[ "$8" == --p8-file-path && "$(cat "$9")" == 'test API key' ]]
@@ -81,6 +81,8 @@ export APP_STORE_CERTIFICATES=dGVzdA== APP_STORE_CERTIFICATES_PASSWORD=password
 plutil -create xml1 "${scratch}/IOS.plist"
 /usr/libexec/PlistBuddy -c "Add :UUID string $(uuidgen)" \
   -c 'Add :TeamIdentifier array' -c 'Add :TeamIdentifier:0 string ABCDEFGHIJ' \
+  -c 'Add :Entitlements dict' \
+  -c 'Add :Entitlements:application-identifier string OLDPREFIX1.com.mikemcquaid.Sanductor' \
   "${scratch}/IOS.plist"
 export "APP_STORE_IOS_PROFILE=$(base64 -i "${scratch}/IOS.plist")"
 
@@ -94,6 +96,23 @@ if env -u APP_STORE_IOS_PROFILE script/testflight >"${scratch}/missing.log" 2>&1
 fi
 grep -q APP_STORE_IOS_PROFILE "${scratch}/missing.log"
 [[ ! -e "${scratch}/security.log" ]]
+
+cp "${scratch}/IOS.plist" "${scratch}/old-profile.plist"
+/usr/libexec/PlistBuddy \
+  -c 'Set :Entitlements:application-identifier OLDPREFIX1.com.mikemcquaid.AgentIDE' \
+  "${scratch}/old-profile.plist"
+if APP_STORE_IOS_PROFILE="$(base64 -i "${scratch}/old-profile.plist")" TESTFLIGHT_TEST_FAILURE=none \
+  script/testflight --dry-run >"${scratch}/old-profile.log" 2>&1; then
+  echo 'An old bundle identifier did not prevent archiving' >&2
+  exit 1
+fi
+grep -q SANDUCTOR_APP_STORE_IOS_PROFILE "${scratch}/old-profile.log"
+[[ ! -e "${scratch}/calls" ]]
+if grep -Eq '^(create-keychain|import)$' "${scratch}/security.log"; then
+  echo 'An invalid profile changed the signing keychain' >&2
+  exit 1
+fi
+rm "${scratch}/security.log"
 
 for mode in upload export; do
   dry_run=
@@ -125,7 +144,7 @@ for mode in upload export; do
       [[ ! -e "${scratch}/calls" ]]
       continue
     fi
-    grep -qx AgentIDE-iOS "${scratch}/archive.args"
+    grep -qx Sanductor-iOS "${scratch}/archive.args"
     grep -qx generic/platform=iOS "${scratch}/archive.args"
     grep -qx DEVELOPMENT_TEAM=ABCDEFGHIJ "${scratch}/archive.args"
     grep -qx MARKETING_VERSION=1.2.3 "${scratch}/archive.args"
@@ -148,7 +167,7 @@ for mode in upload export; do
     grep -qx "IOS_PROFILE_UUID=${uuid}" "${scratch}/archive.args"
     [[ ! -e "${HOME}/Library/Developer/Xcode/UserData/Provisioning Profiles/${uuid}.mobileprovision" ]]
     if [[ "${failure}" != archive ]]; then
-      [[ "$(/usr/libexec/PlistBuddy -c "Print :provisioningProfiles:com.mikemcquaid.AgentIDE" "${scratch}/export.plist")" == "${uuid}" ]]
+      [[ "$(/usr/libexec/PlistBuddy -c "Print :provisioningProfiles:com.mikemcquaid.Sanductor" "${scratch}/export.plist")" == "${uuid}" ]]
     fi
   done
 done

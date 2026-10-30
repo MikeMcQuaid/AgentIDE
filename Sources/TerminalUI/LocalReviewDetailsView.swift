@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// The captured exchange, including failures, in both local review surfaces.

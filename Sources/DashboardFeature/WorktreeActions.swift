@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 

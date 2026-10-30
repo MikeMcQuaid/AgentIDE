@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 /// One running terminal in the phone's repository navigation.
 struct MobileSession: Identifiable, Hashable {
@@ -35,7 +35,7 @@ struct MobileSession: Identifiable, Hashable {
 
     static func sessions(in snapshot: HerdrSnapshot, worktrees: [String: GitWorktreeStatus] = [:]) -> [Self] {
         snapshot.workspaces.flatMap { workspace in
-            guard SessionName.isAgentIDE(workspace.label) else {
+            guard SessionName.isSanductor(workspace.label) else {
                 return [Self]()
             }
 

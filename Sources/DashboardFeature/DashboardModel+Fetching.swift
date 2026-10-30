@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// The explicit fetches a repository row offers. Split from the

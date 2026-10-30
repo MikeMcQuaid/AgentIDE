@@ -1,4 +1,4 @@
-name: AgentIDE
+name: Sanductor
 options:
   bundleIdPrefix: com.mikemcquaid
   createIntermediateGroups: true
@@ -6,7 +6,7 @@ options:
     macOS: "26.0"
     iOS: "26.0"
 packages:
-  AgentIDEPackage:
+  SanductorPackage:
     path: .
 settings:
   base:
@@ -40,23 +40,23 @@ settings:
     CLANG_ANALYZER_SECURITY_INSECUREAPI_STRCPY: YES
     CLANG_ANALYZER_SECURITY_BUFFER_OVERFLOW_EXPERIMENTAL: YES
 targets:
-  AgentIDE-iOS:
+  Sanductor-iOS:
     type: application
     platform: iOS
     sources:
       - iOSApp
       - App/Assets.xcassets
     dependencies:
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: MobileFeature
     configFiles:
       Debug: .build/version.xcconfig
       Release: .build/version.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
-        PRODUCT_NAME: AgentIDE
-        PRODUCT_MODULE_NAME: AgentIDEiOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.Sanductor
+        PRODUCT_NAME: Sanductor
+        PRODUCT_MODULE_NAME: SanductoriOS
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Connect to your Mac over SSH to view and steer its agents.
@@ -78,7 +78,7 @@ targets:
       configs:
         Release:
           PROVISIONING_PROFILE_SPECIFIER: $(IOS_PROFILE_UUID)
-  AgentIDEApp:
+  SanductorApp:
     type: application
     platform: macOS
     sources:
@@ -90,20 +90,20 @@ targets:
         type: folder
         buildPhase: resources
     dependencies:
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: DashboardFeature
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: SessionFeature
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: ReviewFeature
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: PRFeature
-      - package: AgentIDEPackage
+      - package: SanductorPackage
         product: TerminalUI
-      - package: AgentIDEPackage
-        product: AgentIDEData
-      - package: AgentIDEPackage
-        product: AgentIDEInterface
+      - package: SanductorPackage
+        product: SanductorData
+      - package: SanductorPackage
+        product: SanductorInterface
     # The version and build number come from git through
     # `script/version`, which writes this before the project is
     # generated and before every scripted build; a build started in
@@ -113,8 +113,8 @@ targets:
       Release: .build/version.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.AgentIDE
-        PRODUCT_NAME: AgentIDE
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemcquaid.Sanductor
+        PRODUCT_NAME: Sanductor
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Mike McQuaid."
@@ -122,27 +122,27 @@ targets:
         # macOS has no way to decline these prompts in advance: a
         # non-sandboxed app is asked the first time it touches one of
         # these places, and these strings are only what the prompt
-        # says. AgentIDE reaches them for one reason, so the prompt
+        # says. Sanductor reaches them for one reason, so the prompt
         # says which directory of your own asked and offers the
         # honest way out.
         INFOPLIST_KEY_NSDocumentsFolderUsageDescription: >-
-          AgentIDE reads a directory you listed yourself. Deny this and remove
+          Sanductor reads a directory you listed yourself. Deny this and remove
           the directory from its repository's menu if you would rather it never
           looked.
         INFOPLIST_KEY_NSDesktopFolderUsageDescription: >-
-          AgentIDE reads a directory you listed yourself. Deny this and remove
+          Sanductor reads a directory you listed yourself. Deny this and remove
           the directory from its repository's menu if you would rather it never
           looked.
         INFOPLIST_KEY_NSDownloadsFolderUsageDescription: >-
-          AgentIDE reads a directory you listed yourself. Deny this and remove
+          Sanductor reads a directory you listed yourself. Deny this and remove
           the directory from its repository's menu if you would rather it never
           looked.
         INFOPLIST_KEY_NSNetworkVolumesUsageDescription: >-
-          AgentIDE reads a directory you listed yourself, or a repository on a
+          Sanductor reads a directory you listed yourself, or a repository on a
           share. Deny this and keep your work on a local disk if you would
           rather it never looked.
         INFOPLIST_KEY_NSRemovableVolumesUsageDescription: >-
-          AgentIDE reads a directory you listed yourself, or a repository on a
+          Sanductor reads a directory you listed yourself, or a repository on a
           removable disk. Deny this and keep your work on the internal disk if
           you would rather it never looked.
         MACOSX_DEPLOYMENT_TARGET: "26.0"
@@ -152,22 +152,22 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_ENTITLEMENTS: App/AgentIDE.entitlements
+        CODE_SIGN_ENTITLEMENTS: App/Sanductor.entitlements
         ENABLE_HARDENED_RUNTIME: YES
     scheme:
       testTargets:
-        - AgentIDEIntentTests
+        - SanductorIntentTests
   # The App Intents exercised through the system's own runtime, out
   # of process: a UI testing bundle is what AppIntentsTesting wants.
   # macOS 27 hosts only: AppIntentsTesting needs it, and xcodebuild
   # cannot run in the sandbox.
-  AgentIDEIntentTests:
+  SanductorIntentTests:
     type: bundle.ui-testing
     platform: macOS
     sources:
-      - Tests/AgentIDEIntentTests
+      - Tests/SanductorIntentTests
     dependencies:
-      - target: AgentIDEApp
+      - target: SanductorApp
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

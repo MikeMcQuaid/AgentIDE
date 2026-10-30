@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 import TerminalUI
 
 /// Committing from the review pane: the ticked files, or the whole

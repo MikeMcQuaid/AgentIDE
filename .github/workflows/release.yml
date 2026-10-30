@@ -13,7 +13,7 @@ on:
   push:
     paths:
       - .github/workflows/release.yml
-      - App/AgentIDE.entitlements
+      - App/Sanductor.entitlements
       - Package.swift
       - Package.resolved
       - project.yml
@@ -139,8 +139,8 @@ jobs:
       - name: Upload the app
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: AgentIDE
-          path: .build/AgentIDE-${{ steps.version.outputs.version }}.zip
+          name: Sanductor
+          path: .build/Sanductor-${{ steps.version.outputs.version }}.zip
           # The zip lives in a hidden directory, skipped by default.
           include-hidden-files: true
           if-no-files-found: error
@@ -177,13 +177,13 @@ jobs:
       - name: Download app
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: AgentIDE
+          name: Sanductor
           path: .test-scratch
 
       - name: Launch app
         run: |
-          ditto -x -k .test-scratch/AgentIDE-*.zip .test-scratch
-          .test-scratch/AgentIDE.app/Contents/MacOS/AgentIDE &
+          ditto -x -k .test-scratch/Sanductor-*.zip .test-scratch
+          .test-scratch/Sanductor.app/Contents/MacOS/Sanductor &
           pid=$!
           trap 'kill "${pid}" &>/dev/null || true' EXIT
           sleep 10
@@ -205,7 +205,7 @@ jobs:
       - name: Download the app
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: AgentIDE
+          name: Sanductor
           path: .build
 
       - name: Create the release
@@ -217,7 +217,7 @@ jobs:
           gh auth setup-git
           git push origin "refs/tags/${VERSION}"
           gh release create "${VERSION}" --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes \
-            ".build/AgentIDE-${VERSION}.zip"
+            ".build/Sanductor-${VERSION}.zip"
 
   testflight:
     name: TestFlight (iPhone)
@@ -270,8 +270,11 @@ jobs:
           APP_STORE_ISSUER_ID: ${{ secrets.NOTARIZATION_ISSUER_ID }}
           APP_STORE_CERTIFICATES: ${{ secrets.APP_STORE_CERTIFICATES }}
           APP_STORE_CERTIFICATES_PASSWORD: ${{ secrets.APP_STORE_CERTIFICATES_PASSWORD }}
-          APP_STORE_IOS_PROFILE: ${{ secrets.AGENTIDE_APP_STORE_IOS_PROFILE }}
+          SANDUCTOR_APP_STORE_IOS_PROFILE: ${{ secrets.SANDUCTOR_APP_STORE_IOS_PROFILE }}
+          AGENTIDE_APP_STORE_IOS_PROFILE: ${{ secrets.AGENTIDE_APP_STORE_IOS_PROFILE }}
         run: |
+          [[ -n "${SANDUCTOR_APP_STORE_IOS_PROFILE:+set}" ]] || unset SANDUCTOR_APP_STORE_IOS_PROFILE
+          [[ -n "${AGENTIDE_APP_STORE_IOS_PROFILE:+set}" ]] || unset AGENTIDE_APP_STORE_IOS_PROFILE
           if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
             script/testflight --dry-run
           else

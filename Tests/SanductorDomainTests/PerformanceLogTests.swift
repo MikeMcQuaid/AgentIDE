@@ -1,0 +1,82 @@
+import Foundation
+import SanductorDomain
+import Testing
+
+/// The performance log is off unless asked for, lives where both
+/// users can read it, keeps a day and never grows past its cap.
+struct PerformanceLogTests {
+    // MARK: Internal
+
+    @Test
+    func `a line older than a day is not kept`() {
+        let now = Date()
+        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-80_000), now: now))
+        #expect(PerformanceLog.keeps(lineWrittenAt: now.addingTimeInterval(-90_000), now: now) == false)
+    }
+
+    @Test
+    func `trimming keeps the newest whole lines that fit`() {
+        let text = (1 ... 10).lazy.map { "line-" + String($0) }.joined(separator: "\n") + "\n"
+
+        // Each line is seven bytes and a newline: a budget of
+        // twenty-four holds three of them, newest last.
+        #expect(PerformanceLog.newest(of: text, within: 24) == "line-8\nline-9\nline-10\n")
+        #expect(PerformanceLog.newest(of: text, within: 1).isEmpty)
+        #expect(PerformanceLog.newest(of: text, within: 1_000) == text)
+        #expect(PerformanceLog.sizeFloor < PerformanceLog.sizeCap)
+    }
+
+    @Test
+    func `the gate is the variable or the marker file, never on by itself`() {
+        // The environment cannot change under a running process, so
+        // the test asserts the rule's shape against whatever this
+        // one was launched with.
+        let marker = PerformanceLog.file.replacing("performance.log", with: "performance-log")
+        let expected = ProcessInfo.processInfo.environment["SANDUCTOR_PERFORMANCE_LOG"] != nil
+            || FileManager.default.fileExists(atPath: marker)
+        #expect(PerformanceLog.isEnabled == expected)
+    }
+
+    @Test
+    func `the log lives in the shared temporary directory`() {
+        // script/test points the log into the test scratch; run
+        // any other way it is the shared temporary directory.
+        if let override = ProcessInfo.processInfo.environment["SANDUCTOR_PERFORMANCE_LOG_DIRECTORY"] {
+            #expect(PerformanceLog.file == override + "/performance.log")
+        } else {
+            #expect(PerformanceLog.file.hasSuffix("/tmp/sanductor/performance.log"))
+            #expect(PerformanceLog.file.hasPrefix("/Users/Shared/sv-"))
+        }
+    }
+
+    @Test
+    func `every message is kept beside the performance log while it is on`() async throws {
+        // Only where script/test pointed the log: the real shared
+        // file must never take a test's line.
+        let override = try #require(ProcessInfo.processInfo.environment["SANDUCTOR_PERFORMANCE_LOG_DIRECTORY"])
+
+        #expect(PerformanceLog.messagesFile == override + "/messages.log")
+        let marker = "kept-" + UUID().uuidString
+        let quiet = "quiet-" + UUID().uuidString
+        PerformanceLog.recordMessage("nothing to see " + quiet, isError: false, enabled: false)
+        PerformanceLog.recordMessage("first line\nsecond line " + marker, isError: true, enabled: true)
+        // The write is queued; the file has it within a moment.
+        var text = ""
+        for _ in 0 ..< Self.readAttempts where text.contains(marker) == false {
+            try await Task.sleep(for: .milliseconds(Self.readWaitMilliseconds))
+            text = (try? String(contentsOfFile: PerformanceLog.messagesFile, encoding: .utf8)) ?? ""
+        }
+        let line = try #require(text.split(separator: "\n").first { $0.contains(marker) })
+        // Stamp, kind, message: newlines folded so a message stays
+        // one line of the file; and off, nothing is written at all.
+        #expect(line.split(separator: "\t").count == 3)
+        #expect(line.contains("\terror\t"))
+        #expect(line.contains("first line \u{23CE} second line"))
+        #expect(text.contains(quiet) == false)
+    }
+
+    // MARK: Private
+
+    private static let readAttempts = 20
+    private static let readWaitMilliseconds = 50
+}

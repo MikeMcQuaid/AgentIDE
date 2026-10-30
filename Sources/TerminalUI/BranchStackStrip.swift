@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// The stack a worktree's branch belongs to, bottom first, with the

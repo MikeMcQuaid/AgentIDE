@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Synchronization
 import Testing
 

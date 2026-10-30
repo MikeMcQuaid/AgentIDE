@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 
 /// The pull request tab's state and actions: listing, pagination,
 /// selection enrichment, caching and the branch actions, kept out of

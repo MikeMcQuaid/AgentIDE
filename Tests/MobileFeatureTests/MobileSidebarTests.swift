@@ -1,5 +1,5 @@
-import AgentIDEDomain
 @testable import MobileFeature
+import SanductorDomain
 import Testing
 
 struct MobileSidebarTests {

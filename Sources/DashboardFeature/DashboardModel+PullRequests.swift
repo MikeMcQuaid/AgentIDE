@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// GitHub pull request polling, tiered by attention: the selected

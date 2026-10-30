@@ -1,6 +1,6 @@
-import AgentIDEData
 import Foundation
 @testable import ReviewFeature
+import SanductorData
 import Testing
 
 struct FileEditorPathTests {

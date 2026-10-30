@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// The same brand mark and name in local and remote reviewer menus.

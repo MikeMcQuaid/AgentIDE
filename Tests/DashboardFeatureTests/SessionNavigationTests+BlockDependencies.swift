@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import DashboardFeature
 import Foundation
+import SanductorData
+import SanductorDomain
 import Testing
 
 extension SessionNavigationTests {

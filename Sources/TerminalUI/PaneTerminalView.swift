@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import AppKit
+import SanductorDomain
 import SwiftTerm
 
 // MARK: - PaneTerminalView

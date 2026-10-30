@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import AppKit
+import SanductorDomain
 
 /// The messages pane's whole log as one attributed text, newest
 /// first, so a drag can select across entries the way it cannot

@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import AppKit
 @testable import ReviewFeature
+import SanductorDomain
 import Testing
 
 /// The editor's line shortcuts driven through the real text view,

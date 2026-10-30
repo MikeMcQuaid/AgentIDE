@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 import SwiftUI
 
 /// Stages stay in place, with the active one highlighted rather than hidden.

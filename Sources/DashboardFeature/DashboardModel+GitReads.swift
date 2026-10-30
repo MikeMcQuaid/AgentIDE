@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 
 /// When the sidebar asks git about each repository: when the file
 /// system says something under it changed, with slow safety re-reads

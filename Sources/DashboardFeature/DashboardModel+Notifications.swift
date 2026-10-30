@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import AppKit
 import Foundation
+import SanductorDomain
 import TerminalUI
 import UserNotifications
 

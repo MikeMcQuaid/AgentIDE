@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import TerminalUI
 
 /// What the tab is listing and how it asks for it. Split from the

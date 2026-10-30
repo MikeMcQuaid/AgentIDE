@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import Foundation
 @testable import MobileFeature
+import SanductorDomain
 import Testing
 
 struct MobileSessionTests {
@@ -58,7 +58,7 @@ struct MobileSessionTests {
     func `the visible branch comes from Git rather than the session label`() throws {
         let snapshot = try HerdrSnapshot.decode(Data(#"""
         {"result":{"snapshot":{
-          "workspaces":[{"workspace_id":"w1","label":"agentide--repo--old-slug--claude"}],
+          "workspaces":[{"workspace_id":"w1","label":"sanductor--repo--old-slug--claude"}],
           "panes":[{"workspace_id":"w1","pane_id":"w1:p1","agent":"codex",
                     "cwd":"/worktrees/repo/old_slug","foreground_cwd":"/worktrees/repo/old_slug/src"}]
         }}}
@@ -85,7 +85,7 @@ struct MobileSessionTests {
     func `every pane is listed but unrelated herdr workspaces are excluded`() throws {
         let snapshot = try HerdrSnapshot.decode(Data(#"""
         {"result":{"snapshot":{
-          "workspaces":[{"workspace_id":"w1","label":"agentide--repo--branch--claude"},
+          "workspaces":[{"workspace_id":"w1","label":"sanductor--repo--branch--claude"},
                         {"workspace_id":"w2","label":"unrelated"}],
           "panes":[{"workspace_id":"w1","pane_id":"w1:p1","agent":"claude","agent_status":"blocked"},
                    {"workspace_id":"w1","pane_id":"w1:p2","agent":"codex","agent_status":"working"},

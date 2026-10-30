@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 import SwiftUI
 
 /// Keep the current wait readable without opening the detailed history.

@@ -23,7 +23,7 @@ extension PaneTerminalView {
             return []
         }
 
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agentide-paste")
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("sanductor-paste")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("pasted-" + UUID().uuidString + ".png")
         guard (try? png.write(to: file)) != nil else {

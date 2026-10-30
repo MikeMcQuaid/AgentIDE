@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEInterface
+import SanductorData
+import SanductorInterface
 import SwiftUI
 
 /// Shows repair instructions only after a failed check; there is no dismiss action.
@@ -16,7 +16,7 @@ public struct SetupView: View {
         if model.currentIssue != nil {
             wizard
         } else if model.isReady == false {
-            LaunchProgressView(spinner: "Starting AgentIDE…")
+            LaunchProgressView(spinner: "Starting Sanductor…")
                 .frame(minWidth: Self.minimumWidth, minHeight: Self.minimumHeight)
         }
     }
@@ -39,7 +39,7 @@ public struct SetupView: View {
         VStack(spacing: Self.spacing) {
             if model.isChecking {
                 if showsProgress {
-                    LaunchProgressView(spinner: "Checking AgentIDE setup…")
+                    LaunchProgressView(spinner: "Checking Sanductor setup…")
                 } else {
                     Spacer()
                 }
@@ -77,7 +77,7 @@ public struct SetupView: View {
     private var instructions: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Self.spacing) {
-                Text("Set up AgentIDE").interfaceFont(.title, weight: .semibold)
+                Text("Set up Sanductor").interfaceFont(.title, weight: .semibold)
                 if let issue = model.currentIssue {
                     Text("Step " + String(issue.step.rawValue) + " of " + String(SetupStep.allCases.count))
                         .interfaceFont(.caption)

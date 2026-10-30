@@ -1,4 +1,4 @@
-import AgentIDERemote
+import SanductorRemote
 
 extension MobileModel {
     func subscribe(

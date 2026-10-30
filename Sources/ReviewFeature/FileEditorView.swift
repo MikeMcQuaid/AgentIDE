@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 
@@ -27,7 +27,7 @@ struct FileEditorView: View {
         // relative file that resolves outside the worktree gets no path at
         // all and the editor refuses to read or write it.
         let base = URL(fileURLWithPath: worktreePath).standardizedFileURL.path
-        // A path of its own is the file: `agentide` can be handed
+        // A path of its own is the file: `sanductor` can be handed
         // something outside every worktree, which opens in whichever
         // one is on screen rather than not at all.
         let target = relativePath.hasPrefix("/")

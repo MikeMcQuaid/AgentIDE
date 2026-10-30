@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 extension MobileSession {
     func sidebarStatus(inactiveStatus: SidebarStatus = .branch) -> SidebarStatus {

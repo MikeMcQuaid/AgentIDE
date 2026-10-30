@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 
 /// The stacks the sidebar knows about. GitHub's own chain of pull
 /// requests says where a branch stands once they are open and based

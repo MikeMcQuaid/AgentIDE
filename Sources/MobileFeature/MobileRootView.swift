@@ -1,7 +1,7 @@
 #if os(iOS)
-    import AgentIDEDomain
-    import AgentIDEInterface
-    import AgentIDERemote
+    import SanductorDomain
+    import SanductorInterface
+    import SanductorRemote
     import SwiftUI
 
     /// The iPhone's repository navigation and selected agent terminal.
@@ -17,7 +17,7 @@
         public var body: some View {
             NavigationStack {
                 content
-                    .navigationTitle("AgentIDE")
+                    .navigationTitle("Sanductor")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { toolbar }
                     .navigationDestination(item: $model.selection) { session in
@@ -61,7 +61,7 @@
             ToolbarItem(placement: .principal) {
                 HStack(spacing: Self.titleSpacing) {
                     MobileAppIcon()
-                    Text("AgentIDE").interfaceFont(.headline, weight: .semibold)
+                    Text("Sanductor").interfaceFont(.headline, weight: .semibold)
                 }
             }
             ToolbarItem(placement: .topBarLeading) {

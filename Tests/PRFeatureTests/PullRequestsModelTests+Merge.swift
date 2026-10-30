@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 /// The merge button says Merge only for a pull request GitHub

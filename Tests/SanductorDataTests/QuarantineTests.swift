@@ -1,0 +1,37 @@
+import Foundation
+@testable import SanductorData
+import SanductorDomain
+import Testing
+
+struct QuarantineTests {
+    @Test
+    func `clears the attribute from the agents install`() throws {
+        let root = try TestSupport.temporaryDirectory("quarantine")
+        let cask = root + "/cask/bin"
+        let binaries = root + "/bin"
+        try FileManager.default.createDirectory(atPath: cask, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: binaries, withIntermediateDirectories: true)
+        for name in ["codex", "codex-helper", "clean"] {
+            try "".write(toFile: cask + "/" + name, atomically: true, encoding: .utf8)
+        }
+        try FileManager.default.createSymbolicLink(atPath: binaries + "/codex", withDestinationPath: cask + "/codex")
+        let marker = "0083;00000000;test;"
+        for name in ["codex", "codex-helper"] {
+            let marked = marker.withCString { value in
+                unsafe setxattr(cask + "/" + name, "com.apple.quarantine", value, marker.utf8.count, 0, 0) == 0
+            }
+            try #require(marked)
+        }
+
+        let cleared = Quarantine.clear(for: .codexCLI, binaryDirectories: [binaries])
+
+        // Both sides through realpath: Foundation's own resolving
+        // drops `/private` from a temporary root and a directory
+        // listing puts it back, so the spellings differ there.
+        let real = TestSupport.canonical(cask)
+        #expect(cleared.map(TestSupport.canonical) == [real + "/codex", real + "/codex-helper"])
+        #expect(unsafe getxattr(cask + "/codex-helper", "com.apple.quarantine", nil, 0, 0, 0) < 0)
+        #expect(Quarantine.clear(for: .codexCLI, binaryDirectories: [binaries]).isEmpty)
+        #expect(Quarantine.clear(for: .claudeCode, binaryDirectories: [binaries]).isEmpty)
+    }
+}

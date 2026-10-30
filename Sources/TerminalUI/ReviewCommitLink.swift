@@ -3,7 +3,7 @@ import Foundation
 /// Links within the review's commit listing.
 public enum ReviewCommitLink {
     /// The internal URL scheme for commit listings.
-    public static let scheme = "agentide-commit"
+    public static let scheme = "sanductor-commit"
 
     /// Accepts only hexadecimal object names, never git options or expressions.
     public static func hash(in url: URL) -> String? {

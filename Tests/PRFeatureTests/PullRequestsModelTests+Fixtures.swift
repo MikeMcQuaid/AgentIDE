@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 
 /// The shared fixtures behind the pull request model tests, split
 /// from the test body for length.
@@ -55,7 +55,7 @@ extension PullRequestsModelTests {
         let runner = FoundationProcessRunner()
         let base = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-prmodel-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-prmodel-" + UUID().uuidString, isDirectory: true)
             .path
         let paths = WorkspacePaths(
             hostUser: "test",

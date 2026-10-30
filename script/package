@@ -17,13 +17,13 @@ cd "$(dirname "$0")/.."
 : "${NOTARIZATION_KEY_ID:?}"
 : "${NOTARIZATION_ISSUER_ID:?}"
 
-app=.DerivedData/Build/Products/Release/AgentIDE.app
+app=.DerivedData/Build/Products/Release/Sanductor.app
 keychains=()
 while read -r existing_keychain; do
   existing_keychain="${existing_keychain#\"}"
   keychains+=("${existing_keychain%\"}")
 done < <(security list-keychains -d user)
-scratch="$(mktemp -d -t agentide-package)"
+scratch="$(mktemp -d -t sanductor-package)"
 keychain="${scratch}/signing.keychain-db"
 cleanup() {
   security list-keychains -d user -s "${keychains[@]}" &>/dev/null || true
@@ -57,7 +57,7 @@ fi
 # notarisation rejects, so sign again from the source entitlements with
 # the hardened runtime and secure timestamp notarisation requires.
 codesign --force --sign "${identity}" --keychain "${keychain}" \
-  --options runtime --timestamp --entitlements App/AgentIDE.entitlements "${app}"
+  --options runtime --timestamp --entitlements App/Sanductor.entitlements "${app}"
 
 zip="$(script/zip)"
 key="${scratch}/notarization.p8"

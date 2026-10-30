@@ -1,5 +1,5 @@
-import AgentIDEDomain
-import AgentIDEInterface
+import SanductorDomain
+import SanductorInterface
 import SwiftUI
 
 // MARK: - WorktreeBlockSelection

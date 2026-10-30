@@ -1,6 +1,6 @@
-import AgentIDEData
 import AppKit
 import CoreText
+import SanductorData
 import SwiftUI
 import TerminalUI
 

@@ -1,6 +1,6 @@
-import AgentIDEDomain
-import AgentIDEInterface
 import AppKit
+import SanductorDomain
+import SanductorInterface
 
 // NSTextView ranges are UTF-16 offsets, so NSString is the correct
 // arithmetic here, not String.

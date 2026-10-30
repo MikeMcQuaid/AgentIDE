@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 
 /// Finding text in the diff. The editor and the terminals answer
 /// AppKit's own find bar, but a diff is a list of views rather than

@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// Selectable author names with the same review bot branding on every surface.

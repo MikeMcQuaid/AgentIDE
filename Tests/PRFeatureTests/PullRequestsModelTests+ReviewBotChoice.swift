@@ -1,6 +1,6 @@
-@testable import AgentIDEData
-import AgentIDEDomain
 @testable import PRFeature
+@testable import SanductorData
+import SanductorDomain
 import Testing
 
 extension PullRequestsModelTests {

@@ -1,7 +1,7 @@
-import AgentIDEDomain
 import AppKit
 import Darwin
 import Observation
+import SanductorDomain
 import SwiftUI
 @testable import TerminalUI
 import Testing

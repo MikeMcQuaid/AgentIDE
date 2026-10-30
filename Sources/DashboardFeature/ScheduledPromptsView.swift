@@ -1,5 +1,5 @@
-import AgentIDEDomain
-import AgentIDEInterface
+import SanductorDomain
+import SanductorInterface
 import SwiftUI
 import TerminalUI
 
@@ -17,7 +17,7 @@ public struct ScheduledPromptsView: View {
     public var body: some View {
         VStack(alignment: .leading) {
             header
-            Text("Runs while AgentIDE is open. Reopening or waking runs each overdue prompt once.")
+            Text("Runs while Sanductor is open. Reopening or waking runs each overdue prompt once.")
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             if let error = model.error {

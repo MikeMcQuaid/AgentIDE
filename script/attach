@@ -33,7 +33,7 @@ exec herdr'
 
 if [[ -n "${SV_SESSION_ID:-}" ]]; then
   # Matches HerdrClient: the installed app's named session.
-  export HERDR_SESSION=agentide
+  export HERDR_SESSION=sanductor
   if [[ $# -eq 0 ]]; then
     herdr workspace list 2>/dev/null || no_sessions
     exit 0
@@ -51,7 +51,7 @@ RUN_IN_SANDBOX=(
   # characters here as in the app's terminals.
   LANG=en_US.UTF-8
   PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-  HERDR_SESSION=agentide
+  HERDR_SESSION=sanductor
   /usr/bin/sandbox-exec -f "/var/sandvault/sandbox-sandvault-${USER}.sb"
 )
 

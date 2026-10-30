@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 
 extension DashboardModel {
     func repositoryGroups(sortedBy sort: RepositorySort) -> [RepositoryGroup] {

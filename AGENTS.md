@@ -1,4 +1,4 @@
-# Agent Instructions for MikeMcQuaid/AgentIDE
+# Agent Instructions for MikeMcQuaid/Sanductor
 
 Most importantly: run `script/style --fix` before finishing any change,
 read `README.md` and `ARCHITECTURE.md` before changing anything and
@@ -17,8 +17,16 @@ Keep user setup instructions in `README.md`.
 Describe user benefits there; keep implementation details and regression
 histories in `ARCHITECTURE.md` or the relevant platform notes.
 
-AgentIDE is a native SwiftUI macOS app for running, steering and
-reviewing sandboxed AI coding agents.
+Sanductor is a native SwiftUI macOS workspace built around Mike
+McQuaid's Homebrew maintainer workflow, for running, steering and
+reviewing AI coding agents in parallel git worktrees. sandvault runs
+agents under a dedicated non-admin user with a clean environment,
+protecting the host user's home and credentials even in YOLO mode.
+The app combines GitHub review and CI fix loops with signed commits,
+stacked pull requests, Shortcuts, Siri and an iPhone companion over SSH.
+It needs no Sanductor account, subscription or hosted relay.
+This checkout still builds and ships as Sanductor; its targets, bundle
+IDs and `sanductor` command retain that name.
 
 Write sentence-case imperative commit messages without
 conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
@@ -26,22 +34,22 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 ## Commands
 
 - `script/bootstrap`: install `Brewfile` dependencies and generate
-  `AgentIDE.xcodeproj` with XcodeGen
+  `Sanductor.xcodeproj` with XcodeGen
 - `script/project`: generate Xcode's project and copy the package pins
 - `script/build`: regenerate the Xcode project when sources
   changed, then build Release (`XCODE_CONFIGURATION=Debug` overrides)
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds, and relaunch it automatically
 - `script/zip`: zip the Release build as
-  `.build/AgentIDE-<version>.zip`
+  `.build/Sanductor-<version>.zip`
 - `script/package`: sign the Release build with a Developer ID
   certificate, notarise and staple it, then remake its zip
 - `script/test`: run the unit and integration tests, then on the
   host the App Intents tests through `xcodebuild` (a UI testing
   bundle on macOS 27 or later, since `AppIntentsTesting` drives the
-  system's own runtime; they need `AGENTIDE_DEVELOPMENT_TEAM` set to a
+  system's own runtime; they need `SANDUCTOR_DEVELOPMENT_TEAM` set to a
   real team id, since the framework refuses a runner signed differently
-  from the app, and `AGENTIDE_SKIP_INTENT_TESTS=1` leaves them out
+  from the app, and `SANDUCTOR_SKIP_INTENT_TESTS=1` leaves them out
   regardless)
 - `script/analyze`: Periphery for dead code everywhere, plus
   SwiftLint analysis on the host and in CI
@@ -49,7 +57,7 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `script/performance-log [on|off|status]`: switch the installed
   app's performance log on or off (off by default; on, every process
   run, `gh` call and cache hit or miss lands in the shared
-  `tmp/agentide/performance.log`)
+  `tmp/sanductor/performance.log`)
 - `script/attach [workspace]`: attach this terminal to the sandboxed
   herdr session, or list its workspaces when run without arguments
   (works as the host user or inside the sandbox)
@@ -62,16 +70,16 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
 - `App/`: the app shell; `project.yml` defines the XcodeGen target
   (the generated `.xcodeproj` stays gitignored). `Package.swift`
-  also carries these sources as `AgentIDEAppSources`, which builds
+  also carries these sources as `SanductorAppSources`, which builds
   no bundle and exists only so `swift build` type-checks them
-- `bin/`: the `agentide` command shipped inside the app bundle: the
+- `bin/`: the `sanductor` command shipped inside the app bundle: the
   editor shim a shell pane puts on its `PATH` (waiting only with
   `--wait`, and taking a directory anywhere inside a worktree or
   checkout to switch the window to it),
-  and `agentide new`,
+  and `sanductor new`,
   which asks its way to a session over SSH the way the app does,
   defaulting to what the window last chose (published by the app as
-  `agentide/session-defaults`). Nothing installs it: an SSH login
+  `sanductor/session-defaults`). Nothing installs it: an SSH login
   aliases the bundled path. It speaks the way Homebrew's own scripts
   do, a blue `==>` before each step, bold labels, green defaults and
   bold `Warning:`/`Error:` labels, colour only on a terminal that has
@@ -228,7 +236,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   to `objc_exception_rethrow`; the log around the crash has it:
 
   ```bash
-  log show --predicate 'process == "AgentIDE"' --info
+  log show --predicate 'process == "Sanductor"' --info
   ```
 
   The symptoms lie about the cause: the scroll view's document
@@ -297,7 +305,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   beside it carries a fresh UUID per planning pass. `script/build`
   therefore uses `swift build --disable-sandbox` in the sandbox,
   which runs the same plugin unsandboxed and compiles every target,
-  `App` included, through the `AgentIDEAppSources` target that
+  `App` included, through the `SanductorAppSources` target that
   exists for that alone. The bundle itself and SwiftLint analysis
   belong to the host and CI: SwiftLint's analyser wants a full
   `xcodebuild` log and reads a `swift build` one as a confident zero.
@@ -336,13 +344,13 @@ Hard-won on macOS 27 beta; check before assuming they expired.
 
   The coordinator writes its failures to stderr, not `os_log`, so
   `log show` finds nothing however good the predicate is. Until it is
-  fixed, `swift build --target AgentIDEDomain`, `--target
-  AgentIDEData` and `--target AgentIDEDataTests` still typecheck,
+  fixed, `swift build --target SanductorDomain`, `--target
+  SanductorData` and `--target SanductorDataTests` still typecheck,
   since none of them reach SwiftTerm.
 - A binary Gatekeeper refuses dies with `zsh: killed` (rc 137) at
   exec and nothing in the sandbox explains why; `xattr -l` on it shows
   `com.apple.quarantine`, `spctl -a -t exec -vv` rejects it and the
-  host's `log show` names `syspolicyd` with AgentIDE as the responsible
+  host's `log show` names `syspolicyd` with Sanductor as the responsible
   app.
   Terminal works because it holds the Developer Tools privilege, which
   has no request API. Codex's command host is the known case, so
@@ -423,16 +431,14 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   relaunch, which dropped every reader, was the only sure fix.
   Read pipes through `readabilityHandler` (`HerdrTerminalChannel`);
   `HerdrTerminalChannelReaderTests` pins it.
-- SwiftTerm encodes Option and an arrow the way the kitty keyboard
-  protocol does (`ESC [ 1 ; 3 D`) whether or not anything turned that
-  protocol on, so a shell read as far as `ESC [ 1`, found nothing
-  bound and typed `;3D` into the line instead of moving a word. Its
-  `keyDown` is not overridable, so `PaneTerminalView.routeKey` takes
-  those four keys off the coordinator's event monitor in local shell
-  panes and sends the traditional keys (`TerminalKeys.optionArrow`).
-  herdr-backed panes keep SwiftTerm's encoding: the frames omit the
-  agent's keyboard modes, so an empty local mode cannot identify a
-  shell. Applying the shell mapping there broke Option-Up in Codex.
+- SwiftTerm 1.99.1 applies shell bindings to Option-arrows without
+  the kitty keyboard protocol. herdr's frames omit those modes, so
+  an empty local mode cannot identify a shell: applying shell
+  bindings there broke Option-Up in Codex. `PaneTerminalView.routeKey`
+  sends modified arrows (`ESC [ 1 ; 3 D`) in agent panes and
+  traditional keys (`TerminalKeys.optionArrow`) in local shell panes.
+  Its coordinator's event monitor handles this because SwiftTerm's
+  `keyDown` is not overridable.
 - zsh asks for application keypad mode at every prompt, since
   `smkx` for `xterm-256color` is `ESC [ ? 1 h ESC =` and the `ESC =`
   is DECKPAM. SwiftTerm 1.19 honours it as a VT terminal does and
@@ -452,7 +458,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   scroll with a full repaint, so a local history filled up with
   the screens those repaints replaced and the same output showed
   two and three times over.
-- `agentide <file>` can be handed anything readable: a file
+- `sanductor <file>` can be handed anything readable: a file
   belonging to no worktree opens in whichever worktree is on
   screen, and the editor takes an absolute path as the file
   itself rather than resolving it against a worktree.
@@ -468,7 +474,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
   found holding memory after one such kill.
 - herdr servers and their workspaces outlive the app, so changes to
   launch commands, workspace shapes or server behaviour often need
-  the running `agentide` or `agentide-dev` herdr session stopped
+  the running `sanductor` or `sanductor-dev` herdr session stopped
   (`herdr session stop <name>` as the sandbox user, or `herdr server
   reload-config` for config alone) to take effect: when finishing
   such a change, tell the user exactly what to restart or stop.
@@ -508,7 +514,7 @@ Hard-won on macOS 27 beta; check before assuming they expired.
    sandbox. The host fetches GitHub data and passes it into prompts;
    sandboxed pushes use per-repository deploy keys only.
 4. Derive state from herdr, git and `gh` on demand rather than caching
-   it. AgentIDE must be killable at any moment losing nothing, and
+   it. Sanductor must be killable at any moment losing nothing, and
    every conversation must stay browsable and resumable after its
    session closes or its worktree is deleted.
 5. Keep dependency directions clean: Domain depends on nothing,

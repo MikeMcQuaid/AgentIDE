@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import AppKit
 @testable import DashboardFeature
+import SanductorDomain
 import SwiftUI
 import Testing
 
@@ -14,13 +14,13 @@ struct SnapshotTests {
     func `renders the worktree row to an inspectable image`() throws {
         let item = WorktreeItem(
             worktree: Worktree(
-                repositoryName: "AgentIDE",
-                repositoryPath: "/tmp/AgentIDE",
+                repositoryName: "Sanductor",
+                repositoryPath: "/tmp/Sanductor",
                 branch: "agent/fix-crash",
                 path: "/tmp/worktrees/1234/agent-fix-crash",
             ),
             session: AgentSession(
-                name: "agentide--agentide--agent-fix-crash--claude",
+                name: "sanductor--sanductor--agent-fix-crash--claude",
                 agent: .claudeCode,
                 status: .running,
             ),
@@ -33,7 +33,7 @@ struct SnapshotTests {
         let pullRequest = PullRequestSummary(
             number: 12,
             title: "Fix crash",
-            url: "https://github.com/MikeMcQuaid/AgentIDE/pull/12",
+            url: "https://github.com/MikeMcQuaid/Sanductor/pull/12",
             headBranch: "agent/fix-crash",
             mergeable: "MERGEABLE",
             reviewDecision: "",

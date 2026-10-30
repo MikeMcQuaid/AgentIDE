@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 
 /// Revalidates completed setup in the background and gates the app on failures.
 @Observable

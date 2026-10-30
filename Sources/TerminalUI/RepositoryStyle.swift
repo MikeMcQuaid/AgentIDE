@@ -1,5 +1,5 @@
-import AgentIDEData
 import AppKit
+import SanductorData
 import SwiftUI
 
 /// The sidebar's repository names, retaining their original weight.

@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 @testable import ReviewFeature
+import SanductorData
+import SanductorDomain
 import Testing
 
 // MARK: - CommitMessageFieldTests
@@ -31,7 +31,7 @@ struct ReviewModelTests {
     func `unticking every file is not the same as ticking them all`() async throws {
         let path = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-ticks-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-ticks-" + UUID().uuidString, isDirectory: true)
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
@@ -65,7 +65,7 @@ struct ReviewModelTests {
     func `a working file goes back to HEAD, and a deleted one shows as deleted`() async throws {
         let path = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-edit-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-edit-" + UUID().uuidString, isDirectory: true)
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
@@ -108,7 +108,7 @@ struct ReviewModelTests {
         // The user's temporary directory, per the no-bare-/tmp rule.
         let path = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-review-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-review-" + UUID().uuidString, isDirectory: true)
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
@@ -144,7 +144,7 @@ struct ReviewModelTests {
     func `upstream scope gates on a pushed branch and diffs against it`() async throws {
         let path = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-upstream-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-upstream-" + UUID().uuidString, isDirectory: true)
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)
@@ -182,7 +182,7 @@ struct ReviewModelTests {
     func `finding walks the hunks that hold a match and highlights them`() async throws {
         let path = FileManager.default
             .temporaryDirectory
-            .appendingPathComponent("agentide-find-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("sanductor-find-" + UUID().uuidString, isDirectory: true)
             .path
         defer { try? FileManager.default.removeItem(atPath: path) }
         try await makeRepository(at: path)

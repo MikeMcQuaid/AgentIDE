@@ -1,8 +1,8 @@
-@testable import AgentIDERemote
 import Foundation
 @testable import MobileFeature
 import NIOCore
 import NIOPosix
+@testable import SanductorRemote
 import Testing
 
 struct MobileSubscriptionTests {

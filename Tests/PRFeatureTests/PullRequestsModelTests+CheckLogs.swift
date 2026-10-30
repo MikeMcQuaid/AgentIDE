@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 @testable import PRFeature
+import SanductorData
+import SanductorDomain
 import TerminalUI
 import Testing
 

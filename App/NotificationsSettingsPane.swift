@@ -1,5 +1,5 @@
-import AgentIDEData
 import AppKit
+import SanductorData
 import SwiftUI
 import TerminalUI
 

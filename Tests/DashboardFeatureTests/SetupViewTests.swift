@@ -1,6 +1,6 @@
-@testable import AgentIDEData
 import AppKit
 import DashboardFeature
+@testable import SanductorData
 import SwiftUI
 import Testing
 

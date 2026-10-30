@@ -1,5 +1,5 @@
-import AgentIDEData
-import AgentIDEDomain
+import SanductorData
+import SanductorDomain
 
 /// A stack of branches in one worktree, as the pull request tab sees
 /// it: which branch is listed and what it would take to put the

@@ -1,8 +1,8 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 
 extension DashboardModel {
-    /// Hands `agentide new` what only the app can know: which
+    /// Hands `sanductor new` what only the app can know: which
     /// repositories exist, where Settings keeps them and their
     /// worktrees, and what each agent offers. What was last chosen
     /// is not published here, since the command chooses too and its

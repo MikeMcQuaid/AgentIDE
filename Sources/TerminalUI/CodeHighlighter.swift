@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import Foundation
+import SanductorDomain
 import SwiftTreeSitter
 import Synchronization
 import TreeSitterBash

@@ -1,5 +1,5 @@
-import AgentIDEData
 import Foundation
+import SanductorData
 
 /// Holds a system activity that blocks idle sleep while agents or
 /// shells run, so the machine never sleeps mid-response. Closing the

@@ -1,4 +1,4 @@
-import AgentIDEInterface
+import SanductorInterface
 import SwiftUI
 
 // MARK: - FinderResultRow

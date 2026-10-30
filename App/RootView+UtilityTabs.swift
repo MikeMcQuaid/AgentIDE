@@ -1,7 +1,7 @@
-import AgentIDEDomain
 import Foundation
 import PRFeature
 import ReviewFeature
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 

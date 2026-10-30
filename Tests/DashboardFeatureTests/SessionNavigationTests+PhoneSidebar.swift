@@ -1,6 +1,6 @@
-import AgentIDEDomain
 @testable import DashboardFeature
 import Foundation
+import SanductorDomain
 import Testing
 
 extension SessionNavigationTests {
@@ -31,7 +31,7 @@ extension SessionNavigationTests {
         ]
         fixture.model.groups = groups
         fixture.model.cacheSidebar(groups)
-        let file = fixture.root + "/shared/agentide/sidebar-agentide-dev.json"
+        let file = fixture.root + "/shared/sanductor/sidebar-sanductor-dev.json"
         #expect(try JSONDecoder().decode([SidebarRepository].self, from: Data(contentsOf: URL(filePath: file))) == [
             SidebarRepository(
                 name: "repo",
@@ -47,7 +47,7 @@ extension SessionNavigationTests {
             ),
         ])
         #expect(FileManager.default.fileExists(
-            atPath: fixture.root + "/shared/agentide/sidebar-agentide.json",
+            atPath: fixture.root + "/shared/sanductor/sidebar-sanductor.json",
         ) == false)
 
         let timestamp = Date(timeIntervalSince1970: 1)

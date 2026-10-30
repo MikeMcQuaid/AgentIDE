@@ -1,1 +1,0 @@
-.DerivedData/Build/Products/Release/AgentIDE.app

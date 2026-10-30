@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 import SwiftUI
 import TerminalUI
 

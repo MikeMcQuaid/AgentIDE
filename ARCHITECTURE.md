@@ -1,6 +1,6 @@
-# AgentIDE Architecture
+# Sanductor Architecture
 
-How AgentIDE works under the hood. [README.md](README.md) owns what it
+How Sanductor works under the hood. [README.md](README.md) owns what it
 does and why; this document owns the design: what exists, the rules that
 keep it working and what is planned. It is written for whoever changes
 the code next, human or agent, so each rule says what breaks without it.
@@ -9,14 +9,26 @@ live in [AGENTS.md](AGENTS.md); this document does not repeat them.
 
 ## Overview
 
-AgentIDE is a native SwiftUI macOS app (macOS 26 or later, Swift 6.4,
-AGPL-3.0) that runs, steers and reviews sandboxed AI coding agents in
-parallel git worktrees. Its user supervises rather than types, so the
-window is arranged around the agent loop, not around an editor.
+Sanductor is a native SwiftUI macOS workspace (macOS 26 or later,
+Swift 6.4, AGPL-3.0) for running, steering and reviewing AI coding agents
+in parallel git worktrees. It is built around Mike McQuaid's Homebrew
+maintainer workflow: agents run as untrusted code under sandvault,
+isolated from the host user's home, credentials and environment, while
+the host app handles GitHub access and delivery. Its user supervises
+rather than types, so the window is arranged around the agent loop.
 
-The architectural thesis, referenced throughout: **AgentIDE holds no
+Agents and builds run directly on macOS, without containers or virtual
+machines. The host app coordinates independent local reviews, GitHub
+bot feedback and required CI results with commit signing, restacking
+and pushes, with automatic pushing off by default. App Intents and the
+iPhone's direct SSH connection expose the local workflow without a
+Sanductor account, subscription or hosted relay. Unpublished advisory
+sessions use neutral branch names and ask agents to keep advisory
+details out of public commit messages and pull requests.
+
+The architectural thesis, referenced throughout: **Sanductor holds no
 session-critical state**. Agents run as the sandvault sandbox user inside
-a [herdr](https://herdr.dev) server that AgentIDE introduces. The app
+a [herdr](https://herdr.dev) server that Sanductor introduces. The app
 derives its entire view of the world from herdr, git, agent transcripts
 and GitHub, and persists only its own metadata. Killing, crashing or
 updating the app loses nothing.
@@ -25,10 +37,10 @@ updating the app loses nothing.
 
 ```mermaid
 flowchart LR
-    ios["AgentIDE iPhone companion"]
+    ios["Sanductor iPhone companion"]
     subgraph mac["Mac"]
         subgraph host["Host user"]
-            app["AgentIDE.app<br/>gh credentials stay here"]
+            app["Sanductor.app<br/>gh credentials stay here"]
         end
         subgraph sandbox["Sandbox user (sandvault-&lt;user&gt;)"]
             herdr["herdr server"]
@@ -50,22 +62,30 @@ flowchart LR
 
 Boundary facts the design relies on:
 
+- Every agent runs as the dedicated, non-admin `sandvault-<user>`
+  account, under `sandbox-exec` with an environment rebuilt by `env -i`.
+  macOS enforces this boundary even in YOLO mode, independently of the
+  agent's own approval and sandbox settings.
 - The sandbox may write only to the shared workspace, its own home,
-  `/tmp`, `/var/folders` and `/dev`. The host user's home is unreadable
-  from inside and keychains are denied.
+  `/tmp`, `/var/folders` and `/dev`. The host user's home and keychains
+  are unreadable from inside.
 - The shared workspace is writable by both users through inheriting
   ACLs; it is the data plane for code, prompts and events.
 - The sandbox has no GitHub credentials: `gh` is unauthenticated there
   and agent settings deny `git push`. Pushing and everything
   credentialled happens host-side.
-- Credentials never cross the boundary in either direction.
+- Host credentials stay outside the sandbox; agent sign-in happens in
+  the sandbox user's own account.
+
+All agents share that sandbox account and workspace, including any files
+or agent credentials deliberately placed there.
 
 ## Guiding principles
 
 1. **P1: Derive, don't own.** herdr, git, transcripts and GitHub are the
    sources of truth. The app reconciles from them on every launch.
 2. **P2: Unprivileged glue.** The only privilege crossing is the sudoers
-   path sandvault already configured. AgentIDE never widens it.
+   path sandvault already configured. Sanductor never widens it.
 3. **P3: Compiler-enforced boundaries.** Clean architecture mapped onto
    SPM targets; an illegal dependency is a build failure.
 4. **P4: Approachable strict concurrency.** MainActor by default in UI
@@ -145,7 +165,7 @@ sudo --non-interactive --login --set-home --user="sandvault-${USER}" \
   HOME="/Users/sandvault-${USER}" USER="sandvault-${USER}" SHELL=/bin/zsh \
   TERM=xterm-256color COLORTERM=truecolor \
   INITIAL_DIR="${WORKTREE}" SHARED_WORKSPACE="/Users/Shared/sv-${USER}" \
-  SV_SESSION_ID="$(uuidgen)" AGENTIDE_SESSION="${SESSION_NAME}" \
+  SV_SESSION_ID="$(uuidgen)" SANDUCTOR_SESSION="${SESSION_NAME}" \
   LANG=en_US.UTF-8 \
   PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory \
@@ -154,7 +174,7 @@ sudo --non-interactive --login --set-home --user="sandvault-${USER}" \
   /bin/zsh -c "${PAYLOAD}"
 ```
 
-This is byte-compatible with sandvault's own session launch; AgentIDE
+This is byte-compatible with sandvault's own session launch; Sanductor
 substitutes the payload and refuses interactive password prompts.
 Payload variables use `${name}` so sudo's login shell leaves their
 expansion to the sandbox shell; bare `$name` expands before the payload
@@ -167,7 +187,7 @@ install through sandvault's `SV_NATIVE_INSTALL` flag; setup probes the
 same binaries directly, without invoking installing wrappers. Each
 probe checks the first installed binary in sandvault's selection order;
 a failed sign-in must not fall through to a different installation.
-Before starting herdr, AgentIDE loads sandvault's shell profile, which
+Before starting herdr, Sanductor loads sandvault's shell profile, which
 adds native and staged agent paths and its launch wrappers.
 Every launch passes through one function that refuses a path outside the
 shared workspace: the sandbox user can often read a host directory and
@@ -186,20 +206,20 @@ build.
 
 - There is no daemon or launchd unit. The server starts lazily inside
   the sandbox on first use, through zsh's `&!` with output redirected
-  to `~/.config/herdr/agentide-server.log`: this launch context has no
+  to `~/.config/herdr/sanductor-server.log`: this launch context has no
   controlling terminal, so `nohup` refuses to run ("can't detach from
   console"). A server that never answers has that log printed before
   the failure.
 - `HERDR_SESSION` names the session, whose socket and state live under
   `~/.config/herdr/sessions/<name>/`, owner-only. The installed app
-  uses `agentide`; development builds and tests use `agentide-dev`, and
+  uses `sanductor`; development builds and tests use `sanductor-dev`, and
   tests relocate herdr entirely with `XDG_CONFIG_HOME`, so no build or
   test can list or kill the installed app's sessions.
 - Each conversation is one workspace whose single pane runs a login
   shell; the agent command is submitted to that shell (`pane run`)
   behind `export TMPDIR="$(mktemp -d)"`, because a server born through
   sudo resolves no usable temporary directory and Codex's execution host
-  dies in its handshake without one. `AGENTIDE_SESSION` and
+  dies in its handshake without one. `SANDUCTOR_SESSION` and
   `INITIAL_DIR` are workspace environment. A finished agent leaves the
   shell at its prompt with the scrollback inspectable; whether an agent
   runs comes from herdr's detection confirmed by the pane's foreground
@@ -211,7 +231,7 @@ build.
   the pane's foreground; a pane this run launched is confirmed as it
   starts, so steady state pays nothing and a new agent is never caught
   in the instant before its process registers.
-- Workspace labels follow `agentide--<repo>--<branch-slug>--<agent>`
+- Workspace labels follow `sanductor--<repo>--<branch-slug>--<agent>`
   (`SessionName`): slugs collapse `-` runs so `--` stays unambiguous,
   collisions append `-2`, `.` and `:` are replaced. Labels are a
   readable fallback for herdr's own UI over SSH; the metadata store is
@@ -283,8 +303,9 @@ Rules that follow from that shape:
   in-app mitigation if it is.
 - **Option-arrows keep their modifiers in agent panes.** herdr's
   frames omit the keyboard modes too, so an empty local mode does
-  not mean the agent wants shell key bindings. Agent panes leave
-  those keys to SwiftTerm's modified-arrow encoding; only local
+  not mean the agent wants shell key bindings. Agent panes send
+  modified-arrow sequences explicitly, since SwiftTerm 1.99.1 applies
+  shell bindings when the local keyboard mode is empty; only local
   shells use `TerminalKeys` for traditional word navigation.
 - **The numeric keypad types its numbers in shell panes.** zsh asks
   for application keypad mode at every prompt, and SwiftTerm answers
@@ -419,27 +440,27 @@ login item is the documented later option.
 
 One root `Package.swift` defines every library target; the app shell in
 `App/` is generated into an Xcode project by XcodeGen (`project.yml`
-committed, `.xcodeproj` gitignored). `AgentIDEAppSources` in the package
+committed, `.xcodeproj` gitignored). `SanductorAppSources` in the package
 carries the same sources so `swift build` type-checks them in the
 sandbox, where `xcodebuild` cannot run. The companion shell in `iOSApp/`
-uses the same project and package, with `AgentIDEiOSAppSources` providing
+uses the same project and package, with `SanductoriOSAppSources` providing
 the equivalent iOS type-check target. Analysis indexes both platforms
 so Periphery sees callers behind `#if os(iOS)`.
 
 ```mermaid
 flowchart TD
-    App["AgentIDEApp<br/>(composition root)"]
+    App["SanductorApp<br/>(composition root)"]
     Dashboard["DashboardFeature"]
     Session["SessionFeature"]
     Review["ReviewFeature"]
     PR["PRFeature"]
     Terminal["TerminalUI"]
-    Data["AgentIDEData<br/>(adapters)"]
-    Domain["AgentIDEDomain<br/>(pure)"]
-    Phone["AgentIDE-iOS"]
+    Data["SanductorData<br/>(adapters)"]
+    Domain["SanductorDomain<br/>(pure)"]
+    Phone["Sanductor-iOS"]
     Mobile["MobileFeature"]
-    Remote["AgentIDERemote"]
-    Interface["AgentIDEInterface"]
+    Remote["SanductorRemote"]
+    Interface["SanductorInterface"]
 
     App --> Dashboard & Session & Review & PR & Data
     Dashboard & Session & Review & PR --> Domain & Data & Terminal
@@ -450,14 +471,14 @@ flowchart TD
     Data --> Domain
 ```
 
-- **AgentIDEDomain**: entities (`Repository`, `Worktree`,
+- **SanductorDomain**: entities (`Repository`, `Worktree`,
   `RepositoryGroup`, `AgentSession`, `AgentKind`, `PullRequestSummary`,
   `ReviewThread`, `BranchStack`, `TranscriptSession`, `DiffFile`) and
   pure logic (`DiffParser`, `PatchBuilder`, `SessionName`,
   `HerdrTerminal` frame decoding, `HerdrSnapshot`, the keyword tokenizer, `FuzzyMatcher`,
   `Wrapping`, `ShellTabs`). Foundation value types are allowed;
   process, file, network and database APIs are banned.
-- **AgentIDEData**: the adapters, composed by `SessionService`:
+- **SanductorData**: the adapters, composed by `SessionService`:
   `GitClient`, `GitHubClient` (every question through the host's `gh`),
   `SandvaultLauncher`, `HerdrClient`, `HerdrTerminalChannel`,
   `TranscriptReader` and `CodexTranscriptIndex`, `EventSpool`,
@@ -479,26 +500,26 @@ flowchart TD
   `SelectableTextView` (read-only document-style selection) and
   syntax highlighting (tree-sitter grammars, with
   the Domain's tokenizer as fallback for fragmentary text).
-- **AgentIDEInterface**: shared typography, `BusyButton`, `Motion` and
+- **SanductorInterface**: shared typography, `BusyButton`, `Motion` and
   `LaunchProgress`; TerminalUI re-exports these for the Mac's features.
-- **AgentIDERemote**: SwiftNIO SSH command channels, device Keychain
+- **SanductorRemote**: SwiftNIO SSH command channels, device Keychain
   credentials, host verification and the remote herdr adapter.
 - **MobileFeature**: repository navigation, session creation and a UIKit
   SwiftTerm wrapper. It does not import the macOS data or feature targets.
-- **AgentIDEApp**: builds adapters, injects the service, owns navigation,
+- **SanductorApp**: builds adapters, injects the service, owns navigation,
   Settings and the App Intents. No logic.
 
 Third-party imports are confined (P3): SwiftTerm, Textual, swift-markdown, SwiftSoup,
 SwiftTreeSitter and grammars in TerminalUI; WebKit in SessionFeature;
-FoundationModels in AgentIDEData; SwiftNIO, SwiftNIO SSH and Swift Crypto
-in AgentIDERemote. MobileFeature also uses SwiftTerm’s UIKit renderer.
+FoundationModels in SanductorData; SwiftNIO, SwiftNIO SSH and Swift Crypto
+in SanductorRemote. MobileFeature also uses SwiftTerm’s UIKit renderer.
 
 **One implementation per concern.** Terminals, editors, conversation
 views, markdown rendering, git access, GitHub access and link opening
 each have exactly one shared component or client. Every in-app link
 takes `LinkOpener` (the window's `openURL`): web links to the Browser
 tab, or the system browser with Cmd. Commit links in review comments
-use the existing `agentide-commit` scheme and open that commit read-only
+use the existing `sanductor-commit` scheme and open that commit read-only
 in Review, scoped to the utility pane’s worktree. Abbreviated hashes
 resolve locally without changing HEAD, and returning restores an edited
 commit message and its baseline. A request counter allows repeated clicks
@@ -518,7 +539,7 @@ share their parent's embedded id); the models and efforts it offers; its
 version and model listing command. Agent state (working, idle, done,
 blocked) comes from herdr, the same for every agent, so no runner detects
 anything. Foreign-session discovery is reconciliation in
-`AgentIDEData`, outside the protocol.
+`SanductorData`, outside the protocol.
 
 Models are asked of every CLI once after first reading and kept in the
 metadata under the CLI's version, so `claude models` (a twenty-second
@@ -531,11 +552,11 @@ Claude.
 
 | Target | Default isolation | Notes |
 |---|---|---|
-| AgentIDEDomain | nonisolated | Sendable value types by construction |
-| AgentIDEData | nonisolated | `@concurrent` on parsing and subprocess work |
-| AgentIDERemote | nonisolated | actors own the SSH connection and remote adapter |
-| Features, TerminalUI, AgentIDEInterface | MainActor | `@Observable` MainActor view models |
-| AgentIDEApp | MainActor | wiring only |
+| SanductorDomain | nonisolated | Sendable value types by construction |
+| SanductorData | nonisolated | `@concurrent` on parsing and subprocess work |
+| SanductorRemote | nonisolated | actors own the SSH connection and remote adapter |
+| Features, TerminalUI, SanductorInterface | MainActor | `@Observable` MainActor view models |
+| SanductorApp | MainActor | wiring only |
 
 Under approachable concurrency `nonisolated async` runs on the caller's
 actor, so quick awaited I/O stays plain; only CPU-bound or blocking leaf
@@ -607,7 +628,7 @@ the default branch. Placeholders and host directories supply no base.
    keeps it for its retry, and every opener clears it, so nothing
    stacks by accident.
    What was picked is remembered per agent in
-   `agentide/session-defaults` in the shared workspace (`key=value`
+   `sanductor/session-defaults` in the shared workspace (`key=value`
    lines, since the sandbox has no JSON tool), merged by whichever
    surface starts a session. Submitting inserts a placeholder row
    instantly and narrates creation until herdr detects the agent's
@@ -659,7 +680,7 @@ the default branch. Placeholders and host directories supply no base.
    removed, so a base that does not resolve is followed to where
    origin's HEAD points now, exactly as an explicit fetch follows it
    (`followDefaultBranch`, the main checkout moving with it), and
-   `agentide new` re-points `origin/HEAD` the same way; an old clone
+   `sanductor new` re-points `origin/HEAD` the same way; an old clone
    once needed `git remote set-head origin --auto` by hand before it
    could start anything. Naming a free branch, the fetch and
    `git worktree add` run one launch at a time per repository, through
@@ -691,7 +712,7 @@ the default branch. Placeholders and host directories supply no base.
    agent may clone a base of its own and cut worktrees from it), with
    the owning clone as their repository path. Sessions always launch
    from the real path because transcripts are keyed by cwd.
-4. The prompt is written to `agentide/prompts/<session>.md` in the
+4. The prompt is written to `sanductor/prompts/<session>.md` in the
    shared workspace and travels inside the launch command as
    `-- "$(cat …)"`, the path shell-quoted: pasting it after launch
    raced the agent's terminal setup, which flushed pending input, and
@@ -720,7 +741,7 @@ the default branch. Placeholders and host directories supply no base.
    that one file, sign in again) go once to the Messages pane; nothing
    deletes a keychain on anyone's behalf.
 
-The same funnel serves three more entrances. `agentide new` (in
+The same funnel serves three more entrances. `sanductor new` (in
 `bin/`, aliased from the bundle for SSH logins) asks its way to a
 session in Homebrew's idiom, computes branch, label and paths by the
 rules above rather than reading anything the app owns. It uses the
@@ -731,12 +752,12 @@ fetch stops creation. It runs itself as the sandbox user when started
 as the host user, and focuses the new workspace instead of attaching
 when already inside herdr
 (`HERDR_PANE_ID`), which refuses a nested client. App Intents
-(`App/AgentIDEShortcuts.swift`) resolve entities from the dashboard's
+(`App/SanductorShortcuts.swift`) resolve entities from the dashboard's
 in-memory groups and reach the app through `AppDependencies.shared`,
 since the system invokes them outside any view. Start Agent Session
 answers with the launch's failure when there is one rather than
 claiming it started; they are tested from
-the `AgentIDEIntentTests` UI bundle through `AppIntentsTesting`, with
+the `SanductorIntentTests` UI bundle through `AppIntentsTesting`, with
 Start Agent Session checked to exist rather than run. The repository
 page resumes any past conversation into a fresh worktree.
 
@@ -757,7 +778,7 @@ Only one schedule launches at a time, and manual starts share the same
 persistence, retry and result handling as automatic runs.
 
 One timer waits for the next enabled schedule, rearmed on edits and
-clock changes and checked on wake. AgentIDE must be open: reopening or
+clock changes and checked on wake. Sanductor must be open: reopening or
 waking catches up once per overdue schedule, never once per missed
 occurrence. The next occurrence is saved before launching, so a restart
 cannot replay a claimed run; a crash between that save and launch can
@@ -781,8 +802,8 @@ shows a different branch from the one checked out.
   any existing notifier hooks for UserPromptSubmit, Stop, StopFailure,
   PostToolUse, PostToolUseFailure, PermissionRequest, SessionStart and
   SessionEnd in the defensive `[ -x … ] && … || true` shape. The hook
-  appends a JSON line to `agentide/events/<session>.jsonl`, keyed by
-  `AGENTIDE_SESSION` with `SV_SESSION_ID` as fallback.
+  appends a JSON line to `sanductor/events/<session>.jsonl`, keyed by
+  `SANDUCTOR_SESSION` with `SV_SESSION_ID` as fallback.
 - **An explicit fetch follows the default branch.** `origin/HEAD` is
   set at clone time and a fetch never moves it, so a repository whose
   default branch went from `trunk` to `main` kept reading as `trunk`.
@@ -1262,7 +1283,7 @@ the requested worktree before its saved tab can be restored. Off-screen
 requests leave the shared tab unchanged until their worktree is selected.
 A move button on the open file sends it to the other
 slot, and a session appearing in a worktree whose centre held the
-editor (`agentide new`, a phone, a resume) moves the open file to the
+editor (`sanductor new`, a phone, a resume) moves the open file to the
 side editor. Buffers survive every such displacement because an editor
 saves on its way off screen; the Close button is the one deliberate
 discard, and a file a command waits on is never written behind its
@@ -1285,9 +1306,12 @@ so an unconfigured project behaves as it did. The glob subset (`*`,
 `**`, `?`, classes and `{a,b}`) is the app's own: no Swift package for
 the format meets the dependency rule below.
 
-The **editor shim** (`bin/agentide`, on every shell pane's `PATH` as
+The deprecated `bin/agentide` is a relative symlink to `sanductor`; using
+it warns on stderr, preserving stdout for remote JSON and listings.
+
+The **editor shim** (`bin/sanductor`, on every shell pane's `PATH` as
 `EDITOR`, `VISUAL` and `GIT_EDITOR` with `--wait`) spools one JSON
-request per file into `AGENTIDE_EDITS` (or `~/.agentide/edits`),
+request per file into `SANDUCTOR_EDITS` (or `~/.sanductor/edits`),
 written aside and renamed into place; the window watches the spool with
 a dispatch source ringing a `DirectoryWake` that a loop waits on with a
 backstop timeout, nothing cancelled on either side (the platform notes
@@ -1303,10 +1327,10 @@ terminal's own child may ask that of the system where the app asking
 for itself is refused by cooperative activation, and the copy outside
 any bundle (the shared workspace's, for SSH) skips it. A request whose
 process has gone is swept. Nothing inside the sandbox can reach the
-spool. `AGENTIDE=1` lets shell configuration defer to the app;
+spool. `SANDUCTOR=1` lets shell configuration defer to the app;
 `GIT_SEQUENCE_EDITOR` is left alone. The same command with a directory
-selects the worktree holding it, and `agentide new` starts a session;
-both, and `agentide repositories`, look in the directories the app
+selects the worktree holding it, and `sanductor new` starts a session;
+both, and `sanductor repositories`, look in the directories the app
 published to `session-defaults`.
 Explicit absolute file paths may belong to no worktree and open beside
 the current selection; relative paths remain confined to their worktree.
@@ -1559,7 +1583,7 @@ steps.
   replace the listing, including with an empty result.
   A selection missing from the refreshed listing closes its conversation.
   Authentication failures pause GitHub requests across repositories.
-  Before recovery, AgentIDE removes `GH_TOKEN` and `GITHUB_TOKEN` from
+  Before recovery, Sanductor removes `GH_TOKEN` and `GITHUB_TOKEN` from
   its own process environment application-wide, so later commands across
   repositories and panes inherit the stored-login fallback.
   One shared, non-interactive `gh auth status` check lets the CLI refresh
@@ -1567,7 +1591,7 @@ steps.
   A failed recovery reports once and checks again at the shared
   authentication cadence while requests are pending. It never asks the
   user to unset variables or relaunch the app. Cached content remains
-  visible. AgentIDE never captures or caches a token.
+  visible. Sanductor never captures or caches a token.
   Host Git network commands clear `GH_TOKEN` and `GITHUB_TOKEN` overrides
   so the credential helper uses the stored, refreshable login.
 - **A guarded default branch is not pushed from here.** Whether the
@@ -1588,7 +1612,7 @@ steps.
   named after the fork's owner, with both its tracking and push remote
   set there; occupied names gain a numeric suffix so remote refs and
   leases still work. A newly added remote records its original URL in
-  local git config as `remote.<name>.agentide-created-url`. After a
+  local git config as `remote.<name>.sanductor-created-url`. After a
   worktree and its branch are deleted, including merge cleanup, unused
   marked remotes are removed. Both tracking and push remotes of all
   remaining branches and `remote.pushDefault` keep a remote in use.
@@ -1981,7 +2005,34 @@ moved onto its display, brought onto a screen that exists if the one it
 was left on has gone, and put into fullscreen, and only then are its
 moves recorded, once each drag or resize pauses rather than per step.
 
-The metadata store is `~/Library/Application Support/AgentIDE/state.json`,
+Historical `agentide--` session labels remain recognisable for archived
+conversations; new sessions always use `sanductor--`.
+Git remote cleanup also recognises the old `agentide-created-url`
+ownership marker; newly created remotes use `sanductor-created-url`.
+On first launch, the Mac closes the old app gracefully, then copies
+missing files from `~/.agentide` and the old Application Support
+folder before constructing models or loading metadata. Existing
+Sanductor files and preferences win. The old private directory is
+retained as a backup and replaced with a compatibility symlink, so
+old editor paths keep working. A completion marker is saved only after
+a successful migration, and interrupted copies can be retried.
+Startup shows progress and retries a failed migration before offering
+Retry; it never continues with an empty replacement state.
+Each retry closes AgentIDE again, even if private state was already
+copied before sandbox preparation failed.
+
+Sandbox preparation copies old shared files without overwriting new
+ones and aliases the old herdr session directories under the new names,
+so running agents survive the rename. These operations run as the
+sandbox user through the existing launcher. The payload uses explicit
+command separators and braced variables to survive sudo's login shell,
+which removes escaped line breaks and expands bare variables early.
+The system rsync copies missing files without changing existing files
+or directory metadata, so retries do not fail on files already copied.
+Old prompt paths remain intact. Managed legacy hooks forward to the
+new notifier.
+
+The metadata store is `~/Library/Application Support/Sanductor/state.json`,
 outside the shared workspace so agents can neither read nor corrupt it.
 Deleting it loses only unread state, settings and the attribution of
 conversations to deleted worktrees. Rules:
@@ -2003,9 +2054,9 @@ conversations to deleted worktrees. Rules:
 
 Two directories in the shared workspace are the app's own: `user/`, the
 template sandvault syncs into the sandbox home, where the agent hooks
-live and where your keys and shell configuration go, and `agentide/`,
+live and where your keys and shell configuration go, and `sanductor/`,
 holding prompts, hook events and `session-defaults`, which remembers
-what the new session form and `agentide new` last chose. Every refresh
+what the new session form and `sanductor new` last chose. Every refresh
 also publishes the Repositories and Worktrees directories there, as
 Settings resolves them (`repositories-directory`,
 `worktrees-directory`), since only the host user can read Settings; the
@@ -2016,7 +2067,7 @@ it and no agent launches there, so the command keeps to the defaults
 rather than making worktrees nothing can run in. A path holding a
 newline cannot be a line of either published file, so it is left out,
 and a refresh that would write what is already there writes nothing. The
-sandbox can write `agentide/`, so the app reads and replaces
+sandbox can write `sanductor/`, so the app reads and replaces
 `session-defaults` and `host-directories` as a `SandboxFile`, as it
 reads an autofix result: the directory and the file are opened without
 following links, anything but a regular file with one name counts as
@@ -2026,24 +2077,31 @@ sandbox reads. The app also keeps `[worktrees] directory` in herdr's own
 configuration pointed at its layout, so `herdr worktree create` lands
 where the sidebar looks.
 
+The old `AGENTIDE` and `AGENTIDE_*` environment names remain accepted.
+Canonical names take precedence, including explicitly empty values;
+using a legacy fallback prints a deprecation warning to stderr without
+printing its value. Shell panes also export the old editor flags so
+existing shell configuration continues to work. Developer scripts and
+performance logging use the same fallback rules.
+
 The variables shell files and scripts can read or set:
 
 | Variable | Set by | Meaning |
 |---|---|---|
-| `AGENTIDE` | the app, in shell panes | `1`, so shell files know they are inside the app |
-| `SHARED_WORKSPACE` | you, for remote logins | the shared workspace `agentide` reads, when a login did not inherit it |
-| `HERDR_SESSION` | your shell configuration | the herdr session name, `agentide` for the installed app |
-| `AGENTIDE_SESSION` | the app, per pane | the session's label, which the agent hooks attribute events by |
-| `AGENTIDE_EDITS` | the app, in shell panes | where `agentide --wait` spools the edit it is waiting on |
-| `AGENTIDE_COLOR` | you | forces colour in `agentide`'s output where no terminal is detected |
-| `AGENTIDE_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
-| `AGENTIDE_DEVELOPMENT_TEAM` | you, running `script/test` | the Apple team id signing the app and the App Intents runner alike, which the framework requires; unset, the bundle is skipped |
-| `AGENTIDE_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out even with a team set |
-| `AGENTIDE_DRY_RUN` | you, running `agentide new` | prints what it would make instead of making it |
+| `SANDUCTOR` | the app, in shell panes | `1`, so shell files know they are inside the app |
+| `SHARED_WORKSPACE` | you, for remote logins | the shared workspace `sanductor` reads, when a login did not inherit it |
+| `HERDR_SESSION` | your shell configuration | the herdr session name, `sanductor` for the installed app |
+| `SANDUCTOR_SESSION` | the app, per pane | the session's label, which the agent hooks attribute events by |
+| `SANDUCTOR_EDITS` | the app, in shell panes | where `sanductor --wait` spools the edit it is waiting on |
+| `SANDUCTOR_COLOR` | you | forces colour in `sanductor`'s output where no terminal is detected |
+| `SANDUCTOR_PERFORMANCE_LOG` | you | turns the performance log on, as `script/performance-log on` does |
+| `SANDUCTOR_DEVELOPMENT_TEAM` | you, running `script/test` | the Apple team id signing the app and the App Intents runner alike, which the framework requires; unset, the bundle is skipped |
+| `SANDUCTOR_SKIP_INTENT_TESTS` | you, running `script/test` | leaves the App Intents bundle out even with a team set |
+| `SANDUCTOR_DRY_RUN` | you, running `sanductor new` | prints what it would make instead of making it |
 
 ### From a phone
 
-The `AgentIDE-iOS` target is a thin SwiftUI shell in `iOSApp`, sharing
+The `Sanductor-iOS` target is a thin SwiftUI shell in `iOSApp`, sharing
 Domain, the herdr protocol and common UI controls with the Mac. Its SSH
 adapter uses SwiftNIO SSH with a device-generated Ed25519 key held in
 Keychain. The device identity is added without updating an existing key;
@@ -2063,8 +2121,8 @@ Settings can change only its base size. Other saved font overrides are
 ignored.
 Connection settings accept an IP address or hostname and keep the
 `sandvault-` username prefix fixed. The SSH port stays visible beside the
-address; a menu selects `agentide` for the installed Mac app or
-`agentide-dev` for development builds. Network errors name the destination
+address; a menu selects `sanductor` for the installed Mac app or
+`sanductor-dev` for development builds. Network errors name the destination
 and give actionable guidance for permissions, DNS, refusal and timeouts.
 Validation, connections, host-key pins and diagnostics share a host value
 with surrounding whitespace removed.
@@ -2094,7 +2152,7 @@ Both platforms' plus icons use the same primary colour as the Mac's
 disclosure caret. Settings presentation is separate from the session
 list so opening it does not rebuild that list.
 The Mac publishes repository owners and ordered worktree paths to
-`agentide/sidebar-agentide.json` or `sidebar-agentide-dev.json` in the
+`sanductor/sidebar-sanductor.json` or `sidebar-sanductor-dev.json` in the
 shared workspace, only when that projection changes. The phone reads it
 on connection and manual refresh, orders known repositories and worktrees
 accordingly and keeps new or unlisted sessions accessible. Without a
@@ -2131,7 +2189,7 @@ creation's physical-path check. Creation accepts listed names, including
 spaces and non-ASCII characters, but rejects path separators and traversal.
 The command composes decomposed accents before filtering session labels.
 Creation uses the installed
-`agentide new` command's non-interactive interface, retaining its
+`sanductor new` command's non-interactive interface, retaining its
 worktree, prompt and agent-launch rules, and decodes only the returned
 root pane's ID. That ID confirms creation even if the following listing
 fails or the phone disconnects; the creation sheet closes to avoid
@@ -2185,17 +2243,17 @@ Aliasing the command in the sandbox user's shell configuration also
 names the session:
 
 ```bash
-alias an='/Applications/AgentIDE.app/Contents/Resources/bin/agentide new'
-export HERDR_SESSION=agentide
+alias an='/Applications/Sanductor.app/Contents/Resources/bin/sanductor new'
+export HERDR_SESSION=sanductor
 ```
 
 Connecting as `sandvault-<you>` and running `herdr` presents every agent
 workspace in one attach, so a session steered from the phone is the same
 session.
 
-Owner avatars cache per owner under `Application Support/AgentIDE/Avatars`;
+Owner avatars cache per owner under `Application Support/Sanductor/Avatars`;
 a failed fetch is silent. The performance log
-(`<workspace>/tmp/agentide/performance.log`, off by default, on with
+(`<workspace>/tmp/sanductor/performance.log`, off by default, on with
 `script/performance-log on`) records every process, `gh` call and cache
 hit or miss; tests point it into the scratch directory. While it is on, every
 message the Messages pane shows is also appended to `messages.log`
@@ -2259,7 +2317,7 @@ organisation.
 System frameworks (WebKit, UserNotifications, FSEvents, Network and
 FoundationModels, weak-linked because CI's runner OS lacks it) and
 runtime tools (herdr via Homebrew, never linked) sit outside the table.
-No updater of its own: releases ship as the `agentide` Homebrew cask,
+No updater of its own: releases ship as the `sanductor` Homebrew cask,
 and `brew upgrade` is the updater.
 
 Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
@@ -2316,9 +2374,11 @@ indexes with Periphery. SwiftLint uses each platform's own build log
 and `.xcfilelist`, the extension its file-list reader requires, and
 excludes the other platform's font implementations: SourceKit's
 cursor lookup otherwise enters inactive branches with an unavailable SDK.
+Platform-neutral Domain files need only the Mac import check; Domain
+files with conditional compilation are still checked on both platforms.
 File lists use absolute paths so SwiftLint can match them to compiler
 arguments; a full pass analysing zero files fails rather than reporting success.
-CI sets `AGENTIDE_ANALYZE_BASE` to the PR's base commit or the commit before
+CI sets `SANDUCTOR_ANALYZE_BASE` to the PR's base commit or the commit before
 a push to main, checking imports only in Swift files changed since that
 commit. Both events use the same scope, with no full scan after merging.
 Unchanged and deleted files are omitted; a platform with no matching
@@ -2326,8 +2386,8 @@ compiled files needs no import check. Local analysis remains a full scan
 unless the same variable is set. Periphery always scans both complete indexes.
 Phone font styles use distinct concrete types behind the shared names
 so the combined index keeps both platforms' declarations.
-The iPhone app's Swift module is `AgentIDEiOS`, distinct from the Mac's
-`AgentIDE`, while both products remain named AgentIDE. SwiftTerm's
+The iPhone app's Swift module is `SanductoriOS`, distinct from the Mac's
+`Sanductor`, while both products remain named Sanductor. SwiftTerm's
 generated plugin sources are excluded from indexing, not just reporting,
 so platform-specific copies cannot collide in the combined index.
 The clean builds give SwiftLint current compiler arguments on every run.
@@ -2340,6 +2400,8 @@ In the sandbox it builds app and test targets into a fresh
 passes both to Periphery without another build. SwiftPM's native build
 engine supplies that index; it is deprecated but works with this
 toolchain. SwiftLint analysis still needs the host's Xcode build log.
+Periphery excludes test targets in the sandbox to match the host's
+production API visibility checks.
 Build or analyser failures fail the script; no findings are baselined.
 
 Tests are two tiers. Unit tests cover Domain's pure functions, Data
@@ -2454,13 +2516,13 @@ so that only the last needs credentials:
   waits for its exit and kills it if necessary before replacing the
   bundle in /Applications and launching the new app. If the old process
   cannot be stopped, installation fails without replacing its bundle.
-  It ignores SIGHUP so closing an AgentIDE shell pane cannot interrupt
+  It ignores SIGHUP so closing an Sanductor shell pane cannot interrupt
   installation.
   Zipping and distribution signing always use Release. Sandboxed builds
   only compile, so they cannot install an app bundle.
 - `script/zip` verifies the built app's signature, then zips it with
-  `ditto` as `.build/AgentIDE-<version>.zip`, the version read from the
-  built `Info.plist`, with `AgentIDE.app` as the only top-level entry.
+  `ditto` as `.build/Sanductor-<version>.zip`, the version read from the
+  built `Info.plist`, with `Sanductor.app` as the only top-level entry.
 - `script/package` needs every credential in its environment and fails
   without them. `DEVELOPER_ID_APPLICATION_CERTIFICATE`, a base64
   encoded `.p12` export of the Developer ID Application certificate and
@@ -2468,7 +2530,7 @@ so that only the last needs credentials:
   `DEVELOPER_ID_APPLICATION_CERTIFICATE_PASSWORD`, is imported into a
   temporary keychain. The script selects its one valid Developer ID
   Application identity, signs the app from
-  `App/AgentIDE.entitlements` with a hardened runtime and secure
+  `App/Sanductor.entitlements` with a hardened runtime and secure
   timestamp, and restores the user's keychain list on exit.
   `NOTARIZATION_KEY`, the contents of an App Store Connect API key's
   `.p8` file, `NOTARIZATION_KEY_ID` and `NOTARIZATION_ISSUER_ID` send
@@ -2503,15 +2565,76 @@ signing, notarisation and startup checks as a dry run, uploading the
 test artefact but pushing no tag or release. Dependabot cannot read
 Actions secrets, so its dry runs skip signing, notarisation and
 TestFlight validation.
-Nothing here bumps the cask: the `agentide` cask in
+Nothing here bumps the cask: the `sanductor` cask in
 Homebrew/homebrew-cask is open source and Homebrew's own autobump reads
 each release through `brew livecheck` and opens the pull request
 itself, so the release needs no GitHub token of its own.
 
+For the rename, first rename the GitHub repository to
+`MikeMcQuaid/Sanductor` and update the public project page to
+`https://mikemcquaid.com/sanductor/`. Publish the first signed
+`Sanductor-<version>.zip` before submitting the cask rename. Fill its
+version and SHA-256 from that release, rename the token and file to
+`sanductor` and `Casks/s/sanductor.rb`, add `agentide: sanductor` to
+`cask_renames.json` and expose both bundled CLI names. Verify the online
+audit, installation, migration from `agentide` and uninstallation against
+the actual release; a source rename cannot supply its final checksum.
+
 #### iPhone TestFlight
 
+Both apps now use `com.mikemcquaid.Sanductor`; the iPhone Swift module
+is `SanductoriOS` and the Mac module is `Sanductor`. Apple treats the
+new bundle ID as a separate app, including its preferences, permissions
+and iPhone Keychain access.
+
+Set up the new identity before running the Release workflow:
+
+1. In Apple Developer's **Certificates, Identifiers & Profiles**, open
+   **Identifiers**, choose **+**, then **App IDs** and register the
+   explicit bundle ID `com.mikemcquaid.Sanductor`, named Sanductor.
+   Keep the existing team and enable only capabilities the app uses.
+   One App ID can cover both platforms.
+2. In App Store Connect, choose **Apps > + > New App**, select iOS,
+   name it Sanductor, select the new bundle ID and give it a unique SKU
+   such as `sanductor-ios`. Once a build has been uploaded, Apple does
+   not allow changing that record's bundle ID: leave the AgentIDE
+   record in place and create this new one.
+3. In the Developer portal's **Profiles**, create an **App Store
+   Connect** distribution profile for the new App ID and the existing
+   Apple Distribution certificate. Download it and base64-encode it:
+   `base64 -i Sanductor.mobileprovision | pbcopy`.
+   Save the result as the repository Actions secret
+   `SANDUCTOR_APP_STORE_IOS_PROFILE`: open the repository's
+   **Settings > Secrets and variables > Actions**, choose
+   **New repository secret**, enter that name and paste the base64.
+   Create or update its value with the newly downloaded profile;
+   renaming `AGENTIDE_APP_STORE_IOS_PROFILE` without replacing its
+   contents cannot sign the new bundle ID. Remove the old secret after
+   the new one passes validation. The legacy name is a deprecated
+   fallback and still requires a profile for Sanductor.
+   Reuse `APP_STORE_CERTIFICATES`, its password and `NOTARIZATION_*`
+   when they belong to that team and certificate.
+4. Push this release-input change and check the **Release** dry run,
+   which archives and validates without uploading. After merging, run
+   **Release** on `main` with a fresh version to upload the first build.
+5. Complete encryption compliance, create TestFlight groups on the new
+   record and add the testers again. External testing needs its own
+   beta review and a new public link if one is used. Old invitations
+   and installed builds continue to belong to AgentIDE.
+
+The new iPhone app needs its Mac connection configured again, its new
+public key installed using the README steps and the Mac's host key
+verified again. Once the new connection works, remove the old phone key
+from sandvault's authorised keys and run `sv build` on the host. The Mac
+may ask again for notification and protected-folder permissions, and
+Shortcuts referring to the old app need updating.
+
+Apple documents [registering an App ID](https://developer.apple.com/help/account/identifiers/register-an-app-id/),
+[adding an app record](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/)
+and [changing a bundle ID](https://developer.apple.com/documentation/xcode/changing-the-bundle-identifier).
+
 Before pushing the GitHub tag or publishing release binaries, the
-workflow archives the `AgentIDE-iOS` scheme in Release and uploads it
+workflow archives the `Sanductor-iOS` scheme in Release and uploads it
 to App Store Connect.
 Human push dry runs run the same archive with distribution signing,
 export a signed IPA and call `altool --validate-app` using the same API
@@ -2522,15 +2645,18 @@ failed validation fail the workflow. Dependabot skips it.
 `script/testflight [--dry-run]` imports `APP_STORE_CERTIFICATES`, the
 base64 of an `Apple-Distribution.p12` export including its private key,
 using `APP_STORE_CERTIFICATES_PASSWORD`. Both can be shared with other
-apps on the same team. GitHub's `AGENTIDE_APP_STORE_IOS_PROFILE`
+apps on the same team. GitHub's `SANDUCTOR_APP_STORE_IOS_PROFILE`
 supplies the base64 App Store Connect distribution profile as
-`APP_STORE_IOS_PROFILE`. It must match `com.mikemcquaid.AgentIDE` and
+`APP_STORE_IOS_PROFILE`. It must match `com.mikemcquaid.Sanductor` and
 the exported certificate; there is no Watch app or Watch profile. The
 script reads the Team ID from the profile, uses a temporary keychain and
 restores the keychain search list while removing its temporary
 credentials and profile on exit. If the original keychain search list
 cannot be read, it stops before changing keychains. Credentials and
 signed iPhone products are never cached.
+Before importing certificates or invoking Xcode, it checks the profile's
+application identifier against `com.mikemcquaid.Sanductor` and reports
+which Actions secret needs the replacement profile.
 
 Upload and validation reuse the existing `NOTARIZATION_KEY`,
 `NOTARIZATION_KEY_ID` and `NOTARIZATION_ISSUER_ID` secrets, passed as
@@ -2553,10 +2679,10 @@ or restrict builds to internal-only testing. Public iOS distribution
 can use the same bundle ID and signing setup later.
 
 The release contract is also the cask contract: the tag is the bare
-version, the zip is `AgentIDE-<version>.zip` and the app's
+version, the zip is `Sanductor-<version>.zip` and the app's
 `CFBundleShortVersionString` is the same value, so the cask can use the
 stable URL
-`https://github.com/MikeMcQuaid/AgentIDE/releases/download/#{version}/AgentIDE-#{version}.zip`.
+`https://github.com/MikeMcQuaid/Sanductor/releases/download/#{version}/Sanductor-#{version}.zip`.
 Releases are ARM64-only; the cask must require Apple silicon and macOS
 26 or later.
 Every release is Developer ID signed with the hardened runtime,
@@ -2727,12 +2853,12 @@ feedback. Local fixes stay unpushed until the local stage finishes, then
 the shared push opt-in controls the transition to remote CI and review.
 Without it the loop waits for a confirmed manual push. At the local
 round limit the loop completes the local stage automatically, rechecks
-the committed result and pushes through AgentIDE when opted in. A clear
+the committed result and pushes through Sanductor when opted in. A clear
 local review can complete the stage early. Review-only loops finish
 locally without any push. Remote rounds request the chosen bot when
 needed before waiting for all required CI and selected reviews. Each
 round batches their findings into one fix-and-commit prompt, then pushes
-through AgentIDE. The final round still waits for the new head and its
+through Sanductor. The final round still waits for the new head and its
 CI and review results: clear feedback is success, remaining failures
 are reported as still failing without exceeding the round limit.
 Unknown required-check configuration blocks CI automation; a confirmed
@@ -2791,7 +2917,7 @@ idle state before that turn starts is insufficient. The follow-up is
 claimed durably before delivery, rechecks the branch, head
 and session and asks the agent to commit only its autofix changes and
 write the result. It never asks the agent to push; verified completion
-continues through AgentIDE's existing push path and opt-in. Unrelated
+continues through Sanductor's existing push path and opt-in. Unrelated
 changes still prevent automatic pushing. Already attempted feedback
 with uncommitted changes and no pending attempt can recover the commit
 step on an explicit loop restart, using freshly verified feedback and
@@ -2944,7 +3070,7 @@ Only that explicit retry can repeat the push, preserving its round and thread
 marks and rechecking the PR, branch, session and committed tip. A push
 that failed after signing remembers the signed tip. Manual pushes are
 noticed without clicking Retry, including signed rewrites and pushes
-made outside AgentIDE. Matching commit trees allow a signing-only rewrite
+made outside Sanductor. Matching commit trees allow a signing-only rewrite
 to continue; changed code returns to existing-work validation without
 resetting round counts or delivery claims. A manually pushed result
 marks addressed threads against the pre-push head so the confirmed push

@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
+import SanductorData
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 
@@ -145,7 +145,7 @@ struct CheckLogView: View {
     }
 
     private func toggleGroup(_ url: URL) -> Bool {
-        guard url.scheme == "agentide-log-group", let host = url.host, let index = Int(host),
+        guard url.scheme == "sanductor-log-group", let host = url.host, let index = Int(host),
               document.lines.indices.contains(index), document.lines[index].endIndex != nil
         else {
             return false

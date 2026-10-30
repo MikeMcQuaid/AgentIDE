@@ -1,6 +1,6 @@
-import AgentIDEDomain
 import DashboardFeature
 import ReviewFeature
+import SanductorDomain
 import SwiftUI
 import TerminalUI
 
@@ -252,7 +252,7 @@ struct RootView: View {
         .onChange(of: editorFileRequest) { routeOpenFileRequest() }
         .onChange(of: finderFocusRequest) { routeFinderFocusRequest() }
         // A session appearing in a worktree whose centre pane held
-        // the editor (from `agentide new`, a phone or a resume): the
+        // the editor (from `sanductor new`, a phone or a resume): the
         // session always wins the centre, so the open file moves to
         // the side editor.
         .onChange(of: runningWorktreePaths) { _, running in

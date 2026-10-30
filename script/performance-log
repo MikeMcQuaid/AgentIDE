@@ -6,7 +6,7 @@
 set -euo pipefail
 
 user="${USER#sandvault-}"
-directory="/Users/Shared/sv-${user}/tmp/agentide"
+directory="/Users/Shared/sv-${user}/tmp/sanductor"
 marker="${directory}/performance-log"
 log="${directory}/performance.log"
 

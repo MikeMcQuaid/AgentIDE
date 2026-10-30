@@ -1,4 +1,4 @@
-import AgentIDEData
+import SanductorData
 
 /// The single preparation and push action shared by the footer and shortcuts.
 extension PullRequestsModel {

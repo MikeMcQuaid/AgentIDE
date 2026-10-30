@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
 import Observation
+import SanductorData
+import SanductorDomain
 
 /// Whether GitHub is answering, so an outage is reported once and
 /// waited out rather than retried and re-reported per request.

@@ -1,6 +1,6 @@
-import AgentIDEData
-import AgentIDEDomain
 import Foundation
+import SanductorData
+import SanductorDomain
 
 /// The sidebar the last run left behind: written on every
 /// reading and painted before the first one, so the window opens

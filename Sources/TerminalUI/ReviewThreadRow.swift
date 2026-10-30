@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import AppKit
+import SanductorDomain
 import SwiftUI
 
 /// One GitHub conversation or local finding: a header with the

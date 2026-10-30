@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build AgentIDE, install a copy into /Applications and relaunch, so the app
+# Build Sanductor, install a copy into /Applications and relaunch, so the app
 # you run daily is never the build output the next rebuild
 # overwrites in place.
 set -euo pipefail
@@ -13,28 +13,28 @@ app="$(tail -1 <<<"${build_output}")"
   exit 1
 }
 
-# Quitting AgentIDE also hangs up commands in its shell panes.
+# Quitting Sanductor also hangs up commands in its shell panes.
 trap '' HUP
-if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
-  osascript -e 'with timeout of 5 seconds' -e 'quit app "AgentIDE"' -e 'end timeout' &>/dev/null || true
+if pgrep -u "$(id -u)" -x Sanductor &>/dev/null; then
+  osascript -e 'with timeout of 5 seconds' -e 'quit app "Sanductor"' -e 'end timeout' &>/dev/null || true
   for ((attempt = 0; attempt < 50; attempt++)); do
-    pgrep -u "$(id -u)" -x AgentIDE &>/dev/null || break
+    pgrep -u "$(id -u)" -x Sanductor &>/dev/null || break
     sleep 0.1
   done
-  if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
-    pkill -KILL -u "$(id -u)" -x AgentIDE || true
+  if pgrep -u "$(id -u)" -x Sanductor &>/dev/null; then
+    pkill -KILL -u "$(id -u)" -x Sanductor || true
     for ((attempt = 0; attempt < 50; attempt++)); do
-      pgrep -u "$(id -u)" -x AgentIDE &>/dev/null || break
+      pgrep -u "$(id -u)" -x Sanductor &>/dev/null || break
       sleep 0.1
     done
   fi
-  if pgrep -u "$(id -u)" -x AgentIDE &>/dev/null; then
-    echo "AgentIDE is still running; the installed app was not replaced." >&2
+  if pgrep -u "$(id -u)" -x Sanductor &>/dev/null; then
+    echo "Sanductor is still running; the installed app was not replaced." >&2
     exit 1
   fi
 fi
-rm -rf /Applications/AgentIDE.app
-ditto "${app}" /Applications/AgentIDE.app
-open /Applications/AgentIDE.app
+rm -rf /Applications/Sanductor.app
+ditto "${app}" /Applications/Sanductor.app
+open /Applications/Sanductor.app
 
-echo "Installed and relaunched /Applications/AgentIDE.app."
+echo "Installed and relaunched /Applications/Sanductor.app."

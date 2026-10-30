@@ -1,24 +1,12 @@
-import AgentIDEDomain
 import AppKit
+import SanductorDomain
 
-/// What a key means to a local shell pane, which sees the keyboard
-/// modes its own PTY set and has asked for nothing better. Split
-/// from the view for length.
+/// Key routing for local shells and herdr-backed agents.
 extension PaneTerminalView {
-    /// Sends Option and an arrow as terminals always have, and the
-    /// numeric keypad as the numbers it is labelled with, for a
-    /// local shell that never asked for the kitty keyboard protocol:
-    /// SwiftTerm encodes the arrows the way that protocol does
-    /// whether or not anything turned it on, and a shell typed the
-    /// tail of the sequence into the line rather than moving a word.
-    /// The keypad it answers as a VT does, since zsh asks for
-    /// application keypad mode at every prompt, so the 5 arrived as
-    /// `ESC O u` and a Mac has no Num Lock to turn that off with.
-    /// Fed by the coordinator's event monitor, since `keyDown` is
-    /// not overridable either; nil means the pane consumed it.
+    /// Keeps agent modifiers and traditional shell bindings when the
+    /// local terminal has no keyboard protocol. Nil consumes the event.
     func routeKey(_ event: NSEvent) -> NSEvent? {
-        guard isHerdrBacked == false,
-              unsafe window?.firstResponder === self,
+        guard unsafe window?.firstResponder === self,
               keyboardEnhancementFlags.isEmpty,
               event.modifierFlags.isDisjoint(with: [.command, .control])
         else {
@@ -28,6 +16,16 @@ extension PaneTerminalView {
         if event.modifierFlags.contains(.option) {
             guard let arrow = Self.arrow(of: event) else {
                 return event
+            }
+
+            if isHerdrBacked {
+                guard event.modifierFlags.contains(.shift) == false else {
+                    return event
+                }
+
+                // herdr omits the agent's keyboard modes; SwiftTerm applies shell bindings without them.
+                send(txt: "\u{1B}[1;3\(arrow.rawValue)")
+                return nil
             }
 
             switch arrow {
@@ -46,7 +44,8 @@ extension PaneTerminalView {
             return nil
         }
 
-        guard event.modifierFlags.contains(.shift) == false,
+        guard isHerdrBacked == false,
+              event.modifierFlags.contains(.shift) == false,
               let text = Self.numericPadText(of: event)
         else {
             return event

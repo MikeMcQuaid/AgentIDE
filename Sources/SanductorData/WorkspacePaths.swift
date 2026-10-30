@@ -1,0 +1,121 @@
+import Foundation
+
+/// The sandvault-related locations Sanductor reads and writes. The
+/// roots are injectable so tests run against temporary workspaces.
+public struct WorkspacePaths: Sendable {
+    // MARK: Lifecycle
+
+    /// Creates paths from explicit roots.
+    public init(
+        hostUser: String,
+        sharedWorkspace: String,
+        sandboxHome: String,
+        metadataFile: String,
+        appDirectory: String? = nil,
+    ) {
+        self.hostUser = hostUser
+        self.sharedWorkspace = sharedWorkspace
+        self.sandboxHome = sandboxHome
+        self.metadataFile = metadataFile
+        self.appDirectory = appDirectory ?? NSHomeDirectory() + "/.sanductor"
+    }
+
+    // MARK: Public
+
+    /// Whether this process is the installed app rather than a dev
+    /// build or a test runner; the check names the app bundle
+    /// because a test runner's `Bundle.main` is Xcode's own harness,
+    /// which also lives under /Applications. Dev and test flavours
+    /// get their own herdr session, so building and testing can
+    /// never list or kill production sessions.
+    public static let isProductionBuild = Bundle.main.bundlePath.hasPrefix("/Applications/Sanductor.app")
+
+    public static var isInsideSandbox: Bool {
+        ProcessInfo.processInfo.environment["SV_SESSION_ID"] != nil
+    }
+
+    /// The host (GUI) user name.
+    public let hostUser: String
+
+    /// The workspace shared by the host and sandbox users.
+    public let sharedWorkspace: String
+
+    /// The sandbox user's home directory.
+    public let sandboxHome: String
+
+    /// Where the app's own metadata file lives.
+    public let metadataFile: String
+
+    /// The app's directory in the running user's home, holding the
+    /// files that shell commands have to reach by path.
+    public let appDirectory: String
+
+    /// Where the editor shim spools the files commands wait on. Dev
+    /// builds keep their own, so a build under test never answers
+    /// the installed app's shells.
+    public var editsDirectory: String {
+        appDirectory + (Self.isProductionBuild ? "/edits" : "/edits-dev")
+    }
+
+    /// Where full repository checkouts live; Settings can point
+    /// this elsewhere, the empty override meaning the default.
+    public var repositoriesDirectory: String {
+        Self.overridden(AppSettings.repositoriesDirectoryKey) ?? sharedWorkspace + "/repositories"
+    }
+
+    /// Where canonical worktrees live, grouped by repository (or
+    /// by uuid, in the layout an older release inherited); Settings
+    /// can point this elsewhere too.
+    public var worktreesDirectory: String {
+        Self.overridden(AppSettings.worktreesDirectoryKey) ?? sharedWorkspace + "/worktrees"
+    }
+
+    /// Sanductor's own area of the shared workspace.
+    public var sanductorDirectory: String {
+        sharedWorkspace + "/sanductor"
+    }
+
+    /// Where session prompt files are written.
+    public var promptsDirectory: String {
+        sanductorDirectory + "/prompts"
+    }
+
+    /// Where hook events are spooled.
+    public var eventsDirectory: String {
+        sanductorDirectory + "/events"
+    }
+
+    /// Where earlier releases kept human-friendly worktree
+    /// symlinks; only their cleanup reads this now.
+    public var friendlyWorktreesDirectory: String {
+        sanductorDirectory + "/worktrees"
+    }
+
+    /// The template directory sandvault copies into the sandbox home.
+    public var userTemplateDirectory: String {
+        sharedWorkspace + "/user"
+    }
+
+    /// Creates paths for the current process, stripping any sandvault
+    /// prefix so the same paths work inside and outside the sandbox.
+    public static func current() -> Self {
+        let user = NSUserName()
+        let prefix = "sandvault-"
+        let host = user.hasPrefix(prefix) ? String(user.dropFirst(prefix.count)) : user
+        let support = NSHomeDirectory() + "/Library/Application Support/Sanductor"
+        return Self(
+            hostUser: host,
+            sharedWorkspace: "/Users/Shared/sv-" + host,
+            sandboxHome: "/Users/sandvault-" + host,
+            metadataFile: support + "/state.json",
+        )
+    }
+
+    // MARK: Private
+
+    /// A non-empty Settings override for a location key.
+    private static func overridden(_ key: String) -> String? {
+        let stored = UserDefaults.standard.string(forKey: key) ?? ""
+        return stored.isEmpty ? nil : stored
+    }
+}

@@ -1,4 +1,4 @@
-import AgentIDEDomain
+import SanductorDomain
 import SwiftUI
 
 /// Syntax colours shared by diffs and Markdown code blocks.

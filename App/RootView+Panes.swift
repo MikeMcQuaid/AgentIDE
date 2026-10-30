@@ -1,5 +1,5 @@
-import AgentIDEDomain
 import DashboardFeature
+import SanductorDomain
 import SessionFeature
 import SwiftUI
 import TerminalUI
@@ -174,7 +174,7 @@ extension RootView {
     /// it invisible in the window itself.
     var windowTitle: String {
         guard let item = dependencies.dashboard.selection else {
-            return "AgentIDE"
+            return "Sanductor"
         }
 
         return item.worktree.repositoryName + ": " + item.worktree.branch

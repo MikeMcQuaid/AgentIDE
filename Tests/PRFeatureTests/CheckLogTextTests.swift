@@ -1,6 +1,6 @@
-import AgentIDEData
 import AppKit
 @testable import PRFeature
+import SanductorData
 import Testing
 
 struct CheckLogTextTests {
@@ -27,7 +27,8 @@ struct CheckLogTextTests {
 
     @Test(arguments: ["[command]", "##[command]"], [false, true])
     func `commands render in bold without their marker`(marker: String, showTimestamps: Bool) throws {
-        let command = "/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/AgentIDE/AgentIDE"
+        let command = "/opt/homebrew/bin/git config --global --add safe.directory "
+            + "/Users/runner/work/Sanductor/Sanductor"
         let document = CheckLogDocument("""
         ##[group]Setup
         2026-10-17T19:22:49.6831900Z \(marker)\(command)
@@ -70,7 +71,7 @@ struct CheckLogTextTests {
         )
         #expect(expanded.string == "▾ Runner Image Provisioner\n  <script>literal output</script>\nDone")
         let link = unsafe expanded.attribute(.link, at: 0, effectiveRange: nil) as? URL
-        #expect(try #require(link).absoluteString == "agentide-log-group://0")
+        #expect(try #require(link).absoluteString == "sanductor-log-group://0")
         let collapsed = CheckLogText.attributed(
             document,
             showTimestamps: true,

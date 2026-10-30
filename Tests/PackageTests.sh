@@ -11,7 +11,7 @@ cp script/package "${scratch}/script/"
 cat >"${scratch}/script/zip" <<'ZIP'
 #!/bin/bash
 echo zip >>events
-echo .build/AgentIDE.zip
+echo .build/Sanductor.zip
 ZIP
 cat >"${scratch}/bin/security" <<'SECURITY'
 #!/bin/bash

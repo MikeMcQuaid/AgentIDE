@@ -1,7 +1,7 @@
-import AgentIDEData
-import AgentIDEDomain
 import AppKit
 import Foundation
+import SanductorData
+import SanductorDomain
 import TerminalUI
 
 /// The footer's branch actions, split from the model body for

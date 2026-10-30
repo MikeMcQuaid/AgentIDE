@@ -1,0 +1,220 @@
+import Foundation
+import SanductorData
+import SanductorDomain
+import Testing
+
+/// Exercises the metadata file round trip.
+struct MetadataStoreTests {
+    @Test
+    func `round trips every field and tolerates a missing file`() throws {
+        let root = try TestSupport.temporaryDirectory("store")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/nested/state.json")
+
+        #expect(store.load().prompts.isEmpty)
+
+        let seen = Date(timeIntervalSince1970: 1)
+        var metadata = AppMetadata()
+        metadata.lastSeen["session"] = seen
+        metadata.prompts["session"] = "prompt"
+        metadata.arguments["session"] = "--model fable"
+        metadata.resumeIDs["session"] = "abc"
+        metadata.sessionsByWorktree["/w"] = "session"
+        metadata.agentVersions["session"] = "2.1.239"
+        store.update { $0 = metadata }
+
+        let loaded = store.load()
+        #expect(loaded.prompts["session"] == "prompt")
+        #expect(loaded.arguments["session"] == "--model fable")
+        #expect(loaded.resumeIDs["session"] == "abc")
+        #expect(loaded.sessionsByWorktree["/w"] == "session")
+        #expect(loaded.lastSeen["session"] == seen)
+        // The tolerant decoder once skipped this field, so every
+        // reload silently dropped the recorded versions and the
+        // session strip never showed one.
+        #expect(loaded.agentVersions["session"] == "2.1.239")
+    }
+
+    @Test
+    func `changes made at the same moment are all kept`() async throws {
+        let root = try TestSupport.temporaryDirectory("store-update")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Loading, changing and saving as three steps kept only the
+        // last writer's copy: everything saved while it held its own
+        // was overwritten, which is how a branch's cached pull
+        // requests and a worktree's recorded session went missing.
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0 ..< 20 {
+                group.addTask {
+                    store.update { $0.prompts["session-" + String(index)] = "prompt" }
+                }
+            }
+        }
+
+        #expect(store.load().prompts.count == 20)
+    }
+
+    @Test
+    func `a fetch inside the minute is reused, and a stale one is not`() throws {
+        let root = try TestSupport.temporaryDirectory("fetch-stamp")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Rebasing wants a current remote, and fetching a large
+        // repository takes seconds: one rebase's fetch serves the
+        // next rebase started right after it, and nothing older.
+        store.update { $0.gitFetchedAt["/repositories/brew"] = Date().addingTimeInterval(-30) }
+        let recent = try #require(store.load().gitFetchedAt["/repositories/brew"])
+        #expect(Date().timeIntervalSince(recent) < SessionService.fetchInterval)
+
+        store.update { $0.gitFetchedAt["/repositories/brew"] = Date().addingTimeInterval(-90) }
+        let stale = try #require(store.load().gitFetchedAt["/repositories/brew"])
+        #expect(Date().timeIntervalSince(stale) >= SessionService.fetchInterval)
+    }
+
+    @Test
+    func `a load after an update is served from memory`() throws {
+        let root = try TestSupport.temporaryDirectory("store-memory")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+
+        // Views ask models per row and models ask the store; each
+        // ask was a whole-file read and JSON decode on the main
+        // thread. The in-memory copy answers even with the file
+        // gone, which is what proves no read happened.
+        store.update { $0.prompts["session"] = "prompt" }
+        try FileManager.default.removeItem(atPath: file)
+
+        #expect(store.load().prompts["session"] == "prompt")
+    }
+
+    @Test
+    func `saving an unchanged value writes nothing`() throws {
+        let root = try TestSupport.temporaryDirectory("store-unchanged")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+
+        var metadata = AppMetadata()
+        metadata.prompts["session"] = "prompt"
+        store.update { $0 = metadata }
+        try FileManager.default.removeItem(atPath: file)
+
+        // The poll saves its sidebar snapshot every tick and most
+        // ticks change nothing; an equal value must not be encoded
+        // or written again.
+        store.update { $0 = metadata }
+        #expect(FileManager.default.fileExists(atPath: file) == false)
+
+        metadata.prompts["other"] = "changed"
+        store.update { $0 = metadata }
+        #expect(FileManager.default.fileExists(atPath: file))
+    }
+
+    @Test
+    func `decoding tolerates files written before new fields existed`() throws {
+        let root = try TestSupport.temporaryDirectory("store-old")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        try #"{"prompts":{"session":"keep me"}}"#.write(toFile: file, atomically: true, encoding: .utf8)
+
+        let loaded = MetadataStore(file: file).load()
+        #expect(loaded.prompts["session"] == "keep me")
+        #expect(loaded.cachedSidebar.isEmpty)
+        #expect(loaded.sessionsByWorktree.isEmpty)
+    }
+
+    @Test
+    func `saving evicts the oldest cache entries beyond each cap`() throws {
+        let root = try TestSupport.temporaryDirectory("store-caps")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        // Stamped a second apart ending now, so every entry is well
+        // inside the week the age sweep keeps and only the count
+        // caps decide; one entry a week and a bit old proves the
+        // sweep takes it whatever the count.
+        let now = Date()
+        var metadata = AppMetadata()
+        for age in 0 ... 80 {
+            metadata.conversationCache["conversation-\(age)"] =
+                CachedConversation(savedAt: now.addingTimeInterval(TimeInterval(age - 80)))
+        }
+        for age in 0 ... 40 {
+            metadata.pullRequestListsCache["listing-\(age)"] =
+                CachedPullRequestList(summaries: [], savedAt: now.addingTimeInterval(TimeInterval(age - 40)))
+        }
+        metadata.enrichedSummaryCache["ancient"] =
+            CachedSummary(
+                summary: PullRequestSummary(
+                    number: 1,
+                    title: "old",
+                    url: "",
+                    headBranch: "old",
+                    mergeable: "",
+                    reviewDecision: "",
+                    checks: "",
+                ),
+                savedAt: now.addingTimeInterval(-700_000),
+            )
+        store.update { $0 = metadata }
+
+        let loaded = store.load()
+        #expect(loaded.conversationCache.count == 80)
+        #expect(loaded.conversationCache["conversation-0"] == nil)
+        #expect(loaded.conversationCache["conversation-80"] != nil)
+        #expect(loaded.pullRequestListsCache.count == 40)
+        #expect(loaded.pullRequestListsCache["listing-0"] == nil)
+        #expect(loaded.pullRequestListsCache["listing-40"] != nil)
+        #expect(loaded.enrichedSummaryCache["ancient"] == nil)
+    }
+
+    @Test
+    func `round trips the cached sidebar snapshot`() throws {
+        let root = try TestSupport.temporaryDirectory("store-cache")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let store = MetadataStore(file: root + "/state.json")
+
+        var repository = CachedRepository()
+        repository.name = "Sanductor"
+        repository.fullName = "octocat/example"
+        repository.path = "/r"
+        var worktree = CachedWorktree()
+        worktree.branch = "agent/fix"
+        worktree.path = "/w"
+        repository.worktrees = [worktree]
+        var metadata = AppMetadata()
+        metadata.cachedSidebar = [repository]
+        store.update { $0 = metadata }
+
+        let cached = store.load().cachedSidebar
+        #expect(cached.first?.fullName == "octocat/example")
+        #expect(cached.first?.worktrees.first?.branch == "agent/fix")
+    }
+
+    @Test
+    func `an update that changes nothing writes nothing`() throws {
+        let root = try TestSupport.temporaryDirectory("store-unchanged")
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let file = root + "/state.json"
+        let store = MetadataStore(file: file)
+        store.update { $0.prompts["session"] = "prompt" }
+        let written = try #require(
+            FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date,
+        )
+
+        // The sidebar cache and the seen times are written on every
+        // reading; holding what the file already holds must not
+        // re-encode and replace it.
+        store.update { $0.prompts["session"] = "prompt" }
+        let after = try #require(FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date)
+        #expect(after == written)
+
+        // A real change still lands.
+        store.update { $0.prompts["session"] = "another" }
+        #expect(store.load().prompts["session"] == "another")
+    }
+}

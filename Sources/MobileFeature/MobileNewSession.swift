@@ -1,6 +1,6 @@
 #if os(iOS)
-    import AgentIDEDomain
-    import AgentIDEInterface
+    import SanductorDomain
+    import SanductorInterface
     import SwiftUI
 
     struct MobileNewSession: View {
