@@ -44,6 +44,7 @@ struct PullRequestCreateForm: View {
         }
         .padding(Self.spacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onDisappear { model.flushDraft() }
     }
 
     // MARK: Private

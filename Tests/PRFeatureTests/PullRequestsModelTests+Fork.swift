@@ -81,6 +81,7 @@ extension PullRequestsModelTests {
 
         // A reload of a fresh model still restores the draft, which
         // is what the draft is for.
+        model.flushDraft()
         let reopened = makeModel(items: [item(branch: "feature", ahead: 2)], metadataFile: metadataFile)
         await reopened.reload()
         #expect(reopened.prBody == "Why it matters")

@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SanductorDomain
 import SwiftTerm
 
@@ -53,6 +54,21 @@ final class PaneTerminalView: TerminalView {
     /// Discards the herdr client and attaches afresh, for a pane
     /// that stopped drawing; nil on a local shell, which has none.
     var onReattach: (() -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if unsafe window != nil {
+            // Metal keeps frame preparation and drawing off the main thread.
+            // SwiftTerm retains Core Graphics if Metal cannot start.
+            try? setUseMetal(true)
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // SwiftTerm's Metal drawing view must not intercept clicks and focus.
+        let hit = super.hitTest(point)
+        return hit?.layer is CAMetalLayer ? self : hit
+    }
 
     /// Round native drags through the view's input API, without escaping
     /// SwiftTerm's locked selection state.

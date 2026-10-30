@@ -1,3 +1,4 @@
+import AppKit
 import SanductorData
 import SanductorDomain
 import SwiftUI
@@ -95,6 +96,7 @@ public struct PullRequestsView: View {
         // request to poll for until Open PR creates it.
         .task(id: identity) {
             if loadedIdentity != identity {
+                model.flushDraft()
                 model = makeModel()
                 loadedIdentity = identity
                 await model.reload()
@@ -103,6 +105,9 @@ public struct PullRequestsView: View {
             } else if model.needsCreateForm == false {
                 await model.reload(keepingSelection: true)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.flushDraft()
         }
         .onChange(of: model.scope) {
             Task {

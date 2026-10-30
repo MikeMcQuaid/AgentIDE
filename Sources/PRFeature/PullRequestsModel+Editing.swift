@@ -30,6 +30,7 @@ extension PullRequestsModel {
             return
         }
 
+        flushDraft()
         editingNumber = selected.number
         loadingDraft = true
         prTitle = selected.title

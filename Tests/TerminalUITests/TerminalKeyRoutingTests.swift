@@ -1,4 +1,5 @@
 import AppKit
+import Metal
 import SwiftTerm
 @testable import TerminalUI
 import Testing
@@ -6,6 +7,50 @@ import Testing
 @MainActor
 struct TerminalKeyRoutingTests {
     // MARK: Internal
+
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil), arguments: [false, true], [false, true])
+    func `terminal hit targets accept focus and typed keys`(herdrBacked: Bool, metal: Bool) throws {
+        let pane = try Self.focusedPane(herdrBacked: herdrBacked)
+        defer { pane.window.close() }
+        try pane.view.setUseMetal(metal)
+        try #require(pane.window.makeFirstResponder(nil))
+        let point = NSPoint(x: pane.view.bounds.midX, y: pane.view.bounds.midY)
+        let hit = try #require(pane.window.contentView?.hitTest(point))
+        #expect(hit === pane.view)
+        // Headless windows cannot become key; focus the hit target AppKit would choose.
+        try #require(hit.acceptsFirstResponder)
+        try #require(pane.window.makeFirstResponder(hit))
+        #expect(pane.window.firstResponder === pane.view)
+        try pane.window.firstResponder?.keyDown(with: #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: pane.window.windowNumber,
+            context: nil,
+            characters: "a",
+            charactersIgnoringModifiers: "a",
+            isARepeat: false,
+            keyCode: 0,
+        )))
+        #expect(String(bytes: pane.capture.bytes, encoding: .utf8) == "a")
+    }
+
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil))
+    func `terminal hit testing preserves scroll controls and hidden panes`() throws {
+        let pane = try Self.focusedPane(herdrBacked: false)
+        defer { pane.window.close() }
+        pane.view.scrollerStyle = .legacy
+        pane.view.feed(text: String(repeating: "line\r\n", count: 100))
+        pane.view.layoutSubtreeIfNeeded()
+        let scroller = try #require(pane.view.subviews.compactMap { $0 as? NSScroller }.first)
+        #expect(scroller.isHidden == false)
+        let point = scroller.convert(NSPoint(x: scroller.bounds.midX, y: scroller.bounds.midY), to: pane.view)
+        #expect(pane.window.contentView?.hitTest(point) === scroller)
+        #expect(pane.window.contentView?.hitTest(NSPoint(x: -1, y: -1)) == nil)
+        pane.view.isHidden = true
+        #expect(pane.window.contentView?.hitTest(point) == nil)
+    }
 
     @Test(arguments: [false, true], [
         (("\u{F700}", UInt16(126)), ("\u{1B}[1;3A", "\u{1B}\u{1B}[A")),
