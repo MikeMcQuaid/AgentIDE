@@ -271,6 +271,15 @@ the wheel as `terminal.scroll`. The channel reads its client through
 the pipe's readability handler, never a blocking read: every mounted
 pane keeps a client, most of them silent, and reads that wait on each
 other left a fresh attach blank until some other pane's agent spoke.
+Mac and phone terminals enable SwiftTerm's Metal renderer when attached
+to a window, falling back to Core Graphics if Metal is unavailable.
+On the Mac, its render loop prepares and draws frames off the main
+thread. SwiftTerm owns frame scheduling and keeps per-row GPU buffers,
+rebuilding only dirty rows.
+Pointer hits on the Mac's Metal surface go to the terminal view, so
+clicking gives the terminal keyboard focus rather than its drawing view.
+Keystrokes go straight to the transport without a main-queue buffer;
+herdr pastes already carry their complete bracketed payload in one send.
 Rules that follow from that shape:
 
 - **Visited agent panes stay mounted across sidebar selections.**
@@ -1697,7 +1706,10 @@ steps.
   description up to date with what was actually pushed before the
   pull request merges.
 - **The creation form** shows when the branch has no open pull request:
-  title, body and template as fields, with drafts saved as typed.
+  title, body and template as fields, with drafts saved after typing
+  has been quiet for 350 ms. Pending text is saved before leaving the
+  form or quitting, and retains its original branch and pull request
+  key. Cancelling an edit discards its pending save too.
   Creation selects the new pull request and unlocks the form before
   assigning its closing issues in a background task.
   GitHub's closing issue references identify issues

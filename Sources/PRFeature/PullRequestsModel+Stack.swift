@@ -36,6 +36,7 @@ extension PullRequestsModel {
             return nil
         }
 
+        flushDraft()
         stacking.selected = branch
         if let worktreePath {
             StackSelection.remember(branch, for: worktreePath)

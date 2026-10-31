@@ -5,6 +5,8 @@ import SanductorDomain
 /// from the model body for length: a branch's unfinished title, body
 /// and template survive leaving the tab and quitting the app.
 extension PullRequestsModel {
+    private static let draftSettleMilliseconds = 350
+
     /// The worktree this tab is for. Found by path first: a
     /// worktree's branch changes under the app whenever an agent or
     /// a restack checks another one out, and matching on the name
@@ -87,24 +89,54 @@ extension PullRequestsModel {
         discloseInTemplate()
     }
 
-    /// Saves the drafted title, body and template for this branch as
-    /// they change; the model itself is rebuilt whenever the branch
-    /// changes, which is what used to lose the writing.
-    func saveDraft(defaults: (title: String, body: String)? = nil) {
+    /// Coalesces typing, retaining the draft's key across navigation.
+    func saveDraft(afterDelay: Bool = false, defaults: (title: String, body: String)? = nil) {
         guard loadingDraft == false, let key = draftKey else {
             return
         }
 
-        store.update { metadata in
-            metadata.pullRequestDrafts[key] = PullRequestFormDraft(
+        if pendingDraft?.key != key {
+            flushDraft()
+        }
+        let previous = pendingDraft?.value ?? store.load().pullRequestDrafts[key]
+        pendingDraft = (
+            key,
+            PullRequestFormDraft(
                 title: prTitle,
                 body: prBody,
                 template: prTemplate,
                 labels: prLabels,
                 isDraft: prIsDraft,
-                defaultTitle: defaults?.title ?? metadata.pullRequestDrafts[key]?.defaultTitle,
-                defaultBody: defaults?.body ?? metadata.pullRequestDrafts[key]?.defaultBody,
-            )
+                defaultTitle: defaults?.title ?? previous?.defaultTitle,
+                defaultBody: defaults?.body ?? previous?.defaultBody,
+            ),
+        )
+        draftSaveTask?.cancel()
+        if afterDelay {
+            draftSaveTask = Task {
+                try? await Task.sleep(for: .milliseconds(Self.draftSettleMilliseconds))
+                guard Task.isCancelled == false else {
+                    return
+                }
+
+                flushDraft()
+            }
+        } else {
+            flushDraft()
+        }
+    }
+
+    /// Saves before leaving the form or terminating the app.
+    func flushDraft() {
+        draftSaveTask?.cancel()
+        draftSaveTask = nil
+        guard let pendingDraft else {
+            return
+        }
+
+        self.pendingDraft = nil
+        store.update { metadata in
+            metadata.pullRequestDrafts[pendingDraft.key] = pendingDraft.value
         }
     }
 
@@ -115,7 +147,7 @@ extension PullRequestsModel {
     /// live one. Title, body and template each answer for
     /// themselves, since they are edited separately.
     func loadDraft() {
-        guard let key = draftKey, let draft = store.load().pullRequestDrafts[key] else {
+        guard let key = draftKey, pendingDraft?.key != key, let draft = store.load().pullRequestDrafts[key] else {
             return
         }
 
@@ -145,6 +177,11 @@ extension PullRequestsModel {
             return
         }
 
+        if pendingDraft?.key == key {
+            draftSaveTask?.cancel()
+            draftSaveTask = nil
+            pendingDraft = nil
+        }
         store.update { metadata in
             metadata.pullRequestDrafts.removeValue(forKey: key)
         }

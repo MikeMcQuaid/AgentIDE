@@ -178,7 +178,7 @@ final class PullRequestsModel {
     // swiftlint:enable function_body_length
 
     deinit {
-        // Tasks are owned by the view's lifetime.
+        // A pending draft save retains the model until it finishes.
     }
 
     // MARK: Internal
@@ -255,6 +255,9 @@ final class PullRequestsModel {
     /// Suppresses saving while a draft is restored, so restoring
     /// never writes back what it just read.
     var loadingDraft = false
+
+    @ObservationIgnored var draftSaveTask: Task<Void, Never>?
+    @ObservationIgnored var pendingDraft: (key: String, value: PullRequestFormDraft)?
 
     /// True while a pull request opens, and while a push, rebase
     /// or restack runs: either way the creation form keeps every
@@ -362,15 +365,15 @@ final class PullRequestsModel {
     /// The pull request creation form's fields; the template loads
     /// from the repository on reload when the form shows.
     var prTitle = "" {
-        didSet { saveDraft() }
+        didSet { saveDraft(afterDelay: true) }
     }
 
     var prBody = "" {
-        didSet { saveDraft() }
+        didSet { saveDraft(afterDelay: true) }
     }
 
     var prTemplate = "" {
-        didSet { saveDraft() }
+        didSet { saveDraft(afterDelay: true) }
     }
 
     /// The labels the pull request opens with, from the repository's

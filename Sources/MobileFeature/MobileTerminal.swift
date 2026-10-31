@@ -250,6 +250,14 @@
         var onSize: (() -> Void)?
         var shiftModifier = false
 
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil {
+                // SwiftTerm retains Core Graphics if Metal cannot start.
+                try? setUseMetal(true)
+            }
+        }
+
         override func insertText(_ text: String) {
             super.insertText(shiftModifier ? text.uppercased() : text)
             resetModifiers()
