@@ -19,7 +19,6 @@ public extension DashboardModel {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         for index in groups.indices
             where groups[index].repository.path == repository.path

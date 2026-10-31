@@ -1,10 +1,8 @@
 import Foundation
 
 /// Which agent events notify, chime and count in the Dock badge,
-/// set in the Settings window. Every toggle defaults on; only the
-/// completed turn has a default sound, matching what the app always
-/// did, and new output deliberately has no sound at all: it would
-/// chime per burst until the turn ended.
+/// set in the Settings window. Every toggle defaults on; the
+/// completed turn and input request have their own sounds.
 public enum NotificationPreferences {
     // MARK: Public
 
@@ -12,7 +10,6 @@ public enum NotificationPreferences {
     public enum Event: CaseIterable, Sendable {
         case done
         case blocked
-        case output
 
         // MARK: Public
 
@@ -26,45 +23,23 @@ public enum NotificationPreferences {
 
             case .blocked:
                 "notifyNeedsInput"
-
-            case .output:
-                "notifyOutput"
             }
         }
 
-        /// The Dock badge toggle's storage key.
-        public var badgeKey: String {
-            switch self {
-            case .done:
-                "badgeDone"
-
-            case .blocked:
-                "badgeNeedsInput"
-
-            case .output:
-                "badgeOutput"
-            }
-        }
-
-        /// The sound path's storage key; nil for output, which never
-        /// chimes. The completed turn keeps the key the original
-        /// picker wrote.
-        public var soundKey: String? {
+        /// The sound path's storage key. The completed turn keeps
+        /// the key the original picker wrote.
+        public var soundKey: String {
             switch self {
             case .done:
                 CompletionSound.key
 
             case .blocked:
                 "needsInputSound"
-
-            case .output:
-                nil
             }
         }
 
         /// The sound played when none was chosen: the chime the
-        /// completed turn always had, a ping for the one state that
-        /// needs a person, silence for the rest.
+        /// completed turn always had and a ping for input requests.
         public var defaultSound: String {
             switch self {
             case .done:
@@ -72,11 +47,16 @@ public enum NotificationPreferences {
 
             case .blocked:
                 "/System/Library/Sounds/Ping.aiff"
-
-            case .output:
-                ""
             }
         }
+    }
+
+    /// The Dock badge toggle's storage key.
+    public static let badgeKey = "badgeNeedsInput"
+
+    /// Whether agents waiting for input count in the Dock badge.
+    public static var badges: Bool {
+        boolDefaultingTrue(badgeKey)
     }
 
     /// Whether an event posts at all; absent means on.
@@ -84,19 +64,9 @@ public enum NotificationPreferences {
         boolDefaultingTrue(event.enabledKey)
     }
 
-    /// Whether an event's worktrees count in the Dock badge; absent
-    /// means on.
-    public static func badges(_ event: Event) -> Bool {
-        boolDefaultingTrue(event.badgeKey)
-    }
-
     /// The event's chosen sound path; the empty string is silence.
     public static func sound(for event: Event) -> String {
-        guard let key = event.soundKey else {
-            return ""
-        }
-
-        return UserDefaults.standard.string(forKey: key) ?? event.defaultSound
+        UserDefaults.standard.string(forKey: event.soundKey) ?? event.defaultSound
     }
 
     // MARK: Private

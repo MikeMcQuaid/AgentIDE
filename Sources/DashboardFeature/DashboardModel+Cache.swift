@@ -96,7 +96,6 @@ extension DashboardModel {
                     session: nil,
                     isDirty: worktree.isDirty,
                     aheadOfUpstream: worktree.aheadOfUpstream,
-                    hasUnread: false,
                     aheadOfDefault: worktree.aheadOfDefault,
                     behindDefault: worktree.behindDefault,
                     behindUpstream: worktree.behindUpstream,

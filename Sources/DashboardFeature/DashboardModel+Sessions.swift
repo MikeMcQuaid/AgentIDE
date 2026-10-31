@@ -345,7 +345,6 @@ public extension DashboardModel {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         deletingPaths.insert(path)
         if let index = groups.firstIndex(where: { $0.repository.path == repository.path }) {

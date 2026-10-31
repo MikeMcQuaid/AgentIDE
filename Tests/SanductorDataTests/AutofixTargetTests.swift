@@ -13,7 +13,7 @@ struct AutofixTargetTests {
             name: "running", agent: .claudeCode, status: .running, paneID: "pane", activity: .done,
         )
         let item = WorktreeItem(
-            worktree: worktree, session: session, isDirty: false, aheadOfUpstream: 0, hasUnread: false,
+            worktree: worktree, session: session, isDirty: false, aheadOfUpstream: 0,
         )
         let group = RepositoryGroup(repository: repository, items: [item], defaultBranch: "main")
         let summary = PullRequestSummary(

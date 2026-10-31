@@ -14,12 +14,6 @@ struct NotificationsSettingsPane: View {
         Form {
             eventRow(.done, title: "Agent finished", detail: "A turn completed; the answer is waiting.")
             eventRow(.blocked, title: "Agent needs input", detail: "A question or approval is waiting.")
-            eventRow(
-                .output,
-                title: "Agent output",
-                detail: "Unread output once the agent pauses for you; streaming output "
-                    + "never counts, and this never chimes.",
-            )
         }
         .formStyle(.grouped)
     }
@@ -27,7 +21,6 @@ struct NotificationsSettingsPane: View {
     // MARK: Private
 
     private static let iconSpacing: CGFloat = 6
-    private static let dotSize: CGFloat = 6
 
     private func eventRow(
         _ event: NotificationPreferences.Event,
@@ -39,13 +32,13 @@ struct NotificationsSettingsPane: View {
                 statusIcon(for: event)
                 Toggle(title, isOn: toggleBinding(key: event.enabledKey))
             }
-            Toggle("Count in the Dock badge", isOn: toggleBinding(key: event.badgeKey))
+            if event == .blocked {
+                Toggle("Count in the Dock badge", isOn: toggleBinding(key: NotificationPreferences.badgeKey))
+            }
             Text(detail)
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
-            if event.soundKey != nil {
-                SoundPicker(event: event)
-            }
+            SoundPicker(event: event)
         }
     }
 
@@ -65,13 +58,6 @@ struct NotificationsSettingsPane: View {
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
                 .hoverHelp("The sidebar's waiting-on-input icon")
-
-        case .output:
-            Circle()
-                .fill(.tint)
-                .frame(width: Self.dotSize, height: Self.dotSize)
-                .accessibilityHidden(true)
-                .hoverHelp("The sidebar's unread dot")
         }
     }
 
@@ -141,11 +127,7 @@ private struct SoundPicker: View {
         Binding(
             get: { chosen },
             set: { path in
-                // The picker only renders for events with a sound
-                // slot, so the key is always there in practice.
-                if let key = event.soundKey {
-                    UserDefaults.standard.set(path, forKey: key)
-                }
+                UserDefaults.standard.set(path, forKey: event.soundKey)
                 generation += 1
                 CompletionSound.play(path: path)
             },

@@ -20,7 +20,6 @@ extension SessionNavigationTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         let groups = [
             RepositoryGroup(

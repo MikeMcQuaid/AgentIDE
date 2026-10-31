@@ -24,7 +24,6 @@ extension PullRequestStackTests {
             ),
             isDirty: state == "dirty",
             aheadOfUpstream: 1,
-            hasUnread: false,
         )
         let model = fixtures.makeModel(
             items: [fixtures.item(branch: "middle", ahead: 1), holder],
@@ -102,7 +101,6 @@ extension PullRequestStackTests {
             session: nil,
             isDirty: true,
             aheadOfUpstream: 1,
-            hasUnread: false,
         )
         let model = fixtures.makeModel(
             items: [fixtures.item(branch: "feature", ahead: 1), dirty],

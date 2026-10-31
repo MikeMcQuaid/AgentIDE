@@ -123,7 +123,6 @@ public extension SessionService {
                 session: nil,
                 isDirty: facts?.isDirty ?? false,
                 aheadOfUpstream: facts?.aheadOfUpstream,
-                hasUnread: false,
             ))
         }
         return items

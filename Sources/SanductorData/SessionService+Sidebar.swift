@@ -260,40 +260,23 @@ public extension SessionService {
         return await git.aheadBehind(worktreePath: worktree.path, baseRef: baseRef)
     }
 
-    /// One worktree's row: its session, unread state and git counts.
+    /// One worktree's row: its session, activity and git counts.
     func item(
         worktree: Worktree,
         baseRef: String?,
         facts: BranchFacts?,
         reading: SidebarReading,
     ) async -> WorktreeItem {
-        let metadata = reading.metadata
-        let activity = reading.activity
         let session = liveSession(of: worktree, reading: reading)
         let past = pastSessions(of: worktree, liveSession: session)
 
-        // Unread is any agent activity since the worktree was last
-        // viewed: the event spool and transcript modification count;
-        // herdr keeps no output clock, and the spool and transcripts
-        // already cover every agent message.
         var lastEvent = Date.distantPast
-        if let session, let spooled = activity[session.name] {
+        if let session, let spooled = reading.activity[session.name] {
             lastEvent = spooled
         }
         if let newest = past.first {
             lastEvent = max(lastEvent, Date(timeIntervalSince1970: TimeInterval(newest.modifiedAt)))
         }
-        let seen = metadata.seenAt[worktree.path] ?? session.flatMap { metadata.lastSeen[$0.name] } ?? startedAt
-        // The selected worktree is on screen, so whatever arrived is
-        // seen as it is read, and written down only then: a stamp
-        // written on every reading rewrote the metadata file every
-        // few seconds to say nothing new.
-        let isSelected = worktree.path == selectedWorktreePath()
-        if isSelected, lastEvent > seen {
-            acknowledgeActivity(worktreePath: worktree.path)
-        }
-        let unread = metadata.unreadMarks.contains(worktree.path) || (isSelected == false && lastEvent > seen)
-
         // The counts and the date came with the repository's own
         // read; only uncommitted work is the worktree's to answer,
         // and only a detached head has to be asked the rest.
@@ -312,7 +295,6 @@ public extension SessionService {
             session: session,
             isDirty: isDirty,
             aheadOfUpstream: known?.aheadOfUpstream,
-            hasUnread: unread,
             pastSessions: past,
             aheadOfDefault: known?.ahead,
             behindDefault: known?.behind,

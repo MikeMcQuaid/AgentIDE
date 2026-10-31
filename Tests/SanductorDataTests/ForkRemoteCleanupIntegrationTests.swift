@@ -172,7 +172,6 @@ struct ForkRemoteCleanupIntegrationTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: 0,
-            hasUnread: false,
         )
     }
 }

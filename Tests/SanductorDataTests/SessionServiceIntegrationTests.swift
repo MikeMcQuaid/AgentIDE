@@ -344,29 +344,4 @@ struct SessionServiceIntegrationTests {
         #expect(found.worktreePath == worktreePath)
         #expect(FileManager.default.fileExists(atPath: found.worktreePath))
     }
-
-    @Test
-    func `manual unread marks survive acknowledgement and clear on viewing`() async throws {
-        let world = try await World.make()
-        defer { world.tearDown() }
-
-        let path = world.repository.path
-        let before = await world.service.overview()
-        let main = try #require(before.groups.first?.items.first { $0.worktree.path == path })
-        #expect(main.hasUnread == false)
-
-        world.service.markUnread(worktreePath: path)
-        let marked = await world.service.overview()
-        #expect(marked.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == true)
-
-        // Staying on screen acknowledges activity without clearing
-        // the deliberate mark.
-        world.service.acknowledgeActivity(worktreePath: path)
-        let acknowledged = await world.service.overview()
-        #expect(acknowledged.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == true)
-
-        world.service.markSeen(worktreePath: path)
-        let seen = await world.service.overview()
-        #expect(seen.groups.first?.items.first { $0.worktree.path == path }?.hasUnread == false)
-    }
 }

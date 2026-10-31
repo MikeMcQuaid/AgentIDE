@@ -19,7 +19,7 @@ public extension DashboardModel {
     }
 
     /// Reloads everything and notifies about newly finished or
-    /// newly unread sessions. Readings never stack: at most one
+    /// newly blocked sessions. Readings never stack: at most one
     /// runs and one waits, and a call arriving while one runs joins
     /// the queued follow-up with every other waiter, so the poll, a
     /// launch's listing retries and an action's refresh cost one
@@ -155,9 +155,7 @@ public extension DashboardModel {
     }
 
     /// One whole reading of the system; only `refresh` runs it, one
-    /// at a time. The reading itself counts the selected worktree's
-    /// activity as seen, since it is on screen; a manual unread
-    /// mark survives.
+    /// at a time.
     private func performRefresh() async {
         let forces = pendingForces
         pendingForces = []

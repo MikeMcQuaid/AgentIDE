@@ -134,7 +134,6 @@ extension PullRequestsModelTests {
             session: session,
             isDirty: false,
             aheadOfUpstream: ahead,
-            hasUnread: false,
             behindDefault: behind,
         )
     }

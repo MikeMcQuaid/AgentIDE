@@ -67,7 +67,7 @@ Settings (Cmd-,) controls:
 - **Schedules**: Manage recurring repository jobs or start them now.
 - **Sessions**: Inspect and stop agents and browser pages.
 - **Review**: Choose reviewers, models, effort and review or fix prompts.
-- **Notifications**: Choose notifications, Dock badges and sounds.
+- **Notifications**: Choose finished-turn and input notifications, sounds and a Dock badge for agents waiting for input.
 - **Fonts**: Customise fonts and sizes.
 - **Editor**: Choose the external editor opened with Cmd-click.
 - **Advanced**: Set paths, refresh intervals, idle sleep and logging.

@@ -43,7 +43,6 @@ extension SessionNavigationTests {
             session: AgentSession(name: "agent", agent: .codexCLI, status: .running, activity: .working),
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         fixture.model.groups = [
             RepositoryGroup(repository: fixture.repository, items: [first]),

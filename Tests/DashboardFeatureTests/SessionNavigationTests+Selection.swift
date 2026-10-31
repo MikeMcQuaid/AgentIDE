@@ -121,7 +121,6 @@ extension SessionNavigationTests.Fixture {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
     }
 }

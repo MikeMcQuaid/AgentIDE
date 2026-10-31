@@ -31,7 +31,7 @@ struct AutofixReadinessTests {
         )
         let session = AgentSession(name: "agent", agent: .codexCLI, status: .running, paneID: "pane", activity: .idle)
         let item = WorktreeItem(
-            worktree: worktree, session: session, isDirty: true, aheadOfUpstream: 0, hasUnread: false,
+            worktree: worktree, session: session, isDirty: true, aheadOfUpstream: 0,
         )
         let group = RepositoryGroup(repository: world.repository, items: [item], defaultBranch: "main")
         let summary = PullRequestSummary(

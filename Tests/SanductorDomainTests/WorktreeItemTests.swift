@@ -9,7 +9,6 @@ struct WorktreeItemTests {
             session: nil,
             isDirty: true,
             aheadOfUpstream: 1,
-            hasUnread: true,
             aheadOfDefault: 2,
             behindDefault: 3,
             behindUpstream: 4,

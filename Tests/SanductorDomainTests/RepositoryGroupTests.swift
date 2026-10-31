@@ -36,7 +36,6 @@ struct RepositoryGroupTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
     }
 }

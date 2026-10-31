@@ -20,7 +20,6 @@ extension SessionNavigationTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         fixture.model.groups = [RepositoryGroup(repository: fixture.repository, items: [item, other])]
         try FileManager.default.createDirectory(atPath: other.worktree.path, withIntermediateDirectories: true)

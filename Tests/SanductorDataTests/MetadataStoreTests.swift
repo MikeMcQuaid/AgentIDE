@@ -13,9 +13,7 @@ struct MetadataStoreTests {
 
         #expect(store.load().prompts.isEmpty)
 
-        let seen = Date(timeIntervalSince1970: 1)
         var metadata = AppMetadata()
-        metadata.lastSeen["session"] = seen
         metadata.prompts["session"] = "prompt"
         metadata.arguments["session"] = "--model fable"
         metadata.resumeIDs["session"] = "abc"
@@ -28,11 +26,25 @@ struct MetadataStoreTests {
         #expect(loaded.arguments["session"] == "--model fable")
         #expect(loaded.resumeIDs["session"] == "abc")
         #expect(loaded.sessionsByWorktree["/w"] == "session")
-        #expect(loaded.lastSeen["session"] == seen)
         // The tolerant decoder once skipped this field, so every
         // reload silently dropped the recorded versions and the
         // session strip never showed one.
         #expect(loaded.agentVersions["session"] == "2.1.239")
+    }
+
+    @Test
+    func `legacy unread state is discarded without losing session metadata`() throws {
+        let legacy = Data(#"""
+        {"lastSeen":{"session":1},"seenAt":{"/w":1},"unreadMarks":["/w"],
+         "prompts":{"session":"keep me"},"sessionsByWorktree":{"/w":"session"}}
+        """#.utf8)
+        let metadata = try JSONDecoder().decode(AppMetadata.self, from: legacy)
+        #expect(metadata.prompts["session"] == "keep me")
+        #expect(metadata.sessionsByWorktree["/w"] == "session")
+        let saved = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(metadata)) as? [String: Any])
+        #expect(saved["lastSeen"] == nil)
+        #expect(saved["seenAt"] == nil)
+        #expect(saved["unreadMarks"] == nil)
     }
 
     @Test
@@ -206,8 +218,8 @@ struct MetadataStoreTests {
             FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date,
         )
 
-        // The sidebar cache and the seen times are written on every
-        // reading; holding what the file already holds must not
+        // The sidebar cache is written on every reading;
+        // holding what the file already holds must not
         // re-encode and replace it.
         store.update { $0.prompts["session"] = "prompt" }
         let after = try #require(FileManager.default.attributesOfItem(atPath: file)[.modificationDate] as? Date)

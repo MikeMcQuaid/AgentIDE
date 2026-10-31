@@ -150,7 +150,6 @@ struct RowRetentionTests {
                     session: nil,
                     isDirty: false,
                     aheadOfUpstream: nil,
-                    hasUnread: false,
                 )
             },
         )

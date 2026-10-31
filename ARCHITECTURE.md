@@ -835,13 +835,6 @@ shows a different branch from the one checked out.
   together through `for-each-ref`. Unused fork remotes are left
   out of fetches: a deleted fork must not block unrelated
   work. A failure from a remote still in use remains an error.
-- **Unread.** A worktree is unread when its spool file or transcripts
-  are newer than its per-worktree seen time; viewing records that time
-  and a context menu marks it unread again. The selected worktree is
-  seen as the reading reads it, and its time is written only when
-  something has arrived since: stamping it on every reading rewrote
-  the metadata file every few seconds to say nothing new. Raw terminal
-  output counts for nothing: herdr keeps no output timestamp.
 - **Agent state is an event, not a poll.** The dashboard keeps one
   `herdr agent wait --until <every state but the current>` per running
   agent, so a change refreshes at once; the poll stays for git and as
@@ -908,9 +901,10 @@ shows a different branch from the one checked out.
   or play it in-process as this now does; the cost is that the alert
   volume and the accessibility flash no longer apply. Nothing is
   played into a machine that has announced sleep, and what is
-  mid-play stops then. An exit posts nothing. The Dock badge counts worktrees
-  needing attention, each contribution behind a toggle. Authorisation
-  asks for badges beside alerts and sounds: macOS hides an app's
+  mid-play stops then. An exit posts nothing. The Dock badge counts
+  agents waiting for input, controlled by its own toggle. The What
+  Needs Me Shortcut lists those agents too. Authorisation asks for
+  badges beside alerts and sounds: macOS hides an app's
   `dockTile` badge, and offers no toggle to show it, until the app
   has asked for badges.
 - **Git reads are driven by the file system.** One FSEvents stream
@@ -2001,7 +1995,7 @@ steps.
 | Code, branches, diffs, worktrees | git in the shared workspace | operate host-side, hardened |
 | Conversation history | agent transcripts | read-only |
 | Pull request, CI and review state | GitHub via `gh` | poll, cache with timestamps |
-| Unread markers, prompt history, per-repository settings, session names and resume ids, drafts, blockers, last sidebar snapshot | metadata store | sole owner |
+| Prompt history, per-repository settings, session names and resume ids, drafts, blockers, last sidebar snapshot | metadata store | sole owner |
 | Window frame, display and fullscreen state | `UserDefaults` | sole owner |
 
 The window's own shape is the exception to the metadata store.
@@ -2053,8 +2047,8 @@ new notifier.
 
 The metadata store is `~/Library/Application Support/Sanductor/state.json`,
 outside the shared workspace so agents can neither read nor corrupt it.
-Deleting it loses only unread state, settings and the attribution of
-conversations to deleted worktrees. Rules:
+Deleting it loses settings and the attribution of conversations to
+deleted worktrees. Rules:
 
 - Every change goes through `MetadataStore.update`, which loads, changes
   and saves under one lock. Load-modify-save on a copy silently erased
@@ -2206,7 +2200,7 @@ directory name, as on the Mac. Session labels and herdr IDs remain
 internal. Repository counts count worktrees with sessions. Status mode
 reads the host-provided PR classification and blockers through the shared
 sidebar snapshot; it never queries GitHub inside the sandbox. Host-only
-feedback-loop, load and unread state are not inferred.
+feedback-loop and load state are not inferred.
 Repository listings omit symlinked aliases, matching the desktop and
 creation's physical-path check. Creation accepts listed names, including
 spaces and non-ASCII characters, but rejects path separators and traversal.

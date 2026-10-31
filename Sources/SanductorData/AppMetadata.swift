@@ -16,11 +16,8 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         localReviews = try container.decodeIfPresent([String: LocalReview].self, forKey: .localReviews) ?? [:]
-        lastSeen = try container.decodeIfPresent([String: Date].self, forKey: .lastSeen) ?? [:]
-        seenAt = try container.decodeIfPresent([String: Date].self, forKey: .seenAt) ?? [:]
         conversationBackupAt = try container
             .decodeIfPresent([String: Date].self, forKey: .conversationBackupAt) ?? [:]
-        unreadMarks = try container.decodeIfPresent([String].self, forKey: .unreadMarks) ?? []
         pullRequestCache = try container
             .decodeIfPresent([String: PullRequestSummary].self, forKey: .pullRequestCache) ?? [:]
         organisations = try container
@@ -164,20 +161,10 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// Manual and dependency blocks, shared by both devices through the host.
     public var workBlocks: [WorkBlock] = []
 
-    /// When each session was last seen by the user, for unread state.
-    public var lastSeen: [String: Date] = [:]
-
-    /// When each worktree path was last viewed, for unread state.
-    public var seenAt: [String: Date] = [:]
-
     /// When each worktree's conversation was last copied out of the
     /// sandbox, so a long-running session is copied on a schedule
     /// rather than on every poll.
     public var conversationBackupAt: [String: Date] = [:]
-
-    /// Worktree paths the user marked unread to revisit, cleared by
-    /// viewing them.
-    public var unreadMarks: [String] = []
 
     /// Each branch's last known pull request, keyed by repository
     /// path and branch, so badges survive restarts and green results

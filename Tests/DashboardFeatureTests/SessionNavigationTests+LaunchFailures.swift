@@ -26,7 +26,6 @@ extension SessionNavigationTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         fixture.model.groups[0].items.append(item)
         fixture.model.selection = item
