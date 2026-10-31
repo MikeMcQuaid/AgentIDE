@@ -39,13 +39,8 @@ extension SessionService {
         .events
     }
 
-    func automationWriters(_ state: PullRequestAutomation, threads: [ReviewThread], fresh: Bool) async -> Set<String> {
-        guard await github.isPrivate(repositoryPath: state.repositoryPath, fresh: fresh) else {
-            return []
-        }
-
+    func automationWriters(_ state: PullRequestAutomation, authors: Set<String>, fresh: Bool) async -> Set<String> {
         var verified = Set<String>()
-        let authors = Set(threads.flatMap(\.comments).filter { $0.authorType == "User" }.map(\.author))
         for author in authors where await github.hasWriteAccess(
             login: author, repositoryPath: state.repositoryPath, fresh: fresh,
         ) {

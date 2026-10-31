@@ -5,8 +5,50 @@ import SanductorDomain
 import Testing
 
 struct AutofixLocalTests {
+    @Test(arguments: ["head", "fixed"])
+    func `local findings resolve before GitHub and update the captured review`(commit: String) async throws {
+        let fixture = try AutofixFixture()
+        let review = LocalReview(reviewer: .codexCLI, snapshot: "diff", revision: "revision", threads: [
+            AutofixFixture.thread("local"), AutofixFixture.thread("unfixed", comment: "unfixed"),
+        ])
+        let collection = LocalFeedbackCollection(
+            id: "collection", revision: "revision", configuration: "tools", isPending: false, review: review,
+        )
+        fixture.store.update { metadata in
+            metadata.localReviews["/worktree"] = review
+            metadata.pullRequestAutomation[AutofixFixture.key]?.autofixLocalReviews = true
+            metadata.pullRequestAutomation[AutofixFixture.key]?.autofixReviews = true
+            metadata.pullRequestAutomation[AutofixFixture.key]?.isAutomatic = true
+            metadata.pullRequestAutomation[AutofixFixture.key]?.collection = collection
+        }
+        await fixture.update { state in
+            state.localReview = review
+            state.localCollection = collection
+            state.comments = [AutofixFixture.thread("remote", comment: "remote")]
+            state.writers = ["human"]
+        }
+        let driver = await fixture.driver()
+        let coordinator = AutofixCoordinator()
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        await fixture.complete(addressed: ["local", "remote"], commit: commit)
+        await fixture.update { $0.freshSummaryAvailable = false }
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        let metadata = fixture.store.load()
+        #expect(metadata.localReviews["/worktree"]?.threads.first?.isResolved == true)
+        #expect(metadata.localReviews["/worktree"]?.threads.last?.isResolved == false)
+        let pending = try #require(metadata.pullRequestAutomation[AutofixFixture.key])
+        #expect(pending.collection?.review?.threads.first?.isResolved == true)
+        #expect(pending.attempt != nil)
+        await fixture.update { $0.freshSummaryAvailable = true }
+        await coordinator.refresh(store: fixture.store, driver: driver)
+        let completed = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
+        #expect(completed.resolutions["remote"]?.fixCommit == commit)
+        #expect(completed.attempt == nil)
+        #expect(await fixture.state.resolutions.isEmpty)
+    }
+
     @Test(arguments: AgentKind.allCases)
-    func `local reviews precede required CI and mark only addressed findings`(
+    func `local reviews batch with CI and mark only addressed findings`(
         reviewer: AgentKind,
     ) async throws {
         let fixture = try AutofixFixture()
@@ -27,7 +69,7 @@ struct AutofixLocalTests {
         await fixture.update { $0.localReview = review; $0.localCollection = captured }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         let prompt = try #require(await fixture.state.prompts.first)
-        #expect(prompt.contains("test: FAILURE") == false)
+        #expect(prompt.contains("test: FAILURE"))
         #expect(prompt.contains("Fix fixed"))
         await fixture.complete(addressed: ["fixed"])
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
@@ -35,7 +77,6 @@ struct AutofixLocalTests {
         #expect(saved.threads.first?.isResolved == true)
         #expect(saved.threads.first?.codeContext == "reviewed source")
         #expect(saved.threads.last?.isResolved == false)
-        #expect(await fixture.state.pushes.isEmpty)
         #expect(await fixture.state.resolutions.isEmpty)
     }
 

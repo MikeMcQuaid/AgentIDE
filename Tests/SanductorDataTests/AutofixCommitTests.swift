@@ -9,7 +9,6 @@ struct AutofixCommitTests {
         let fixture = try AutofixFixture()
         fixture.store.update { metadata in
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.handledEvents = ["run:1"]
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
@@ -20,15 +19,11 @@ struct AutofixCommitTests {
         #expect(recovery.commitRequestedHead == "head")
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityStatus
             == "Commit-only prompt sent; waiting for the agent to commit existing fixes")
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 0)
-        #expect(await fixture.state.pushes.isEmpty)
         await fixture.complete()
         await fixture.update { $0.isDirty = false }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
-        #expect(await fixture.state.pushes == ["fixed"])
         #expect(await fixture.state.deliveries.count == 1)
         fixture.store.update { metadata in
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushedCommit = nil
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         await fixture.update { $0.isDirty = true; $0.localHead = "head" }
@@ -36,14 +31,13 @@ struct AutofixCommitTests {
         #expect(await fixture.state.deliveries.count == 1)
     }
 
-    @Test(arguments: [true, false], [true, false])
-    func `uncommitted fixes get one commit follow-up before the app pushes`(
-        reportsResult: Bool, automaticPush: Bool,
+    @Test(arguments: [true, false])
+    func `uncommitted fixes get one commit follow-up before watching resumes`(
+        reportsResult: Bool,
     ) async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { metadata in
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = automaticPush
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         let driver = await fixture.driver()
@@ -60,24 +54,19 @@ struct AutofixCommitTests {
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.count == 2)
         #expect(await fixture.state.deliveries.last?.id == original.id)
-        #expect(await fixture.state.pushes.isEmpty)
         #expect(await fixture.state.deliveries.last?.commitRequestedHead == "head")
         let stored = fixture.store.load()
-        #expect(stored.pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 1)
         let restored = try JSONDecoder().decode(AppMetadata.self, from: JSONEncoder().encode(stored))
         fixture.store.update { $0 = restored }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.count == 2)
         await fixture.update { $0.localHead = "fixed"; $0.isDirty = false }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
-        #expect(await fixture.state.pushes.isEmpty)
         await fixture.complete()
         await fixture.update { $0.isDirty = false; $0.activity = .working }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
-        #expect(await fixture.state.pushes.isEmpty)
         await fixture.update { $0.activity = .done }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
-        #expect(await fixture.state.pushes == (automaticPush ? ["fixed"] : []))
         #expect(await fixture.state.deliveries.count == 2)
     }
 
@@ -118,7 +107,6 @@ struct AutofixCommitTests {
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.count == 1)
-        #expect(await fixture.state.pushes.isEmpty)
     }
 
     @Test
@@ -158,8 +146,8 @@ struct AutofixCommitTests {
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         let state = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
-        #expect(state.loopStatus == "Failed")
-        #expect(state.lastResult.contains("already attempted"))
+        #expect(state.loopStatus == "Running")
+        #expect(state.pending.contains("Watching"))
         #expect(await fixture.state.deliveries.isEmpty)
     }
 

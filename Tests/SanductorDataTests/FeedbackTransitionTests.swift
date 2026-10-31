@@ -5,22 +5,20 @@ import Testing
 struct FeedbackTransitionTests {
     // MARK: Internal
 
-    @Test(arguments: [true, false])
-    func `local completion respects the shared push opt-in`(automaticPush: Bool) async throws {
-        let fixture = try await localFixture(automaticPush: automaticPush)
+    @Test
+    func `local and remote feedback are committed together`() async throws {
+        let fixture = try await localFixture()
         await fixture.complete()
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        #expect(await fixture.state.pushes == (automaticPush ? ["fixed"] : []))
         #expect(await fixture.state.deliveries.count == 1)
         await fixture.update { $0.head = "fixed"; $0.freshHead = "fixed" }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        #expect(await fixture.state.deliveries.last?.sources == [.checks])
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 1)
+        #expect(await fixture.state.deliveries.last?.sources == [.checks, .localReview])
     }
 
     @Test(arguments: [true, false])
     func `local completion cannot push a changed local or remote head`(local: Bool) async throws {
-        let fixture = try await localFixture(automaticPush: true)
+        let fixture = try await localFixture()
         await fixture.complete()
         await fixture.update { value in
             if local {
@@ -30,13 +28,12 @@ struct FeedbackTransitionTests {
             }
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        #expect(await fixture.state.pushes.isEmpty)
         #expect(await fixture.state.deliveries.count == 1)
     }
 
     @Test
     func `starting another local cycle preserves claims and first checks existing feedback`() async throws {
-        let fixture = try await localFixture(automaticPush: false)
+        let fixture = try await localFixture()
         await fixture.complete()
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         let events = fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.handledEvents
@@ -52,7 +49,7 @@ struct FeedbackTransitionTests {
 
     // MARK: Private
 
-    private func localFixture(automaticPush: Bool) async throws -> AutofixFixture {
+    private func localFixture() async throws -> AutofixFixture {
         let fixture = try AutofixFixture()
         let review = LocalReview(reviewer: .codexCLI, snapshot: "diff", revision: "revision", threads: [
             AutofixFixture.thread("local"),
@@ -64,7 +61,6 @@ struct FeedbackTransitionTests {
         fixture.store.update { metadata in
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixLocalReviews = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = automaticPush
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         await fixture.update { $0.localReview = review; $0.localCollection = finished }

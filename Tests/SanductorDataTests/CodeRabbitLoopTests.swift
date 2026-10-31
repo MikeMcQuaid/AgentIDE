@@ -11,23 +11,21 @@ struct CodeRabbitLoopTests {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixCodeRabbit = true
+            value.pullRequestAutomation[AutofixFixture.key]?.recordBotRequest(.codeRabbit, head: "head", date: Date())
             value.pullRequestAutomation[AutofixFixture.key]?.isAutomatic = true
         }
         for _ in 0 ..< 2 {
             await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         }
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
         #expect(await fixture.state.deliveries.isEmpty)
         let restarted = MetadataStore(file: fixture.directory + "/state.json")
         await AutofixCoordinator().refresh(store: restarted, driver: fixture.driver())
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
         await fixture.update { $0.reviewEvents = [review(head: "stale")] }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         #expect(await fixture.state.deliveries.isEmpty)
         await fixture.update { $0.reviewEvents = [review(head: "head")] }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         #expect(await fixture.state.deliveries.count == 1)
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
     }
 
     @Test
@@ -64,7 +62,7 @@ struct CodeRabbitLoopTests {
     }
 
     @Test
-    func `legacy dual selections request only one reviewer without filling the activity log`() async throws {
+    func `legacy dual selections watch quietly without creating requests`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixCopilot = true
@@ -75,11 +73,11 @@ struct CodeRabbitLoopTests {
         let log = fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog == log)
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
+        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.botRequests == nil)
     }
 
     @Test
-    func `changing the chosen reviewer cannot request both even after a restart`() async throws {
+    func `changing the chosen reviewer never restricts observed bot feedback`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixBots = true
@@ -92,13 +90,11 @@ struct CodeRabbitLoopTests {
         try FileManager.default.copyItem(atPath: fixture.directory + "/state.json", toPath: file)
         let restarted = MetadataStore(file: file)
         await AutofixCoordinator().refresh(store: restarted, driver: fixture.driver())
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
         await fixture.update { value in
             value.reviewEvents = [review(head: "head")]
             value.comments = [AutofixFixture.thread("copilot", author: "copilot-pull-request-reviewer", type: "Bot")]
         }
         await AutofixCoordinator().refresh(store: restarted, driver: fixture.driver())
-        #expect(await fixture.state.requestedBots == [.codeRabbit])
         #expect(await fixture.state.deliveries.first?.sources == [.codeRabbit, .copilot])
         #expect(restarted.load().pullRequestAutomation[AutofixFixture.key]?.reviewBot == .copilot)
     }

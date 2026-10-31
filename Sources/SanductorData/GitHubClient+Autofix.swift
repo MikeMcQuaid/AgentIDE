@@ -2,7 +2,7 @@ import Foundation
 import SanductorDomain
 
 extension GitHubClient {
-    /// Job logs, never a whole run's log which could include optional failures.
+    /// Complete logs for every failed job, including optional checks.
     func autofixPrompt(
         _ candidate: AutofixCandidate,
         summary: PullRequestSummary,
@@ -33,20 +33,14 @@ extension GitHubClient {
                 steps: nil,
             )
             guard let log = await jobLog(job, repositoryPath: repositoryPath, complete: true) else {
-                throw SessionServiceError("Waiting for the required job log: " + failure.name)
+                throw SessionServiceError("Waiting for the job log: " + failure.name)
             }
 
-            sections.append(CheckLog.format(
-                log: log,
-                heading: "Required CI · " + failure.name,
-                byteLimit: min(CheckLog.logByteLimit, Self.autofixLogByteBudget / failures.count),
-            ))
+            sections.append("CI · " + failure.name + "\n" + log)
             if isPublic {
                 sections.append(failure.link)
             }
         }
         return sections.joined(separator: "\n\n")
     }
-
-    private static let autofixLogByteBudget = 262_144
 }

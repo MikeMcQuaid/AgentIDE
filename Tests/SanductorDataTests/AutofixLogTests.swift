@@ -9,7 +9,7 @@ struct AutofixLogTests {
     // MARK: Internal
 
     @Test(arguments: ["public", "private", "unknown"])
-    func `required CI prompts condense complete logs and include only public links`(visibility: String) async throws {
+    func `CI prompts include complete optional job logs and only public links`(visibility: String) async throws {
         var lines = (1 ... 600).map { "analyze\tAnalyze\t2026-10-10T11:15:00Z Analyzing file " + String($0) }
         lines[99] = "analyze\tAnalyze\t2026-10-10T11:15:00Z Sources/A.swift:1:1: error: Unused import"
         lines[199] = "tests\tTest\t2026-10-10T11:15:00Z ✘ Test recorded an issue: Expectation failed: submitted"
@@ -24,20 +24,21 @@ struct AutofixLogTests {
         #expect(prompt.contains("Sources/A.swift:1:1: error: Unused import"))
         #expect(prompt.contains("Expectation failed: submitted"))
         #expect(prompt.contains("Analyzing file 99"))
-        #expect(prompt.contains("Analyzing file 300") == false)
-        #expect(prompt.contains("lines cut"))
+        #expect(prompt.contains("Analyzing file 300"))
+        #expect(prompt.contains("lines cut") == false)
         #expect(prompt.contains("https://github.com/o/r/actions") == (visibility == "public"))
-        #expect(prompt.contains("Analyzing file 201") == false)
-        #expect(prompt.contains("2026-10-10T") == false)
-        #expect(prompt.contains("optional") == false)
+        #expect(prompt.contains("Analyzing file 201"))
+        #expect(prompt.contains("2026-10-10T"))
+        #expect(prompt.contains("optional"))
         #expect(await runner.commands == [
             ["gh", "api", "repos/{owner}/{repo}", "--cache", "60s"],
             ["gh", "api", "--allow-escape-sequences", "repos/{owner}/{repo}/actions/jobs/11/logs"],
+            ["gh", "api", "--allow-escape-sequences", "repos/{owner}/{repo}/actions/jobs/22/logs"],
         ])
     }
 
     @Test
-    func `large failure logs are bounded while both ends remain readable`() async throws {
+    func `large failure logs retain every diagnostic`() async throws {
         let log = "error: first diagnostic\n"
             + String(repeating: "error: " + String(repeating: "x", count: 200) + "\n", count: 10_000)
             + "error: final diagnostic"
@@ -49,14 +50,14 @@ struct AutofixLogTests {
         let prompt = try await GitHubClient(runner: runner).autofixPrompt(
             candidate, summary: summary, repositoryPath: "/repo",
         )
-        #expect(prompt.utf8.count < 66_000)
+        #expect(prompt.contains(log))
         #expect(prompt.contains("first diagnostic"))
         #expect(prompt.contains("final diagnostic"))
-        #expect(prompt.contains("log shortened"))
+        #expect(prompt.contains("log shortened") == false)
     }
 
     @Test
-    func `the log budget is shared across all required failures`() async throws {
+    func `all failed logs are captured without a shared truncation budget`() async throws {
         let log = "error: first diagnostic\n"
             + String(repeating: "é", count: 200_000) + "\nerror: final diagnostic"
         let runner = LogRunner(output: log, visibility: "private")
@@ -67,9 +68,9 @@ struct AutofixLogTests {
         let prompt = try await GitHubClient(runner: runner).autofixPrompt(
             candidate, summary: summary, repositoryPath: "/repo",
         )
-        #expect(prompt.utf8.count < 263_000)
-        #expect(prompt.components(separatedBy: "first diagnostic").count == 11)
-        #expect(prompt.components(separatedBy: "final diagnostic").count == 11)
+        #expect(prompt.contains(log))
+        #expect(prompt.components(separatedBy: "first diagnostic").count == 12)
+        #expect(prompt.components(separatedBy: "final diagnostic").count == 12)
     }
 
     // MARK: Private

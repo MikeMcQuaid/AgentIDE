@@ -50,7 +50,7 @@ struct AutofixDeliveryTests {
             #expect(followUp.contains("commit only the fixes you made"))
             #expect(followUp.contains("autofix-attempt.md"))
             #expect(followUp.contains("start another session or push"))
-            #expect(followUp.contains("Sanductor will verify your committed result and handle pushing"))
+            #expect(followUp.contains("Sanductor will verify your committed result and keep watching"))
         }
     }
 

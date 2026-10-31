@@ -23,6 +23,10 @@ struct FeedbackMigrationTests {
         #expect(encoded.contains("autofixLocalCI") == false)
         #expect(encoded.contains("localCICommand") == false)
         #expect(encoded.contains("ciOutput") == false)
+        #expect(encoded.contains("pushAutomatically") == false)
+        #expect(encoded.contains("roundLimit") == false)
+        #expect(encoded.contains("roundsStarted") == false)
+        #expect(encoded.contains("pushClaimed") == false)
     }
 
     @Test
@@ -48,10 +52,8 @@ struct FeedbackMigrationTests {
         let metadata = try JSONDecoder().decode(AppMetadata.self, from: JSONSerialization.data(withJSONObject: json))
         let restored = try #require(metadata.pullRequestAutomation["pr"])
         #expect(restored.isAutomatic == false)
-        #expect(restored.roundLimit == 1)
         #expect(restored.handledEvents == ["local-ci:run"])
         #expect(restored.attempt?.id == "attempt")
-        #expect(restored.attempt?.pushClaimed == false)
         #expect(restored.collection?.isPending == true)
         #expect(restored.resolutions["thread"]?.requested == false)
         #expect(try JSONDecoder().decode(AppMetadata.self, from: JSONEncoder().encode(metadata)) == metadata)

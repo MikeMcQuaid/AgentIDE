@@ -22,11 +22,19 @@ actor AutofixFixture {
     struct State {
         var head = "head"
         var freshHead = "head"
+        var freshSummaryAvailable = true
+        var mergeable = ""
+        var baseBranch = "main"
+        var conflictBase: String? = "base"
+        var containedHeads: Set<String> = []
         var localHead = "head"
         var activity: AgentActivity = .done
         var hasSession = true
         var isDirty = false
+        var requestedReviewers: Set<String> = []
+        var containsRemoteHead = true
         var checksComplete = true
+        var optionalComplete = true
         var checkConclusion = "FAILURE"
         var comments: [ReviewThread] = []
         // Nil reuses the initial snapshot; empty explicitly removes its comments.
@@ -36,7 +44,6 @@ actor AutofixFixture {
         // Nil keeps the first reading.
         // swiftlint:disable:next discouraged_optional_collection
         var freshReviewEvents: [ReviewComment]?
-        var requestedBots: [ReviewBot] = []
         var writers: Set<String> = []
         // Nil reuses permissions; an empty set revokes them.
         // swiftlint:disable:next discouraged_optional_collection
@@ -44,13 +51,10 @@ actor AutofixFixture {
         var localReview: LocalReview?
         var localCollection: LocalFeedbackCollection?
         var result: AutofixResult?
-        var failPush = false
-        var signedCommit: String?
         var failResolution = false
         var deliveries: [AutofixAttempt] = []
         var prompts: [String] = []
         var resolutions: [String] = []
-        var pushes: [String] = []
     }
 
     static let key = "https://github.com/owner/repo/pull/1"
@@ -97,7 +101,7 @@ actor AutofixFixture {
         AutofixDriver(
             summary: { _, fresh in await self.summary(fresh: fresh) },
             threads: { _, fresh in await self.threads(fresh: fresh) },
-            writers: { _, _, fresh in await self.writers(fresh: fresh) },
+            writers: { _, authors, fresh in await self.writers(fresh: fresh).intersection(authors) },
             localReview: { _ in await self.state.localReview },
             target: { state, _ in await self.target(allowsUncommitted: state.attempt == nil) },
             head: { _ in await self.state.localHead },
@@ -105,11 +109,14 @@ actor AutofixFixture {
             isDirty: { _ in await self.state.isDirty },
             collect: { _, _, _ in await self.collect() },
             reviewComments: { _, fresh in await self.reviewEvents(fresh: fresh) },
-            requestBot: { _, bot in await self.request(bot) },
+            conflictBase: { _, _ in await self.state.conflictBase },
+            containsHead: { _, head in
+                let current = await self.state
+                return current.containsRemoteHead || current.containedHeads.contains(head)
+            },
             waitReason: { target, head in await self.waitReason(target: target, head: head) },
             deliver: { attempt, prompt in await self.deliver(attempt, prompt: prompt) },
             result: { _ in await self.state.result },
-            push: { _, _, commit in try await self.push(commit) },
             resolve: { _, id in try await self.resolve(id) },
         )
     }
@@ -136,16 +143,22 @@ actor AutofixFixture {
         return collection
     }
 
-    private func summary(fresh: Bool) -> PullRequestSummary {
-        PullRequestSummary(
+    private func summary(fresh: Bool) -> PullRequestSummary? {
+        guard fresh == false || state.freshSummaryAvailable else {
+            return nil
+        }
+
+        return PullRequestSummary(
             number: 1,
             title: "Change",
             url: Self.key,
             headBranch: "feature",
-            mergeable: "",
+            mergeable: state.mergeable,
             reviewDecision: "",
             checks: "FAILURE",
+            baseBranch: state.baseBranch,
             headCommit: fresh ? state.freshHead : state.head,
+            requestedReviewers: state.requestedReviewers,
             autofixChecks: AutofixChecks(required: ["test", "build"], results: [
                 AutofixCheck(
                     name: "test",
@@ -163,8 +176,8 @@ actor AutofixFixture {
                 ),
                 AutofixCheck(
                     name: "optional",
-                    status: "IN_PROGRESS",
-                    conclusion: "FAILURE",
+                    status: state.optionalComplete ? "COMPLETED" : "IN_PROGRESS",
+                    conclusion: state.optionalComplete ? "SUCCESS" : "",
                     runID: "run:2",
                     link: "optional",
                 ),
@@ -195,10 +208,6 @@ actor AutofixFixture {
         } else {
             state.reviewEvents
         }
-    }
-
-    private func request(_ bot: ReviewBot) {
-        state.requestedBots.append(bot)
     }
 
     private func target(allowsUncommitted: Bool) -> AutofixDriver.Target? {
@@ -232,15 +241,6 @@ actor AutofixFixture {
     private func deliver(_ attempt: AutofixAttempt, prompt: String) {
         state.deliveries.append(attempt)
         state.prompts.append(prompt)
-    }
-
-    private func push(_ commit: String) throws -> String {
-        state.pushes.append(commit)
-        state.localHead = state.signedCommit ?? commit
-        if state.failPush {
-            throw AutofixPushError(commit: state.localHead, errorDescription: "Push refused")
-        }
-        return state.localHead
     }
 
     private func resolve(_ id: String) throws {

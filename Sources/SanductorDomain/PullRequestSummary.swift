@@ -30,6 +30,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         stateChangedAt: Date? = nil,
         headCommit: String? = nil,
         awaitsCopilotReview: Bool = false,
+        requestedReviewers: Set<String> = [],
         copilotReviewedAt: Date? = nil,
         labels: [String] = [],
         optionalFailures: Int = 0,
@@ -60,6 +61,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         self.stateChangedAt = stateChangedAt ?? closedAt
         self.headCommit = headCommit
         self.awaitsCopilotReview = awaitsCopilotReview
+        self.requestedReviewers = requestedReviewers
         self.copilotReviewedAt = copilotReviewedAt
         self.labels = labels
         self.optionalFailures = optionalFailures
@@ -96,6 +98,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
         stateChangedAt = try container.decodeIfPresent(Date.self, forKey: .stateChangedAt) ?? closedAt
         headCommit = try container.decodeIfPresent(String.self, forKey: .headCommit)
         awaitsCopilotReview = try container.decodeIfPresent(Bool.self, forKey: .awaitsCopilotReview) ?? false
+        requestedReviewers = try container.decodeIfPresent(Set<String>.self, forKey: .requestedReviewers) ?? []
         copilotReviewedAt = try container.decodeIfPresent(Date.self, forKey: .copilotReviewedAt)
         labels = try container.decodeIfPresent([String].self, forKey: .labels) ?? []
         optionalFailures = try container.decodeIfPresent(Int.self, forKey: .optionalFailures) ?? 0
@@ -182,6 +185,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
     /// Whether a review is still requested of Copilot and not yet
     /// given: asking again then only queues the same review.
     public let awaitsCopilotReview: Bool
+    public let requestedReviewers: Set<String>
 
     /// When Copilot last submitted a review, nil when it never has
     /// or the reader did not ask; an ask older than this has been
@@ -285,6 +289,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             stateChangedAt: stateChangedAt,
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
+            requestedReviewers: requestedReviewers,
             copilotReviewedAt: copilotReviewedAt,
             labels: labels,
             optionalFailures: optionalFailures,
@@ -324,6 +329,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
             stateChangedAt: stateChangedAt,
             headCommit: headCommit,
             awaitsCopilotReview: awaitsCopilotReview,
+            requestedReviewers: requestedReviewers,
             copilotReviewedAt: copilotReviewedAt,
             labels: labels,
             optionalFailures: 0,

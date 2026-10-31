@@ -16,14 +16,12 @@ struct FeedbackDefaultsTests {
             repositoryPath: world.repository.path, worktreePath: path, summary: Self.summary(1),
         )
         try world.service.updateFeedback(remote) { state in
-            state.pushAutomatically = true
             state.autofixCI = true
             state.autofixBots = true
         }
         let local = world.service.feedbackState(repositoryPath: world.repository.path, worktreePath: path, summary: nil)
         #expect(local.url != remote.url)
         #expect(local.hasRemoteSources == false)
-        #expect(local.pushAutomatically == false)
         try world.service.updateFeedback(local) { $0.autofixLocalReviews = true; $0.startLoop() }
         let summary = try #require(try await world.service.automationSummary(local, fresh: true))
         #expect(summary.url == local.url)
@@ -31,7 +29,6 @@ struct FeedbackDefaultsTests {
         #expect(summary.headBranch == "feature")
         #expect(world.service.currentFeedback(local).isAutomatic)
         #expect(world.service.currentFeedback(remote).isAutomatic == false)
-        #expect(world.service.currentFeedback(remote).pushAutomatically)
     }
 
     @Test
@@ -50,8 +47,6 @@ struct FeedbackDefaultsTests {
             state.autofixReviews = true
             state.autofixCopilot = true
             state.isAutomatic = true
-            state.pushAutomatically = true
-            state.roundLimit = 3
         }
         for summary in [Self.summary(1), nil] {
             let fresh = world.service.feedbackState(
@@ -61,8 +56,6 @@ struct FeedbackDefaultsTests {
             #expect(fresh.reviewBot == .codeRabbit)
             #expect(fresh.selectedSources.isEmpty)
             #expect(fresh.isAutomatic == false)
-            #expect(fresh.pushAutomatically == false)
-            #expect(fresh.roundLimit == 1)
         }
         let unrelated = world.service.feedbackState(repositoryPath: "/another-repo", worktreePath: nil, summary: nil)
         #expect(unrelated.reviewer == nil)
@@ -117,7 +110,6 @@ struct FeedbackDefaultsTests {
         #expect(reloaded.reviewer == .codexCLI)
         #expect(service.currentFeedback(initial).reviewer == .codexCLI)
         #expect(reloaded.isAutomatic == false)
-        #expect(reloaded.pushAutomatically == false)
     }
 
     @Test

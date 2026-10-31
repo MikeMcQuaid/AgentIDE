@@ -46,11 +46,6 @@ public struct FeedbackView: View {
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             popover { isPresented = false }
         }
-        .onChange(of: state.failedPush?.id, initial: true) { _, failure in
-            if failure != nil {
-                isPresented = true
-            }
-        }
         .task(id: refreshID) {
             if isPresented {
                 await reload()
@@ -86,8 +81,6 @@ public struct FeedbackView: View {
     var startUnavailableReason: String? {
         if state.isAutomatic {
             "Stop the current loop before starting another."
-        } else if state.pushedCommit != nil {
-            "Wait for GitHub to confirm the push."
         } else if let loopUnavailableReason {
             loopUnavailableReason
         } else if isCopying || isReviewing || reviewIsBusy || state.collection?.isPending == true {
@@ -96,10 +89,6 @@ public struct FeedbackView: View {
             "A fix is outstanding. Stop the loop to cancel this cycle."
         } else if summary?.state == "CLOSED" || summary?.state == "MERGED" {
             "Autofix requires an open PR."
-        } else if state.autofixReviews, privateReviewersAvailable == false,
-                  state.autofixLocalReviews == false, state.autofixCI == false, state.autofixBots == false
-        {
-            "Private reviewers require a confirmed private repository."
         } else if state.autofixLocalReviews == false, state.hasRemoteSources == false {
             "Select a feedback source to start a loop."
         } else {
@@ -118,13 +107,7 @@ public struct FeedbackView: View {
                     available: available,
                     localReview: localReview,
                     reviewing: isReviewing,
-                    privateReviewersAvailable: privateReviewersAvailable,
                 )
-                if localOnly == false {
-                    Toggle("Push fixes automatically", isOn: binding(\.pushAutomatically))
-                        .disabled(state.number <= 0)
-                        .hoverHelp("Shared by all sources; pushes wait until local review rounds finish")
-                }
                 findings
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -198,11 +181,11 @@ public struct FeedbackView: View {
         onReview?(state.reviewer ?? .claudeCode)
     }
 
-    func startLoop() async {
+    func startLoop() {
         isStarting = true
         defer { isStarting = false; generation += 1 }
         do {
-            try await service.startFeedbackLoop(state)
+            try service.startFeedbackLoop(state)
         } catch {
             message = error.localizedDescription
         }
@@ -211,8 +194,6 @@ public struct FeedbackView: View {
     // MARK: Private
 
     @State private var isStarting = false
-
-    @State private var privateReviewersAvailable = false
 
     @State private var showsFindings = false
     @State private var localReview: LocalReview?
@@ -257,8 +238,6 @@ public struct FeedbackView: View {
                     repositoryPath: repositoryPath, worktreePath: worktreePath, summary: found,
                 )
             }
-            privateReviewersAvailable = state.number > 0
-                ? await service.privateReviewersAvailable(repositoryPath: repositoryPath) : false
             if let path = state.feedbackWorktreePath ?? state.localWorktreePath ?? worktreePath {
                 localReview = service.localReview(worktreePath: path)
             }

@@ -37,7 +37,6 @@ struct FeedbackClipboardTests {
         #expect(prompt.contains("GitHub") == false)
         let saved = service.currentFeedback(state)
         #expect(saved.handledEvents == [event])
-        #expect(saved.roundsStarted == 0)
         #expect(saved.attempt == nil)
         #expect(saved.isAutomatic == false)
         #expect(saved.collection == nil)

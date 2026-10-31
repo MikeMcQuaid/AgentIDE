@@ -1,18 +1,13 @@
 import SanductorDomain
 import SwiftUI
 
-/// The same brand mark and name in local and remote reviewer menus.
+/// The same brand mark and name in local reviewer menus.
 public struct ReviewerLabel: View {
     // MARK: Lifecycle
 
     public init(_ agent: AgentKind) {
         title = agent.displayName
         image = agent.iconAssetName
-    }
-
-    public init(_ bot: ReviewBot) {
-        title = bot.displayName
-        image = bot.iconAssetName
     }
 
     // MARK: Public

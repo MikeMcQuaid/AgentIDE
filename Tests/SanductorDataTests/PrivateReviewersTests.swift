@@ -4,10 +4,10 @@ import Testing
 // MARK: - PrivateReviewersTests
 
 struct PrivateReviewersTests {
-    // All three visibility responses must fail closed unless explicitly private.
+    // Write access, not repository visibility, gates human feedback.
     // swiftlint:disable discouraged_optional_boolean
     @Test(arguments: [true, false, nil] as [Bool?])
-    func `verified writers need confirmed private visibility`(isPrivate: Bool?) async throws {
+    func `verified writers qualify regardless of repository visibility`(isPrivate: Bool?) async throws {
         // swiftlint:enable discouraged_optional_boolean
         let world = try await World.make()
         defer { world.tearDown() }
@@ -26,16 +26,14 @@ struct PrivateReviewersTests {
         let state = PullRequestAutomation(repositoryPath: world.repository.path, number: 1, url: AutofixFixture.key)
         for fresh in [false, true] {
             let writers = await service.automationWriters(
-                state, threads: [AutofixFixture.thread("thread")], fresh: fresh,
+                state, authors: ["human"], fresh: fresh,
             )
-            #expect(writers == (isPrivate == true ? ["human"] : []))
+            #expect(writers == ["human"])
         }
         let permissions = await runner.commands.filter { $0.contains { $0.hasSuffix("/permission") } }
-        #expect(permissions.count == (isPrivate == true ? 2 : 0))
+        #expect(permissions.count == 2)
         let visibilityReads = await runner.commands.filter { $0.contains("repos/{owner}/{repo}") }
-        #expect(visibilityReads.count == 2)
-        #expect(visibilityReads.first?.contains("--cache") == true)
-        #expect(visibilityReads.last?.contains("--cache") == false)
+        #expect(visibilityReads.isEmpty)
     }
 }
 

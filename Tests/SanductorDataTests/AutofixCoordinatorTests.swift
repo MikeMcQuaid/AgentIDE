@@ -9,11 +9,9 @@ struct AutofixCoordinatorTests {
         let fixture = try AutofixFixture()
         let state = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
         #expect(state.isAutomatic == false)
-        #expect(state.roundLimit == 1)
         #expect(state.autofixCI == false)
         #expect(state.autofixReviews == false)
         #expect(state.autofixLocalReviews == false)
-        #expect(state.pushAutomatically == false)
     }
 
     @Test

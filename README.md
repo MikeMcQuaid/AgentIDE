@@ -8,7 +8,7 @@ Sanductor is a native macOS workspace for maintainers to run coding agents, revi
 I lead [Homebrew](https://brew.sh), so protecting my GitHub credentials and signing keys is part of my responsibility to its users.
 I treat agent code as untrusted and run it under a separate macOS user.
 My [secure agentic coding workflow](https://mikemcquaid.com/sandboxed-agent-worktrees-my-coding-and-ai-setup-in-2026/) now fits in one app, from prompt to reviewed, signed and merged pull request.
-macOS enforces the sandbox; GitHub access and pushes use my account, with automatic pushing off by default.
+macOS enforces the sandbox; GitHub access and manual pushes use my account.
 No Sanductor account, subscription or hosted relay is required.
 
 ![The worktree sidebar, an agent's terminal and its review beside it](docs/screenshot.png)
@@ -17,7 +17,7 @@ No Sanductor account, subscription or hosted relay is required.
 
 - Runs Claude Code or Codex CLI in parallel worktrees, directly on macOS without containers or virtual machines.
 - Reviews diffs with comments and a second agent, Copilot or CodeRabbit.
-- Runs fix loops for local reviews, GitHub feedback and required CI, with automatic pushing off by default.
+- Fixes reviews, failing CI and upstream merge conflicts locally, resuming feedback watching after relaunch.
 - Opens pull requests with commit signing, rebasing, stack pushes, automerge and merge cleanup.
 - Keeps agents running when the app closes and conversations browsable and resumable after worktree deletion.
 - Starts from prompts, issues, PRs or unpublished security advisories.

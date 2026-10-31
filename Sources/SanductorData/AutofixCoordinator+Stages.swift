@@ -2,19 +2,13 @@ import SanductorDomain
 
 extension AutofixCoordinator {
     func advance(
-        _ state: PullRequestAutomation, summary: PullRequestSummary, head: String, context: AutofixContext,
+        _ state: PullRequestAutomation, summary: PullRequestSummary, context: AutofixContext,
     ) async throws {
         let key = context.key
         let store = context.store
         let driver = context.driver
         let target = await driver.target(state, summary)
-        if try await reconcileIdleChanges(state, target: target, head: head, context: context) {
-            return
-        }
-        if state.attempt == nil, state.isPreparingExistingWork == false,
-           state.isLocalStage == false, state.canStartRound == false
-        {
-            try await finishRemoteStage(state, summary: summary, head: head, target: nil, context: context)
+        if try await reconcileIdleChanges(state, target: target, context: context) {
             return
         }
         guard let target else {
@@ -25,90 +19,27 @@ extension AutofixCoordinator {
         }
 
         if let attempt = state.attempt {
-            try await finish(attempt, summary: summary, target: target, context: context)
+            try await finish(attempt, target: target, context: context)
             return
         }
         try await gather(state, summary: summary, target: target, context: context)
     }
 
-    func finishLocal(
-        _ attempt: AutofixAttempt,
-        result: AutofixResult,
-        summary: PullRequestSummary,
-        target: AutofixDriver.Target,
-        context: AutofixContext,
-    ) async throws {
-        if result.commit != attempt.head || attempt.sources == [.existingWork] {
-            try await markAddressed(attempt, result: result, context: context)
-            try context.store.updatePersisting { metadata in
-                guard var state = metadata.pullRequestAutomation[context.key], state.attempt?.id == attempt.id else {
-                    return
-                }
-
-                state.localRounds = state.localRounds ?? LocalAutofixRounds(started: max(1, state.roundsStarted))
-                state.localRounds?.lastAttempt = attempt
-                state.localRounds?.commit = result.commit
-                metadata.pullRequestAutomation[context.key] = state
-            }
-        }
-        guard let state = context.store.load().pullRequestAutomation[context.key] else {
-            return
-        }
-
-        if state.canStartRound == false {
-            try await finishLocalStage(summary: summary, target: target, context: context)
-        } else if result.commit != attempt.head || attempt.sources.contains(.localReview) == false {
-            try complete(key: context.key, message: "Local fix committed; reviewing again", store: context.store)
-        } else {
-            try await finishLocalStage(summary: summary, target: target, context: context)
-        }
-    }
-
-    func finishLocalStage(
-        summary: PullRequestSummary, target: AutofixDriver.Target, context: AutofixContext,
-    ) async throws {
-        let key = context.key
-        var finished: PullRequestAutomation?
+    func finishLocalStage(_ expected: PullRequestAutomation, context: AutofixContext) throws {
         try context.store.updatePersisting { metadata in
-            guard var state = metadata.pullRequestAutomation[key], state.isAutomatic, state.isLocalStage,
-                  metadata.pullRequestAutomation.allSatisfy({ entry in
-                      entry.key == key || entry.value.attempt?.worktreePath != target.worktree.path
-                  })
-            else {
+            guard var state = metadata.pullRequestAutomation[context.key], state == expected, state.isAutomatic else {
                 return
             }
 
             state.localRounds = state.localRounds ?? LocalAutofixRounds()
             state.localRounds?.isComplete = true
-            state.attempt = state.localRounds?.lastAttempt
-            metadata.pullRequestAutomation[key] = state
-            finished = state
+            state.pending = state.hasRemoteSources ? "Watching for new CI and review feedback" : ""
+            if state.hasRemoteSources == false {
+                state.isAutomatic = false
+                state.loopResult = .finished
+                state.lastResult = "Local review and fixes complete"
+            }
+            metadata.pullRequestAutomation[context.key] = state
         }
-        guard let finished else {
-            return
-        }
-
-        if finished.localWorktreePath != nil {
-            try context.store.updatePersisting { $0.pullRequestAutomation[key]?.isAutomatic = false }
-            try complete(key: key, message: "Local review and fixes complete", store: context.store)
-            return
-        }
-        guard let attempt = finished.attempt, let commit = finished.localRounds?.commit else {
-            try complete(key: key, message: "Local stage complete", store: context.store)
-            return
-        }
-        guard let current = try await currentCommit(replacing: commit, target: target, context: context),
-              await ready(target, head: current, context: context)
-        else {
-            return
-        }
-
-        try await push(
-            attempt,
-            result: AutofixResult(attemptID: attempt.id, head: attempt.head, commit: current, addressedThreadIDs: []),
-            summary: summary,
-            target: target,
-            context: context,
-        )
     }
 }

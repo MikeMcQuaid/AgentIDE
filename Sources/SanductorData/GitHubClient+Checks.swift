@@ -63,9 +63,9 @@ extension GitHubClient {
         )
     }
 
-    static func autofixCheck(_ row: CheckRow) -> AutofixCheck {
+    static func autofixCheck(_ row: CheckRow, head: String = "") -> AutofixCheck {
         let link = row.detailsUrl ?? row.targetUrl ?? "" // swiftformat:disable:this acronyms
-        let parts = URL(string: link)?.pathComponents ?? []
+        let parts = GitHubRemote.fullName(ofURL: link) == nil ? [] : URL(string: link)?.pathComponents ?? []
         let run = parts.firstIndex(of: "runs").flatMap { index in
             parts.indices.contains(index + 1) ? parts[index + 1] : nil
         }
@@ -76,7 +76,12 @@ extension GitHubClient {
             name: row.name ?? row.context ?? "",
             status: status,
             conclusion: conclusion,
-            runID: run.map { "run:" + $0 } ?? row.createdAt.map { "status:" + (row.context ?? "") + ":" + $0 } ?? "",
+            runID: (parts.dropLast().last == "job" ? parts.last : nil).map { "job:" + $0 }
+                ?? run.map { "run:" + $0 } ?? row.createdAt.map { "status:" + (row.context ?? "") + ":" + $0 }
+                ?? [
+                    "check", head, row.name ?? row.context ?? "", link,
+                    (row.startedAt ?? row.completedAt)?.ISO8601Format() ?? "",
+                ].joined(separator: ":"),
             link: link,
         )
     }

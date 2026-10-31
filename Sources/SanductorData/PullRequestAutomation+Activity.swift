@@ -32,8 +32,8 @@ extension PullRequestAutomation {
            attempt.id != previous?.attempt?.id, handledEvents != previous?.handledEvents
         {
             let sources = [
-                AutofixAttempt.Kind.checks: "Required CI", .reviews: "Private reviewers",
-                .existingWork: "Existing local work",
+                AutofixAttempt.Kind.checks: "CI", .reviews: "Human reviews",
+                .existingWork: "Existing local work", .conflicts: "Upstream merge conflicts",
                 .localReview: "Local AI review", .copilot: "Copilot", .codeRabbit: "CodeRabbit",
                 .githubReview: "GitHub quality/security",
             ]
@@ -42,9 +42,6 @@ extension PullRequestAutomation {
             .sorted()
             .joined(separator: " + ")
             messages.append("Trigger: " + sources + " · head " + String(attempt.head.prefix(Self.headLength)))
-        }
-        if pushAutomatically != (previous?.pushAutomatically ?? false) {
-            messages.append(pushAutomatically ? "Automatic pushing enabled" : "Automatic pushing disabled")
         }
         if pending.isEmpty == false, pending != previous?.pending {
             messages.append(pending)
@@ -65,10 +62,9 @@ extension PullRequestAutomation {
 }
 
 public extension PullRequestAutomation {
-    /// Remains active while a fix or its push confirmation is outstanding.
+    /// Remains active while watching feedback or awaiting a fix.
     var isLoopRunning: Bool {
-        isAutomatic || attempt != nil || (pushedCommit != nil && loopResult != .stopped)
-            || failedPush?.retryRequested == true
+        isAutomatic || attempt != nil
     }
 
     /// The loop's lifecycle, independent of its current action or wait.
@@ -76,7 +72,7 @@ public extension PullRequestAutomation {
         if isLoopRunning {
             "Running"
         } else {
-            loopResult?.rawValue ?? (roundsStarted > 0 || localRoundsStarted > 0 ? "Finished" : "Not started")
+            loopResult?.rawValue ?? (localRoundsStarted > 0 ? "Finished" : "Not started")
         }
     }
 
@@ -85,14 +81,12 @@ public extension PullRequestAutomation {
         if isPreparingExistingWork, attempt == nil || attempt?.sources == [.existingWork] {
             return "Existing work"
         }
-        let local = (isPreparingExistingWork ? false : isLocalStage) || attempt?.sources.contains(.localReview) == true
-            || failedPush?.attempt.sources.contains(.localReview) == true
-            || (pushedCommit != nil && roundsStarted == 0 && localRoundsStarted > 0)
-        let started = local ? localRoundsStarted : roundsStarted
-        let limit = local ? localRoundLimit : roundLimit
-        let round = attempt != nil || pushedCommit != nil || failedPush != nil
-            ? max(1, started) : min(started + 1, limit)
-        return (local ? "Local" : "GitHub") + " round " + String(round) + "/" + String(limit)
+        guard isLocalStage || attempt?.sources.contains(.localReview) == true else {
+            return "GitHub feedback"
+        }
+
+        let round = attempt != nil ? max(1, localRoundsStarted) : min(localRoundsStarted + 1, localRoundLimit)
+        return "Local round " + String(round) + "/" + String(localRoundLimit)
     }
 
     /// Combines the lifecycle with the specific activity for compact surfaces.
@@ -120,31 +114,21 @@ public extension PullRequestAutomation {
 
     /// What lets the current stage proceed.
     var nextTrigger: String {
-        if failedPush != nil {
-            return "Choose Push to retry signing and pushing the committed fixes through Sanductor."
-        }
-        if collection?.isPending == true, isAutomatic == false {
-            return "Inspect the review, then Copy all or Start loop."
-        }
-        if pushedCommit != nil {
-            return "GitHub must confirm the pushed commit before gathering more feedback."
-        }
         if isAutomatic == false {
             return "Review gathers local findings. Copy all copies ready feedback. Start loop begins automatic fixes."
         }
         if attempt != nil {
-            return "The agent must finish with a matching committed result before another round"
-                + (localWorktreePath == nil ? " or push." : ".")
+            return "The agent must finish with a matching committed result before gathering more feedback."
         }
         if isPreparingExistingWork {
-            return "Address existing feedback and finish local changes before requesting fresh reviews."
+            return "Wait for selected feedback and finish existing local work."
         }
         if isLocalStage {
             return "Current local findings trigger a fix once this branch’s fixing agent is idle."
-                + (localWorktreePath == nil ? " GitHub work waits." : "")
         }
-        return "This branch’s existing agent applies fixes, even with Local AI off, once the pushed head matches"
-            + (autofixCI ? ", all required CI jobs finish" : "")
-            + (autofixBots ? ", the requested reviewer finishes" : "") + " and the agent is idle."
+        return "New eligible feedback triggers local fixes once the agent is idle"
+            + (autofixCI ? " and all CI jobs finish" : "")
+            + (autofixReviews || autofixBots ? " and requested reviews finish" : "")
+            + ". Push manually when you are ready; autofix only watches GitHub."
     }
 }

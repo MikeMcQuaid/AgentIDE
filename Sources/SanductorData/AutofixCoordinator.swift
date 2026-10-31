@@ -21,11 +21,7 @@ actor AutofixCoordinator {
         for (key, state) in store.load().pullRequestAutomation where state.needsRefresh {
             do {
                 let context = AutofixContext(key: key, store: store, driver: driver)
-                if let failure = state.failedPush {
-                    try await retryPush(failure, context: context)
-                } else {
-                    try await reconcile(context: context)
-                }
+                try await reconcile(context: context)
             } catch {
                 store.update { value in
                     let running = value.pullRequestAutomation[key]?.isAutomatic == true
@@ -55,8 +51,6 @@ actor AutofixCoordinator {
             store.update { value in
                 value.pullRequestAutomation[key]?.pending = "Pull request is closed"
                 value.pullRequestAutomation[key]?.isAutomatic = false
-                value.pullRequestAutomation[key]?.pushedCommit = nil
-                value.pullRequestAutomation[key]?.pushedFrom = nil
                 value.pullRequestAutomation[key]?.attempt = nil
                 value.pullRequestAutomation[key]?.resolutions = [:]
             }
@@ -64,15 +58,12 @@ actor AutofixCoordinator {
         }
 
         try await resolveMarked(state: state, head: head, context: context)
-        guard try confirmPush(state, head: head, context: context) else {
-            return
-        }
         guard state.attempt != nil || state.isAutomatic else {
             store.update { $0.pullRequestAutomation[key]?.pending = "" }
             return
         }
 
-        try await advance(state, summary: summary, head: head, context: context)
+        try await advance(state, summary: summary, context: context)
     }
 
     func gather(
@@ -89,12 +80,17 @@ actor AutofixCoordinator {
         }
 
         let localHead = await driver.head(target) ?? head
-        if state.isPreparingExistingWork {
-            try await prepareExistingWork(state, summary: summary, head: localHead, target: target, context: context)
+        if state.hasRemoteSources, localHead != head,
+           await state.acceptsFeedback(from: head, contains: { await driver.containsHead(target, $0) }) == false
+        {
+            store.update { $0.pullRequestAutomation[key]?.pending = "Integrate the current PR head before autofixing" }
             return
         }
-        guard state.isLocalStage || state.hasRemoteSources == false || localHead == head else {
-            try reconsiderChanges(state, context: context)
+        if try await gatherConflicts(state, summary: summary, head: localHead, target: target, context: context) {
+            return
+        }
+        if state.isPreparingExistingWork {
+            try await prepareExistingWork(state, summary: summary, head: localHead, target: target, context: context)
             return
         }
         guard await ready(target, head: localHead, context: context),
@@ -107,14 +103,8 @@ actor AutofixCoordinator {
         let feedback = try await candidate(
             state: current.stageSelection, summary: summary, head: localHead, fresh: false, driver: driver,
         )
-        guard let feedback, current.canStartRound else {
-            if current.isLocalStage {
-                try await finishLocalStage(summary: summary, target: target, context: context)
-            } else {
-                try await finishRemoteStage(
-                    current, summary: summary, head: localHead, target: target, context: context,
-                )
-            }
+        guard let feedback, current.canStartFix else {
+            try finishLocalStage(current, context: context)
             return
         }
 
@@ -129,10 +119,9 @@ actor AutofixCoordinator {
         context: AutofixContext,
         committing: Bool = false,
     ) async throws {
-        let key = context.key
         let store = context.store
         let driver = context.driver
-        guard let state = store.load().pullRequestAutomation[key] else {
+        guard let state = store.load().pullRequestAutomation[context.key] else {
             return
         }
 
@@ -147,16 +136,16 @@ actor AutofixCoordinator {
                   state: selection, summary: fresh, head: head, target: target, driver: driver,
               ),
               checked == candidate, let paneID = target.session.paneID,
-              try await driver.summary(state, true)?.headCommit == summary.headCommit
+              try await driver.summary(state, true) == fresh
         else {
-            store.update { $0.pullRequestAutomation[key]?.pending = "Waiting: head, permissions or feedback changed" }
+            store.update { $0.pullRequestAutomation[context.key]?.pending = "Waiting: captured feedback changed" }
             return
         }
         guard await ready(target, head: head, context: context) else {
             return
         }
 
-        if state.isLocalStage, state.isPreparingExistingWork == false {
+        if candidate.sources.contains(.localReview), state.isPreparingExistingWork == false {
             guard let collection = try await driver.collect(state, target, false),
                   collection.isPending == false, collection.failure == nil,
                   collection.id == state.collection?.id
@@ -176,6 +165,7 @@ actor AutofixCoordinator {
             paneID: paneID,
             threads: candidate.threads,
             commitRequestedHead: committing ? head : nil,
+            rebase: candidate.rebase,
         )
         guard try claim(attempt, events: candidate.events, settings: state, context: context) else {
             return
@@ -198,14 +188,15 @@ actor AutofixCoordinator {
             guard var current = metadata.pullRequestAutomation[key], current.attempt == nil,
                   current.handledEvents.isDisjoint(with: claims),
                   attempt.commitRequestedHead == nil || events.isSubset(of: current.handledEvents),
-                  current.canStartRound || (current.isPreparingExistingWork && attempt.sources == [.existingWork]),
+                  current.canStartFix || (current.isPreparingExistingWork && attempt.sources == [.existingWork]),
                   current.allows(attempt.sources),
                   current.selectedSources == settings.selectedSources,
                   current.botRequests == settings.botRequests,
                   current.reviewBot == settings.reviewBot,
                   current.isLocalStage == settings.isLocalStage,
                   current.isPreparingExistingWork == settings.isPreparingExistingWork,
-                  attempt.sources == [.existingWork] || attempt.sources.isSubset(of: current.isPreparingExistingWork
+                  attempt.sources == [.existingWork] || attempt.sources == [.conflicts]
+                  || attempt.sources.isSubset(of: current.isPreparingExistingWork
                       ? current.selectedSources : current.stageSelection.selectedSources),
                   current.collection?.id == settings.collection?.id,
                   current.reviewer == settings.reviewer,
@@ -214,7 +205,7 @@ actor AutofixCoordinator {
                 return
             }
 
-            current.countRound(for: attempt)
+            current.countLocalRound(for: attempt)
             current.handledEvents.formUnion(claims)
             current.attempt = attempt
             current.lastResult = ""

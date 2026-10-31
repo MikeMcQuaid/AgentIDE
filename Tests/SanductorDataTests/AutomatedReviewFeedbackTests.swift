@@ -85,7 +85,6 @@ struct AutomatedReviewFeedbackTests {
         #expect(try await AutofixCoordinator().candidate(
             state: state, summary: summary, head: "head", fresh: true, driver: driver,
         ) == nil)
-        #expect(await fixture.state.requestedBots.isEmpty)
     }
 
     @Test
@@ -94,12 +93,10 @@ struct AutomatedReviewFeedbackTests {
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixBots = true
             value.pullRequestAutomation[AutofixFixture.key]?.isAutomatic = true
-            value.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
         }
         await fixture.update { value in
             value.comments = Self.authors.map { AutofixFixture.thread($0, comment: $0, author: $0, type: "Bot") }
             value.reviewEvents = [AutofixFixture.botReview(head: "head")]
-            value.failPush = true
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         let attempt = try #require(await fixture.state.deliveries.first)
@@ -110,8 +107,8 @@ struct AutomatedReviewFeedbackTests {
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.resolutions.count == 3)
         await fixture.update { value in
             value.comments[0] = AutofixFixture.thread(Self.authors[0], comment: "follow-up")
-            value.head = "external-push"
-            value.freshHead = "external-push"
+            value.head = "fixed"
+            value.freshHead = "fixed"
         }
         let restarted = MetadataStore(file: fixture.directory + "/state.json")
         await AutofixCoordinator().refresh(store: restarted, driver: fixture.driver())

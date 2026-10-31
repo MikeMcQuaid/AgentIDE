@@ -35,7 +35,7 @@ struct AutofixGitHubTests {
     }
 
     @Test
-    func `unreadable required checks cannot clear CI automation`() async throws {
+    func `unreadable branch protection still exposes every reported CI result`() async throws {
         let directory = try TestSupport.temporaryDirectory("unknown-checks")
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let store = MetadataStore(file: directory + "/state.json")
@@ -49,7 +49,7 @@ struct AutofixGitHubTests {
             fromJSON: json, requiredChecks: pullRequests.requiredChecksReader(repositoryPath: "/repo"),
         )
         .first)
-        #expect(unknown.autofixChecks == nil)
+        #expect(unknown.autofixChecks?.failures.count == 1)
         #expect(unknown.checks == "FAILURE")
         store.update { $0.requiredChecksCache["required-checks#/repo#main"] = [] }
         let known = try #require(await GitHubClient.summaries(
@@ -57,7 +57,63 @@ struct AutofixGitHubTests {
         )
         .first)
         #expect(known.autofixChecks?.isComplete == true)
-        #expect(known.autofixChecks?.failures.isEmpty == true)
+        #expect(known.autofixChecks?.failures.count == 1)
+    }
+
+    @Test
+    func `rerunning a workflow gives its failed jobs fresh delivery identities`() async throws {
+        let json = """
+        [{"number":1,"title":"PR","url":"pr","headRefName":"feature","statusCheckRollup":[
+          {"name":"test","status":"COMPLETED","conclusion":"FAILURE",
+          "detailsUrl":"https://github.com/o/r/actions/runs/123/job/456"}
+        ]}]
+        """
+        let requiredChecks: GitHubClient.RequiredChecksReader = { _ in nil }
+        let first = try #require(await GitHubClient.summaries(fromJSON: json, requiredChecks: requiredChecks)
+            .first?
+            .autofixChecks?
+            .failures
+            .first)
+        let rerun = try #require(await GitHubClient.summaries(
+            fromJSON: json.replacing("job/456", with: "job/789"), requiredChecks: requiredChecks,
+        )
+        .first?
+        .autofixChecks?
+        .failures
+        .first)
+        #expect(first.runID != rerun.runID)
+    }
+
+    @Test(arguments: ["https://ci.example/build", "https://ci.example/runs/123/job/456"])
+    func `external failures without Actions identifiers trigger once per head and rerun`(link: String) async throws {
+        let json = """
+        [{"number":1,"title":"PR","url":"pr","headRefName":"feature","headRefOid":"head",
+        "statusCheckRollup":[{"name":"external","status":"COMPLETED","conclusion":"FAILURE",
+        "startedAt":"2026-01-01T00:00:00Z","detailsUrl":"\(link)"}]}]
+        """
+        let requiredChecks: GitHubClient.RequiredChecksReader = { _ in nil }
+        let first = try #require(await GitHubClient.summaries(fromJSON: json, requiredChecks: requiredChecks).first)
+        var state = PullRequestAutomation(repositoryPath: "/repo", number: 1, url: "pr")
+        state.autofixCI = true
+        let candidate = try #require(AutofixCandidate.checks(summary: first, state: state))
+        #expect(candidate.text.contains("external: FAILURE"))
+        state.handledEvents = candidate.events
+        #expect(AutofixCandidate.checks(summary: first, state: state) == nil)
+        for changed in [
+            json.replacing("2026-01-01", with: "2026-01-02"), json.replacing("\"head\"", with: "\"new-head\""),
+        ] {
+            let summary = try #require(await GitHubClient.summaries(
+                fromJSON: changed, requiredChecks: requiredChecks,
+            )
+            .first)
+            #expect(AutofixCandidate.checks(summary: summary, state: state) != nil)
+        }
+        let undated = json.replacing("\"startedAt\":\"2026-01-01T00:00:00Z\",", with: "")
+        let summary = try #require(await GitHubClient.summaries(
+            fromJSON: undated, requiredChecks: requiredChecks,
+        )
+        .first)
+        #expect(AutofixCandidate.checks(summary: summary, state: state) != nil)
     }
 
     @Test
@@ -72,7 +128,8 @@ struct AutofixGitHubTests {
         ]}]
         """
         let summary = try #require(await GitHubClient.summaries(fromJSON: json) { _ in ["test"] }.first)
-        #expect(summary.autofixChecks?.failures.first?.runID == "run:123")
+        #expect(summary.autofixChecks?.results.first?.runID == "job:456")
+        #expect(summary.autofixChecks?.isComplete == false)
         #expect(summary.headRepository == "fork/r")
         #expect(summary.retitled("Edited", body: "Body").autofixChecks == summary.autofixChecks)
         #expect(summary.awaitingChecks().autofixChecks == nil)

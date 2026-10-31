@@ -5,7 +5,7 @@ import Testing
 
 struct FeedbackActivityTests {
     @Test
-    func `launch resets loop progress but preserves preferences and side-effect claims`() async throws {
+    func `launch preserves active progress and side-effect claims`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
@@ -15,20 +15,10 @@ struct FeedbackActivityTests {
             )
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        var expected = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
+        let expected = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
         #expect(expected.attempt != nil)
         #expect(expected.activityLog?.isEmpty == false)
-        expected.activityLog = []
-        expected.isAutomatic = false
-        expected.preparingExistingWork = nil
-        expected.attempt = nil
-        expected.roundsStarted = 0
-        expected.localRounds = LocalAutofixRounds(limit: expected.localRoundLimit)
-        expected.repeatLocalReview = true
-        expected.pending = ""
-        expected.lastResult = ""
-        expected.loopResult = nil
-        fixture.store.resetFeedbackLoops()
+        fixture.store.resumeFeedbackLoops()
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key] == expected)
     }
 
@@ -92,7 +82,7 @@ struct FeedbackActivityTests {
         )
         #expect(ready == false)
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.pending == (unknown
-                ? "Waiting for required CI results" : "Waiting for 2 required CI jobs"))
+                ? "Waiting for CI results" : "Waiting for 2 CI jobs"))
     }
 
     @Test
@@ -107,7 +97,7 @@ struct FeedbackActivityTests {
         await coordinator.refresh(store: fixture.store, driver: fixture.driver())
         let log = fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog
         #expect(log?.contains { $0.message.contains("Started") } == true)
-        #expect(log?.last?.message == "Existing work · Waiting for 1 required CI job")
+        #expect(log?.last?.message == "Existing work · Waiting for 1 CI job")
         await coordinator.refresh(store: fixture.store, driver: fixture.driver())
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog == log)
         let decoder = JSONDecoder()
@@ -119,7 +109,7 @@ struct FeedbackActivityTests {
         await fixture.update { $0.checksComplete = true }
         await coordinator.refresh(store: fixture.store, driver: fixture.driver())
         let delivered = fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog
-        #expect(delivered?.contains { $0.message.contains("Trigger:") && $0.message.contains("Required CI") } == true)
+        #expect(delivered?.contains { $0.message.contains("Trigger:") && $0.message.contains("CI") } == true)
     }
 
     @Test
