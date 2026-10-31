@@ -18,7 +18,7 @@ struct AutofixDriver {
 
     let summary: @Sendable (PullRequestAutomation, Bool) async throws -> PullRequestSummary?
     let threads: @Sendable (PullRequestAutomation, Bool) async throws -> [ReviewThread]
-    let writers: @Sendable (PullRequestAutomation, [ReviewThread], Bool) async -> Set<String>
+    let writers: @Sendable (PullRequestAutomation, Set<String>, Bool) async -> Set<String>
     var localReview: @Sendable (PullRequestAutomation) async throws -> LocalReview? = { _ in nil }
     let target: @Sendable (PullRequestAutomation, PullRequestSummary) async -> Target?
     var head: @Sendable (Target) async -> String? = { _ in nil }
@@ -27,8 +27,11 @@ struct AutofixDriver {
     var isDirty: @Sendable (Target) async -> Bool = { _ in false }
     var collect: Collection = { _, _, _ in nil }
     var reviewComments: @Sendable (PullRequestAutomation, Bool) async throws -> [ReviewComment] = { _, _ in [] }
-    var requestBot: @Sendable (PullRequestAutomation, ReviewBot) async throws -> Void = { _, _ in
-        // Tests without remote review requests need no implementation.
+    var conflictBase: @Sendable (Target, PullRequestSummary) async throws -> String? = { _, _ in nil }
+    var containsHead: @Sendable (Target, String) async -> Bool = { _, _ in false }
+
+    var containsFix: @Sendable (PullRequestAutomation, String, String) async -> Bool = { _, commit, head in
+        commit == head
     }
 
     let waitReason: @Sendable (Target, String) async -> String?
@@ -38,7 +41,6 @@ struct AutofixDriver {
 
     var deliver: @Sendable (AutofixAttempt, String) async throws -> Void
     let result: @Sendable (AutofixAttempt) async throws -> AutofixResult?
-    let push: @Sendable (Target, PullRequestSummary, String) async throws -> String
     let resolve: @Sendable (PullRequestAutomation, String) async throws -> Void
 }
 

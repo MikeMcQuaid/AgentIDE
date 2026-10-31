@@ -1,11 +1,6 @@
 import SanductorDomain
 
 public extension SessionService {
-    /// Cached privacy for the control; delivery always rechecks it.
-    func privateReviewersAvailable(repositoryPath: String) async -> Bool {
-        await github.isPrivate(repositoryPath: repositoryPath)
-    }
-
     /// Explicitly runs a fresh local review without touching the clipboard or the agent.
     func reviewLocalFeedback(_ initial: PullRequestAutomation) async throws {
         let state = currentFeedback(initial)
@@ -112,11 +107,21 @@ public extension SessionService {
             } else {
                 remoteHead
             }
+        let matches =
+            if head == remoteHead {
+                true
+            } else if let worktree {
+                await state.acceptsFeedback(from: remoteHead) { commit in
+                    await git.isAncestor(commit, of: head, worktreePath: worktree.path)
+                }
+            } else {
+                false
+            }
         state.feedbackWorktreePath = worktree?.path
         state.autofixLocalReviews = state.autofixLocalReviews && worktree != nil
-        state.autofixCI = state.autofixCI && head == remoteHead && summary.autofixChecks?.isComplete == true
-        state.autofixReviews = state.autofixReviews && head == remoteHead
-        state.autofixBots = state.autofixBots && head == remoteHead
+        state.autofixCI = state.autofixCI && matches && summary.autofixChecks?.isComplete == true
+        state.autofixReviews = state.autofixReviews && matches
+        state.autofixBots = state.autofixBots && matches
         var driver = automationDriver(groups: [])
         let review = state.autofixLocalReviews ? try await driver.localReview(state) : nil
         driver.localReview = { _ in review }
@@ -126,7 +131,7 @@ public extension SessionService {
                 state: state, summary: summary, head: head, fresh: fresh, driver: driver,
             ),
             localReview: review,
-            hasMatchingHead: head == remoteHead,
+            hasMatchingHead: matches,
         )
     }
 }

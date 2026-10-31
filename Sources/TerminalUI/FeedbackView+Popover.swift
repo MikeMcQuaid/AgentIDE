@@ -22,7 +22,6 @@ extension FeedbackView {
                         .buttonStyle(.borderless)
                         .hoverHelp("Close autofix settings; running work continues")
                 }
-                pushFailure
                 configuration
                 Divider()
                 actions
@@ -51,13 +50,13 @@ extension FeedbackView {
                 if canStop {
                     update { $0.stopLoop() }
                 } else {
-                    await startLoop()
+                    startLoop()
                 }
             }
             .hoverHelp(canStop
                 ? "Stop loop; the agent’s current turn continues"
                 : startUnavailableReason ?? (localOnly ? "Start loop: review and fix up to the chosen round limit"
-                    : "Start loop: run local review rounds, then gather selected GitHub feedback"))
+                    : "Start loop: fix selected feedback locally and keep watching GitHub"))
         }
     }
 
@@ -72,23 +71,6 @@ extension FeedbackView {
                 await review()
             }
             .hoverHelp("Run the chosen local reviewer; inspect findings before copying or fixing")
-        }
-    }
-
-    @ViewBuilder private var pushFailure: some View {
-        if let failure = state.failedPush {
-            VStack(alignment: .leading, spacing: Self.spacing) {
-                Label("Automatic push failed", systemImage: "exclamationmark.triangle")
-                    .interfaceFont(.headline)
-                Text("Choose Push to retry. Approve your configured signer if prompted.")
-                DisclosureGroup("Error details") {
-                    Text(failure.message).textSelection(.enabled)
-                }
-                BusyButton("Push", busy: "Pushing", disabled: failure.retryRequested || inputsLocked) {
-                    update { $0.retryPush() }
-                }
-            }
-            Divider()
         }
     }
 

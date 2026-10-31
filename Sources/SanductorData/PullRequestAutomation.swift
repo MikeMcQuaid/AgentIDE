@@ -23,8 +23,6 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
         isAutomatic = try container.decodeIfPresent(Bool.self, forKey: .isAutomatic) ?? false
         preparingExistingWork = try container.decodeIfPresent(Bool.self, forKey: .preparingExistingWork)
         loopResult = try container.decodeIfPresent(FeedbackLoopResult.self, forKey: .loopResult)
-        roundLimit = try container.decodeIfPresent(Int.self, forKey: .roundLimit) ?? 1
-        roundsStarted = try container.decodeIfPresent(Int.self, forKey: .roundsStarted) ?? 0
         localRounds = try container.decodeIfPresent(LocalAutofixRounds.self, forKey: .localRounds)
         autofixCopilot = try container.decodeIfPresent(Bool.self, forKey: .autofixCopilot) ?? false
         codeRabbitEnabled = try container.decodeIfPresent(Bool.self, forKey: .codeRabbitEnabled)
@@ -38,21 +36,18 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
         autofixLocalReviews = try container.decodeIfPresent(Bool.self, forKey: .autofixLocalReviews) ?? false
         autofixCI = try container.decodeIfPresent(Bool.self, forKey: .autofixCI) ?? false
         autofixReviews = try container.decodeIfPresent(Bool.self, forKey: .autofixReviews) ?? false
-        pushAutomatically = try container.decodeIfPresent(Bool.self, forKey: .pushAutomatically) ?? false
         pending = try container.decodeIfPresent(String.self, forKey: .pending) ?? ""
         lastResult = try container.decodeIfPresent(String.self, forKey: .lastResult) ?? ""
         handledEvents = try container.decodeIfPresent(Set<String>.self, forKey: .handledEvents) ?? []
+        rebasedHeads = try container.decodeIfPresent([String: String].self, forKey: .rebasedHeads) ?? [:]
         resolutions = try container.decodeIfPresent([String: PendingThreadResolution].self, forKey: .resolutions) ?? [:]
         attempt = try container.decodeIfPresent(AutofixAttempt.self, forKey: .attempt)
-        failedPush = try container.decodeIfPresent(FailedAutofixPush.self, forKey: .failedPush)
-        pushedCommit = try container.decodeIfPresent(String.self, forKey: .pushedCommit)
-        pushedFrom = try container.decodeIfPresent(String.self, forKey: .pushedFrom)
         activityLog = try container.decodeIfPresent([FeedbackActivity].self, forKey: .activityLog)
     }
 
     // MARK: Public
 
-    public static let roundLimits = 1 ... 3
+    public static let localRoundLimits = 1 ... 3
 
     public let repositoryPath: String
     public let number: Int
@@ -63,8 +58,6 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
     // Absent from loops saved before startup reconciliation.
     public var preparingExistingWork: Bool? // swiftlint:disable:this discouraged_optional_boolean
     public var loopResult: FeedbackLoopResult?
-    public var roundLimit = 1
-    public var roundsStarted = 0
     public var localRounds: LocalAutofixRounds?
     public var autofixCopilot = false
     // Missing in metadata written before CodeRabbit support.
@@ -81,22 +74,18 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
     public var autofixLocalReviews = false
     public var autofixCI = false
     public var autofixReviews = false
-    public var pushAutomatically = false
     public var pending = ""
     public var lastResult = ""
     public var handledEvents: Set<String> = []
+    public var rebasedHeads: [String: String] = [:]
     public var resolutions: [String: PendingThreadResolution] = [:]
     public var attempt: AutofixAttempt?
-    public var failedPush: FailedAutofixPush?
-    public var pushedCommit: String?
-    public var pushedFrom: String?
     // Absent from older metadata.
     // swiftlint:disable:next discouraged_optional_collection
     public var activityLog: [FeedbackActivity]?
 
     public var needsRefresh: Bool {
-        isAutomatic || resolutions.isEmpty == false || attempt != nil || pushedCommit != nil
-            || failedPush != nil
+        isAutomatic || resolutions.isEmpty == false || attempt != nil
     }
 
     public var hasRemoteSources: Bool {
@@ -117,17 +106,12 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
         autofixLocalReviews
     }
 
-    var canStartRound: Bool {
+    var canStartFix: Bool {
         guard isAutomatic else {
             return false
         }
 
-        if isLocalStage {
-            return localRoundsStarted
-                < min(Self.roundLimits.upperBound, max(Self.roundLimits.lowerBound, localRoundLimit))
-        }
-        return hasRemoteSources
-            && roundsStarted < min(Self.roundLimits.upperBound, max(Self.roundLimits.lowerBound, roundLimit))
+        return hasRemoteSources || isLocalStage
     }
 
     var selectedSources: Set<AutofixAttempt.Kind> {
@@ -172,6 +156,9 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
 
         case .existingWork:
             hasLocalSources || hasRemoteSources
+
+        case .conflicts:
+            hasRemoteSources
         }
     }
 
@@ -186,15 +173,17 @@ public struct PullRequestAutomation: Codable, Equatable, Sendable {
 public struct PendingThreadResolution: Codable, Equatable, Sendable {
     // MARK: Lifecycle
 
-    public init(head: String, commentID: String) {
+    public init(head: String, commentID: String, fixCommit: String? = nil) {
         self.head = head
         self.commentID = commentID
+        self.fixCommit = fixCommit
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         head = try container.decode(String.self, forKey: .head)
         commentID = try container.decode(String.self, forKey: .commentID)
+        fixCommit = try container.decodeIfPresent(String.self, forKey: .fixCommit)
         requested = try container.decodeIfPresent(Bool.self, forKey: .requested) ?? false
     }
 
@@ -202,6 +191,7 @@ public struct PendingThreadResolution: Codable, Equatable, Sendable {
 
     public let head: String
     public let commentID: String
+    public let fixCommit: String?
     public var requested = false
 }
 
@@ -216,6 +206,7 @@ public struct AutofixAttempt: Codable, Equatable, Sendable {
         case reviews
         case localReview
         case existingWork
+        case conflicts
         case copilot
         case codeRabbit
         case githubReview
@@ -245,7 +236,7 @@ public struct AutofixAttempt: Codable, Equatable, Sendable {
     public var commitRequestedHead: String?
     /// Absent from older attempts; idle alone does not prove the fixing turn ran.
     public var hasObservedTurn: Bool? // swiftlint:disable:this discouraged_optional_boolean
-    public var pushClaimed = false
+    public var rebase: AutofixRebase?
 }
 
 // MARK: - AutofixResult

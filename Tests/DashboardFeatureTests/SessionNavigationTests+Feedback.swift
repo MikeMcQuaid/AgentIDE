@@ -91,10 +91,6 @@ extension SessionNavigationTests {
         #expect(model.feedbackStatus(for: item) == state.statusSummary)
         state.isAutomatic = false
         state.loopResult = .finished
-        state.pushedCommit = "awaiting-confirmation"
-        model.store.update { $0.pullRequestAutomation[key] = state }
-        #expect(model.feedbackStatus(for: item) != nil)
-        state.pushedCommit = nil
         model.store.update { $0.pullRequestAutomation[key] = state }
         #expect(model.feedbackStatus(for: item) == nil)
         state = PullRequestAutomation(repositoryPath: "/another-checkout", number: 7, url: url)

@@ -18,12 +18,9 @@ struct FeedbackProgressView: View {
                 enabled: state.autofixLocalReviews,
             )
             if localOnly == false {
-                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
-                stage("Push", active: state.pushedCommit != nil, enabled: state.pushAutomatically)
-                Image(systemName: "chevron.right").foregroundStyle(.secondary).accessibilityHidden(true)
                 stage(
-                    "GitHub " + String(state.roundsStarted) + "/" + String(state.roundLimit),
-                    active: state.isAutomatic && state.isLocalStage == false && state.isPreparingExistingWork == false,
+                    "Watching GitHub",
+                    active: state.isAutomatic && state.hasRemoteSources,
                     enabled: state.hasRemoteSources,
                 )
             }
@@ -32,7 +29,7 @@ struct FeedbackProgressView: View {
         .accessibilityElement(children: .combine)
         .hoverHelp("Finish existing feedback and local changes first. " + (localOnly
                 ? "Review and fix for the chosen number of rounds, then inspect the changes"
-                : "Local review and commit rounds finish before pushing and the shared GitHub CI and review rounds"))
+                : "Fixes stay local while autofix watches GitHub for new feedback"))
     }
 
     // MARK: Private

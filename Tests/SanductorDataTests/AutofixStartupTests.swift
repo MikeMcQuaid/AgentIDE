@@ -62,7 +62,6 @@ struct AutofixStartupTests {
         }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.isEmpty)
-        #expect(await fixture.state.pushes.isEmpty)
     }
 
     @Test
@@ -74,7 +73,7 @@ struct AutofixStartupTests {
         }
         await fixture.update { $0.isDirty = true }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        fixture.store.resetFeedbackLoops()
+        fixture.store.update { $0.pullRequestAutomation[AutofixFixture.key]?.stopLoop() }
         fixture.store.update { $0.pullRequestAutomation[AutofixFixture.key]?.startLoop() }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         #expect(await fixture.state.deliveries.count == 1)
@@ -88,7 +87,6 @@ struct AutofixStartupTests {
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixLocalReviews = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixBots = true
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         await fixture.update { state in
@@ -98,16 +96,12 @@ struct AutofixStartupTests {
         driver.collect = { _, _, _ in Issue.record("Existing feedback must precede a new review"); return nil }
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.first?.sources == [.checks, .codeRabbit])
-        #expect(await fixture.state.requestedBots.isEmpty)
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 1)
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.localRoundsStarted == 0)
         let activity = fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.activityLog ?? []
         #expect(activity.contains { $0.message.contains("local round 0") } == false)
         await fixture.complete(commit: "fixed")
         await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
-        #expect(await fixture.state.pushes.isEmpty)
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.isLocalStage == true)
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.localRounds?.commit == "fixed")
     }
 
     @Test
@@ -135,40 +129,36 @@ struct AutofixStartupTests {
             metadata.pullRequestAutomation[AutofixFixture.key]?.localWorktreePath = localOnly ? "/worktree" : nil
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixLocalReviews = localOnly
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixBots = localOnly == false
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         await fixture.update { $0.isDirty = true }
-        await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
+        var driver = await fixture.driver()
+        driver.reviewComments = { _, _ in
+            #expect(localOnly == false)
+            return []
+        }
+        await AutofixCoordinator().refresh(store: fixture.store, driver: driver)
         #expect(await fixture.state.deliveries.count == 1)
         #expect(await fixture.state.prompts.first?.contains("uncommitted") == true)
-        #expect(await fixture.state.requestedBots.isEmpty)
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 0)
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.localRoundsStarted == 0)
         await fixture.complete(commit: "fixed")
         await fixture.update { $0.isDirty = false }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        #expect(await fixture.state.pushes == (localOnly ? [] : ["fixed"]))
         #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.isPreparingExistingWork == false)
     }
 
-    @Test(arguments: [true, false])
-    func `verified unpushed starting commits can continue through the shared push opt-in`(
-        automaticPush: Bool,
-    ) async throws {
+    @Test
+    func `unpushed local commits can receive published feedback`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { metadata in
             metadata.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            metadata.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = automaticPush
             metadata.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         await fixture.update { $0.localHead = "unpushed" }
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         #expect(await fixture.state.deliveries.count == 1)
-        #expect(await fixture.state.prompts.first?.contains("Fix these failed required CI") == false)
+        #expect(await fixture.state.prompts.first?.contains("Fix these failed CI") == true)
         await fixture.complete(commit: "unpushed")
         await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
-        #expect(await fixture.state.pushes == (automaticPush ? ["unpushed"] : []))
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 0)
     }
 }

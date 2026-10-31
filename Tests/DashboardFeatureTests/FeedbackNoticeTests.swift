@@ -14,7 +14,7 @@ struct FeedbackNoticeTests {
         #expect(FeedbackNotice.change(from: running, to: state) == .finished)
         #expect(FeedbackNotice.change(from: state, to: state) == nil)
         state.startLoop()
-        state.pending = "Push the current fixes before gathering remote feedback"
+        state.pending = "Integrate the current PR head before autofixing"
         #expect(FeedbackNotice.change(from: running, to: state) == .attention)
         #expect(FeedbackNotice.change(from: state, to: state) == nil)
         let waiting = state
@@ -28,14 +28,14 @@ struct FeedbackNoticeTests {
         #expect(FeedbackNotice(state) == nil)
         state.startLoop()
         for wait in [
-            "Waiting for 2 required CI jobs",
+            "Waiting for 2 CI jobs",
             "Your agent is working on something else. Autofix will wait until it finishes.",
         ] {
             state.pending = wait
             #expect(FeedbackNotice(state) == nil)
         }
         for wait in [
-            "Push the current fixes before gathering remote feedback",
+            "Integrate the current PR head before autofixing",
             "Waiting for a clean worktree before accepting the fix",
             "Check out feature before autofixing",
         ] {
@@ -48,15 +48,12 @@ struct FeedbackNoticeTests {
         #expect(FeedbackNotice(state) == .finished)
         #expect(FeedbackNotice.change(from: nil, to: state) == .finished)
         #expect(FeedbackNotice.change(from: state, to: state) == nil)
-        state.pushedCommit = "pushed"
-        #expect(FeedbackNotice(state) == nil)
-        state.pushedCommit = nil
         state.loopResult = .failed
         #expect(FeedbackNotice(state) == .attention)
         state.startLoop()
         state.isAutomatic = false
         state.localRoundLimit = 1
-        state.pending = "Push the current fixes before gathering remote feedback"
+        state.pending = "Integrate the current PR head before autofixing"
         state.isAutomatic = true
         #expect(FeedbackNotice(state) == .attention)
     }

@@ -8,7 +8,7 @@ extension AutofixCoordinator {
         let key = context.key
         let store = context.store
         guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id,
-              state.allows(attempt.sources), attempt.pushClaimed == false
+              state.allows(attempt.sources)
         else {
             return
         }

@@ -13,7 +13,7 @@ struct AutofixChecksTests {
     }
 
     @Test
-    func `optional jobs neither delay nor trigger fixes`() {
+    func `optional jobs delay collection and their failures trigger fixes`() {
         let optional = AutofixCheck(
             name: "optional",
             status: "IN_PROGRESS",
@@ -22,8 +22,8 @@ struct AutofixChecksTests {
             link: "optional",
         )
         let failed = AutofixCheck(name: "test", status: "COMPLETED", conclusion: "FAILURE", runID: "1", link: "test")
-        #expect(AutofixChecks(required: ["test"], results: [failed, optional]).failures == [failed])
-        #expect(AutofixChecks(required: [], results: [failed]).failures.isEmpty)
+        #expect(AutofixChecks(required: ["test"], results: [failed, optional]).isComplete == false)
+        #expect(AutofixChecks(required: [], results: [failed]).failures == [failed])
         #expect(AutofixChecks(required: ["optional"], results: [failed, optional]).failures.isEmpty)
     }
 

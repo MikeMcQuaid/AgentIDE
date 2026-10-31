@@ -7,6 +7,7 @@ struct AutofixCandidate: Equatable {
     let text: String
     var localThreadIDs: Set<String> = []
     let threads: [String: PendingThreadResolution]
+    var rebase: AutofixRebase?
 
     static func combine(_ candidates: [Self]) -> Self? {
         guard candidates.isEmpty == false else {
@@ -39,7 +40,7 @@ struct AutofixCandidate: Equatable {
             counts: [.checks: failures.count],
             sources: [.checks],
             events: Set(failures.map(\.runID)),
-            text: "Fix these failed required CI jobs on this head:\n"
+            text: "Fix these failed CI jobs on this head:\n"
                 + failures.lazy.map { $0.name + ": " + $0.conclusion }.joined(separator: "\n\n"),
             threads: [:],
         )

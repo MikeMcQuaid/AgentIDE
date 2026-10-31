@@ -27,13 +27,13 @@ public struct AutofixCheck: Codable, Hashable, Sendable {
 
 // MARK: - AutofixChecks
 
-/// Missing required results block automation even when the rollup is already red.
+/// Every reported job must finish before automation gathers failures.
 public struct AutofixChecks: Codable, Hashable, Sendable {
     // MARK: Lifecycle
 
     public init(required: Set<String>, results: [AutofixCheck]) {
         self.required = required
-        self.results = results.filter { required.contains($0.name) }
+        self.results = results
     }
 
     // MARK: Public
@@ -47,7 +47,7 @@ public struct AutofixChecks: Codable, Hashable, Sendable {
     }
 
     public var failures: [AutofixCheck] {
-        guard required.isEmpty == false, isComplete else {
+        guard isComplete else {
             return []
         }
 

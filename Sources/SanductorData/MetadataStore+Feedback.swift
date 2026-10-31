@@ -1,27 +1,16 @@
 public extension MetadataStore {
-    /// Resets loop progress at launch while preserving side-effect claims and user preferences.
-    func resetFeedbackLoops() {
+    /// Active loops retain their claims; interrupted local collections can retry after launch.
+    func resumeFeedbackLoops() {
         update { metadata in
             for key in metadata.pullRequestAutomation.keys {
-                guard var state = metadata.pullRequestAutomation[key] else {
+                guard metadata.pullRequestAutomation[key]?.isAutomatic == true,
+                      metadata.pullRequestAutomation[key]?.collection?.isPending == true
+                else {
                     continue
                 }
 
-                state.isAutomatic = false
-                state.preparingExistingWork = nil
-                state.attempt = nil
-                state.failedPush = nil
-                state.localRounds = LocalAutofixRounds(limit: state.localRoundLimit)
-                state.roundsStarted = 0
-                state.collection = nil
-                state.repeatLocalReview = true
-                state.pushedCommit = nil
-                state.pushedFrom = nil
-                state.loopResult = nil
-                state.pending = ""
-                state.lastResult = ""
-                state.activityLog = []
-                metadata.pullRequestAutomation[key] = state
+                metadata.pullRequestAutomation[key]?.collection = nil
+                metadata.pullRequestAutomation[key]?.pending = "Resuming local feedback collection"
             }
         }
     }

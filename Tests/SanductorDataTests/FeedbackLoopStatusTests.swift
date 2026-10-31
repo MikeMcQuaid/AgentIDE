@@ -20,11 +20,10 @@ struct FeedbackLoopStatusTests {
     }
 
     @Test
-    func `the loop runs through push confirmation and remembers completion after restart`() async throws {
+    func `the loop keeps watching after local fixes and a manual push`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            value.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
             value.pullRequestAutomation[AutofixFixture.key]?.startLoop()
         }
         let coordinator = AutofixCoordinator()
@@ -36,39 +35,20 @@ struct FeedbackLoopStatusTests {
         await coordinator.refresh(store: fixture.store, driver: fixture.driver())
         state = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
         #expect(state.isAutomatic == true)
-        #expect(state.pushedCommit == "fixed")
         #expect(state.isLoopRunning)
-        #expect(state.nextTrigger == "GitHub must confirm the pushed commit before gathering more feedback.")
+        #expect(state.nextTrigger.contains("Push manually"))
         #expect(state.activityLog?.contains { $0.message == "Finished feedback loop" } == false)
         #expect(state.activityLog?.contains { $0.message == "Stopped feedback loop" } == false)
         await fixture.update { $0.head = "fixed"; $0.freshHead = "fixed"; $0.checkConclusion = "SUCCESS" }
         await coordinator.refresh(store: fixture.store, driver: fixture.driver())
         let restarted = try JSONDecoder().decode(AppMetadata.self, from: JSONEncoder().encode(fixture.store.load()))
         state = try #require(restarted.pullRequestAutomation[AutofixFixture.key])
-        #expect(state.isLoopRunning == false)
-        #expect(state.loopStatus == "Finished")
-        #expect(state.activityLog?.contains { $0.message == "Finished feedback loop" } == true)
+        #expect(state.isLoopRunning)
+        #expect(state.loopStatus == "Running")
+        #expect(state.activityLog?.contains { $0.message == "Finished feedback loop" } == false)
         state.startLoop()
         state.stopLoop()
         #expect(state.loopStatus == "Stopped")
-        #expect(state.isLoopRunning == false)
-    }
-
-    @Test
-    func `a failed automatic push is not labelled finished`() async throws {
-        let fixture = try AutofixFixture()
-        fixture.store.update { value in
-            value.pullRequestAutomation[AutofixFixture.key]?.autofixCI = true
-            value.pullRequestAutomation[AutofixFixture.key]?.pushAutomatically = true
-            value.pullRequestAutomation[AutofixFixture.key]?.startLoop()
-        }
-        let coordinator = AutofixCoordinator()
-        await coordinator.refresh(store: fixture.store, driver: fixture.driver())
-        await fixture.complete()
-        await fixture.update { $0.failPush = true }
-        await coordinator.refresh(store: fixture.store, driver: fixture.driver())
-        let state = try #require(fixture.store.load().pullRequestAutomation[AutofixFixture.key])
-        #expect(state.loopStatus == "Failed")
         #expect(state.isLoopRunning == false)
     }
 }

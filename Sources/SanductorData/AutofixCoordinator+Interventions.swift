@@ -33,30 +33,25 @@ extension AutofixCoordinator {
             )
         }
         if await driver.isDirty(target), result != nil || attempt.hasObservedTurn == true {
-            try await requestCommit(attempt, head: result?.commit ?? attempt.head, target: target, context: context)
+            guard let head = await driver.head(target), result == nil || result?.commit == head else {
+                return nil
+            }
+
+            if attempt.rebase == nil {
+                try await requestCommit(attempt, head: head, target: target, context: context)
+            }
             return nil
         }
         return result
     }
 
     func reconcileIdleChanges(
-        _ state: PullRequestAutomation, target: AutofixDriver.Target?, head: String, context: AutofixContext,
+        _ state: PullRequestAutomation, target: AutofixDriver.Target?, context: AutofixContext,
     ) async throws -> Bool {
-        guard state.attempt == nil, state.isPreparingExistingWork == false, let target else {
+        guard state.attempt == nil, state.isPreparingExistingWork == false, let target,
+              await context.driver.isDirty(target)
+        else {
             return false
-        }
-
-        let dirty = await context.driver.isDirty(target)
-        let localHead = await context.driver.head(target)
-        guard dirty || (state.isLocalStage == false && localHead != nil && localHead != head) else {
-            return false
-        }
-
-        if dirty == false, state.pushAutomatically == false {
-            context.store.update { metadata in
-                metadata.pullRequestAutomation[context.key]?.pending = "Push committed fixes to continue the loop"
-            }
-            return true
         }
 
         try reconsiderChanges(state, context: context)
@@ -88,15 +83,12 @@ extension AutofixCoordinator {
     func reconsiderChanges(_ expected: PullRequestAutomation, context: AutofixContext) throws {
         try context.store.updatePersisting { metadata in
             guard var state = metadata.pullRequestAutomation[context.key], state == expected,
-                  state.isAutomatic || state.failedPush?.retryRequested == true
+                  state.isAutomatic
             else {
                 return
             }
 
             state.attempt = nil
-            state.failedPush = nil
-            state.localRounds?.lastAttempt = nil
-            state.localRounds?.commit = nil
             state.collection = nil
             state.preparingExistingWork = true
             state.isAutomatic = true

@@ -14,7 +14,7 @@ extension AutofixAttempt {
         threads = try container.decodeIfPresent([String: PendingThreadResolution].self, forKey: .threads) ?? [:]
         commitRequestedHead = try container.decodeIfPresent(String.self, forKey: .commitRequestedHead)
         hasObservedTurn = try container.decodeIfPresent(Bool.self, forKey: .hasObservedTurn)
-        pushClaimed = try container.decodeIfPresent(Bool.self, forKey: .pushClaimed) ?? false
+        rebase = try container.decodeIfPresent(AutofixRebase.self, forKey: .rebase)
     }
 
     // Coding keys match the existing synthesised spelling.
@@ -32,7 +32,7 @@ extension AutofixAttempt {
         case threads
         case commitRequestedHead
         case hasObservedTurn
-        case pushClaimed
+        case rebase
     }
     // swiftlint:enable explicit_enum_raw_value
 }

@@ -338,7 +338,7 @@ public struct GitHubClient: Sendable {
 
     private static func summary(
         from row: PullRequestRow,
-        // swiftlint:disable:next discouraged_optional_collection - Unknown rules must block autofix.
+        // swiftlint:disable:next discouraged_optional_collection - Rules may be unavailable.
         requiredChecks: Set<String>?,
         askedForChecks: Bool,
     ) -> PullRequestSummary {
@@ -365,15 +365,20 @@ public struct GitHubClient: Sendable {
             updatedAt: row.updatedAt,
             headCommit: row.headRefOid,
             awaitsCopilotReview: (row.reviewRequests ?? []).contains { Self.isCopilot($0.login) },
+            requestedReviewers: Set((row.reviewRequests ?? []).compactMap(\.login)),
             copilotReviewedAt: (row.latestReviews ?? [])
                 .filter { Self.isCopilot($0.author?.login) }
                 .compactMap(\.submittedAt)
                 .max(),
             labels: (row.labels ?? []).map(\.name).sorted(),
             optionalFailures: rollup.optionalFailures,
-            autofixChecks: requiredChecks.map { required in
-                AutofixChecks(required: required, results: (row.statusCheckRollup ?? []).map(Self.autofixCheck))
-            },
+            autofixChecks: askedForChecks || row.statusCheckRollup != nil
+                ? AutofixChecks(
+                    required: requiredChecks ?? [], results: (row.statusCheckRollup ?? []).map { check in
+                        Self.autofixCheck(check, head: row.headRefOid ?? "")
+                    },
+                )
+                : nil,
             headRepository: row.headRepository?.nameWithOwner,
             checkDetails: askedForChecks || row.statusCheckRollup != nil
                 ? Self.checkDetails(row.statusCheckRollup ?? [], required: requiredChecks) : nil,

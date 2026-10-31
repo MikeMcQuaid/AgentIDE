@@ -19,8 +19,8 @@ rather than types, so the window is arranged around the agent loop.
 
 Agents and builds run directly on macOS, without containers or virtual
 machines. The host app coordinates independent local reviews, GitHub
-bot feedback and required CI results with commit signing, restacking
-and pushes, with automatic pushing off by default. App Intents and the
+bot feedback and all CI results with local fixes; commit signing,
+restacking and pushes remain explicit user actions. App Intents and the
 iPhone's direct SSH connection expose the local workflow without a
 Sanductor account, subscription or hosted relay. Unpublished advisory
 sessions use neutral branch names and ask agents to keep advisory
@@ -1646,7 +1646,6 @@ steps.
   twin. An automatic rebase conflict aborts and leaves the branch and
   remote unchanged. An explicit Rebase can still set a conflicting
   version aside (`OverwriteTips`), with Push leasing that exact tip.
-  Autofix keeps its captured remote head and reviewed source commit.
   Never add `--force` or `--force-if-includes`.
 - **Pushed is a tip, not a flag.** A push records the branch and the
   commit it sent, and Push stays dimmed with Open PR lit until that
@@ -2762,355 +2761,132 @@ LF, CRLF and CR line endings. Locations are checked before slicing;
 unusable ranges leave the original text readable instead of crashing
 the PR pane.
 
-The shared Autofix feedback loop controls select local AI reviews,
-required GitHub checks, automated reviews and private repository reviews for
-each pull request, including entries in a stack. Review's local
-preferences belong to the worktree. A compact button opens a native
-popover from the same icon in both top bars. The PR header replaces its
-browser button with autofix and moves the label picker alongside it.
-Refresh uses the same small control size on both pages. Review-request
-and label menus use native bordered buttons to match adjacent actions.
-The PR number and context menu still open the browser. Applied labels alone
-get a row below the header, and autofix status appears there only while
-the loop is active or awaiting a fix. Review shows its local loop's
-status and a narrower popover containing only local review controls,
-rounds, findings and activity. Its loop belongs to the worktree even when
-a PR exists, never adopts PR settings and cannot push. The PR popover
-retains the full local-to-GitHub workflow and its separate push opt-in.
-Long status text remains available on hover. Closing the
-popover leaves reviews and the loop running. Escape dismisses it.
-The shared icon rotates in the toolbar and corresponding sidebar row
-while the loop or its final push confirmation is pending, respecting
-Reduce Motion. A separate lifecycle label identifies
-Not started, Running, Finished, Stopped or Failed while the activity
-still names the current wait. Loop stages, counts, pending attempts,
-collections and results reset on
-app launch, leaving automation stopped and preferences intact; selecting
-sources or running a manual review does not imply that a loop has started.
-The review pane reads local loop state from memory without looking up a PR.
-Native group boxes separate local review from GitHub feedback, placing each
-reviewer and round limit in its stage. The groups sit side by side when
-space allows and stack in narrower panes. Within the
-popover, sources, pickers and actions stay visible when disabled;
-selecting a source never moves the other controls. Standard menu pickers,
-body labels and secondary callouts provide the same hierarchy as the rest
-of the app; idle sources do not
-repeat their unchecked state in text. Compact source rows show counts of
-eligible findings, failed required jobs and review comments, or the reason
-each selected source is waiting.
-Reviewer menus show Claude, Codex, Copilot and CodeRabbit’s brand marks.
-CI waits show the number of outstanding required jobs, including missing
-results, rather than listing their names in the compact status row.
-Copy all (N) totals those items using the same candidate selection as its
-prompt; stale heads, unfinished required checks and unverified reviewers
-never inflate it. The Local → Push → GitHub strip highlights the
-current stage using text and system chevrons. Activity starts as a compact
-summary of current activity and the last result; its disclosure opens the
-next trigger and event history. One leftmost icon button starts the loop
-with the play symbol and switches to stop while active or awaiting a fix.
-Review and Copy all follow it. Both states retain the
-same button size, with tooltips and accessible labels. Sources and options
-precede actions, then progress, results and history. All popovers share
-content-based sizing against the
-current screen's visible height; contents and expanded findings grow the
-popover, and only the outer surface scrolls once it reaches that limit.
-Local review, issue selection, branch switching and stack popovers use the
-same sizing, with no independent height caps on their result lists.
-The PR footer's Reviews and Checks copy buttons and the conversation's
-bulk copy icon stay in place when it opens or closes. Those actions and the
-footer's context menu keep their broader behaviour: unfiltered unresolved
-reviews and failed-job logs, including partial runs. Individual thread
-copy actions and browser shortcuts stay available.
-The last displayed local review stays inspectable when its source is
-unchecked; the findings disclosure stays visible but disabled until a
-result exists.
-Selecting feedback never enables automation: Start loop explicitly begins
-a cycle and Stop ends it. Startup first reconciles existing work: current
-local findings take priority, then ready selected GitHub feedback on the
-matching head, without requesting another review. Missing required CI
-results still block remote feedback. Existing local reviews are reused
-only for the same code and reviewer. Without actionable feedback, dirty
-or unpushed work goes to the existing agent for inspection, completion
-and a committed result, preserving unrelated edits. That preparation is
-claimed by worktree revision and consumes no review round. Existing
-feedback fixes count towards their source's round budget. A clean,
-verified unpushed tip can be pushed even if the agent needed no new commit.
-Local review rounds still finish before pushing; pushing remains opt-in,
-and the Review pane never pushes. Changed or diverged PR heads are never
-treated as matching feedback, and the normal push ancestry checks remain.
-After startup work is reconciled, fresh local and GitHub rounds proceed.
-The activity log identifies preparation separately from those rounds.
-Automatic pushing is a separate opt-in, initially disabled.
-Local and remote stages each default to one round, with a limit of three;
-required CI and selected remote reviews share the remote round budget.
-Editing the reviewer in the feedback controls also saves that choice as
-the repository's default for new PRs and worktrees.
-Existing saved choices stay unchanged. Defaults persist in host-owned
-metadata by repository path, independently of feedback source selections,
-round limits and automation opt-ins, which remain local to each PR or
-worktree. Marking a review thread before opening the feedback controls
-uses the same repository defaults.
-Selecting Local AI review does not start a review. Review runs the chosen
-local reviewer explicitly and saves its findings for inspection. Copy
-all is disabled until selected feedback is available and copies current
-results without starting a review, sending a fix or requesting a remote review.
-The saved local review is authoritative, including findings resolved or
-reopened after collection; manual review changes refresh copy availability.
-Unavailable sources do not prevent copying the other ready sources;
-incomplete required CI and feedback for a different head are excluded.
-The manual flow is Review, inspect findings, Copy all, then paste into
-the agent. Starting a loop waits for the existing agent's turn to finish,
-then completes local review and fix rounds before gathering remote
-feedback. Local fixes stay unpushed until the local stage finishes, then
-the shared push opt-in controls the transition to remote CI and review.
-Without it the loop waits for a confirmed manual push. At the local
-round limit the loop completes the local stage automatically, rechecks
-the committed result and pushes through Sanductor when opted in. A clear
-local review can complete the stage early. Review-only loops finish
-locally without any push. Remote rounds request the chosen bot when
-needed before waiting for all required CI and selected reviews. Each
-round batches their findings into one fix-and-commit prompt, then pushes
-through Sanductor. The final round still waits for the new head and its
-CI and review results: clear feedback is success, remaining failures
-are reported as still failing without exceeding the round limit.
-Unknown required-check configuration blocks CI automation; a confirmed
-empty set has no required failures and optional jobs still cannot delay it.
-Cancelled required jobs cannot count as success. Final verification does
-not need an agent session after its last fix and push have finished.
-Local reviews
-reuse runLocalReview, running the chosen CLI against a captured diff through
-SandvaultLauncher. Collections run beside dashboard refreshes and
-publish progress. The fixing agent runs relevant local checks; the app
-has no local CI command or runner. Removed local CI preferences are
-ignored on reload and old attempt claims survive without enabling a push.
-The local reviewer sheet contains only its prompt, findings and review
-log; the shared loop lives in the review pane and PR pane. Failed local
-collections retain the CLI output and diagnostics, with the selected
-model and effort, and expose a useful error rather than only an exit
-status. The loop shows its current wait, last result and next trigger;
-its current wait remains visible with the popover closed. An expandable
-activity log records state transitions and round triggers without adding
-entries on unchanged refreshes; it retains the latest 100 events and
-clears on app launch and loop stop or restart. Log entries name the
-stage and round. App launch also resets active progress, deferred pushes
-and counters; durable delivery, bot request and resolution claims remain
-to prevent repeats. Pending Resolve on push marks remain active.
-The dashboard's existing refresh detects completion, failures
-and waits requiring a person, notifying once per transition with the
-existing completion or input-needed sound preferences. Ordinary CI,
-review and working-agent waits stay quiet, as does an explicit stop.
-An unavailable Start loop action shows its reason: no selected source,
-reviewing or copying in progress, an outstanding fix or a closed PR.
-A round is claimed before delivery and its duplicate-prevention record
-survives restarts. The loop verifies the final results at its limit and
-stops on unchanged code or an ambiguous side effect. A new cycle requires
-an explicit restart. Selected remote feedback waits for a matching pushed head;
-automatic pushing remains optional even in a multi-round loop.
-The dashboard's existing refresh cycle drives the work through
-`PullRequestStore`, `GitHubClient` and `SessionService`; no automation
-starts or resumes a session or switches a branch. A stacked entry waits
-until its branch is checked out in a worktree with a running agent.
-Local review selects a feedback source, not the agent that applies fixes:
-remote-only loops still need the branch's existing session. Agent waits
-identify that fixing role and appear only after checking session state.
-Settings → Review edits four independent prompt briefs: local review,
-local fix and commit, GitHub fix and commit and commit-only follow-up.
-Changes apply to the next prompt. The app appends the captured scope,
-untrusted-feedback rules, no-push instruction and result protocol to
-fix prompts; the reviewer receives only its own brief and captured code.
-Initial fix prompts allow uncommitted work and instruct the agent to
-preserve unrelated changes. Completion and automatic pushing still
-require a clean worktree. Activity distinguishes fix-and-commit prompts
-from commit-only follow-ups for existing fixes. If the agent finishes with
-uncommitted changes, the same attempt can send one commit-only follow-up
-to that session, even if the result file has not been written yet. The
-app must have observed the fixing turn running or received its result;
-idle state before that turn starts is insufficient. The follow-up is
-claimed durably before delivery, rechecks the branch, head
-and session and asks the agent to commit only its autofix changes and
-write the result. It never asks the agent to push; verified completion
-continues through Sanductor's existing push path and opt-in. Unrelated
-changes still prevent automatic pushing. Already attempted feedback
-with uncommitted changes and no pending attempt can recover the commit
-step on an explicit loop restart, using freshly verified feedback and
-the existing session. Commit requests are also claimed by head, so
-clearing an attempt cannot repeat them. Recovery does not repeat the
-fixing round or consume another round. Remaining attempted feedback
-without a recoverable commit is reported as needing attention, not
-success.
-Readiness reports the specific changed branch,
-head, session or activity rather than a combined agent/head wait.
-Starting a loop clears the previous result and activity history, so an
-earlier local review failure cannot label a new CI loop.
-Fixes run in the existing session's visible terminal. Delivery submits a
-short autofix instruction pointing to the captured findings file through
-`herdr agent prompt`, which handles bracketed paste and delayed Enter
-for the live agent, and asks it to report progress in that conversation.
-Reviewers return only
-their findings; their private review context is not injected into the
-fixing agent. The activity log confirms when the prompt has been sent.
-The default branch, unknown agent state and blocked agents never receive
-a prompt. Working agents finish their current turn first; the waiting
-message explains that the agent is working on something else.
+The shared Autofix controls select local AI reviews, all GitHub checks,
+bot reviews and human reviews from verified repository writers.
+The PR popover combines these sources; Review's narrower popover owns
+an independent worktree loop, even when a PR exists. Sources, reviewer
+choices, findings, actions and activity remain visible while disabled.
+The controls use native group boxes, menu pickers and content-based
+popover sizing. Closing the popover leaves work running; Escape closes
+it. A rotating icon and compact status show active work and its wait,
+respecting Reduce Motion. An expandable activity log retains the latest
+100 transitions without adding entries for unchanged refreshes.
 
-CI automation waits for every required check on the current head to
-report a terminal result. Optional checks neither delay it nor enter its
-prompt. Copy all and autofix fetch each failed required job through the
-same GitHub client and log formatter as Checks, reading the complete
-job output from the REST job-log endpoint before condensing it. The
-failed-step view can omit diagnostics not assigned to a step, so autofix
-waits for the complete job log rather than accepting that partial view.
-The shared formatter recognises case-insensitive severity words, including
-`[ERR]`, `[FAIL]` and `[WARN]`, compiler diagnostics, fatal and critical
-messages, panics, exception names and failure symbols such as `❌`.
-Word boundaries avoid matching severity fragments inside identifiers;
-suffix matches require conventional capitalised diagnostic type names.
-Warnings, including `⚠`, share the existing warning budget; failures
-take priority. Each warning is kept before its nearest context lines,
-so oversized context cannot discard a marker that fits the budget.
-Matching follows timestamp and ANSI colour stripping.
-Three context lines on each side expand through contiguous indented
-details, traceback and Go goroutine and frame headings, chained causes,
-source gutters and diff lines, up to forty lines per side.
-Ordinary progress breaks expansion, and context never crosses a job or
-step boundary. Overlapping contexts appear once, and expanded warning
-context counts towards its byte budget.
-It retains head, tail and failure context, then caps
-each formatted log at 64 KiB with an explicit omission notice. If that
-cap is exceeded, errors and their context take precedence over warnings
-and progress; error lines alone take precedence if their context also
-exceeds the cap. Autofix divides a 256 KiB log budget across failed
-required jobs, including for Copy all; exceptionally large diagnostics
-retain their beginning and end.
-Job links are appended only after repository visibility is verified as
-public; private or unknown repositories supply captured
-output without generated resource links. Optional jobs' logs are never
-fetched by automation.
-Only failed required checks are batched, with persistent run
-identifiers limiting each run to one attempt, including reruns. Review
-automation batches unresolved comments from human accounts only in
-private repositories and only when GitHub verifies their write access. Both
-privacy and permission are rechecked before delivery; public repositories
-and unknown privacy or permissions are ineligible. The Private reviewers
-control stays visible but disabled unless privacy is confirmed. Automated
-reviews is one initially disabled source: it includes unresolved comments
-from both Copilot and CodeRabbit plus GitHub Code Quality and Advanced
-Security (CodeQL), regardless of the selected request provider. Exact bot
-logins and Bot account types are required; lookalike accounts never qualify.
-The request picker chooses either Copilot or CodeRabbit for the loop.
-The header uses an icon-only review button: an existing request remembers
-the PR's choice, otherwise cached timeline and inline bot comments infer
-the provider when only one has commented. With neither or both providers,
-a code-review button opens a chooser whose selection requests that review.
-Repository defaults alone never bypass this first choice. The chooser uses
-the same persistent request claims as automation; current-head requests
-take precedence over later preference changes. The CodeRabbit mark comes
-from its [official brand assets](https://www.coderabbit.ai/brand), and the
-code-review and Copilot marks use GitHub's vendored Octicons.
-A missing head disables requests. Only one
-provider can be requested per head,
-including across restarts or a later selection change; a new push permits
-a different provider. Existing requests complete before autofix proceeds,
-but Copy all can collect existing comments while a review is pending.
-Existing feedback from other providers neither requests nor waits for a
-new review from them. The reviewer choice is remembered per repository
-without enabling automation on new PRs.
-CodeRabbit requests post the documented `@coderabbitai review` command on
-the selected PR. Requests are claimed before delivery and survive restarts,
-including ambiguous failures. All automated feedback shares the GitHub
-round budget, prompt delivery and push setting.
-CodeRabbit findings in submitted review summaries, such as nitpicks and
-comments outside the diff, join inline threads in Copy all and autofix. Only
-summaries for the current head qualify; review information, skipped checks
-and praise do not trigger fixes. Summary prompts include the extracted
-findings rather than the full review. Individual and bulk conversation
-copies and autofix share the same CodeRabbit body cleanup: omit leading
-classification badges and trailing tracking and attribution comments,
-preserving finding text, code examples, anchors and replies. Raw bodies
-remain cached for completion detection and feedback extraction.
-Summary findings have durable review IDs
-but no thread resolution action. Completion can be a submitted review or
-a new run with no findings for the current head in CodeRabbit's overview
-comment. An overview edit with the same run identifier does not answer a
-recorded request.
-Legacy Copilot requests without a captured head are answered by a later
-submitted Copilot review, even if the branch has since been pushed.
-These sources reuse the conversation cache and its GitHub refresh cadence.
-The shared timeline reader paginates REST reviews and issue comments,
-retaining node IDs, Bot types, timestamps and reviewed commits; decoding
-failures preserve the last good cache. Summary findings count as one
-feedback item per submitted review. Comment identifiers prevent repeat
-delivery even across pushes and restarts. Threads containing reviewers
-outside the selected, verified sources need manual attention; autofix
-does not act on or resolve them. Eligible threads include their earlier
-replies as context even when those replies have already been handled.
-The PR head and review threads are re-read before delivery. Remote
-feedback requires the matching checked-out head. Local feedback can
-include uncommitted work, provided its captured revision still matches
-before delivery.
+Start loop waits for the branch's existing agent to finish its turn,
+then gathers selected feedback before delivering a fix-and-commit prompt.
+All fixes remain local. Autofix never signs or pushes, requests a remote
+review or waits for a push. It keeps watching the published PR for new
+CI jobs and eligible comments until stopped, including after local
+commits have moved ahead. Remote feedback must belong to an ancestor of
+the checked-out tip or a locally verified autofix rebase of that head;
+a changed or otherwise diverged remote head waits for the user to
+integrate it. Captured heads, branch, session, permissions and feedback
+are checked again immediately before delivery. Agents receive both the
+published feedback and the current local scope and preserve unrelated
+changes. No automation starts a session or switches branches.
 
-Automation runs beside the dashboard refresh, with one coalesced pass at
-a time, so log downloads and signing cannot hold up session updates.
-Missing automation fields decode with their original defaults and a
-malformed PR entry cannot discard other PR claims or scheduled prompts.
+A PR loop also handles upstream merge conflicts before gathering CI and
+reviews, since conflicts can prevent those checks from running. When
+GitHub reports conflicts, the app fetches through the shared fetch path
+in the worktree and checks whether the local history already contains
+`origin/<target branch>`. GitHub supplies conflict detection; the local
+ancestry check never runs repository-configured merge drivers.
+The existing idle agent receives a prompt to rebase on that ref and
+resolve the conflicts, leaving the completed rebase local. Dirty
+worktrees wait. The captured target branch, target commit and local head
+are rechecked before delivery, and each rebase is claimed once.
+Completion verifies that the target commit is in the resulting history.
+The app records the rebased commit for the published head so feedback
+watching continues; a different published head still needs integration.
+Existing automatic Resolve on push marks follow the rebased fix commit.
+Stale GitHub conflicts cannot request another rebase once the fetched
+target is integrated locally, and conflict recovery consumes no local
+review cycle.
 
-Claims reach the host-owned metadata file before terminal delivery,
-pushing or resolution. An ambiguous failure is shown and never retried
-automatically. The agent receives a prompt file through the existing
-terminal client, commits its fixes and writes a bounded result naming
-its commit and only the review threads it actually addressed. The prompt
-forbids resolving GitHub conversations directly; addressed remote threads
-are marked Resolve on push and resolved only after a confirmed new head.
-Summary findings never produce resolution requests. Standalone code-scanning
-alerts and check annotations are not review conversations. Completion
-requires the same running agent to finish and the reported commit to be
-the clean checked-out tip. Every feedback source uses the same guarded push
-path. When signatures are required, the existing signed rebase replays
-only commits above the captured remote head, without changing the base.
-The app rechecks the clean tip, signatures and unchanged code tree before
-pushing, then tracks the signed commit for GitHub confirmation. Autofix
-uses the same stack push path as manual pushes, updating published
-branches above the fixing branch while leaving unpublished branches local.
-The stack is captured before signing, and children replay from their
-parent's pre-signing tip. The fixing branch keeps its verified source
-commit and captured remote lease instead of integrating unreviewed work.
-Autofix leaves lower branches untouched and checks that the fixing
-branch contains its parent's tip before pushing any branch.
-Signing failures stop the loop without asking the agent to push. A failure
-opens the existing autofix popover with the diagnostic and a Push action.
-Only that explicit retry can repeat the push, preserving its round and thread
-marks and rechecking the PR, branch, session and committed tip. A push
-that failed after signing remembers the signed tip. Manual pushes are
-noticed without clicking Retry, including signed rewrites and pushes
-made outside Sanductor. Matching commit trees allow a signing-only rewrite
-to continue; changed code returns to existing-work validation without
-resetting round counts or delivery claims. A manually pushed result
-marks addressed threads against the pre-push head so the confirmed push
-can resolve them. Dirty work and busy agents still block pushing. Stop,
-restart and app launch clear retries.
-Starting a loop with signing required first signs an unreferenced copy of
-the current commit to wake the configured signing agent while the user
-is present. Unlike an amend, this leaves HEAD, the index and worktree
-unchanged, preserving CI identities and staged work. Failure is recorded
-but does not prevent the loop or its first automatic push attempt.
-The push names
-the PR's existing head repository and branch and checks
-that GitHub's head has not moved. Turning off automatic pushing leaves
-committed changes waiting for a manual push rather than sending the same
-fixes again or judging CI on the old remote head.
+Only local reviews have cycles: one by default, up to three. Existing
+local findings can be reused when code and reviewer match. Local review
+and fix cycles finish when clear or at their limit; GitHub observation
+continues without a round count or limit. New remote fixes do not reset
+the local cycle budget. A worktree-only loop finishes locally. Restarting
+explicitly resets the local cycle count but retains delivery claims.
+App launch resumes active loops, retaining attempts, local cycle counts,
+activity, delivery claims, review requests and resolution marks.
+Interrupted local collections retry for active loops; stopped loops and
+completed collections stay unchanged. An outstanding fix waits for its
+original agent and result without resending the prompt.
+Legacy remote rounds, automatic-push preferences and retries are ignored.
 
-Within a PR loop, local feedback shares the controls, delivery, result
-validation, duplicate prevention and automatic-push setting with remote
-feedback. Review's independent worktree loop uses the same delivery and
-result validation without PR lookups or pushing. Local findings need no
-GitHub reviewer permission lookup, but the
-review's recorded worktree revision must still match before delivery.
-Only local findings the agent reports as addressed are marked resolved,
-and only when the saved review run is still the same. Existing results
-from the local review button can be used without repeating the review.
-Without a PR, fixes remain local. Creating a PR requires a separate
-automation opt-in there; a previous local cycle cannot silently enable
-automation on the new PR.
+CI automation waits for every reported job to finish, including optional
+jobs and any known required checks not yet reported. Unreadable branch
+protection does not hide reported CI. Every failed job can trigger a fix;
+job identifiers distinguish reruns and prevent duplicate delivery.
+External checks use their timestamps and links, scoped to the published
+head when no run identifier exists.
+Autofix and its Copy all action include complete failed-job logs from the
+shared REST job-log reader, without condensing diagnostics or progress.
+Unavailable logs keep collection waiting. External checks retain their
+name and conclusion when no Actions log endpoint exists. Generated job
+links are included only after repository visibility is verified public.
+The Checks pane and its separate copy action retain their existing display
+rollup and condensed-log behaviour.
+
+Remote review collection waits for outstanding Copilot and CodeRabbit
+requests and requested human reviewers with verified write access.
+Autofix observes requests; explicit review buttons remain responsible for
+creating them. Human feedback is eligible in public and private
+repositories only after GitHub confirms write access, rechecked before
+delivery. Known review bots require exact logins and Bot account types;
+lookalike accounts never qualify. Unresolved inline threads and actionable
+current-head review summaries join the same prompt as CI and local
+findings. CodeRabbit summaries retain extracted nitpicks and findings
+outside the diff, excluding praise and review information. Copy and
+autofix share the existing CodeRabbit body cleanup. Threads containing
+unverified participants require manual attention. Previously handled
+replies remain context; durable comment and review identifiers prevent
+repeated fixes across refreshes, pushes and restarts.
+
+Review runs the chosen local reviewer explicitly. Copy all copies ready
+selected feedback without requesting reviews or sending a fix, excluding
+unfinished CI and unverified reviewers. Repository defaults remember
+reviewer choices independently of source opt-ins and local cycle limits.
+The fixing agent and local reviewer remain separate roles. Local review
+collections run beside dashboard refreshes, retain CLI diagnostics on
+failure and use the existing captured-diff and revision validation.
+The fixing agent runs relevant local checks; the app has no CI runner.
+
+Settings → Review edits the local review, local fix-and-commit, GitHub
+fix-and-commit and commit-only briefs. The app appends captured scope,
+untrusted-feedback rules, no-push instructions and the result protocol.
+Fix prompts travel through `herdr agent prompt` to the existing visible
+terminal, with a short instruction pointing to the findings file. Working
+agents finish first; blocked agents, unknown activity and the default
+branch never receive a prompt. Delivery is claimed durably before sending;
+an ambiguous failure is reported and never repeated automatically.
+
+The agent writes a bounded result naming the resulting commit and only
+the findings it addressed. Completion requires the same session, a clean
+worktree and the reported tip. A signing-only rewrite with the same tree
+can match the result. One durably claimed commit-only follow-up handles
+uncommitted fixes after the app observes the fixing turn or its result,
+including partially committed work. Completion is tied to the claimed
+attempt, so late results cannot finish a stopped or restarted loop.
+Transient GitHub reads retry before discarding thread resolution marks.
+Existing dirty work can be reconciled on explicit restart without
+repeating claimed feedback. Local findings are resolved only when their
+saved review run still matches, independently of remote read failures;
+the saved collection reflects those resolutions too. The result names
+all supplied findings verified fixed locally, including existing fixes
+on an unchanged local commit. Addressed remote threads are marked
+Resolve on push and remain unresolved until the user pushes and GitHub
+confirms a new head containing the fix, or an identical tree after
+signing. Summary findings have no thread resolution action.
+
+The dashboard's coalesced refresh drives observation through
+`PullRequestStore`, `GitHubClient` and `SessionService` beside ordinary
+session refreshes. Waiting for CI, reviews or an active agent stays quiet;
+failures and waits requiring intervention use existing notification
+preferences. Stop leaves the agent's current turn running. Unknown or
+malformed legacy metadata cannot authorise a push or discard other claims.
 
 Resolve on next push works independently of autofix. Each mark records
 the PR, thread, GitHub head and latest comment identifier. A fresh GitHub
@@ -3118,7 +2894,8 @@ head different from the marked head confirms a push, wherever it was
 made; a local commit or a failed push confirms nothing. Fresh thread
 state must still be unresolved with the same latest comment before a
 single resolution request is claimed. Further comments cancel the mark.
-Autofix marks only the threads its result reports as addressed. The PR
+Autofix marks only the threads its result reports as addressed and saves
+the fix commit, so an unrelated push cannot resolve them. The PR
 pane shows both pending activity and the last result, and individual
 threads show a cancellable pending mark. All these ledgers survive
 restarts and are not aged out with display caches.

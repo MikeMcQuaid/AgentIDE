@@ -22,7 +22,7 @@ public enum FeedbackPrompt: String, CaseIterable, Sendable {
             "Verify the local review findings, make focused fixes, run relevant checks and commit the changes."
 
         case .remoteFix:
-            "Verify all supplied reviews and failing required CI output, make focused fixes, "
+            "Verify all supplied reviews and failing CI output, make focused fixes, "
                 + "run relevant local checks and commit the changes."
 
         case .commit:

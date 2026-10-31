@@ -53,7 +53,7 @@ struct FeedbackLoopTests {
     }
 
     @Test
-    func `CI and trusted reviews share one round and one prompt`() async throws {
+    func `CI and trusted reviews share one prompt`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.isAutomatic = true
@@ -65,7 +65,6 @@ struct FeedbackLoopTests {
         let prompt = try #require(await fixture.state.prompts.first)
         #expect(prompt.contains("test"))
         #expect(prompt.contains("review"))
-        #expect(fixture.store.load().pullRequestAutomation[AutofixFixture.key]?.roundsStarted == 1)
     }
 
     @Test
@@ -90,15 +89,14 @@ struct FeedbackLoopTests {
         #expect(prompt.contains("private-repo-reader") == false)
     }
 
-    @Test(arguments: [1, 2, 3])
-    func `round budget survives coordinator restarts`(limit: Int) async throws {
+    @Test
+    func `watching continues across coordinator restarts without remote rounds`() async throws {
         let fixture = try AutofixFixture()
         fixture.store.update { value in
             value.pullRequestAutomation[AutofixFixture.key]?.isAutomatic = true
             value.pullRequestAutomation[AutofixFixture.key]?.autofixReviews = true
-            value.pullRequestAutomation[AutofixFixture.key]?.roundLimit = limit
         }
-        for index in 0 ... limit {
+        for index in 0 ... 4 {
             await fixture.update { value in
                 value.comments = [AutofixFixture.thread("thread", comment: String(index))]
                 value.writers = ["human"]
@@ -108,6 +106,6 @@ struct FeedbackLoopTests {
             await fixture.complete()
             await AutofixCoordinator().refresh(store: fixture.store, driver: fixture.driver())
         }
-        #expect(await fixture.state.deliveries.count == limit)
+        #expect(await fixture.state.deliveries.count == 5)
     }
 }

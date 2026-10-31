@@ -1,9 +1,6 @@
-import SanductorDomain
-
 extension AutofixCoordinator {
     func finish(
         _ attempt: AutofixAttempt,
-        summary: PullRequestSummary,
         target: AutofixDriver.Target,
         context: AutofixContext,
     ) async throws {
@@ -18,46 +15,61 @@ extension AutofixCoordinator {
 
         if target.session.activity == .working, attempt.hasObservedTurn != true {
             store.update { value in
-                value.pullRequestAutomation[key]?.attempt?.hasObservedTurn = true
+                if value.pullRequestAutomation[key]?.attempt?.id == attempt.id {
+                    value.pullRequestAutomation[key]?.attempt?.hasObservedTurn = true
+                }
             }
         }
         guard [.done, .idle].contains(target.session.activity),
               let result = try await completedResult(attempt, target: target, context: context),
               await ready(target, head: result.commit, context: context),
-              let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id
+              let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id,
+              try await completeRebase(attempt, result: result, target: target, context: context),
+              try await markAddressed(attempt, result: result, context: context)
         else {
             return
         }
 
-        try store.updatePersisting { $0.pullRequestAutomation[key]?.preparingExistingWork = false }
-        if state.isLocalStage, attempt.sources.contains(.localReview) || state.isPreparingExistingWork {
-            try await finishLocal(attempt, result: result, summary: summary, target: target, context: context)
-            return
-        }
-        guard result.commit != attempt.head || attempt.sources == [.existingWork] else {
-            try complete(key: key, message: "Autofix finished without committed fixes", store: store)
-            return
-        }
+        try store.updatePersisting { metadata in
+            guard metadata.pullRequestAutomation[key]?.attempt?.id == attempt.id else {
+                return
+            }
 
-        try await markAddressed(attempt, result: result, context: context)
-        try await push(attempt, result: result, summary: summary, target: target, context: context)
+            metadata.pullRequestAutomation[key]?.preparingExistingWork = false
+            if attempt.sources.contains(.localReview), result.commit == attempt.head {
+                metadata.pullRequestAutomation[key]?.localRounds?.isComplete = true
+            }
+            metadata.pullRequestAutomation[key]?.attempt = nil
+            metadata.pullRequestAutomation[key]?.pending = ""
+            metadata.pullRequestAutomation[key]?.lastResult = result.commit == attempt.head
+                ? "Autofix finished on the current local commit" : "Autofix changes committed locally"
+            if metadata.pullRequestAutomation[key]?.hasRemoteSources == false,
+               metadata.pullRequestAutomation[key]?.isLocalStage == false
+            {
+                metadata.pullRequestAutomation[key]?.isAutomatic = false
+                metadata.pullRequestAutomation[key]?.loopResult = .finished
+            }
+        }
     }
 
-    func markAddressed(_ attempt: AutofixAttempt, result: AutofixResult, context: AutofixContext) async throws {
+    func markAddressed(_ attempt: AutofixAttempt, result: AutofixResult, context: AutofixContext) async throws -> Bool {
         let key = context.key
         let store = context.store
         let driver = context.driver
+        try markLocalAddressed(attempt, result: result, context: context)
+        guard result.addressedThreadIDs.subtracting(attempt.localThreadIDs).isEmpty == false else {
+            return true
+        }
         guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id,
               let fresh = try await driver.summary(state, true), state.matches(fresh),
               fresh.state == "OPEN", let markedHead = fresh.headCommit
         else {
-            return
+            return false
         }
 
-        let threads = Set(attempt.threads.keys).subtracting(attempt.localThreadIDs).isEmpty
-            ? [] : try await driver.threads(state, true)
+        let threads = try await driver.threads(state, true)
         guard try await driver.summary(state, true)?.headCommit == markedHead else {
-            return
+            return false
         }
 
         try store.updatePersisting { metadata in
@@ -75,11 +87,13 @@ extension AutofixCoordinator {
                 }
 
                 metadata.pullRequestAutomation[key]?.resolutions[id] = PendingThreadResolution(
-                    head: markedHead == result.commit ? attempt.remoteHead : markedHead, commentID: mark.commentID,
+                    head: markedHead == result.commit ? attempt.remoteHead : markedHead,
+                    commentID: mark.commentID,
+                    fixCommit: result.commit,
                 )
             }
         }
-        try markLocalAddressed(attempt, result: result, context: context)
+        return true
     }
 
     func markLocalAddressed(_ attempt: AutofixAttempt, result: AutofixResult, context: AutofixContext) throws {
@@ -100,123 +114,12 @@ extension AutofixCoordinator {
                     review.threads[index].isResolved = true
                 }
                 metadata.localReviews[attempt.worktreePath] = review
+                if let captured = metadata.pullRequestAutomation[key]?.collection?.review,
+                   (captured.runID ?? captured.revision) == (review.runID ?? review.revision)
+                {
+                    metadata.pullRequestAutomation[key]?.collection?.review = review
+                }
             }
         }
-    }
-
-    func push(
-        _ attempt: AutofixAttempt,
-        result: AutofixResult,
-        summary: PullRequestSummary,
-        target: AutofixDriver.Target,
-        context: AutofixContext,
-    ) async throws {
-        let key = context.key
-        let store = context.store
-        let driver = context.driver
-        guard let state = store.load().pullRequestAutomation[key], state.attempt?.id == attempt.id else {
-            return
-        }
-
-        let pushKey = PullRequestAutomation.key(for: summary.url)
-        guard state.localWorktreePath == nil else {
-            try complete(key: key, message: "Local fixes committed", store: store)
-            return
-        }
-
-        let fresh = try await driver.summary(state, true)
-        if let fresh, state.matches(fresh), fresh.state == "OPEN", fresh.headBranch == attempt.branch,
-           fresh.headCommit == result.commit
-        {
-            try complete(key: key, message: "Manual push confirmed by GitHub; continuing feedback", store: store)
-            return
-        }
-        guard store.load().pullRequestAutomation[pushKey]?.pushAutomatically == true,
-              state.allows(attempt.sources), result.commit != attempt.remoteHead
-        else {
-            try complete(key: key, message: "Autofix finished; changes await a push", store: store)
-            return
-        }
-        guard attempt.pushClaimed == false else {
-            try complete(
-                key: key,
-                message: "Push was already attempted; check GitHub before pushing again",
-                store: store,
-            )
-            return
-        }
-        guard let fresh, state.matches(fresh),
-              fresh.state == "OPEN", fresh.headBranch == attempt.branch, fresh.headCommit == attempt.remoteHead
-        else {
-            try reconsiderChanges(state, context: context)
-            return
-        }
-        guard try claimPush(attempt, pushKey: pushKey, context: context) else {
-            return
-        }
-
-        try await performPush(attempt, commit: result.commit, summary: fresh, target: target, context: context)
-    }
-
-    func claimPush(_ attempt: AutofixAttempt, pushKey: String, context: AutofixContext) throws -> Bool {
-        let key = context.key
-        let store = context.store
-        var claimed = false
-        try store.updatePersisting { metadata in
-            guard metadata.pullRequestAutomation[key]?.attempt?.id == attempt.id,
-                  metadata.pullRequestAutomation[key]?.attempt?.pushClaimed == false,
-                  metadata.pullRequestAutomation[pushKey]?.pushAutomatically == true,
-                  metadata.pullRequestAutomation[key]?.allows(attempt.sources) == true
-            else {
-                return
-            }
-
-            metadata.pullRequestAutomation[key]?.attempt?.pushClaimed = true
-            metadata.pullRequestAutomation[key]?.pending = "Preparing and pushing committed fixes through Sanductor"
-            claimed = true
-        }
-        return claimed
-    }
-
-    func complete(
-        key: String, message: String, store: MetadataStore, pushedCommit: String? = nil, previousHead: String? = nil,
-    ) throws {
-        try store.updatePersisting { value in
-            value.pullRequestAutomation[key]?.attempt = nil
-            value.pullRequestAutomation[key]?.pushedCommit = pushedCommit
-            value.pullRequestAutomation[key]?.pushedFrom = previousHead
-            value.pullRequestAutomation[key]?.pending = ""
-            value.pullRequestAutomation[key]?.lastResult = message
-            if value.pullRequestAutomation[key]?.localRounds?.isComplete == true {
-                value.pullRequestAutomation[key]?.localRounds?.lastAttempt = nil
-                value.pullRequestAutomation[key]?.localRounds?.commit = nil
-            }
-            if value.pullRequestAutomation[key]?.hasRemoteSources == false,
-               value.pullRequestAutomation[key]?.isLocalStage == false
-            {
-                value.pullRequestAutomation[key]?.isAutomatic = false
-            }
-        }
-    }
-
-    func confirmPush(_ state: PullRequestAutomation, head: String, context: AutofixContext) throws -> Bool {
-        guard let pushed = state.pushedCommit else {
-            return true
-        }
-        guard head != state.pushedFrom else {
-            context.store.update { value in
-                value.pullRequestAutomation[context.key]?.pending = "Waiting for GitHub to confirm the push"
-            }
-            return false
-        }
-
-        try context.store.updatePersisting { value in
-            value.pullRequestAutomation[context.key]?.pushedCommit = nil
-            value.pullRequestAutomation[context.key]?.pushedFrom = nil
-            value.pullRequestAutomation[context.key]?.pending = ""
-            value.pullRequestAutomation[context.key]?.lastResult = head == pushed
-                ? "Autofix push confirmed by GitHub" : "The head moved after the push; review GitHub's changes"
-        }
-        return true
     }
 }

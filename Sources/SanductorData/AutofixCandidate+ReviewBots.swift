@@ -1,3 +1,4 @@
+import Foundation
 import SanductorDomain
 
 extension AutofixCandidate {
@@ -21,23 +22,32 @@ extension AutofixCandidate {
         return nil
     }
 
-    static func reviewSummaries(_ reviews: [ReviewComment], head: String, state: PullRequestAutomation) -> Self? {
-        guard state.autofixBots else {
+    static func reviewSummaries(
+        _ reviews: [ReviewComment], head: String, state: PullRequestAutomation, writers: Set<String> = [],
+    ) -> Self? {
+        guard state.autofixBots || state.autofixReviews else {
             return nil
         }
 
         return combine(reviews.compactMap { review in
-            guard let id = review.nodeID, state.handledEvents.contains("review:" + id) == false,
-                  let findings = CodeRabbitFeedback.findings(review, head: head)
-            else {
+            guard let id = review.nodeID, state.handledEvents.contains("review:" + id) == false else {
                 return nil
             }
 
+            let human = state.autofixReviews && review.authorType == "User" && writers.contains(review.author)
+                && review.commit == head && ["COMMENTED", "CHANGES_REQUESTED"].contains(review.kind)
+            let findings = human ? review.body
+                : state.autofixBots ? CodeRabbitFeedback.findings(review, head: head) : nil
+            guard let findings, findings.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                return nil
+            }
+
+            let kind: AutofixAttempt.Kind = human ? .reviews : .codeRabbit
             return Self(
-                counts: [.codeRabbit: 1],
-                sources: [.codeRabbit],
+                counts: [kind: 1],
+                sources: [kind],
                 events: ["review:" + id],
-                text: "CodeRabbit review summary:\n" + findings,
+                text: review.author + " review summary:\n" + findings,
                 threads: [:],
             )
         })

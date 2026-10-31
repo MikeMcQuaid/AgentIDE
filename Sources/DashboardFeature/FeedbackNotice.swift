@@ -12,7 +12,7 @@ enum FeedbackNotice {
             self = .finished
         } else if state.loopResult == .failed
             || (state.isLoopRunning && (
-                state.pending.hasPrefix("Push the current fixes")
+                state.pending == "Integrate the current PR head before autofixing"
                     || state.pending.hasPrefix("Check out ")
                     || state.pending == "Waiting for a clean worktree before accepting the fix"
                     || state.pending == "Waiting for an agent session on this branch to apply fixes"

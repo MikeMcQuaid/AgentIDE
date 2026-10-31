@@ -1,12 +1,10 @@
 // MARK: - LocalAutofixRounds
 
-/// Optional in old ledgers; local fixes are pushed only when this stage finishes.
+/// Local review cycles are independent of continued GitHub observation.
 public struct LocalAutofixRounds: Codable, Equatable, Sendable {
     var limit = 1
     var started = 0
     var isComplete = false
-    var lastAttempt: AutofixAttempt?
-    var commit: String?
 }
 
 // MARK: - PullRequestAutomation
@@ -17,9 +15,9 @@ public extension PullRequestAutomation {
         preparingExistingWork == true
     }
 
-    /// Maximum local fix rounds before moving on to GitHub feedback.
+    /// Maximum local review and fix cycles.
     var localRoundLimit: Int {
-        get { localRounds?.limit ?? 1 }
+        get { min(Self.localRoundLimits.upperBound, max(Self.localRoundLimits.lowerBound, localRounds?.limit ?? 1)) }
         set {
             localRounds = localRounds ?? LocalAutofixRounds()
             localRounds?.limit = newValue
@@ -31,20 +29,18 @@ public extension PullRequestAutomation {
         localRounds?.started ?? 0
     }
 
-    /// Remote CI and reviews are deferred until this stage ends.
+    /// Local review remains selected until clear or at its cycle limit.
     var isLocalStage: Bool {
-        autofixLocalReviews && localRounds?.isComplete != true
+        autofixLocalReviews && localRounds?.isComplete != true && localRoundsStarted < localRoundLimit
     }
 
     /// Starts a new cycle without forgetting previously handled feedback.
     mutating func startLoop() {
-        failedPush = nil
         activityLog = []
         collection = nil
         repeatLocalReview = false
         preparingExistingWork = true
         localRounds = LocalAutofixRounds(limit: localRoundLimit)
-        roundsStarted = 0
         isAutomatic = true
         loopResult = nil
         lastResult = ""
@@ -54,7 +50,6 @@ public extension PullRequestAutomation {
     /// Stops further delivery without interrupting the agent's current turn.
     mutating func stopLoop() {
         preparingExistingWork = nil
-        failedPush = nil
         activityLog = []
         isAutomatic = false
         attempt = nil
@@ -64,7 +59,7 @@ public extension PullRequestAutomation {
 
     // MARK: Internal
 
-    internal mutating func countRound(for attempt: AutofixAttempt) {
+    internal mutating func countLocalRound(for attempt: AutofixAttempt) {
         guard attempt.commitRequestedHead == nil else {
             return
         }
@@ -73,20 +68,11 @@ public extension PullRequestAutomation {
             localRounds = localRounds ?? LocalAutofixRounds()
             localRounds?.started += 1
         }
-        if attempt.sources.subtracting([.localReview, .existingWork]).isEmpty == false {
-            roundsStarted += 1
-        }
     }
 
     internal var stageSelection: Self {
         var state = self
-        if isLocalStage {
-            state.autofixCI = false
-            state.autofixReviews = false
-            state.autofixBots = false
-        } else {
-            state.autofixLocalReviews = false
-        }
+        state.autofixLocalReviews = isLocalStage
         return state
     }
 }

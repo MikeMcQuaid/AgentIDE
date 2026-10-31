@@ -35,10 +35,14 @@ extension AutofixCoordinator {
             }
             guard mark.requested == false, head != mark.head,
                   let fresh = try await driver.summary(state, true), fresh.url == state.url,
-                  fresh.state == "OPEN", fresh.headCommit != nil, fresh.headCommit != mark.head,
+                  fresh.state == "OPEN", let freshHead = fresh.headCommit, freshHead != mark.head,
                   let checked = try await driver.threads(state, true).first(where: { $0.resolveID == id }),
                   checked.isResolved == false, checked.comments.last?.id == mark.commentID
             else {
+                continue
+            }
+
+            if let commit = mark.fixCommit, await driver.containsFix(state, commit, freshHead) == false {
                 continue
             }
 

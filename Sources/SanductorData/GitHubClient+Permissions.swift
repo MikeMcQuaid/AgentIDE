@@ -1,11 +1,6 @@
 import Foundation
 
 public extension GitHubClient {
-    /// Unknown visibility never authorises human review automation.
-    func isPrivate(repositoryPath: String, fresh: Bool = false) async -> Bool {
-        await repositoryIsPrivate(repositoryPath: repositoryPath, fresh: fresh) == true
-    }
-
     // Unknown visibility must not authorise public resource links.
     // swiftlint:disable:next discouraged_optional_boolean
     internal func repositoryIsPrivate(repositoryPath: String, fresh: Bool = false) async -> Bool? {
