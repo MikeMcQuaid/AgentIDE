@@ -67,12 +67,13 @@ struct HerdrTerminalTests {
         #expect(resize?["cols"] as? Int == 120)
         #expect(resize?["rows"] as? Int == 40)
 
-        let scroll = try JSONSerialization.jsonObject(
-            with: Data(HerdrTerminal.scrollCommand(upwards: true, lines: 3, column: 7, row: 4).utf8),
-        ) as? [String: Any]
+        let records = HerdrTerminal.scrollCommand(upwards: true, lines: 3, column: 7, row: 4).split(separator: "\n")
+        #expect(records.count == 3)
+        #expect(Set(records).count == 1)
+        let scroll = try JSONSerialization.jsonObject(with: Data(#require(records.first).utf8)) as? [String: Any]
         #expect(scroll?["type"] as? String == "terminal.scroll")
         #expect(scroll?["direction"] as? String == "up")
-        #expect(scroll?["lines"] as? Int == 3)
+        #expect(scroll?["lines"] as? Int == 1)
         #expect(scroll?["column"] as? Int == 7)
         #expect(scroll?["row"] as? Int == 4)
         let down = try JSONSerialization.jsonObject(
@@ -82,9 +83,8 @@ struct HerdrTerminalTests {
     }
 
     @Test
-    func `commands are single lines, the framing the stream needs`() {
+    func `input and resize commands are single records`() {
         #expect(HerdrTerminal.inputCommand(bytes: Array("a\nb".utf8)).contains("\n") == false)
         #expect(HerdrTerminal.resizeCommand(columns: 1, rows: 1).contains("\n") == false)
-        #expect(HerdrTerminal.scrollCommand(upwards: false, lines: 2, column: 0, row: 0).contains("\n") == false)
     }
 }

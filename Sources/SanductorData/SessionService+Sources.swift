@@ -164,19 +164,22 @@ public extension SessionService {
         try await requireNotQueued(worktree)
         let branch = worktree.branch
         let held = await git.currentBranch(worktreePath: worktree.path)
-        if let held, held != branch {
-            // Git checks the branch out to rebase it, so the
-            // worktree must be quiet and is put back afterwards.
-            try await requireQuiet(worktree: worktree, action: "rebase")
-        }
-
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: worktree.path)
         let target = await signedRebaseTarget(worktreePath: worktree.path, branch: branch)
-        try await integrateOrSetAside(worktree: worktree, branch: branch, target: target)
-        if let held, held != branch {
-            try await git.checkout(branch: held, worktreePath: worktree.path)
+        return try await git.preservingChanges(in: [worktree.path]) {
+            do {
+                try await integrateOrSetAside(worktree: worktree, branch: branch, target: target)
+            } catch {
+                if let held, held != branch {
+                    try await git.checkout(branch: held, worktreePath: worktree.path)
+                }
+                throw error
+            }
+            if let held, held != branch {
+                try await git.checkout(branch: held, worktreePath: worktree.path)
+            }
+            return target
         }
-        return target
     }
 
     /// Whether anything in a repository is actively working, which

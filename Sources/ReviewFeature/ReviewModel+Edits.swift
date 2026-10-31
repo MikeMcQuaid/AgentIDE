@@ -19,7 +19,7 @@ extension ReviewModel {
     @discardableResult
     func resetFile(_ file: DiffFile) async -> Bool {
         do {
-            try await git.restoreFromHead(worktreePath: worktreePath, path: file.path)
+            try await git.restoreFromHead(worktreePath: worktreePath, path: file.path, oldPath: file.oldPath)
         } catch {
             status = "Resetting " + file.path + " failed: " + error.localizedDescription
             return false

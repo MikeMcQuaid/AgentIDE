@@ -15,6 +15,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// Decodes tolerantly: absent keys keep their defaults.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        includeOptionalCheckLogs = try container.decodeIfPresent(
+            [String: Bool].self, forKey: .includeOptionalCheckLogs,
+        ) ?? [:]
         localReviews = try container.decodeIfPresent([String: LocalReview].self, forKey: .localReviews) ?? [:]
         conversationBackupAt = try container
             .decodeIfPresent([String: Date].self, forKey: .conversationBackupAt) ?? [:]
@@ -157,6 +160,9 @@ public struct AppMetadata: Codable, Equatable, Sendable {
     /// that an old branch sharing history is nothing to do with the
     /// work in hand; this is where saying so is remembered.
     public var stackExclusions: [String: [String]] = [:]
+
+    /// Manual check-log copy scope, keyed by repository and pull request number.
+    public var includeOptionalCheckLogs: [String: Bool] = [:]
 
     /// Manual and dependency blocks, shared by both devices through the host.
     public var workBlocks: [WorkBlock] = []

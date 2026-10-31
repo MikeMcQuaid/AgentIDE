@@ -21,7 +21,7 @@ public struct ScheduledPromptsView: View {
                 .interfaceFont(.caption)
                 .foregroundStyle(.secondary)
             if let error = model.error {
-                Text(error).foregroundStyle(.red).textSelection(.enabled)
+                Text(TokenRedaction.preview(error)).foregroundStyle(.red).textSelection(.enabled)
             }
             ScrollView {
                 LazyVStack(alignment: .leading) {
@@ -102,7 +102,7 @@ public struct ScheduledPromptsView: View {
 
     private func row(_ prompt: ScheduledPrompt) -> some View {
         HStack {
-            Toggle("Enable “" + prompt.name + "”", isOn: Binding(
+            Toggle("Enable “" + TokenRedaction.preview(prompt.name) + "”", isOn: Binding(
                 get: { prompt.isEnabled },
                 set: { enabled in
                     var updated = prompt
@@ -130,8 +130,8 @@ public struct ScheduledPromptsView: View {
 
     private func details(_ prompt: ScheduledPrompt) -> some View {
         VStack(alignment: .leading) {
-            Text(prompt.name).interfaceFont(.headline)
-            Text(prompt.prompt)
+            Text(TokenRedaction.preview(prompt.name)).interfaceFont(.headline)
+            Text(TokenRedaction.preview(prompt.prompt))
                 .lineLimit(Self.previewLines)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.leading)
@@ -141,11 +141,11 @@ public struct ScheduledPromptsView: View {
             if model.runningID == prompt.id {
                 Label("Starting agent…", systemImage: "hourglass")
             } else if let error = prompt.lastError {
-                Text(error).foregroundStyle(.red).textSelection(.enabled)
+                Text(TokenRedaction.preview(error)).foregroundStyle(.red).textSelection(.enabled)
             } else if let last = prompt.lastRun {
                 Text("Last started: " + last.formatted(date: .abbreviated, time: .shortened))
                     .interfaceFont(.caption)
-                    .hoverHelp(prompt.lastSession ?? "")
+                    .hoverHelp(TokenRedaction.preview(prompt.lastSession ?? ""))
             }
             if prompt.isEnabled, let next = prompt.nextRun {
                 Text("Next: " + next.formatted(date: .abbreviated, time: .shortened))

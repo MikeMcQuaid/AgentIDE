@@ -4,7 +4,7 @@ import SanductorDomain
 
 extension DashboardModel {
     func repositoryGroups(sortedBy sort: RepositorySort) -> [RepositoryGroup] {
-        sort.sorted(groups) { group in
+        sort.sorted(visibleGroups) { group in
             RepositorySort.Key(
                 name: group.repository.fullName ?? group.repository.name,
                 statuses: group.items.map { sidebarStatus(for: $0) },
@@ -43,7 +43,7 @@ extension DashboardModel {
     }
 
     var statusGroups: [(status: SidebarStatus, items: [WorktreeItem])] {
-        let grouped = Dictionary(grouping: groups.flatMap(\.items), by: sidebarStatus(for:))
+        let grouped = Dictionary(grouping: visibleGroups.flatMap(\.items), by: sidebarStatus(for:))
         return SidebarStatus.allCases.compactMap { status in
             grouped[status].map { (status, $0) }
         }

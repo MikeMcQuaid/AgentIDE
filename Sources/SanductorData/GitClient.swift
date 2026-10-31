@@ -271,12 +271,6 @@ public struct GitClient: Sendable {
         try await git(["apply", "-R", "--index", url.path], in: worktreePath)
     }
 
-    /// Puts one tracked path back to what HEAD has, in the index
-    /// and the worktree both: every uncommitted change to it goes.
-    public func restoreFromHead(worktreePath: String, path: String) async throws {
-        try await git(["checkout", "HEAD", "--", path], in: worktreePath)
-    }
-
     /// One commit's full message, named by anything git resolves.
     public func commitMessage(worktreePath: String, commit: String) async throws -> String {
         try await git(["log", "-1", "--format=%B", commit], in: worktreePath)

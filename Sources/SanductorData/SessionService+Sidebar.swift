@@ -28,6 +28,7 @@ public extension SessionService {
     /// `sudo` login shell, and the listing changes only when a
     /// session starts, ends or changes state, each of which wakes a
     /// reading that asks.
+    @concurrent
     func overview(
         scope: GitReadScope = .all,
         kept: [RepositoryGroup] = [],

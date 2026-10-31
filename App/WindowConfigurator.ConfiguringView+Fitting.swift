@@ -68,7 +68,6 @@ extension WindowConfigurator.ConfiguringView {
         }
         guard hasLostDisplay, window.frame != screen.frame else {
             window.contentView?.needsLayout = true
-            window.contentView?.layoutSubtreeIfNeeded()
             return
         }
 

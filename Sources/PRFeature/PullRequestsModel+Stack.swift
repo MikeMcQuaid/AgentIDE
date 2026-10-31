@@ -68,7 +68,7 @@ extension PullRequestsModel {
     }
 
     /// Why a branch held by another worktree cannot be rebased yet:
-    /// its agent is busy or it has uncommitted changes.
+    /// its agent is busy. Local changes are stashed during the rebase.
     var restackBlocker: String? {
         restackBlocker(in: mutableStackBranches)
     }
@@ -82,9 +82,6 @@ extension PullRequestsModel {
 
             if busyWorktrees.contains(holder.worktree.path) {
                 return "`" + branch + "`'s agent is busy; rebase once it is idle or done"
-            }
-            if holder.isDirty {
-                return "Commit or discard the changes in `" + branch + "`'s worktree first"
             }
         }
         return nil
@@ -127,7 +124,7 @@ extension PullRequestsModel {
     }
 
     /// Whether the selected branches have work to push, waiting for any
-    /// busy or dirty worktrees among them when they need rebasing.
+    /// busy worktrees among them when they need rebasing.
     var canPushStack: Bool {
         stack.stackingBlocker == nil && isBranchActionRunning == false
             && unpushedBelow == nil

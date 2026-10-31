@@ -1,6 +1,7 @@
 import Foundation
 @testable import SanductorData
 import SanductorDomain
+import Synchronization
 import Testing
 
 // MARK: - Check details
@@ -20,6 +21,41 @@ extension GitHubClientTests {
         #expect(summary.autofixChecks?.required == ["analyze"])
         let cached = try JSONDecoder().decode(PullRequestSummary.self, from: JSONEncoder().encode(summary))
         #expect(cached.checkDetails == checks)
+    }
+
+    @Test(arguments: ["none", "event", "job"])
+    func `job labels are reused only when complete and from the same job`(missing: String) async throws {
+        let runner = CheckWorkflowRunner(unavailable: false)
+        let github = GitHubClient(runner: runner) { true }
+        let first = try #require(await github.pullRequestSummary(repositoryPath: "/repo", number: 9))
+        var cached = try #require(first.checkDetails)
+        if missing == "event" {
+            cached[0].event = nil
+        } else if missing == "job" {
+            cached[0] = PullRequestCheck(
+                name: "analyze",
+                status: "COMPLETED",
+                conclusion: "SUCCESS",
+                requirement: .unknown,
+                link: "https://github.com/o/r/actions/runs/99/job/100",
+                workflowName: "Old CI",
+                event: "push",
+            )
+        }
+        cached[1] = PullRequestCheck(
+            name: cached[1].name,
+            status: "COMPLETED",
+            conclusion: "SUCCESS",
+            requirement: .unknown,
+            link: cached[1].link,
+            workflowName: cached[1].workflowName,
+            event: cached[1].event,
+        )
+        let next = try #require(await github.pullRequestSummary(
+            repositoryPath: "/repo", number: 9, cachedChecks: cached,
+        ))
+        #expect(next.checkDetails == first.checkDetails)
+        #expect(runner.checkReads.withLock { $0 } == (missing == "none" ? 1 : 2))
     }
 
     @Test
@@ -63,8 +99,21 @@ extension GitHubClientTests {
 
 // MARK: - CheckWorkflowRunner
 
-private struct CheckWorkflowRunner: ProcessRunner {
+private final class CheckWorkflowRunner: ProcessRunner {
+    // MARK: Lifecycle
+
+    init(unavailable: Bool) {
+        self.unavailable = unavailable
+    }
+
+    deinit {
+        // No resources to release.
+    }
+
+    // MARK: Internal
+
     let unavailable: Bool
+    let checkReads: Mutex = .init(0)
 
     func run(
         _ arguments: [String], workingDirectory _: String?, environment _: [String: String], outputLimit _: Int?,
@@ -84,6 +133,7 @@ private struct CheckWorkflowRunner: ProcessRunner {
                 standardError: "",
             )
         }
+        checkReads.withLock { $0 += 1 }
         #expect(arguments == ["gh", "pr", "checks", "9", "--json", "name,link,workflow,event"])
         return ProcessResult(
             status: unavailable ? 1 : 0,

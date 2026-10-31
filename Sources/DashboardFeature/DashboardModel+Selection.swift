@@ -3,7 +3,7 @@ import SanductorDomain
 
 extension DashboardModel {
     var selectedItems: [WorktreeItem] {
-        groups.flatMap(\.items).filter { isSelected($0) }
+        visibleGroups.flatMap(\.items).filter { isSelected($0) }
     }
 
     func isSelected(_ item: WorktreeItem) -> Bool {

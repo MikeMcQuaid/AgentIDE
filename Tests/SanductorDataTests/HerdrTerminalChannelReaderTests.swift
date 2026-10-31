@@ -8,6 +8,32 @@ import Testing
 /// a fresh attach beside it has to draw at once.
 struct HerdrTerminalChannelReaderTests {
     @Test
+    func `queued input and fragmented frame records retain every byte in order`() async throws {
+        let channel = HerdrTerminalChannel(command: ["cat"])
+        let events = try await channel.start()
+        let first = String(repeating: "é\u{1B}[31m", count: 20_000)
+        for frame in [first, "second"] {
+            channel.send(#"{"type":"terminal.frame","bytes":""# + Data(frame.utf8).base64EncodedString() + #""}"#)
+        }
+        channel.send(#"{"type":"terminal.closed","reason":"done"}"#)
+        var received = [UInt8]()
+        for await event in events {
+            switch event {
+            case let .frame(bytes):
+                received.append(contentsOf: bytes)
+
+            case .closed:
+                break
+            }
+            if case .closed = event {
+                break
+            }
+        }
+        await channel.stop()
+        #expect(received == Array((first + "second").utf8))
+    }
+
+    @Test
     func `a fresh client is read while other clients stay silent`() async throws {
         let silent = (0 ..< 3).map { _ in HerdrTerminalChannel(command: ["sleep", "300"]) }
         var drains = [Task<Void, Never>]()

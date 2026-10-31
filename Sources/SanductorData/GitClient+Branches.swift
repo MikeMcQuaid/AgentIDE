@@ -228,7 +228,7 @@ public extension GitClient {
     }
 
     /// Checks a branch out in the worktree; the caller has already
-    /// refused a dirty one or a running agent.
+    /// saved local changes and checked that agents are idle.
     func checkout(branch: String, worktreePath: String) async throws {
         try await git(["checkout", branch], in: worktreePath)
     }

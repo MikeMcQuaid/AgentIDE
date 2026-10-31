@@ -11,6 +11,7 @@ public struct SidebarRepository: Codable, Equatable, Sendable {
         lastActivityAt: Int = 0,
         fullName: String? = nil,
         defaultBranch: String? = nil,
+        isHidden: Bool = false,
     ) {
         self.name = name
         self.owner = owner
@@ -19,6 +20,7 @@ public struct SidebarRepository: Codable, Equatable, Sendable {
         self.lastActivityAt = lastActivityAt
         self.fullName = fullName ?? owner.map { $0 + "/" + name } ?? name
         self.defaultBranch = defaultBranch
+        self.isHidden = isHidden
     }
 
     public init(from decoder: any Decoder) throws {
@@ -31,6 +33,7 @@ public struct SidebarRepository: Codable, Equatable, Sendable {
             lastActivityAt: container.decodeIfPresent(Int.self, forKey: .lastActivityAt) ?? 0,
             fullName: container.decodeIfPresent(String.self, forKey: .fullName),
             defaultBranch: container.decodeIfPresent(String.self, forKey: .defaultBranch),
+            isHidden: container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false,
         )
     }
 
@@ -52,4 +55,6 @@ public struct SidebarRepository: Codable, Equatable, Sendable {
 
     /// The recorded default branch, absent from older snapshots or when unknown.
     public let defaultBranch: String?
+    /// Visibility last published by the Mac, with no schedule needed on the phone.
+    public let isHidden: Bool
 }

@@ -102,4 +102,53 @@ extension PullRequestsModelTests {
         #expect(message.contains("no job in this run has failed yet") == false)
         #expect(checks.allSatisfy { message.contains($0.link) })
     }
+
+    @Test
+    func `optional copy scope persists per PR and cancellation without logs is normal`() async throws {
+        let cancelled = PullRequestCheck(
+            name: "cancelled",
+            status: "COMPLETED",
+            conclusion: "CANCELLED",
+            requirement: .required,
+            link: "https://github.com/o/r/actions/runs/1/job/2",
+            startedAt: .now,
+        )
+        let optional = PullRequestCheck(
+            name: "optional",
+            status: "COMPLETED",
+            conclusion: "FAILURE",
+            requirement: .optional,
+            link: "https://github.com/o/r/actions/runs/1/job/3",
+        )
+        let summary = PullRequestSummary(
+            number: 1,
+            title: "Work",
+            url: "https://github.com/o/r/pull/1",
+            headBranch: "feature",
+            mergeable: "",
+            reviewDecision: "",
+            checks: "FAILURE",
+            failingCheckLinks: [cancelled.link],
+            checkDetails: [cancelled, optional],
+        )
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let metadata = root + "/state.json"
+        let model = makeModel(metadataFile: metadata)
+        model.fetchCheckLog = { jobID in
+            if jobID == 2 {
+                throw GitHubClient.JobLogUnavailable()
+            }
+            return "optional failure"
+        }
+        #expect(try await model.failingLogs(for: summary) == "Cancelled or skipped checks produced no logs.")
+        model.setIncludesOptionalLogs(true, for: summary)
+        #expect(model.includesOptionalLogs(for: summary))
+        #expect(model.includesOptionalLogs(for: self.summary(2, head: "another")) == false)
+        #expect(try await model.failingLogs(for: summary) == "## optional\noptional failure")
+        #expect(makeModel(metadataFile: metadata).includesOptionalLogs(for: summary))
+        model.setIncludesOptionalLogs(false, for: summary)
+        model.fetchCheckLog = { _ in throw URLError(.notConnectedToInternet) }
+        await #expect(throws: URLError.self) { try await model.failingLogs(for: summary) }
+    }
 }

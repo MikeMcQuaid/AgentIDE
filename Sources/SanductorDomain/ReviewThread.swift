@@ -104,7 +104,10 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
     /// Several threads as one pasteable text, the file named once
     /// above its threads and each thread opened by its line: what a
     /// prompt needs without the path repeated per thread.
-    public static func digest(of threads: [Self]) -> String {
+    public static func digest(
+        of threads: [Self],
+        commentText: @escaping (ReviewThreadComment) -> String = \.asText,
+    ) -> String {
         var order = [String]()
         var byPath = [String: [Self]]()
         for thread in threads {
@@ -113,11 +116,12 @@ public struct ReviewThread: Codable, Hashable, Identifiable, Sendable {
             }
             byPath[thread.path, default: []].append(thread)
         }
-        return order.lazy
+        return order
+            .lazy
             .map { path in
                 let body = (byPath[path] ?? []).map { thread in
                     let anchor = thread.line.map { ":" + String($0) + " " } ?? ""
-                    return anchor + thread.comments.lazy.map(\.asText).joined(separator: "\n")
+                    return anchor + thread.comments.map(commentText).joined(separator: "\n")
                 }
                 return path + "\n" + body.joined(separator: "\n")
             }

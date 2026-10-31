@@ -48,8 +48,8 @@ struct HerdrTerminalChannelIntegrationTests {
         #expect(try Data(contentsOf: URL(filePath: input)) == Data(expected))
     }
 
-    @Test
-    func `scrolling a mouse-aware agent carries the pointer position`() async throws {
+    @Test(arguments: [1, 5])
+    func `scrolling a mouse-aware agent preserves distance and pointer position`(lines: Int) async throws {
         let (herdr, home) = try TestSupport.makeHerdrClient()
         let directory = try TestSupport.temporaryDirectory("scroll")
         defer { TestSupport.stopServerSync(configHome: home) }
@@ -58,7 +58,7 @@ struct HerdrTerminalChannelIntegrationTests {
             name: "sanductor--r--scroll--codex",
             directory: directory,
             command: "stty raw -echo; printf '\\033[?1049h\\033[?1000h\\033[?1006hscroll-%s' ready; "
-                + "dd bs=1 count=10 of=" + input.shellQuoted + " 2>/dev/null; stty sane",
+                + "dd bs=1 count=\(lines * 10) of=" + input.shellQuoted + " 2>/dev/null; stty sane",
         )
         let pane = try #require(try await herdr.panes().first)
         let channel = HerdrTerminalChannel(command: herdr.attachCommand(paneID: pane.paneID))
@@ -71,17 +71,18 @@ struct HerdrTerminalChannelIntegrationTests {
             if case let .frame(bytes) = event,
                String(bytes: bytes, encoding: .utf8)?.contains("scroll-ready") == true
             {
-                channel.send(HerdrTerminal.scrollCommand(upwards: true, lines: 1, column: 7, row: 4))
+                channel.send(HerdrTerminal.scrollCommand(upwards: true, lines: lines, column: 7, row: 4))
                 break
             }
         }
         let received = await TestSupport.poll(timeout: 5) {
-            (try? Data(contentsOf: URL(filePath: input)).count) == 10
+            (try? Data(contentsOf: URL(filePath: input)).count) == lines * 10
         }
         watchdog.cancel()
         await channel.stop()
         try #require(received)
-        #expect(try Data(contentsOf: URL(filePath: input)) == Data("\u{1B}[<64;8;5M".utf8))
+        #expect(try Data(contentsOf: URL(filePath: input))
+            == Data(String(repeating: "\u{1B}[<64;8;5M", count: lines).utf8))
     }
 
     @Test

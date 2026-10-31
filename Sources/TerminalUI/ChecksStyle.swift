@@ -230,3 +230,39 @@ public nonisolated enum ChecksStyle {
         }
     }
 }
+
+// MARK: - ChecksIndicator
+
+/// Required checks stay on the left when optional jobs fail.
+public struct ChecksIndicator: View {
+    // MARK: Lifecycle
+
+    public init(summary: PullRequestSummary) {
+        self.summary = summary
+    }
+
+    // MARK: Public
+
+    public var body: some View {
+        if summary.checks == "SUCCESS", summary.optionalFailures > 0 {
+            Octicon(ChecksStyle.checksOcticonName)
+                .foregroundStyle(LinearGradient(
+                    stops: [
+                        .init(color: .green, location: Self.midpoint), .init(color: .red, location: Self.midpoint),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing,
+                ))
+                .environment(\.layoutDirection, .leftToRight)
+                .accessibilityLabel("Required checks passing; optional checks failing")
+        } else {
+            Octicon(ChecksStyle.checksOcticonName, colour: ChecksStyle.colour(for: summary.checks))
+        }
+    }
+
+    // MARK: Private
+
+    private static let midpoint: CGFloat = 0.5
+
+    private let summary: PullRequestSummary
+}

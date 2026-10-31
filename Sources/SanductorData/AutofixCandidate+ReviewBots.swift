@@ -47,7 +47,7 @@ extension AutofixCandidate {
                 counts: [kind: 1],
                 sources: [kind],
                 events: ["review:" + id],
-                text: review.author + " review summary:\n" + findings,
+                text: ReviewCopy.text(ReviewThreadComment(author: review.author, body: findings)),
                 threads: [:],
             )
         })

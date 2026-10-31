@@ -5,7 +5,7 @@ import SanductorDomain
 /// place. Split from the stack for length.
 extension SessionService {
     /// The other worktrees holding the stack's branches, by branch;
-    /// throws while any is busy or dirty.
+    /// throws while any is busy.
     func quietHolders(
         of branches: [String],
         in worktree: Worktree,
@@ -13,6 +13,10 @@ extension SessionService {
     ) async throws -> [String: String] {
         let here = Self.resolved(worktree.path)
         let busy = Set(busyWorktrees.map(Self.resolved))
+        guard busy.contains(here) == false else {
+            throw stackError("The agent is busy; rebase once it is idle or done", in: worktree.path)
+        }
+
         let all = await git.branchHolders(worktreePath: worktree.path)
         var holders = [String: String]()
         for branch in branches {
@@ -22,12 +26,6 @@ extension SessionService {
 
             if busy.contains(Self.resolved(holder)) {
                 throw stackError("`" + branch + "`'s agent is busy; rebase once it is idle or done", in: worktree.path)
-            }
-            if await git.isDirty(worktreePath: holder) {
-                throw stackError(
-                    "Commit or discard the changes in `" + branch + "`'s worktree first",
-                    in: worktree.path,
-                )
             }
             holders[branch] = holder
         }

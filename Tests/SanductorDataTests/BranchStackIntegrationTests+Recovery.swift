@@ -55,6 +55,9 @@ extension BranchStackIntegrationTests {
         let lower = try await Self.tip(of: "lower", in: path)
         let upper = try await Self.tip(of: "upper", in: path)
 
+        try "local draft".write(toFile: path + "/draft.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(["add", "draft.txt"], in: path)
+        let dirty = try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput
         let failure = await #expect(throws: (any Error).self) {
             try await world.service.restack(worktree: worktree)
         }
@@ -65,7 +68,8 @@ extension BranchStackIntegrationTests {
         #expect(try await Self.tip(of: "lower", in: path) == lower)
         #expect(try await Self.tip(of: "upper", in: path) == upper)
         #expect(try await Self.branch(in: path) == "upper")
-        #expect(await world.service.git.isDirty(worktreePath: path) == false)
+        #expect(try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput == dirty)
+        #expect(try String(contentsOfFile: path + "/draft.txt", encoding: .utf8) == "local draft")
     }
 
     @Test
@@ -104,6 +108,26 @@ extension BranchStackIntegrationTests {
         #expect(await world.service.git.isAncestor("origin/main", of: "upper", worktreePath: path))
         #expect(await world.service.git.commitCount(from: "origin/main", to: "upper", worktreePath: path) == 1)
         #expect(try await Self.branch(in: path) == "upper")
+    }
+
+    @Test
+    func `restacking preserves staged unstaged and untracked changes`() async throws {
+        let world = try await Self.staleBaseWorld()
+        defer { world.tearDown() }
+        let path = world.repository.path
+        let worktree = StackedSessionIntegrationTests.worktree("upper", at: path, in: world.repository)
+        try "staged".write(toFile: path + "/draft.txt", atomically: true, encoding: .utf8)
+        try await TestSupport.runGit(["add", "draft.txt"], in: path)
+        try "unstaged".write(toFile: path + "/draft.txt", atomically: true, encoding: .utf8)
+        try "untracked".write(toFile: path + "/notes.txt", atomically: true, encoding: .utf8)
+        let before = try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput
+        _ = try await world.service.restack(worktree: worktree)
+        #expect(try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput == before)
+        #expect(try String(contentsOfFile: path + "/draft.txt", encoding: .utf8) == "unstaged")
+        #expect(try String(contentsOfFile: path + "/notes.txt", encoding: .utf8) == "untracked")
+        #expect(try await TestSupport.runGit(["show", ":draft.txt"], in: path)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines) == "staged")
     }
 
     private static func staleBaseWorld() async throws -> World {

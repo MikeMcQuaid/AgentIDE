@@ -153,11 +153,8 @@ struct PullRequestRowView: View {
         Button {
             LinkOpener.open(summary.checksClickURL)
         } label: {
-            Octicon(
-                ChecksStyle.checksOcticonName,
-                colour: ChecksStyle.colour(for: summary.checks),
-            )
-            .accessibilityLabel("Checks: " + summary.checksDescription)
+            ChecksIndicator(summary: summary)
+                .accessibilityLabel("Checks: " + summary.checksDescription)
         }
         .buttonStyle(.plain)
         .hoverHelp(

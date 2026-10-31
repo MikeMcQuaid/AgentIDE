@@ -56,40 +56,40 @@ public actor HerdrTerminalChannel {
                     return
                 }
 
-                // Lines split at the byte level; each is ASCII JSON
-                // (frame bytes travel as base64), so the string round
-                // trip is lossless.
-                for byte in data {
-                    guard byte == UInt8(ascii: "\n") else {
-                        line.withLock { $0.append(byte) }
-                        continue
+                // Split each pipe chunk under one lock, rather than locking for every byte.
+                let records = line.withLock { pending in
+                    pending.append(contentsOf: data)
+                    guard let last = pending.lastIndex(of: UInt8(ascii: "\n")) else {
+                        return [String]()
                     }
 
-                    let text = line.withLock { pending in
-                        defer { pending.removeAll(keepingCapacity: true) }
-                        return String(bytes: pending, encoding: .utf8) ?? ""
-                    }
-                    if let event = HerdrTerminal.parse(line: text) {
-                        continuation.yield(event)
-                    }
+                    let records = pending[...last]
+                        .split(separator: UInt8(ascii: "\n"))
+                        .compactMap { String(bytes: $0, encoding: .utf8) }
+                    pending.removeFirst(last + 1)
+                    return records
+                }
+                for event in Self.events(from: records) {
+                    continuation.yield(event)
                 }
             }
             continuation.onTermination = { _ in reading.readabilityHandler = nil }
         }
     }
 
-    /// Sends one command line to herdr. Deliberately nonisolated
-    /// and synchronous: calls from one actor reach the pipe in
-    /// order, which keystroke delivery depends on.
+    /// A serial interactive queue preserves order without blocking UI events on a full pipe.
     public nonisolated func send(_ line: String) {
-        try? input.fileHandleForWriting.write(contentsOf: Data((line + "\n").utf8))
+        let data = Data((line + "\n").utf8)
+        writes.async { [input] in
+            try? input.fileHandleForWriting.write(contentsOf: data)
+        }
     }
 
     /// Detaches the client: end of standard input ends it, and the
     /// termination covers a client stuck before reading commands.
     public func stop() {
-        try? input.fileHandleForWriting.close()
         process?.terminate()
+        writes.async { [input] in try? input.fileHandleForWriting.close() }
         process = nil
     }
 
@@ -110,6 +110,7 @@ public actor HerdrTerminalChannel {
 
     // MARK: Private
 
+    private nonisolated let writes: DispatchQueue = .init(label: "Sanductor.terminal-input", qos: .userInteractive)
     private nonisolated let input: Pipe = .init()
     private nonisolated let output: Pipe = .init()
     private nonisolated let errors: Pipe = .init()
@@ -117,4 +118,25 @@ public actor HerdrTerminalChannel {
     private let extraEnvironment: [String: String]
     private var process: Process?
     private var spawned = false
+
+    private static func events(from records: [String]) -> [HerdrTerminalEvent] {
+        var events = [HerdrTerminalEvent]()
+        var frames = [UInt8]()
+        for record in records {
+            if let event = HerdrTerminal.parse(line: record) {
+                if case let .frame(bytes) = event {
+                    frames.append(contentsOf: bytes)
+                } else {
+                    if frames.isEmpty == false {
+                        events.append(.frame(bytes: frames)); frames = []
+                    }
+                    events.append(event)
+                }
+            }
+        }
+        if frames.isEmpty == false {
+            events.append(.frame(bytes: frames))
+        }
+        return events
+    }
 }

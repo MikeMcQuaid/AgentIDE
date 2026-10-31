@@ -12,7 +12,10 @@ struct BranchStackIntegrationTests {
     /// restack signs everything it replays and the runner has no
     /// key: SSH signing needs nothing but a keypair.
     static func signable(_ path: String) async throws {
-        let key = path + "/.signing-key"
+        let directory = try await TestSupport.runGit(["rev-parse", "--absolute-git-dir"], in: path)
+            .standardOutput
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = directory + "/signing-key"
         _ = try await TestSupport.run(["/usr/bin/ssh-keygen", "-t", "ed25519", "-N", "", "-q", "-f", key])
         _ = try await TestSupport.runGit(["config", "gpg.format", "ssh"], in: path)
         _ = try await TestSupport.runGit(["config", "user.signingkey", key], in: path)
@@ -25,7 +28,7 @@ struct BranchStackIntegrationTests {
         // signed branches as unsigned forever.
         let publicKey = try String(contentsOfFile: key + ".pub", encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let allowed = path + "/.allowed-signers"
+        let allowed = directory + "/allowed-signers"
         try ("* " + publicKey + "\n").write(toFile: allowed, atomically: true, encoding: .utf8)
         _ = try await TestSupport.runGit(["config", "gpg.ssh.allowedSignersFile", allowed], in: path)
     }

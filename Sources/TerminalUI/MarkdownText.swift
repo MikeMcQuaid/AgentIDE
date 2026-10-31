@@ -1,3 +1,4 @@
+import SanductorData
 import SwiftUI
 import Textual
 
@@ -60,10 +61,7 @@ public struct MarkdownText: View {
 
     // MARK: Internal
 
-    struct Chunk {
-        let text: String
-        let detailsSummary: String?
-    }
+    typealias Chunk = MarkdownHTML.Chunk
 
     /// Content caches are shared by previews, conversations and review comments.
     final class ParseCache<Value> {

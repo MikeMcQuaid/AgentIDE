@@ -59,11 +59,9 @@ public final class MobileModel {
 
     var configuration: SSHConfiguration
     var publicKey = ""
-    private(set) var sessions: [MobileSession] = []
-    private(set) var repositories: [String] = []
-    var sidebar: [SidebarRepository] = []
+    var allSessions: [MobileSession] = []
+    var allRepositories: [String] = []
     private(set) var defaults: [String: String] = [:]
-    var selection: MobileSession?
     private(set) var isConnected = false
     private(set) var isConnecting = false
     private(set) var isDisconnected = false
@@ -77,6 +75,22 @@ public final class MobileModel {
     @ObservationIgnored var eventChannel: SSHCommand?
     @ObservationIgnored var eventPaneIDs: [String] = []
     @ObservationIgnored var resubscribe = false
+
+    var sidebar: [SidebarRepository] = [] {
+        didSet {
+            if let selection, isHidden(selection) {
+                self.selection = nil
+            }
+        }
+    }
+
+    var selection: MobileSession? {
+        didSet {
+            if let selection, isHidden(selection) {
+                self.selection = nil
+            }
+        }
+    }
 
     func reconnect() {
         terminalFailures = 0
@@ -144,8 +158,8 @@ public final class MobileModel {
                 throw CancellationError()
             }
 
-            if available != repositories {
-                repositories = available
+            if available != allRepositories {
+                allRepositories = available
             }
             if choices != defaults {
                 defaults = choices
@@ -162,8 +176,8 @@ public final class MobileModel {
             throw CancellationError()
         }
 
-        if updated != sessions {
-            sessions = updated
+        if updated != allSessions {
+            allSessions = updated
         }
         if eventPaneIDs != updated.map(\.id) {
             eventPaneIDs = updated.map(\.id)

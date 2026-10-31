@@ -59,7 +59,7 @@ extension ReviewModel {
                 do {
                     try await git.amend(
                         worktreePath: worktreePath,
-                        excluding: files.map(\.path).filter { isCommitting($0) == false },
+                        excluding: files.filter { isCommitting($0.path) == false }.flatMap(\.paths),
                         message: commitMessage,
                         expectedHead: lastCommitHash,
                     )
@@ -98,7 +98,8 @@ extension ReviewModel {
             return []
         }
 
-        return files.map(\.path).filter { excludedFromCommit.contains($0) == false }
+        return files.filter { excludedFromCommit.contains($0.path) == false }
+            .flatMap(\.paths)
     }
 
     /// How many files the next commit carries.

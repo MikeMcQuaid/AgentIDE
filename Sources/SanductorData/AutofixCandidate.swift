@@ -110,7 +110,7 @@ struct AutofixCandidate: Equatable {
             marks[thread.resolveID] = PendingThreadResolution(head: head, commentID: latest)
             sections.append("Thread " + thread.resolveID + " in " + thread.path
                 + (thread.line.map { ":" + String($0) } ?? "") + "\n"
-                + eligible.lazy.map(\.asText).joined(separator: "\n"))
+                + eligible.lazy.map { ReviewCopy.text($0) }.joined(separator: "\n"))
         }
         guard commentEvents.isEmpty == false else {
             return nil

@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import SanductorData
 import SwiftSoup
 
 extension ReviewCommentText {

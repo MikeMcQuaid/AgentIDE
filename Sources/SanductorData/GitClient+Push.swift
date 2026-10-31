@@ -21,24 +21,26 @@ extension GitClient {
     ) async throws {
         let path = await branchHolders(worktreePath: worktreePath)[branch] ?? worktreePath
         let held = await currentBranch(worktreePath: path)
-        guard let held, await isDirty(worktreePath: path) == false else {
-            throw SessionServiceError("Commit or discard the worktree's changes before integrating remote work.")
+        guard let held else {
+            throw SessionServiceError("Check out a branch before integrating remote work.")
         }
 
-        do {
-            if let oldBase {
-                try await rebaseSigned(branch: branch, onto: tip, from: oldBase, worktreePath: path)
-            } else {
-                try await rebaseSigned(worktreePath: path, branch: branch, onto: tip)
+        try await preservingChanges(in: [path]) {
+            do {
+                if let oldBase {
+                    try await rebaseSigned(branch: branch, onto: tip, from: oldBase, worktreePath: path)
+                } else {
+                    try await rebaseSigned(worktreePath: path, branch: branch, onto: tip)
+                }
+            } catch {
+                if held != branch {
+                    try? await checkout(branch: held, worktreePath: path)
+                }
+                throw error
             }
-        } catch {
             if held != branch {
-                try? await checkout(branch: held, worktreePath: path)
+                try await checkout(branch: held, worktreePath: path)
             }
-            throw error
-        }
-        if held != branch {
-            try await checkout(branch: held, worktreePath: path)
         }
     }
 }

@@ -100,14 +100,33 @@ extension GitHubClient {
         }
     }
 
+    public struct JobLogUnavailable: LocalizedError, Sendable {
+        // MARK: Lifecycle
+
+        public init() {
+            // No additional state.
+        }
+
+        // MARK: Public
+
+        public var errorDescription: String? {
+            "GitHub has not published a text log for this job."
+        }
+    }
+
     /// Reads one complete job independently of its workflow run's state.
     public func jobLog(repositoryPath: String, jobID: Int) async throws -> String {
-        let raw = try await gh(
-            ["api", "--allow-escape-sequences", "repos/{owner}/{repo}/actions/jobs/" + String(jobID) + "/logs"],
-            in: repositoryPath,
-        )
+        let raw: ProcessResult
+        do {
+            raw = try await gh(
+                ["api", "--allow-escape-sequences", "repos/{owner}/{repo}/actions/jobs/" + String(jobID) + "/logs"],
+                in: repositoryPath,
+            )
+        } catch let error as CommandError where error.result.standardError.contains("HTTP 404") {
+            throw JobLogUnavailable()
+        }
         guard Self.isText(raw.standardOutput) else {
-            throw SessionServiceError("GitHub has not published a text log for this job yet.")
+            throw JobLogUnavailable()
         }
 
         return CheckLog.strippingANSI(raw.standardOutput)

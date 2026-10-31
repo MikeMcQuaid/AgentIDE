@@ -33,9 +33,31 @@ public final class SetupModel {
     /// Explains the automatic fallback without blocking setup.
     public private(set) var signingDisabled = false
 
+    /// The opening tour stays hidden until setup checks succeed.
+    public private(set) var tutorialStep: SetupTourStep?
+
     /// The wizard shows one unmet prerequisite at a time.
     public var currentIssue: SetupIssue? {
         issues.first
+    }
+
+    /// Advances the opening tour, saving completion after its last pane.
+    public func advanceTutorial() {
+        guard let tutorialStep else {
+            return
+        }
+
+        if let next = SetupTourStep(rawValue: tutorialStep.rawValue + 1) {
+            self.tutorialStep = next
+        } else {
+            finishTutorial()
+        }
+    }
+
+    /// Dismissal and Skip both keep the tour from appearing on later launches.
+    public func finishTutorial() {
+        tutorialStep = nil
+        defaults.set(false, forKey: Self.tutorialKey)
     }
 
     /// Runs once per launch even when completed setup opens the workspace immediately.
@@ -74,6 +96,12 @@ public final class SetupModel {
         if agents.contains(where: { $0.rawValue == defaults.string(forKey: "agentKind") }) == false {
             defaults.set(agents.first?.rawValue, forKey: "agentKind")
         }
+        if defaults.bool(forKey: Self.completedKey) == false {
+            defaults.set(true, forKey: Self.tutorialKey)
+        }
+        if defaults.bool(forKey: Self.tutorialKey), tutorialStep == nil {
+            tutorialStep = .repositories
+        }
         defaults.set(true, forKey: Self.completedKey)
         isReady = true
     }
@@ -83,6 +111,8 @@ public final class SetupModel {
     static let completedKey = "initialSetupCompleted"
 
     // MARK: Private
+
+    private static let tutorialKey = "workspaceTutorialPending"
 
     private let check: @Sendable (Bool) async -> SetupResult
     private let defaults: UserDefaults

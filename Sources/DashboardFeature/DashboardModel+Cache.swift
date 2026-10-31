@@ -185,6 +185,7 @@ extension DashboardModel {
                 lastActivityAt: SessionService.repositoryActivity(of: group),
                 fullName: group.repository.fullName,
                 defaultBranch: group.defaultBranch,
+                isHidden: hiddenOrganisations.contains(group.repository.owner?.lowercased() ?? ""),
             )
         }
         if sidebar != publishedSidebar, service.publishSidebar(sidebar) {

@@ -40,7 +40,9 @@ extension SetupChecker {
             issues.append(SetupIssue(
                 step: .agent,
                 title: "Set up an agent inside sandvault",
-                explanation: "Choose one agent to install and sign in inside sandvault.",
+                explanation: "Sign in as the separate sandbox account, not your normal macOS user. "
+                    + "Agents run in the centre pane; the right-hand Shell pane uses your normal account "
+                    + "to bootstrap repositories and install shared dependencies.",
                 commands: "sv claude\n\nsv codex",
                 alternative: "Complete the agent's sign-in, quit it and recheck here.\n\n"
                     + (result?.standardError.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""),

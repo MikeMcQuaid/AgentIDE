@@ -4,8 +4,8 @@ import SanductorDomain
 import Testing
 
 struct StackPushIntegrationTests {
-    @Test(arguments: ["lower", "upper"])
-    func `integrating a stack parent keeps its children on top`(selected: String) async throws {
+    @Test(arguments: ["lower", "upper"], [false, true])
+    func `integrating a stack parent keeps its children on top`(selected: String, dirty: Bool) async throws {
         let world = try await World.make()
         defer { world.tearDown() }
         let path = world.repository.path
@@ -34,6 +34,11 @@ struct StackPushIntegrationTests {
             in: elsewhere,
         )
         try await TestSupport.runGit(["push", "origin", "lower"], in: elsewhere)
+        if dirty {
+            try "local draft".write(toFile: path + "/draft.txt", atomically: true, encoding: .utf8)
+            try await TestSupport.runGit(["add", "draft.txt"], in: path)
+        }
+        let before = try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput
         let git = GitClient(runner: FoundationProcessRunner())
         #expect(await git.isCommitSigned(worktreePath: path, ref: "lower"))
         let worktree = Worktree(repositoryName: "repo", repositoryPath: path, branch: selected, path: path)
@@ -44,5 +49,9 @@ struct StackPushIntegrationTests {
         }
         #expect(await git.currentBranch(worktreePath: path) == "upper")
         #expect(try String(contentsOfFile: path + "/remote", encoding: .utf8) == "remote work")
+        #expect(try await TestSupport.runGit(["status", "--porcelain"], in: path).standardOutput == before)
+        if dirty {
+            #expect(try String(contentsOfFile: path + "/draft.txt", encoding: .utf8) == "local draft")
+        }
     }
 }

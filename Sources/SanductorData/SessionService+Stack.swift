@@ -219,12 +219,10 @@ public extension SessionService {
     /// Nothing half-done survives a failure: the branches already
     /// moved go back to where they were and the worktree returns to
     /// the branch it started on. A branch another worktree holds is
-    /// rebased there, refused while that worktree is dirty or in
-    /// `busyWorktrees`.
+    /// rebased there, preserving local changes and refusing busy agents.
     func restack(worktree: Worktree, busyWorktrees: Set<String> = []) async throws -> [String] {
         let path = worktree.path
         _ = try await requireStackable(stack(for: worktree))
-        try await requireQuiet(worktree: worktree, action: "restack")
         // The bottom entry rebases onto the default branch, which is
         // only worth rebasing onto if the remote is current.
         try await fetchIfStale(repositoryPath: worktree.repositoryPath, workingDirectory: path)
@@ -248,45 +246,47 @@ public extension SessionService {
             tips[branch] = await git.tip(of: branch, worktreePath: path)
         }
 
-        var moved = [String]()
-        do {
-            for branch in branches {
-                let parentBranch = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
-                let parent = await queued.contains(parentBranch)
-                    ? remoteBranchRef(worktreePath: path, branch: parentBranch) : parentBranch
-                // Already on its parent: leave every commit's name
-                // alone rather than rewriting them to say so —
-                // unless its tip is unsigned while signing is
-                // required, since this rebase is the only thing
-                // that can sign it and Push waits on exactly that.
-                if await stackBranchIsReady(branch, parent: parent, worktreePath: path) {
-                    continue
-                }
-                // Where it forked from, recorded before anything
-                // moved: without it the replay takes the parent's
-                // own commits along a second time.
-                guard let forkedFrom = tips[parentBranch] else {
-                    continue
-                }
+        return try await git.preservingChanges(in: [path] + Array(holders.values)) {
+            var moved = [String]()
+            do {
+                for branch in branches {
+                    let parentBranch = branch == stack.branches.first ? base : stack.parent(of: branch) ?? base
+                    let parent = await queued.contains(parentBranch)
+                        ? remoteBranchRef(worktreePath: path, branch: parentBranch) : parentBranch
+                    // Already on its parent: leave every commit's name
+                    // alone rather than rewriting them to say so —
+                    // unless its tip is unsigned while signing is
+                    // required, since this rebase is the only thing
+                    // that can sign it and Push waits on exactly that.
+                    if await stackBranchIsReady(branch, parent: parent, worktreePath: path) {
+                        continue
+                    }
+                    // Where it forked from, recorded before anything
+                    // moved: without it the replay takes the parent's
+                    // own commits along a second time.
+                    guard let forkedFrom = tips[parentBranch] else {
+                        continue
+                    }
 
-                await progress("Rebasing `" + branch + "` onto `" + parent + "`")
-                try await requireStillHeld(branch, holders: holders, worktreePath: path)
-                try await rebaseStackBranch(
-                    branch: branch,
-                    onto: parent,
-                    from: forkedFrom,
-                    fallback: parent == base && base.hasPrefix("refs/remotes/") ? base : nil,
-                    worktreePath: holders[branch] ?? path,
-                )
-                moved.append(branch)
+                    await progress("Rebasing `" + branch + "` onto `" + parent + "`")
+                    try await requireStillHeld(branch, holders: holders, worktreePath: path)
+                    try await rebaseStackBranch(
+                        branch: branch,
+                        onto: parent,
+                        from: forkedFrom,
+                        fallback: parent == base && base.hasPrefix("refs/remotes/") ? base : nil,
+                        worktreePath: holders[branch] ?? path,
+                    )
+                    moved.append(branch)
+                }
+            } catch {
+                await undoRestack(moved, tips: tips, holders: holders, checkedOut: stack.checkedOut, worktreePath: path)
+                throw error
             }
-        } catch {
-            await undoRestack(moved, tips: tips, holders: holders, checkedOut: stack.checkedOut, worktreePath: path)
-            throw error
-        }
 
-        try await git.checkout(branch: stack.checkedOut, worktreePath: path)
-        return moved
+            try await git.checkout(branch: stack.checkedOut, worktreePath: path)
+            return moved
+        }
     }
 
     /// Pushes through the requested branch and published branches above it,
@@ -324,7 +324,6 @@ public extension SessionService {
     /// where it was, now building on what it just finished.
     func stackBranch(named name: String, on worktree: Worktree) async throws {
         try await requireStackable(stack(for: worktree))
-        try await requireQuiet(worktree: worktree, action: "branch")
         await progress("Creating `" + name + "` on `" + worktree.branch + "`")
         try await git.createBranch(named: name, worktreePath: worktree.path)
     }
@@ -333,17 +332,6 @@ public extension SessionService {
 
     /// The fewest pull requests that make a stack.
     internal static let linkableCount = 2
-
-    /// Refuses while the worktree holds uncommitted work: a stack
-    /// moves by checking branches out, which would take those
-    /// changes with it or refuse half way.
-    internal func requireQuiet(worktree: Worktree, action _: String) async throws {
-        guard await git.isDirty(worktreePath: worktree.path) else {
-            return
-        }
-
-        throw stackError("Commit or discard the worktree's changes first", in: worktree.path)
-    }
 
     internal func stackError(_ message: String, in path: String) -> CommandError {
         CommandError(

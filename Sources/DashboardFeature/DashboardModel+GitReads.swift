@@ -31,6 +31,7 @@ extension DashboardModel {
         let watching = watcher.isWatching
         var due = paths
         let selectedRepository = selection?.worktree.repositoryPath
+        let onBattery = isOnBattery()
         for group in groups {
             let path = group.repository.path
             let isSelected = path == selectedRepository
@@ -60,7 +61,7 @@ extension DashboardModel {
                     nextStackDerivation[item.worktree.path] = .distantPast
                 }
             }
-            let safety = RefreshCadence.slowed(interval, onBattery: isOnBattery())
+            let safety = RefreshCadence.slowed(interval, onBattery: onBattery)
             if touched || Date().timeIntervalSince(last) >= safety {
                 due.insert(path)
             }

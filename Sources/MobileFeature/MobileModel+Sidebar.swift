@@ -1,6 +1,18 @@
 import SanductorDomain
 
 extension MobileModel {
+    var repositories: [String] {
+        allRepositories.filter { name in sidebar.contains { $0.name == name && $0.isHidden } == false }
+    }
+
+    var sessions: [MobileSession] {
+        allSessions.filter { isHidden($0) == false }
+    }
+
+    func isHidden(_ session: MobileSession) -> Bool {
+        sidebar.contains { $0.isHidden && SessionName.slug($0.name) == session.repository }
+    }
+
     func repositoryNames(sortedBy sort: RepositorySort) -> [String] {
         sort.sorted(repositories) { name in
             let projected = sidebar.first { $0.name == name }

@@ -185,10 +185,11 @@ struct DiffFileView: View {
         HStack {
             commitTick
             FileCollapseCaret(isCollapsed: isCollapsed, onToggle: onToggleCollapse)
-            Text(file.path)
+            Text(file.oldPath.map { $0 + " → " + file.path } ?? file.path)
                 .interfaceFont(.headline, monospaced: true)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .hoverHelp(file.oldPath.map { "Renamed from " + $0 + " to " + file.path } ?? file.path)
             copyPathButton
             if file.isNew {
                 Text("new file")

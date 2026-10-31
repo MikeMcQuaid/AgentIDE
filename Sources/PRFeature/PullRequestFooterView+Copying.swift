@@ -34,7 +34,9 @@ extension PullRequestFooterView {
         .disabled(count == 0)
         .hoverHelp("Copy unresolved local AI and GitHub conversations; Cmd-click opens GitHub reviews "
             + "in your browser, Shift-click in the Browser tab; dimmed while none is unresolved")
-        let checks = PullRequestsModel.copyableFailingChecks(in: selected)
+        let checks = PullRequestsModel.copyableFailingChecks(
+            in: selected, includeOptional: model.includesOptionalLogs(for: selected),
+        )
         BusyButton(
             label: copyLabel("Checks", count: checks.count),
             accessibilityLabel: Self.copyTitle("Checks", count: checks.count),
@@ -49,8 +51,14 @@ extension PullRequestFooterView {
         }
         .hoverHelp("Copy logs from " + String(checks.count) + " finished failing Actions checks, "
             + "including diagnostics from long logs; unfinished checks are excluded, "
-            + "as are optional checks when checks are required. "
+            + "Right-click to include optional checks for this PR. "
             + "Cmd-click opens failing checks in your browser, Shift-click in the Browser tab")
+        .contextMenu {
+            Toggle("Include optional check logs", isOn: Binding(
+                get: { model.includesOptionalLogs(for: selected) },
+                set: { model.setIncludesOptionalLogs($0, for: selected) },
+            ))
+        }
     }
 
     /// Explicit manual copies retain their broader scope beside filtered feedback.
@@ -67,7 +75,10 @@ extension PullRequestFooterView {
                     }
                 }
             }
-            .disabled(selected.hasFailingChecks == false || selected.failingCheckLinks.isEmpty)
+            .disabled(PullRequestsModel.copyableFailingChecks(
+                in: selected, includeOptional: model.includesOptionalLogs(for: selected),
+            )
+            .isEmpty)
         }
     }
 
