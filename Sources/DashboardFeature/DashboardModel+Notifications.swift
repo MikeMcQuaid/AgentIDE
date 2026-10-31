@@ -6,9 +6,8 @@ import UserNotifications
 
 /// Poll-to-poll change detection posting user notifications. One
 /// notification per worktree per poll, the most decided state first:
-/// a completed turn beats needing input beats new output. Settings
-/// decides which events notify and what each sounds like; an exit
-/// posts nothing of its own, the stop icon and unread dot carry it.
+/// a completed turn beats needing input. Settings decides which
+/// events notify and what each sounds like; an exit posts nothing.
 extension DashboardModel {
     func notifyChanges(from old: [RepositoryGroup], to new: [RepositoryGroup]) {
         // Uniquing, not trapping: duplicate ids would crash the poll.
@@ -34,10 +33,6 @@ extension DashboardModel {
                 )
             } else if previous.session?.activity != .blocked, session.activity == .blocked {
                 post(.blocked, title: "Agent needs input", body: body)
-            } else if previous.hasActionableUnread == false, item.hasActionableUnread {
-                // Only output that pauses for you counts; streaming
-                // output notified per burst with nothing to do.
-                post(.output, title: "Agent output", body: body)
             }
         }
         updateDockBadge(for: new)
@@ -65,21 +60,9 @@ extension DashboardModel {
 
     // MARK: Private
 
-    /// The Dock badge counts the worktrees needing attention, each
-    /// contribution behind its Settings toggle: an agent waiting on
-    /// input, a done or exited turn not yet viewed, or unread
-    /// output anywhere but the selected worktree of the focused
-    /// window, the one pane demonstrably being read.
     private func updateDockBadge(for groups: [RepositoryGroup]) {
-        let focusedPath = NSApp.isActive ? selection?.worktree.path : nil
         let attention = groups.flatMap(\.items).count { item in
-            let unseen = item.hasActionableUnread && item.worktree.path != focusedPath
-            let blocked = item.session?.activity == .blocked
-                && NotificationPreferences.badges(.blocked)
-            let doneUnseen = item.session?.activity == .done && unseen
-                && NotificationPreferences.badges(.done)
-            let outputUnseen = unseen && NotificationPreferences.badges(.output)
-            return blocked || doneUnseen || outputUnseen
+            item.session?.activity == .blocked && NotificationPreferences.badges
         }
         NSApp.dockTile.badgeLabel = attention > 0 ? String(attention) : nil
     }

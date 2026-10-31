@@ -63,9 +63,8 @@ public struct SessionService: Sendable {
 
     /// The worktree the sidebar has selected, as the storage bus
     /// names it: what is read from disk among directories of your
-    /// own, and whose activity a reading counts as seen. A closure
-    /// with the defaults behind it, so a test can name one without
-    /// writing a global every other test in the process reads.
+    /// own. A closure lets tests name one without writing defaults
+    /// every other test in the process reads.
     public var selectedWorktreePath: @Sendable () -> String? = {
         UserDefaults.standard.string(forKey: selectedWorktreeKey)
     }
@@ -153,10 +152,6 @@ public struct SessionService: Sendable {
 
     /// Where launches narrate their steps.
     var progress: LaunchReporter
-
-    /// Worktrees never viewed count as seen at launch, so a fresh
-    /// install does not flag every historic conversation unread.
-    let startedAt: Date = .init()
 
     /// See `OverwriteTips`; a default so the public init is
     /// untouched.
@@ -249,7 +244,6 @@ public struct SessionService: Sendable {
         store.update { metadata in
             metadata.prompts[sessionName] = prompt
             metadata.arguments[sessionName] = arguments
-            metadata.seenAt[slot.path] = Date()
             metadata.sessionsByWorktree[slot.path] = sessionName
             metadata.intentionallyClosed.removeAll { $0 == slot.path }
         }

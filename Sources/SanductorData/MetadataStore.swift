@@ -5,7 +5,7 @@ import Synchronization
 
 /// Loads and saves the metadata file. Everything else re-derives from
 /// herdr, git, transcripts and GitHub, so losing this file loses only
-/// unread state, prompts and orphaned worktree attribution.
+/// prompts and orphaned worktree attribution.
 /// One decoded copy stays in memory per file: nothing but this app
 /// writes the file, so every load after the first is a dictionary
 /// read. Views ask models per row, and each ask was a whole-file

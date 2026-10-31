@@ -97,7 +97,6 @@ struct CreationPlaceholderTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         #expect(placeholder.isPlaceholder)
         let real = WorktreeItem(
@@ -105,7 +104,6 @@ struct CreationPlaceholderTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         #expect(real.isPlaceholder == false)
     }

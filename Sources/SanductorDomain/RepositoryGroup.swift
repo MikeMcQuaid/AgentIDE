@@ -10,7 +10,6 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         session: AgentSession?,
         isDirty: Bool,
         aheadOfUpstream: Int?,
-        hasUnread: Bool,
         pastSessions: [TranscriptSession] = [],
         aheadOfDefault: Int? = nil,
         behindDefault: Int? = nil,
@@ -26,7 +25,6 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
         self.aheadOfDefault = aheadOfDefault
         self.behindDefault = behindDefault
         self.behindUpstream = behindUpstream
-        self.hasUnread = hasUnread
         self.lastActivityAt = lastActivityAt
         self.revision = revision
     }
@@ -60,9 +58,6 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// pushed have drifted apart.
     public let behindUpstream: Int?
 
-    /// Whether the session has produced output since last seen.
-    public var hasUnread: Bool
-
     /// When the worktree last saw work: a commit, agent output, a
     /// running session or uncommitted edits. Seconds since 1970.
     public let lastActivityAt: Int
@@ -92,23 +87,6 @@ public struct WorktreeItem: Identifiable, Hashable, Sendable {
     /// what lets a tick redraw nothing.
     public var isActive: Bool {
         session != nil && (session?.status == .running || isDirty)
-    }
-
-    /// Whether unread output is worth acting on: the turn is done,
-    /// the process ended, or the agent is blocked on input. Output
-    /// still streaming from a working agent is not news, and the
-    /// dot that lit for it kept lighting with nothing to do.
-    public var hasActionableUnread: Bool {
-        guard hasUnread else {
-            return false
-        }
-        guard let session else {
-            return true
-        }
-
-        return session.status == .finished
-            || session.activity == .done
-            || session.activity == .blocked
     }
 
     /// The stable identity, the worktree path.

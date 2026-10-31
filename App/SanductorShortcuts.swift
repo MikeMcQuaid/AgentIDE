@@ -125,7 +125,7 @@ struct WorktreeEntity: AppEntity {
             "idle"
 
         case .done:
-            item.hasUnread ? "done, unread" : "done"
+            "done"
 
         case .blocked:
             "waiting on input"
@@ -322,18 +322,18 @@ struct OpenPullRequestsIntent: AppIntent {
 // MARK: - WhatNeedsMeIntent
 
 // periphery:ignore - the system finds intents by conformance
-/// Answered without stealing focus: the worktrees waiting on input
-/// or holding an unread finished turn, spoken and returned.
+/// Answered without stealing focus: the worktrees waiting on input,
+/// spoken and returned.
 nonisolated struct WhatNeedsMeIntent: AppIntent {
     static let title: LocalizedStringResource = "What Needs Me"
-    static let description: IntentDescription = .init("Lists the agents waiting on you: blocked, or done and unread.")
+    static let description: IntentDescription = .init("Lists the agents waiting for input.")
     static let openAppWhenRun = false
 
     @MainActor
     func perform() -> some IntentResult & ReturnsValue<[WorktreeEntity]> & ProvidesDialog {
         let needing = (AppDependencies.shared?.dashboard.groups ?? [])
             .flatMap(\.items)
-            .filter { $0.session?.activity == .blocked || $0.hasActionableUnread }
+            .filter { $0.session?.activity == .blocked }
             .map(WorktreeEntity.init)
         guard needing.isEmpty == false else {
             return .result(value: [], dialog: "Nothing needs you.")

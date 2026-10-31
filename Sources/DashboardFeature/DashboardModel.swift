@@ -138,9 +138,8 @@ public final class DashboardModel {
         }
     }
 
-    /// The selected worktree item. Selecting an item marks it seen,
-    /// clearing its unread dot immediately and any manual mark, and
-    /// persists so the next launch resumes on the same worktree.
+    /// The selected worktree item, persisted so the next launch
+    /// resumes on the same worktree.
     public var selection: WorktreeItem? {
         didSet {
             guard let selection, selection.id != oldValue?.id else {
@@ -153,8 +152,6 @@ public final class DashboardModel {
             if selection.isPlaceholder == false {
                 UserDefaults.standard.set(selection.worktree.path, forKey: Self.selectedWorktreeKey)
             }
-            service.markSeen(worktreePath: selection.worktree.path)
-            clearUnread(at: selection.worktree.path)
             // A fresh selection reads its repository's git on the
             // next tick rather than waiting out a safety interval.
             pendingForces.insert(selection.worktree.repositoryPath)
@@ -251,12 +248,6 @@ public final class DashboardModel {
         } catch {
             ErrorLog.shared.report(error.localizedDescription, about: item.worktree.repositoryName)
         }
-    }
-
-    /// Flags the item unread until it is next viewed.
-    public func markUnread(item: WorktreeItem) async {
-        service.markUnread(worktreePath: item.worktree.path)
-        await refresh()
     }
 
     /// The repository's open issues, cached for instant pickers; an
@@ -382,16 +373,5 @@ public final class DashboardModel {
     /// here, which holds both the answers and when they arrived.
     var pullRequests: PullRequestStore {
         PullRequestStore(github: github, store: store)
-    }
-
-    // MARK: Private
-
-    private func clearUnread(at path: String) {
-        for groupIndex in groups.indices {
-            let items = groups[groupIndex].items
-            for itemIndex in items.indices where items[itemIndex].worktree.path == path {
-                groups[groupIndex].items[itemIndex].hasUnread = false
-            }
-        }
     }
 }

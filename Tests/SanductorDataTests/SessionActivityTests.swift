@@ -43,7 +43,6 @@ struct SessionActivityTests {
         let initial = await service.overview(readingPanes: false)
         #expect(initial.groups.first?.items.first?.session?.sidebarActivity == .idle)
 
-        service.markSeen(worktreePath: path)
         let viewed = await service.overview(scope: .only([]), kept: initial.groups, readingPanes: false)
         #expect(viewed.groups.first?.items.first?.session?.sidebarActivity == .idle)
         #expect(viewed.groups.first?.items.first?.session?.activity == .done)

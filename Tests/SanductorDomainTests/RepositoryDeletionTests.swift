@@ -55,7 +55,6 @@ struct RepositoryDeletionTests {
             session: running ? session : nil,
             isDirty: dirty,
             aheadOfUpstream: 0,
-            hasUnread: false,
             aheadOfDefault: ahead,
             behindDefault: behind,
         )
@@ -72,7 +71,6 @@ struct RepositoryDeletionTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: 0,
-            hasUnread: false,
         )
     }
 }

@@ -133,33 +133,6 @@ public extension SessionService {
         }
     }
 
-    /// Marks a worktree viewed: clears its unread state, including a
-    /// manual mark.
-    func markSeen(worktreePath: String) {
-        store.update { metadata in
-            metadata.seenAt[worktreePath] = Date()
-            metadata.unreadMarks.removeAll { $0 == worktreePath }
-        }
-    }
-
-    /// Records that the worktree's current activity has been seen
-    /// without clearing a manual unread mark, for the selected item
-    /// staying on screen.
-    func acknowledgeActivity(worktreePath: String) {
-        store.update { metadata in
-            metadata.seenAt[worktreePath] = Date()
-        }
-    }
-
-    /// Flags a worktree unread until it is next viewed.
-    func markUnread(worktreePath: String) {
-        store.update { metadata in
-            if metadata.unreadMarks.contains(worktreePath) == false {
-                metadata.unreadMarks.append(worktreePath)
-            }
-        }
-    }
-
     /// Commits what the agent left uncommitted: the named paths
     /// alone, or the whole worktree when none are named. An empty
     /// message takes the wording the menu command has always used,

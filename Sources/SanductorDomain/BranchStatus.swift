@@ -1,5 +1,5 @@
 /// The git facts that refresh branch actions and diffs, independent
-/// of agent activity and unread state.
+/// of agent activity.
 public struct BranchStatus: Hashable, Sendable {
     // Periphery does not see the synthesised equality and hash reads.
     // periphery:ignore

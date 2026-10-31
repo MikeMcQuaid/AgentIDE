@@ -26,7 +26,6 @@ struct SnapshotTests {
             ),
             isDirty: true,
             aheadOfUpstream: 2,
-            hasUnread: true,
             aheadOfDefault: 3,
             behindDefault: 1,
         )

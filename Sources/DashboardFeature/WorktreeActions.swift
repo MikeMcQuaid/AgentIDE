@@ -4,7 +4,7 @@ import SanductorDomain
 import SwiftUI
 import TerminalUI
 
-/// A worktree row's own menu: refreshing, copying, git, unread and
+/// A worktree row's own menu: refreshing, copying, git and
 /// the two ways a worktree ends, grouped with separators and the
 /// destructive one last.
 struct WorktreeActions: View {
@@ -81,12 +81,6 @@ struct WorktreeActions: View {
             .hoverHelp("Start another agent in a new worktree whose branch is cut from this one, stacking on its work")
         }
         Divider()
-        Button("Mark as unread") {
-            Task {
-                await model.markUnread(item: item)
-            }
-        }
-        .hoverHelp("Show the unread dot until this worktree is next viewed")
         Button(model.block(for: item) == nil ? "Block…" : "Edit block…") {
             pendingBlock = WorktreeBlockSelection(items: [item], model: model)
         }

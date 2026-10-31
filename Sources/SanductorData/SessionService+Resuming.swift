@@ -294,7 +294,6 @@ extension SessionService {
         store.update { metadata in
             metadata.resumeIDs[sessionName] = resumeID
             metadata.sessionsByWorktree[worktreePath] = sessionName
-            metadata.seenAt[worktreePath] = Date()
             metadata.intentionallyClosed.removeAll { $0 == worktreePath }
         }
     }

@@ -29,7 +29,6 @@ struct WorktreePanesTests {
                 session: AgentSession(name: name, agent: .codexCLI, status: .running),
                 isDirty: false,
                 aheadOfUpstream: nil,
-                hasUnread: false,
             )
         }
 

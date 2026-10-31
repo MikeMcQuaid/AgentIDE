@@ -49,7 +49,6 @@ struct WorktreeRowView: View {
 
     // MARK: Private
 
-    private static let unreadDotSize: CGFloat = 6
     private static let spacing: CGFloat = 4
     /// Sits the icon on the branch line's baseline rather than the
     /// row's very top.
@@ -104,9 +103,6 @@ struct WorktreeRowView: View {
         )
     }
 
-    /// The name of the thing, with the unread dot at the row's
-    /// edge, where a column of them reads at a glance rather than
-    /// tight against branch names of every length.
     private var titleLine: some View {
         HStack(spacing: Self.spacing) {
             // A branch name, or the path of a directory of your
@@ -129,12 +125,6 @@ struct WorktreeRowView: View {
             if let load {
                 Octicon("flame.fill", colour: .orange)
                     .hoverHelp(load.summary())
-            }
-            if item.hasActionableUnread {
-                Circle()
-                    .fill(.tint)
-                    .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
-                    .hoverHelp("Unseen agent output waiting for you")
             }
         }
     }

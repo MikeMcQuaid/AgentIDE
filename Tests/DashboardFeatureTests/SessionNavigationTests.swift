@@ -50,7 +50,6 @@ struct SessionNavigationTests {
                 session: nil,
                 isDirty: false,
                 aheadOfUpstream: nil,
-                hasUnread: false,
             )
             model.groups = [RepositoryGroup(repository: repository, items: [item])]
         }
@@ -127,7 +126,6 @@ struct SessionNavigationTests {
             session: AgentSession(name: "session", agent: .claudeCode, status: .running, paneID: "pane"),
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         fixture.model.watchAgentStates(fixture.model.groups)
         let watcher = try #require(fixture.model.agentWatchers["pane"])
@@ -242,7 +240,6 @@ struct SessionNavigationTests {
             session: nil,
             isDirty: false,
             aheadOfUpstream: nil,
-            hasUnread: false,
         )
         fixture.model.groups[0].items.append(item)
         defaults.set(fixture.repository.path + "\n/another", forKey: "collapsedRepositories")
