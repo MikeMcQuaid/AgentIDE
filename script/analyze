@@ -8,7 +8,6 @@ cd "$(dirname "$0")/.."
 # shellcheck source=bin/environment.sh
 . bin/environment.sh
 
-[[ -d Sanductor.xcodeproj ]] || script/bootstrap
 script/version --xcconfig .build/version.xcconfig
 
 log=".build/analyze-build.log"
@@ -35,20 +34,15 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   export SWIFT_BUILD_USE_SANDBOX=0
   ios_swift_args=(--triple arm64-apple-ios26.0-simulator
     --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)")
-elif command -v xcodegen &>/dev/null; then
-  script/project
+else
+  script/package-pins
 fi
 
 # Package plugins are trusted everywhere, as in script/build: only
 # the Xcode app can show the trust prompt a non-interactive build
 # would otherwise fail on.
 args+=(-skipPackagePluginValidation)
-periphery_args=(
-  --project Sanductor.xcodeproj --schemes SanductorApp Sanductor-iOS
-  --skip-build --index-store-path .DerivedData/Index.noindex/DataStore
-  .DerivedData/iOS/Index.noindex/DataStore
-  -- -skipPackagePluginValidation -onlyUsePackageVersionsFromResolvedFile -clonedSourcePackagesDirPath .build
-)
+periphery_args=(--generic-project-config .build/analyze-project.json --skip-build)
 
 # A failed build must never be analysed: SwiftLint and periphery
 # both read what the build produced, so a broken or stale build
@@ -107,6 +101,26 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   )
   echo "sandboxed: Periphery runs here; SwiftLint analysis still needs the host's Xcode log" >&2
 else
+  plutil -convert xml1 -o .build/analyze-mac-info.plist \
+    ".DerivedData/Build/Products/${XCODE_CONFIGURATION:-Debug}/Sanductor.app/Contents/Info.plist"
+  plutil -convert xml1 -o .build/analyze-ios-info.plist \
+    ".DerivedData/iOS/Build/Products/${XCODE_CONFIGURATION:-Debug}-iphonesimulator/Sanductor.app/Info.plist"
+  cat >.build/analyze-project.json <<JSON
+{
+  "indexstores": [
+    ".DerivedData/Index.noindex/DataStore",
+    ".DerivedData/iOS/Index.noindex/DataStore"
+  ],
+  "test_targets": ["SanductorIntentTests"],
+  "xibs": [],
+  "xcdatamodels": [],
+  "xcmappingmodels": [],
+  "plists": [
+    ".build/analyze-mac-info.plist",
+    ".build/analyze-ios-info.plist"
+  ]
+}
+JSON
   # SourceKit's cursor lookup enters inactive branches, even for an
   # unavailable SDK. Analyse platform-specific files with their own SDK.
   rg --files "${PWD}/App" "${PWD}/Sources" "${PWD}/Tests" -g '*.swift' -g '!**/iOS/**' >.build/analyze-mac-sources.xcfilelist
@@ -142,10 +156,8 @@ else
   analyze_imports ios "$ios_log"
 fi
 
-# On the host the project is scanned through both app schemes because periphery's
-# SPM mode does not find an index store under the current build
-# system; these schemes exclude the package test targets, so the few
-# declarations used only by tests carry `// periphery:ignore`.
+# Generic mode reads the complete Xcode indexes without parsing the project.
+# Package test targets remain absent from the host's app schemes.
 # Exclude SwiftTerm's generated plugin sources before indexing: separate
 # platform builds generate conflicting copies. Keep Periphery's defaults.
 if ! command -v periphery &>/dev/null; then

@@ -9,6 +9,7 @@
             self.terminal = terminal
             self.expanded = expanded
             super.init(frame: .zero, inputViewStyle: .keyboard)
+            frame.size.height = intrinsicContentSize.height
             allowsSelfSizing = true
             let rows = UIStackView(arrangedSubviews: expanded ? extraRows() : [accessoryRow()])
             rows.axis = .vertical

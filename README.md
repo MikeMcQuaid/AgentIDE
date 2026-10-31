@@ -38,7 +38,7 @@ Bring your own agent CLI and sandboxed non-admin user; no marketplace, bundled m
 - [sandvault](https://github.com/webcoyote/sandvault) 1.29 or later, which creates the sandbox user and the shared workspace.
 - [`gh`](https://cli.github.com) authenticated as you; it stays with your user and agents never see it.
 - Claude Code or Codex CLI installed and signed in inside sandvault.
-- Xcode 27 or later, only to build from source.
+- Xcode 27.2 or later, only to build from source.
 
 ## 📦 Installation
 

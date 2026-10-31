@@ -5,23 +5,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # See `script/version`, which decides both of these and writes the
-# xcconfig the generated project includes, so a build started in Xcode
+# xcconfig the project includes, so a build started in Xcode
 # is versioned the same way this one is.
 {
   read -r version
   read -r BUILD_NUMBER
 } < <(script/version)
 script/version --xcconfig .build/version.xcconfig
-
-[[ -d Sanductor.xcodeproj ]] || script/bootstrap
-
-# A new source file is invisible to the generated project until
-# XcodeGen runs again; the sandbox gate builds with SwiftPM, which
-# globs sources itself, so staleness only ever bites the host
-# build. The cache makes an unchanged regeneration a no-op.
-if [[ -z "${SV_SESSION_ID:-}" ]] && command -v xcodegen &>/dev/null; then
-  script/project
-fi
 
 # Capped parallelism inside the sandbox: full-width builds have
 # triggered resource kills that tore down the whole sandbox user,
@@ -68,6 +58,8 @@ if [[ -n "${SV_SESSION_ID:-}" ]]; then
   exec nice -n 10 swift build --disable-sandbox --force-resolved-versions --disable-get-task-allow-entitlement --jobs "${JOBS}" \
     --configuration "$(tr '[:upper:]' '[:lower:]' <<<"${configuration}")"
 fi
+
+script/package-pins
 
 # Package plugins are trusted everywhere: SwiftTerm 1.19 ships a
 # build-tool plugin, and a non-interactive xcodebuild fails on an

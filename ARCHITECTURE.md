@@ -448,9 +448,17 @@ login item is the documented later option.
 ## Package architecture
 
 One root `Package.swift` defines every library target; the app shell in
-`App/` is generated into an Xcode project by XcodeGen (`project.yml`
-committed, `.xcodeproj` gitignored). `SanductorAppSources` in the package
-carries the same sources so `swift build` type-checks them in the
+`App/` belongs to the native JSON project in
+`Sanductor.xcodeproj/project.xcproj`, committed with its shared schemes.
+Xcode synchronises `App/`, `iOSApp/` and `Tests/SanductorIntentTests/`
+with their own targets, so adding, renaming or removing sources needs
+no project edit. Shared assets and the executable `bin/` folder remain
+explicit resources. `Info.plist` and signing entitlements stay out of
+build phases; the version xcconfig lives outside the source folders.
+Asset catalogues are opaque by file type; excluded ordinary directories
+need explicit opaque-folder entries to prevent recursive discovery.
+`SanductorAppSources` in the package carries the same sources so
+`swift build` type-checks them in the
 sandbox, where `xcodebuild` cannot run. The companion shell in `iOSApp/`
 uses the same project and package, with `SanductoriOSAppSources` providing
 the equivalent iOS type-check target. Analysis indexes both platforms
@@ -1453,7 +1461,7 @@ steps.
   home-directory sweep a repository deletion runs skips the guarded
   folders by name rather than reading and discarding them. There is
   no entitlement that declines these prompts in advance: the
-  `NS*UsageDescription` strings in `project.yml` decide only what a
+  `NS*UsageDescription` strings in `project.xcproj` decide only what a
   prompt says, so the app's answer is to not look.
 - **Amend adds to the commit before rather than making a new one.**
   On the uncommitted scope it folds the ticked files into the last
@@ -2125,6 +2133,10 @@ timeout cannot leave the phone connecting indefinitely.
 Successful authentication and earlier host-key errors keep their result.
 The iPhone icon uses the Mac's terminal artwork without the desktop
 icon's outer padding, so iOS applies its own mask without an extra border.
+The shared app icon catalogue uses the supported Mac size slots and an
+iOS universal image; legacy Mac slots do not accept dark or tinted
+appearances. Both platforms' catalogues compile without warnings in
+the project regression tests.
 Phone interface typography follows system text styles and Dynamic Type,
 with monospaced branch names. The terminal uses the system monospaced
 font at 13 points before Dynamic Type scaling, matching the Mac default;
@@ -2211,7 +2223,9 @@ The selected terminal uses the same JSON frames and commands as the Mac
 through SwiftTerm's UIKit view. Its light/dark button matches the palette
 of the existing agent without following the phone’s appearance changes.
 The phone's keyboard accessory keeps Escape, Ctrl, Shift, Tab and arrows
-beside the extra-keyboard toggle. Ctrl and Shift apply to the next key
+beside the extra-keyboard toggle. Its initial frame has the same
+non-zero height as its fitted layout so UIKit reserves the accessory
+row before presenting the keyboard. Ctrl and Shift apply to the next key
 and combine for modified arrows. The extra keyboard gives navigation
 keys such as PgDn wider buttons with inset labels. It replaces
 SwiftTerm's accessory and symbol keyboard through their public view
@@ -2331,10 +2345,11 @@ runtime tools (herdr via Homebrew, never linked) sit outside the table.
 No updater of its own: releases ship as the `sanductor` Homebrew cask,
 and `brew upgrade` is the updater.
 
-Toolchain: Xcode 27, Swift 6.4, XcodeGen, SwiftLint and SwiftFormat with
-every rule enabled (per-line disables with a reason). Scripts:
-`bootstrap`, `project`, `build`, `install`, `zip`, `package`, `test`,
-`analyze`, `style [--fix]`, `performance-log` and `attach [workspace]`;
+Toolchain: Xcode 27.2 or later, Swift 6.4, SwiftLint and SwiftFormat
+with every rule enabled (per-line disables with a reason). Scripts:
+`bootstrap`, `package-pins`, `build`, `install`, `zip`, `package`,
+`test`, `analyze`, `style [--fix]`, `performance-log` and `attach
+[workspace]`;
 see AGENTS.md. Sandboxed builds gate on `SV_SESSION_ID` and disable
 SwiftPM's sandbox. Metal Toolchain 27A266a must be installed from the
 host using `xcodebuild -downloadComponent MetalToolchain`; its system
@@ -2347,8 +2362,9 @@ debugger-attach entitlement:
 Swift 6.4 otherwise tries to sign SwiftTerm's resource-only bundle as
 an executable and warns about a missing build-graph node. Interactive
 Xcode builds retain their debugging entitlements.
-Project generation copies the committed `Package.resolved` into Xcode's
-workspace only when it changes, preserving incremental builds.
+`bootstrap` and scripted Xcode builds copy the committed
+`Package.resolved` into Xcode's workspace only when it changes,
+preserving incremental builds. User-specific Xcode state stays ignored.
 Builds, tests and analysis require those pinned versions,
 so pull requests and main use the same dependencies with warm or cold
 caches.
@@ -2381,7 +2397,12 @@ invalid workflow cannot silently escape the checks.
 
 `script/analyze` builds the Mac and iPhone simulator schemes on the
 host, keeping their compiler logs separate and sharing both schemes'
-indexes with Periphery. SwiftLint uses each platform's own build log
+indexes with Periphery through its supported generic configuration,
+including the generated product plists and test target names. Analysis
+converts copies of the product plists to XML for Periphery's XML-only
+parser, preserving the built bundles and every plist reference. This
+avoids Periphery's legacy project parser without keeping a second
+project. SwiftLint uses each platform's own build log
 and `.xcfilelist`, the extension its file-list reader requires, and
 excludes the other platform's font implementations: SourceKit's
 cursor lookup otherwise enters inactive branches with an unavailable SDK.
@@ -2436,7 +2457,7 @@ Pull request model fixtures use distinct worktree paths so parallel
 tests cannot change each other's remembered stack selection.
 CI (`.github/workflows/tests.yml`) runs style on every push and pull
 request, and build-and-test and analyze in parallel on the `xcode-27`
-image, each asserting Xcode 27 rather than skipping. Analysis shares its
+image, each requiring Xcode 27.2 or later. Analysis shares its
 clean Release builds with packaging; independent matrix jobs run each
 sanitizer, whose differently instrumented outputs cannot be shared.
 The stable `tests` check waits for analysis and every matrix job and
@@ -2653,10 +2674,12 @@ key. They do not upload a TestFlight build. The job runs despite the
 publishing job being skipped on pushes, and missing credentials or
 failed validation fail the workflow. Dependabot skips it.
 
-`script/testflight [--dry-run]` imports `APP_STORE_CERTIFICATES`, the
-base64 of an `Apple-Distribution.p12` export including its private key,
-using `APP_STORE_CERTIFICATES_PASSWORD`. Both can be shared with other
-apps on the same team. GitHub's `SANDUCTOR_APP_STORE_IOS_PROFILE`
+`script/testflight [--dry-run]` prepares version settings and package
+pins before archiving, without Homebrew build tools. It imports
+`APP_STORE_CERTIFICATES`, the base64 of an `Apple-Distribution.p12`
+export including its private key, using `APP_STORE_CERTIFICATES_PASSWORD`.
+Both can be shared with other apps on the same team. GitHub's
+`SANDUCTOR_APP_STORE_IOS_PROFILE`
 supplies the base64 App Store Connect distribution profile as
 `APP_STORE_IOS_PROFILE`. It must match `com.mikemcquaid.Sanductor` and
 the exported certificate; there is no Watch app or Watch profile. The
@@ -2933,7 +2956,7 @@ Not scheduled, recorded so the pieces already built line up with them:
 | # | Risk | Mitigation |
 |---|---|---|
 | R1 | herdr is pre-1.0; releases may change behaviour | schema'd protocol; integration tests run against the real server so drift fails loudly; app-owned PTYs are not acceptable because they forfeit resilience |
-| R2 | the `xcode-27` runner image may change or lag betas | jobs assert Xcode 27 and fail loudly; self-hosted is the fallback |
+| R2 | the `xcode-27` runner image may change or lag betas | jobs require Xcode 27.2 and fail loudly; self-hosted is the fallback |
 | R3 | agent transcript formats drift | tolerant decoders, per-release fixtures |
 | R4 | sandvault updates could change paths, profile or sudoers | `SandvaultLauncher` is the single construction point |
 | R5 | resume ids depend on transcript internals | record defensively; fall back to a fresh session in the same worktree |

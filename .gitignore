@@ -61,8 +61,11 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
-# XcodeGen
+# Only the native project is version-controlled.
 *.xcodeproj
+!Sanductor.xcodeproj
+# Package pins come from Package.resolved.
+Sanductor.xcodeproj/project.xcworkspace/
 
 # Sandboxed builds
 .DerivedData/
