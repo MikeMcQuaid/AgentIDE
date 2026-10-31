@@ -1,8 +1,28 @@
 @testable import MobileFeature
 import SanductorDomain
+import SanductorRemote
 import Testing
 
 struct MobileSidebarTests {
+    @Test
+    func `phone visibility follows the Mac snapshot without local working hours`() {
+        let model = MobileModel(configuration: SSHConfiguration())
+        let session = MobileSession(
+            id: "pane", name: "agent", repository: "work-repo", branch: "main", agent: .codexCLI, activity: .working,
+        )
+        model.allRepositories = ["Work Repo", "personal"]
+        model.allSessions = [session]
+        model.selection = session
+        model.sidebar = [SidebarRepository(name: "Work Repo", owner: "work", worktrees: [], isHidden: true)]
+        #expect(model.repositories == ["personal"])
+        #expect(model.sessions.isEmpty)
+        #expect(model.selection == nil)
+        #expect(model.allSessions == [session])
+        model.sidebar = [SidebarRepository(name: "Work Repo", owner: "work", worktrees: [], isHidden: false)]
+        #expect(model.repositories == ["Work Repo", "personal"])
+        #expect(model.sessions == [session])
+    }
+
     @Test(arguments: [
         ("trunk", SidebarStatus.defaultBranch),
         ("feature", .branch),

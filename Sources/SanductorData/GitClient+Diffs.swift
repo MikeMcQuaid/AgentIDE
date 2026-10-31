@@ -11,9 +11,9 @@ public extension GitClient {
 
     private func diffOptions(ignoringWhitespace: Bool) -> [String] {
         if ignoringWhitespace {
-            ["-w"]
+            ["--find-renames", "-w"]
         } else {
-            []
+            ["--find-renames"]
         }
     }
 

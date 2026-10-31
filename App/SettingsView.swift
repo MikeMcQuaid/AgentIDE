@@ -20,6 +20,9 @@ struct SettingsView: View {
             GeneralSettingsPane(dashboard: dependencies.dashboard)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag("general")
+            WorkModeSettingsPane(dashboard: dependencies.dashboard)
+                .tabItem { Label("Work", systemImage: "briefcase") }
+                .tag("workMode")
             ScheduledPromptsView(model: dependencies.schedules, dashboard: dependencies.dashboard)
                 .tabItem { Label("Schedules", systemImage: "calendar") }
                 .tag("schedules")

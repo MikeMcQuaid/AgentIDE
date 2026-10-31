@@ -5,13 +5,11 @@ public enum DiffParser {
     /// Parses unified diff text; unrecognised lines are ignored.
     public static func parse(_ diff: String) -> [DiffFile] {
         var files = [DiffFile]()
-        var newPath: String?
-        var oldPath: String?
+        var paths = Paths()
         var hunks = [DiffHunk]()
         var lines = [DiffLine]()
         var starts: (old: Int, new: Int) = (0, 0)
         var inHunk = false
-        var sawOldPath = false
 
         func closeHunk() {
             guard inHunk else {
@@ -27,14 +25,14 @@ public enum DiffParser {
             closeHunk()
             // Prefer the new path; fall back to the old path so deleted
             // files (whose new path is /dev/null) are still represented.
-            if let path = newPath ?? oldPath {
+            if let path = paths.new ?? paths.old {
                 // `--- /dev/null` (a git-added file) and the synthetic
                 // untracked diff both leave the old path empty.
-                files.append(DiffFile(path: path, hunks: hunks, isNew: sawOldPath && oldPath == nil))
+                files.append(DiffFile(
+                    path: path, hunks: hunks, isNew: paths.sawOld && paths.old == nil, oldPath: paths.renamedFrom,
+                ))
             }
-            sawOldPath = false
-            newPath = nil
-            oldPath = nil
+            paths = Paths()
             hunks = []
         }
 
@@ -50,11 +48,8 @@ public enum DiffParser {
                 if let parsed = diffLine(line) {
                     lines.append(parsed)
                 }
-            } else if line.hasPrefix("--- ") {
-                sawOldPath = true
-                oldPath = strippedPath(String(line.dropFirst("--- ".count)))
-            } else if line.hasPrefix("+++ ") {
-                newPath = strippedPath(String(line.dropFirst("+++ ".count)))
+            } else {
+                paths.consume(line)
             }
         }
         closeFile()
@@ -65,17 +60,6 @@ public enum DiffParser {
 
     /// The `-old` and `+new` markers of a hunk header.
     private static let hunkMarkerCount = 2
-
-    private static func strippedPath(_ name: String) -> String? {
-        guard name != "/dev/null" else {
-            return nil
-        }
-
-        if name.hasPrefix("a/") || name.hasPrefix("b/") {
-            return String(name.dropFirst("a/".count))
-        }
-        return name
-    }
 
     private static func hunkStarts(_ line: String) -> (old: Int, new: Int) {
         let numbers = line.split(separator: " ").dropFirst().prefix(hunkMarkerCount).map { marker in

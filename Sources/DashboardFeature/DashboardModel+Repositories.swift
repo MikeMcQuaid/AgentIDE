@@ -7,7 +7,7 @@ import TerminalUI
 public extension DashboardModel {
     /// The repositories available for new sessions.
     var repositories: [Repository] {
-        service.repositories()
+        visibleGroups.map(\.repository).sorted { $0.name < $1.name }
     }
 
     /// Explicit navigation reveals the row; background readings do not.

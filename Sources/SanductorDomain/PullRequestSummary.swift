@@ -204,7 +204,7 @@ public struct PullRequestSummary: ReferencedItem, Hashable, Sendable, Codable {
 
     /// Failing checks the branch does not require, which the rollup
     /// leaves out: counted so the help can say why a green dot sits
-    /// beside a red run on GitHub, never offered to open or copy.
+    /// beside a red run on GitHub; manual copying can include optional jobs.
     public let autofixChecks: AutofixChecks?
     public let headRepository: String?
 

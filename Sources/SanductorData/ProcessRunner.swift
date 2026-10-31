@@ -156,6 +156,7 @@ public struct FoundationProcessRunner: ProcessRunner {
     /// global-queue thread in `waitUntilExit` per process meant a
     /// fan-out of git reads held a blocked thread each, at default
     /// quality of service.
+    @concurrent
     public func run(
         _ arguments: [String],
         workingDirectory: String?,

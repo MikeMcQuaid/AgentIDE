@@ -105,9 +105,13 @@ public enum HerdrTerminal {
     /// Scrolls at a zero-based cell, so mouse-aware agents receive
     /// the pointer position rather than herdr's top-left default.
     public static func scrollCommand(upwards: Bool, lines: Int, column: Int, row: Int) -> String {
-        encode(HerdrTerminalInput(
-            type: "terminal.scroll", direction: upwards ? "up" : "down", lines: lines, column: column, row: row,
-        ))
+        // herdr forwards one mouse report per record, ignoring its line count.
+        Array(
+            repeating: encode(HerdrTerminalInput(
+                type: "terminal.scroll", direction: upwards ? "up" : "down", lines: 1, column: column, row: row,
+            )),
+            count: max(lines, 0),
+        ).joined(separator: "\n")
     }
 
     // MARK: Private

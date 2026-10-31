@@ -1,0 +1,20 @@
+#!/bin/bash
+# Replay the opening tour after setup checks, preserving all other settings.
+# Quit the app first; pass a development app's path to test that build instead.
+set -euo pipefail
+
+if [[ "${USER}" == sandvault-* ]]; then
+  echo "Run this script as your normal macOS user, after quitting Sanductor." >&2
+  exit 1
+fi
+
+app="${1:-/Applications/Sanductor.app}"
+bundle_id="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "${app}/Contents/Info.plist")"
+executable="$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "${app}/Contents/Info.plist")"
+if pgrep -u "$(id -u)" -x "${executable}" &>/dev/null; then
+  echo "Quit ${app} before replaying its tutorial; this closes its Shell tabs." >&2
+  exit 1
+fi
+
+defaults write "${bundle_id}" workspaceTutorialPending -bool true
+open "${app}"

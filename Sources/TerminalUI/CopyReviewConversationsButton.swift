@@ -1,4 +1,5 @@
 import AppKit
+import SanductorData
 import SanductorDomain
 import SwiftUI
 
@@ -19,7 +20,7 @@ public struct CopyReviewConversationsButton: View {
             disabled: open.isEmpty,
         ) {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(ReviewThread.digest(of: open), forType: .string)
+            NSPasteboard.general.setString(ReviewCopy.digest(of: open), forType: .string)
         }
         .accessibilityLabel("Copy " + String(open.count) + " unresolved conversations")
     }

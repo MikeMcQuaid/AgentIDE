@@ -206,7 +206,7 @@ struct StackedSessionIntegrationTests {
     }
 
     @Test(arguments: [true, false])
-    func `a restack leaves alone a parent worktree that is dirty or busy`(dirty: Bool) async throws {
+    func `a restack preserves dirty parent changes and refuses busy parents`(dirty: Bool) async throws {
         let pair = try await Self.pair()
         defer { pair.world.tearDown() }
         let repository = pair.world.repository
@@ -216,14 +216,15 @@ struct StackedSessionIntegrationTests {
             try "unsaved".write(toFile: pair.parent.path + "/scratch.txt", atomically: true, encoding: .utf8)
         }
 
-        await #expect(throws: CommandError.self) {
-            try await pair.world.service.restack(
-                worktree: pair.child,
-                busyWorktrees: dirty ? [] : [pair.parent.path],
-            )
+        if dirty {
+            #expect(try await pair.world.service.restack(worktree: pair.child) == ["part_one", "part_two"])
+            #expect(try String(contentsOfFile: pair.parent.path + "/scratch.txt", encoding: .utf8) == "unsaved")
+        } else {
+            await #expect(throws: CommandError.self) {
+                try await pair.world.service.restack(worktree: pair.child, busyWorktrees: [pair.parent.path])
+            }
+            #expect(try await BranchStackIntegrationTests.tip(of: "part_one", in: repository.path) == before)
         }
-
-        #expect(try await BranchStackIntegrationTests.tip(of: "part_one", in: repository.path) == before)
     }
 
     @Test

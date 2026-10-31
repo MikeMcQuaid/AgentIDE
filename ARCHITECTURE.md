@@ -110,6 +110,11 @@ plus resume.
 
 ### First-launch setup
 
+Setup explains that agents use the sandbox account and shared workspace,
+while the Shell pane uses the host account for dependency installation.
+Agent sessions survive quitting through herdr; local shells do not.
+Keychain recovery names the sandbox account, never the host keychain.
+
 After initial setup succeeds, the saved completion marker opens the
 dashboard, schedules and terminals immediately on later launches. Local
 prerequisites are rechecked once in the background, with independent
@@ -117,6 +122,12 @@ checks running concurrently. A failure replaces the workspace with setup
 guidance and blocks further actions until repaired. A first-ever launch
 shows startup progress in the normal app window until checks succeed.
 The workspace then opens; setup controls appear only after a failure.
+New users see three native popovers anchored to the repository, agent and
+tools panes, explaining their roles and the host/sandbox trust boundary.
+A pending marker is saved only when first-time setup succeeds, so existing
+users skip the tour and an interrupted tour resumes on relaunch. Dismissing
+or finishing it clears the marker. `script/tutorial [app-path]` sets only
+that marker for a stopped app and launches it; checks still run first.
 Completed setups show no startup progress. After a failure, manual
 rechecks show a spinner only after half a second. Agent availability
 updates in the mounted dashboard when the background check completes.
@@ -265,8 +276,17 @@ session control <pane> --takeover`, newline-delimited JSON over pipes)
 rather than drawing a remote screen over a PTY. herdr streams
 `terminal.frame` records of base64 ANSI bytes, opening with a full
 repaint, which the pane decodes (`HerdrTerminal` in Domain,
-`HerdrTerminalChannel` in DataAccess) into a local SwiftTerm view;
-keystrokes go back as `terminal.input`, resizes as `terminal.resize` and
+`HerdrTerminalChannel` in DataAccess) into a local SwiftTerm view.
+Keystrokes go through a serial interactive writer queue, so a busy client
+cannot block the main thread and command order is preserved. Pipe reads
+split records once per chunk and batch adjacent frames without dropping
+ANSI updates. Precise wheel deltas use the terminal's actual cell size,
+retain momentum and reset fractional movement at a new gesture.
+Each whole line is a separate `terminal.scroll` record, batched into one
+write: herdr 0.9.5 ignores the `lines` count when forwarding wheel input to
+mouse-aware agents or alternate-screen applications. Sending one record
+per line preserves accelerated gestures and ordinary scrollback alike.
+Keystrokes go back as `terminal.input`, resizes as `terminal.resize` and
 the wheel as `terminal.scroll`. The channel reads its client through
 the pipe's readability handler, never a blocking read: every mounted
 pane keeps a client, most of them silent, and reads that wait on each
@@ -276,6 +296,12 @@ to a window, falling back to Core Graphics if Metal is unavailable.
 On the Mac, its render loop prepares and draws frames off the main
 thread. SwiftTerm owns frame scheduling and keeps per-row GPU buffers,
 rebuilding only dirty rows.
+Typing leaves the cursor's blink cadence running: SwiftTerm 1.99.1's
+per-key blink reset takes the render lock, which can be held while Metal
+waits for a drawable and stalls input across the window.
+Screen changes mark fullscreen content for layout on AppKit's next
+update, allowing repeated notifications to coalesce instead of forcing
+nested SwiftUI layout during event handling.
 Pointer hits on the Mac's Metal surface go to the terminal view, so
 clicking gives the terminal keyboard focus rather than its drawing view.
 Keystrokes go straight to the transport without a main-queue buffer;
@@ -780,6 +806,17 @@ page resumes any past conversation into a fresh worktree.
 
 ### Watch and steer
 
+Work settings provide an opt-in visibility filter for selected GitHub
+organisations, using local working days and hours (Monday to Friday,
+09:00 to 17:00 by default). Outside those hours their repositories and
+selected panes are hidden; schedules and agents continue running. The
+filter updates at the next boundary and on wake or settings changes.
+The Mac publishes visibility in its sidebar snapshot; the iPhone follows
+that state on refresh or reconnect, without configuring or evaluating a
+working schedule of its own.
+Schedule previews mask recognised Sentry and GitHub tokens; editing and
+launching retain the original prompt.
+
 Scheduled prompts belong to the host metadata, with a repository path,
 prompt, agent, model, effort and daily, weekly or monthly recurrence.
 Settings' Schedules pane left-aligns prompt previews and uses repeat, day
@@ -1193,7 +1230,9 @@ An empty result says no findings, not that the code is correct. This
 first pass reviews diff context only and neither executes tests nor
 reads additional source files.
 
-1. `GitClient` produces diffs with rename detection; `DiffParser` turns
+1. `GitClient` explicitly requests rename detection, including untracked
+   destinations in its private index; renamed files retain both paths,
+   including pure renames with no hunks. `DiffParser` turns
    them into files, hunks and lines. Scope is the last commit (or
    uncommitted changes when there are any), the unpushed commits, or
    the whole branch against its merge base, remembered per worktree
@@ -1390,14 +1429,19 @@ steps.
   wait`) and every action of the app's own each wake a reading. The
   poll behind them re-reads on Settings' interval while the window
   shows, a minute while it is covered, and on battery a minute
-  showing and five covered (`RefreshCadence`, `PowerSource`). A tick
-  of its own asks herdr for the pane listing only once a minute
+  showing and five covered (`RefreshCadence`, `PowerSource`). Git safety
+  checks share one power-state reading across their repository batch.
+  A tick of its own asks herdr for the pane listing only once a minute
   (five on battery) and reuses the last listing between, since that
   listing changes only through the events above and asking is a
   `sudo` login shell; git is read only for repositories the watcher
-  flagged or past their own safety interval. On battery every safety
-  interval, the stack rota and every pull request tier (floors
-  included) runs five times slower, one factor for the whole app.
+  flagged or past their own safety interval. Repository pickers and
+  published session choices use the loaded sidebar snapshot. Repository
+  discovery and subprocess setup run off the main actor, leaving input
+  handling free while filesystem and process services answer.
+  On battery every safety interval, the stack rota and every pull
+  request tier (floors included) runs five times slower, one factor
+  for the whole app.
 - **Polling is tiered by attention** with a minute floor per pull
   request: selected worktree first, then its repository, then expanded
   repositories, collapsed ones rarely. A pull request with checks
@@ -1527,7 +1571,12 @@ steps.
   required check GitHub has yet to hear from keeps it orange, which
   is what GitHub's own merge box says. A branch requiring nothing
   counts every check, as does a branch whose rules could not be read.
-  The Checks copy button takes only failures that count. The PR pane's
+  The Checks copy button remembers per PR whether to include only required
+  jobs or required and optional jobs. A passing required rollup with
+  optional failures uses a circle with a green left half and red right
+  half, using the same dot glyph and size as single-colour states.
+  Cancelled or skipped jobs without logs show a normal empty state
+  and do not fail bulk copying. The PR pane's
   Conversations/Checks tabs sit above all reviews and comments, using
   the same compact control as Worktree/Mine/Open. Checks counts use
   parentheses. Required-only and unfinished-only icon toggles share
@@ -1539,6 +1588,9 @@ steps.
   Selected summaries enrich workflow names and event types through
   `gh pr checks`, matching by job name and link while retaining the
   summary's statuses and requirement matching on bare job names.
+  Workflow names and event types are reused for unchanged job identities;
+  new jobs or incomplete labels fetch them again, without delaying status
+  refreshes or changing their cadence.
   Unknown rules remain labelled unknown. Check details travel with the
   enriched summary, using the existing refresh cadence; lightweight
   listings do not claim that checks are empty. A cached summary without
@@ -1823,8 +1875,14 @@ steps.
   A stack can span worktrees: git will not check out a branch
   another worktree holds, so that branch is rebased (and rolled back),
   named, in its own worktree. Before anything moves, the restack
-  refuses while such a worktree is dirty or its agent is not idle or
-  done, and Rebase dims with the reason. Push dims for those blockers
+  refuses while its agent is not idle or done, and Rebase dims with the
+  reason. Dirty worktrees are temporarily stashed, including untracked
+  files, then restored with their staged state; integrating remote work
+  before a push uses the same protection. A failed restack restores
+  branches before applying those changes. Restore conflicts retain the
+  stash with recovery instructions; existing user stashes stay untouched.
+  Creating a branch at HEAD keeps changes in place without stashing.
+  Push dims for those blockers
   only when branches being pushed need rebasing or signing and include
   the blocked worktree. Restacking stops when that worktree has switched
   branches by the time its turn comes. A failed bottom rebase retries
@@ -2755,8 +2813,13 @@ surrounding Markdown source. With pretty printing disabled, SwiftSoup
 2.14.2 reuses original element source without normalising entity
 spellings; notice removal uses these original spans. Bot commit
 references remain as written. Code examples and existing links remain
-unchanged. This is cached presentation filtering: original events remain
-available to Copy all, review completion detection and autofix.
+unchanged. This is cached presentation filtering; original events remain
+available for review completion detection.
+Copied CodeRabbit feedback omits severity decorations, generated HTML
+and investigation disclosures, preserving the finding, suggested patch
+and follow-up instructions. The shared Markdown/HTML parser protects
+literal code and links. Human comments and stored source remain intact.
+The same cleaned feedback feeds manual copies and automated fix prompts.
 Headers, timeline entries, native disclosures, separate review threads
 and scrolling code or table regions remain selection boundaries.
 SwiftSoup maps common HTML formatting into Markdown and keeps nested

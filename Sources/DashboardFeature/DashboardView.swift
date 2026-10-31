@@ -51,6 +51,7 @@ public struct DashboardView: View {
             }
         }
         .task { await model.listenForSidebarRequests() }
+        .workModeUpdates(model)
     }
 
     // MARK: Internal

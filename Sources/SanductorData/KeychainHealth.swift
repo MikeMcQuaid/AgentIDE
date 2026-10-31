@@ -45,6 +45,8 @@ enum KeychainHealth {
             + " raises a keychain password dialog and Claude Code's credentials cannot move to sandvault's"
             + " own keychain. To put it right by hand, on the host: run `sv build --rebuild`, remove the"
             + " old keychain with `sudo --user=" + sandboxUser + " /bin/zsh -c 'rm " + keychain + "'`,"
-            + " then run `sv claude` and sign in again."
+            + " then run `sv claude` and sign in again. These steps affect only " + sandboxUser
+            + "; never reset or remove your normal user's keychain. If a dialog offers Reset to Defaults,"
+            + " first verify it belongs to the sandbox account."
     }
 }

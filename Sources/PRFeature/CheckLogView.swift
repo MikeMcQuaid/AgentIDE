@@ -51,7 +51,9 @@ struct CheckLogView: View {
     private var codeStyle: CodeStyle = .init()
 
     private var unavailableReason: String {
-        if check.status == "EXPECTED" {
+        if check.hasNoLog || (check.isComplete && ["CANCELLED", "SKIPPED"].contains(check.conclusion)) {
+            "This job was cancelled or skipped without a log."
+        } else if check.status == "EXPECTED" {
             "This required check has not reported yet."
         } else if check.jobID == nil {
             "This check publishes its log on its own site. Open the check to view it."
@@ -134,7 +136,11 @@ struct CheckLogView: View {
                 return
             }
 
-            self.error = "Could not read this check's log: " + error.localizedDescription
+            if ["CANCELLED", "SKIPPED"].contains(check.conclusion) == false
+                || error is GitHubClient.JobLogUnavailable == false
+            {
+                self.error = "Could not read this check's log: " + error.localizedDescription
+            }
         }
     }
 

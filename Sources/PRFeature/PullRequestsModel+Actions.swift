@@ -78,7 +78,7 @@ extension PullRequestsModel {
         NSPasteboard.general.clearContents()
         let remote = pullRequests.cachedConversation(repositoryPath: repository.path, number: summary.number).threads
         let threads = (remote + (localReview(for: summary)?.review.threads ?? [])).filter { $0.isResolved == false }
-        let text = ReviewThread.digest(of: threads)
+        let text = ReviewCopy.digest(of: threads)
         NSPasteboard.general.setString(text, forType: .string)
         note("copied \(threads.count) unresolved conversations from `#\(summary.number)`")
     }

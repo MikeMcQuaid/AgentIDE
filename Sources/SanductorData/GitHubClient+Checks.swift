@@ -8,6 +8,7 @@ extension GitHubClient {
     public func pullRequestSummary(
         repositoryPath: String,
         number: Int,
+        cachedChecks: [PullRequestCheck] = [],
         requiredChecks: RequiredChecksReader = { _ in nil },
     ) async throws -> PullRequestSummary? {
         let fields = Self.coreFields + "," + Self.statusFields + ",headRepository"
@@ -16,20 +17,29 @@ extension GitHubClient {
             fromJSON: "[" + result.standardOutput + "]", requiredChecks: requiredChecks,
         )
         .first
-        if var checks = summary?.checkDetails, checks.contains(where: { $0.jobID != nil }),
-           let names = try? await gh(
-               ["pr", "checks", String(number), "--json", "name,link,workflow,event"],
-               in: repositoryPath,
-               allowFailure: true,
-           ),
-           let workflows = try? JSONDecoder().decode([CheckWorkflow].self, from: Data(names.standardOutput.utf8))
-        {
+        if var checks = summary?.checkDetails {
+            let known = Dictionary(cachedChecks.map { ($0.id, $0) }) { first, _ in first }
             for index in checks.indices {
-                if let workflow = workflows.first(where: { item in
-                    item.name == checks[index].name && item.link == checks[index].link
-                }) {
-                    checks[index].workflowName = workflow.workflow
-                    checks[index].event = workflow.event
+                if let cached = known[checks[index].id] {
+                    checks[index].workflowName = cached.workflowName ?? checks[index].workflowName
+                    checks[index].event = cached.event
+                }
+            }
+            if checks.contains(where: { $0.jobID != nil && ($0.workflowName == nil || $0.event == nil) }),
+               let names = try? await gh(
+                   ["pr", "checks", String(number), "--json", "name,link,workflow,event"],
+                   in: repositoryPath,
+                   allowFailure: true,
+               ),
+               let workflows = try? JSONDecoder().decode([CheckWorkflow].self, from: Data(names.standardOutput.utf8))
+            {
+                for index in checks.indices {
+                    if let workflow = workflows.first(where: { item in
+                        item.name == checks[index].name && item.link == checks[index].link
+                    }) {
+                        checks[index].workflowName = workflow.workflow
+                        checks[index].event = workflow.event
+                    }
                 }
             }
             summary?.checkDetails = checks

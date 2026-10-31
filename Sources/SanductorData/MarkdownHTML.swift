@@ -2,26 +2,72 @@ import Foundation
 import SwiftSoup
 
 /// HTML structure around Markdown, never an executable document.
-struct MarkdownHTML {
+public struct MarkdownHTML {
     // MARK: Lifecycle
 
-    init(_ source: String) throws {
+    /// Parses HTML while keeping embedded Markdown code intact.
+    public init(_ source: String, compactReview: Bool = false) throws {
+        self.compactReview = compactReview
         protected = try MarkdownHTMLCode(source)
         document = try SwiftSoup.parseBodyFragment(protected.source
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[//]: #") == false }
             .joined(separator: "\n"))
         document.outputSettings().prettyPrint(pretty: false)
+        if compactReview {
+            for details in try document.select("details") {
+                let summary = try details.select("summary").first()?.text().lowercased() ?? ""
+                if [
+                    "supported by", "analysis", "investigation", "reasoning", "learnings", "review info",
+                    "usage-based", "share", "ai agents",
+                ].contains(where: summary.contains) {
+                    try details.remove()
+                } else {
+                    try details.select("summary").remove()
+                }
+            }
+            try document.select("picture, img, source").remove()
+        }
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    var markdown: String {
-        protected.restore(render(document.body()?.getChildNodes() ?? []))
+    /// Markdown with an optional disclosure title.
+    public struct Chunk {
+        // MARK: Lifecycle
+
+        /// Creates a renderable section.
+        public init(text: String, detailsSummary: String?) {
+            self.text = text
+            self.detailsSummary = detailsSummary
+        }
+
+        // MARK: Public
+
+        /// The section body.
+        public let text: String
+        /// The disclosure label, or nil for ordinary text.
+        public let detailsSummary: String?
     }
 
-    var chunks: [MarkdownText.Chunk] {
-        var result = [MarkdownText.Chunk]()
+    /// Safe Markdown with HTML wrappers removed.
+    public var markdown: String {
+        var text = render(document.body()?.getChildNodes() ?? [])
+        if compactReview {
+            text = text.replacingOccurrences(
+                of: #"(?m)^[ \t]*(?:\*\*|_)[ \t]*(?:Critical|Major|Minor|Trivial)(?:\*\*|_)[^\n]*\n*"#,
+                with: "",
+                options: .regularExpression,
+            )
+            .replacingOccurrences(of: #"\n[ \t]*\n(?:[ \t]*\n)+"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .newlines)
+        }
+        return protected.restore(text)
+    }
+
+    /// Top-level sections, retaining disclosure boundaries.
+    public var chunks: [Chunk] {
+        var result = [Chunk]()
         var plain = [Node]()
         for node in disclosureNodes(document.body()?.getChildNodes() ?? []) {
             guard let element = node as? Element, element.tagName() == "details" else {
@@ -30,7 +76,7 @@ struct MarkdownHTML {
             }
 
             if render(plain).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                result.append(MarkdownText.Chunk(
+                result.append(Chunk(
                     text: protected.restore(plain.map { (try? $0.outerHtml()) ?? "" }.joined()), detailsSummary: nil,
                 ))
             }
@@ -42,12 +88,12 @@ struct MarkdownHTML {
                 .map { $0.restore($0.source.replacing("**", with: "")) } ?? titleSource)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let body = children.filter { $0 !== summary }.map { (try? $0.outerHtml()) ?? "" }.joined()
-            result.append(MarkdownText.Chunk(
+            result.append(Chunk(
                 text: protected.restore(body), detailsSummary: title.isEmpty ? "Details" : title,
             ))
         }
         if render(plain).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            result.append(MarkdownText.Chunk(
+            result.append(Chunk(
                 text: protected.restore(plain.map { (try? $0.outerHtml()) ?? "" }.joined()), detailsSummary: nil,
             ))
         }
@@ -59,6 +105,7 @@ struct MarkdownHTML {
     private static let fenceLength = 3
     private static let maximumListStart = 999_999_999
 
+    private let compactReview: Bool
     private let protected: MarkdownHTMLCode
     private let document: SwiftSoup.Document
 

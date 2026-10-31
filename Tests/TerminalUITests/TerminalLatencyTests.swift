@@ -28,13 +28,20 @@ struct TerminalLatencyTests {
     func `keys and complete pastes reach herdr without another main queue turn`() async throws {
         let channel = HerdrTerminalChannel(command: ["/usr/bin/sed", "-l", "s/terminal.input/terminal.frame/"])
         let stream = try await channel.start()
-        let received = Mutex([[UInt8]]())
+        let received = Mutex([UInt8]())
         let delivered = DispatchSemaphore(value: 0)
+        let payloads = [Array("a".utf8), HerdrTerminal.pasteBytes("two\nlines"), Array("b".utf8)]
+        let expected = payloads.flatMap(\.self)
         let reader = Task.detached {
             for await event in stream {
                 if case let .frame(bytes) = event {
-                    received.withLock { $0.append(bytes) }
-                    delivered.signal()
+                    let complete = received.withLock { received in
+                        received.append(contentsOf: bytes)
+                        return received.count == expected.count
+                    }
+                    if complete {
+                        delivered.signal()
+                    }
                 }
             }
         }
@@ -43,16 +50,13 @@ struct TerminalLatencyTests {
         coordinator.channel = channel
         coordinator.view = view
         view.terminalDelegate = coordinator
-        let payloads = [Array("a".utf8), HerdrTerminal.pasteBytes("two\nlines"), Array("b".utf8)]
         for bytes in payloads {
             view.send(data: bytes[...])
         }
         // Hold the main queue: delivery must not need another turn on it.
-        for _ in payloads {
-            // swiftformat:disable:next redundantClosure -- Deliberately block inside a synchronous context.
-            #expect({ delivered.wait(timeout: .now() + 1) }() == .success)
-        }
-        #expect(received.withLock { $0 } == payloads)
+        // swiftformat:disable:next redundantClosure -- Deliberately block inside a synchronous context.
+        #expect({ delivered.wait(timeout: .now() + 1) }() == .success)
+        #expect(received.withLock { $0 } == expected)
         reader.cancel()
         coordinator.tearDown()
         await channel.stop()

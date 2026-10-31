@@ -135,7 +135,11 @@ let package = Package(
         ),
         .target(
             name: "SanductorData",
-            dependencies: ["SanductorDomain"],
+            dependencies: [
+                "SanductorDomain",
+                .product(name: "Markdown", package: "swift-markdown"),
+                .product(name: "SwiftSoup", package: "SwiftSoup"),
+            ],
             swiftSettings: approachableConcurrency,
             linkerSettings: [
                 // CI's runners boot an older macOS than the 27.0 SDK

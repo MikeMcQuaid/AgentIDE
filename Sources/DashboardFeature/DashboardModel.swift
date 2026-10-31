@@ -33,6 +33,7 @@ public final class DashboardModel {
         restoreCachedSidebar()
         restoreDiscoveredModels()
         readModelNames()
+        refreshWorkMode()
     }
 
     deinit {
@@ -142,7 +143,15 @@ public final class DashboardModel {
     /// resumes on the same worktree.
     public var selection: WorktreeItem? {
         didSet {
-            guard let selection, selection.id != oldValue?.id else {
+            guard let selection else {
+                return
+            }
+
+            if hiddenOrganisations.contains(groups.group(holding: selection)?.repository.owner?.lowercased() ?? "") {
+                self.selection = nil
+                return
+            }
+            guard selection.id != oldValue?.id else {
                 return
             }
 
@@ -358,6 +367,10 @@ public final class DashboardModel {
     /// the listing's safety interval has passed. True at launch,
     /// since nothing has been listed yet.
     var pendingPaneRead = true
+
+    var hiddenOrganisations: Set<String> = []
+    @ObservationIgnored var workModeTimer: Timer?
+    @ObservationIgnored var workModeSettings: WorkMode?
 
     /// When herdr was last asked, for the poll's safety interval.
     var panesReadAt: Date?

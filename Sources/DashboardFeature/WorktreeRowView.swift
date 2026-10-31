@@ -290,7 +290,7 @@ private struct PullRequestBadge: View {
         Button {
             LinkOpener.open(pullRequest.checksClickURL)
         } label: {
-            Octicon(ChecksStyle.checksOcticonName, colour: ChecksStyle.colour(for: pullRequest.checks))
+            ChecksIndicator(summary: pullRequest)
                 .accessibilityLabel("Checks: " + pullRequest.checksDescription)
         }
         .buttonStyle(.plain)

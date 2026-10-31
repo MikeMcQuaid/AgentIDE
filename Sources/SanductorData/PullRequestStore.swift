@@ -137,6 +137,7 @@ public struct PullRequestStore: Sendable {
             var fetched = try await github.pullRequestSummary(
                 repositoryPath: repositoryPath,
                 number: number,
+                cachedChecks: cached?.checkDetails ?? [],
                 requiredChecks: requiredChecksReader(repositoryPath: repositoryPath),
             )
             guard let summary = fetched else {
@@ -198,6 +199,7 @@ public struct PullRequestStore: Sendable {
 
     /// Every repository's merge queue, those due asked for in one
     /// query and the rest answered from what they last said.
+    @concurrent
     public func queuedNumbers(
         repositoryPaths: [String],
         interval: TimeInterval = minimumInterval,

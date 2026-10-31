@@ -2,10 +2,11 @@ import Foundation
 import Markdown
 
 /// Protect code and Markdown links before an HTML parser sees their brackets.
-struct MarkdownHTMLCode {
+public struct MarkdownHTMLCode {
     // MARK: Lifecycle
 
-    init(_ text: String, transform: (any Markup) -> String? = { _ in nil }) throws {
+    /// Replaces parsed code and links with reversible placeholders.
+    public init(_ text: String, transform: (any Markup) -> String? = { _ in nil }) throws {
         let lines = text.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" || $0 == "\r" }
         func sourceIndex(at location: SourceLocation) -> String.Index? {
             guard location.line > 0, location.line <= lines.count, location.column > 0 else {
@@ -58,11 +59,13 @@ struct MarkdownHTMLCode {
         replacements = saved
     }
 
-    // MARK: Internal
+    // MARK: Public
 
-    let source: String
+    /// Text safe to pass through an HTML parser.
+    public let source: String
 
-    func restore(_ text: String) -> String {
+    /// Restores protected content verbatim.
+    public func restore(_ text: String) -> String {
         replacements.reduce(text) { $0.replacing($1.0, with: $1.1) }
     }
 

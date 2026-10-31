@@ -58,6 +58,8 @@ final class PaneTerminalView: TerminalView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if unsafe window != nil {
+            // SwiftTerm's blink reset waits on the drawable acquisition lock.
+            cursorBlinkResetsOnInput = false
             // Metal keeps frame preparation and drawing off the main thread.
             // SwiftTerm retains Core Graphics if Metal cannot start.
             try? setUseMetal(true)
@@ -238,19 +240,23 @@ final class PaneTerminalView: TerminalView {
             return event
         }
 
-        let rows = CGFloat(terminalDimensions.rows)
-        let cellHeight = rows > 0 ? bounds.height / rows : 0
+        let cell = Self.cellSize(of: self)
+        let cellHeight = cell.height
+        if event.phase == .began || event.phase == .cancelled {
+            wheelRemainder = 0
+        }
         var lines = 0
         if event.hasPreciseScrollingDeltas, cellHeight > 0 {
             wheelRemainder += event.scrollingDeltaY
             lines = Int(wheelRemainder / cellHeight)
             wheelRemainder -= CGFloat(lines) * cellHeight
         } else {
-            lines = Int(event.scrollingDeltaY.rounded())
+            wheelRemainder = 0
+            let rounded = Int(event.scrollingDeltaY.rounded())
+            lines = rounded != 0 ? rounded : (event.scrollingDeltaY > 0 ? 1 : event.scrollingDeltaY < 0 ? -1 : 0)
         }
         if lines != 0 {
             let point = convert(event.locationInWindow, from: nil)
-            let cell = Self.cellSize(of: self)
             onScroll(
                 lines > 0,
                 abs(lines),

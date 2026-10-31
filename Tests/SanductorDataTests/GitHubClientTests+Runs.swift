@@ -8,6 +8,17 @@ import Testing
 /// and what is said when none of them can be read yet. Split from
 /// the client's tests for length.
 extension GitHubClientTests {
+    @Test(arguments: ["", "HTTP 404: Not Found"])
+    func `unpublished job logs have a distinct unavailable result`(response: String) async {
+        let runner = ScriptedGitHubRunner(answers: [
+            "gh api --allow-escape-sequences repos/{owner}/{repo}/actions/jobs/11/logs":
+                response.isEmpty ? .success("") : .failure(response),
+        ])
+        await #expect(throws: GitHubClient.JobLogUnavailable.self) {
+            try await GitHubClient(runner: runner) { true }.jobLog(repositoryPath: "/repo", jobID: 11)
+        }
+    }
+
     @Test
     func `individual job logs read complete output without asking for the run`() async throws {
         let output = "2026-10-17T10:00:00Z \u{1B}[32msuccess\u{1B}[0m\n" + String(repeating: "line\n", count: 400)

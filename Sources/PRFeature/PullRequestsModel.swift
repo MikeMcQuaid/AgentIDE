@@ -235,6 +235,7 @@ final class PullRequestsModel {
     var isLoading = false
     /// Bumped per reload: a page fetch a reload overtook leaves the
     /// loading state and the page to it.
+    var checkCopyGeneration = 0
     var listingGeneration = 0
 
     /// True once the first listing answered; the creation form only

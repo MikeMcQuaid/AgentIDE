@@ -1,4 +1,5 @@
 import AppKit
+import SanductorData
 import SanductorDomain
 import SwiftUI
 
@@ -198,7 +199,7 @@ public struct ReviewThreadRow: View {
     private var copyButton: some View {
         PaneIconButton("doc.on.doc", help: "Copy this conversation, with its file and line, to the clipboard") {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(thread.asText, forType: .string)
+            NSPasteboard.general.setString(ReviewCopy.text(thread), forType: .string)
         }
     }
 

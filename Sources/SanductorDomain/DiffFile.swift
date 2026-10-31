@@ -63,10 +63,11 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     /// Creates a file diff; the diffstat counts are computed once
     /// here rather than on every read, since the UI reads them per
     /// row on large diffs.
-    public init(path: String, hunks: [DiffHunk], isNew: Bool = false) {
+    public init(path: String, hunks: [DiffHunk], isNew: Bool = false, oldPath: String? = nil) {
         self.path = path
         self.hunks = hunks
         self.isNew = isNew
+        self.oldPath = oldPath
         let lines = hunks.flatMap(\.lines)
         additions = lines.count { $0.kind == .addition }
         deletions = lines.count { $0.kind == .deletion }
@@ -83,6 +84,9 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
     /// reads as a broken diff beside real hunks.
     public let isNew: Bool
 
+    /// The original path when git identifies a rename.
+    public let oldPath: String?
+
     /// The file's hunks in order.
     public let hunks: [DiffHunk]
 
@@ -91,6 +95,11 @@ public struct DiffFile: Identifiable, Hashable, Sendable {
 
     /// Deleted line count across the file's hunks, for diffstats.
     public let deletions: Int
+
+    /// Paths to stage or exclude together for this change.
+    public var paths: [String] {
+        oldPath.map { [$0, path] } ?? [path]
+    }
 
     /// The stable identity, the file path.
     public var id: String {

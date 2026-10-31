@@ -9,7 +9,7 @@ extension DashboardView {
             if mode == .repository {
                 RepositorySortPicker(sort: $repositorySort).padding(.trailing, Self.listPadding)
             }
-            NewSessionMenu(repositories: model.groups.map(\.repository)) { repository in
+            NewSessionMenu(repositories: model.visibleGroups.map(\.repository)) { repository in
                 model.openNewSession(for: repository)
             }
             .menuStyle(.borderlessButton)

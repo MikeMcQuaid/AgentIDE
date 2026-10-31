@@ -45,11 +45,11 @@ extension PullRequestStackTests {
         await model.reload()
         model.stacking.selected = "middle"
 
-        #expect(model.canRestack == (state == "idle"))
-        #expect((model.restackBlocker == nil) == (state == "idle"))
+        #expect(model.canRestack == (state != "busy"))
+        #expect((model.restackBlocker == nil) == (state != "busy"))
         #expect(model.needsRestackBeforePush == (restack != "upper" || published))
-        #expect(model.canPushStack == ((branch == "upper" && published == false) || state == "idle"))
-        if branch == "lower" || published, state != "idle" {
+        #expect(model.canPushStack == ((branch == "upper" && published == false) || state != "busy"))
+        if branch == "lower" || published, state == "busy" {
             #expect(model.pushStackHelp == model.restackBlocker)
         } else {
             #expect(model.pushStackHelp == "Push the listed branch, those below it "
@@ -89,7 +89,7 @@ extension PullRequestStackTests {
     }
 
     @Test
-    func `a branch held by a dirty worktree dims the restack`() async {
+    func `a branch held by a dirty worktree allows restacking with preserved changes`() async {
         let fixtures = PullRequestsModelTests()
         let dirty = WorktreeItem(
             worktree: Worktree(
@@ -114,7 +114,7 @@ extension PullRequestStackTests {
         }
         await model.reload()
 
-        #expect(model.restackBlocker == "Commit or discard the changes in `lower`'s worktree first")
-        #expect(model.canRestack == false)
+        #expect(model.restackBlocker == nil)
+        #expect(model.canRestack)
     }
 }

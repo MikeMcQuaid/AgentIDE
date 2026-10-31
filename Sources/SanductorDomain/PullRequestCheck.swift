@@ -100,7 +100,11 @@ public struct PullRequestCheck: Codable, Hashable, Identifiable, Sendable {
         return number
     }
 
+    public var hasNoLog: Bool {
+        conclusion == "SKIPPED" || (conclusion == "CANCELLED" && startedAt == nil)
+    }
+
     public var canReadLog: Bool {
-        isComplete && jobID != nil
+        isComplete && jobID != nil && hasNoLog == false
     }
 }

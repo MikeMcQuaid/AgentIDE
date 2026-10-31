@@ -302,7 +302,7 @@ extension TerminalRepresentable {
         private func startControl(_ command: [String], in view: PaneTerminalView) {
             let attached = HerdrTerminalChannel(command: command)
             channel = attached
-            pump = Task { [weak self] in
+            pump = Task(priority: .userInitiated) { [weak self] in
                 guard let stream = try? await attached.start() else {
                     self?.finish(for: attached)
                     return

@@ -67,7 +67,7 @@ nonisolated struct RepositoryQuery: EntityStringQuery {
 
     @MainActor
     private static func all() -> [RepositoryEntity] {
-        (AppDependencies.shared?.dashboard.groups ?? [])
+        (AppDependencies.shared?.dashboard.visibleGroups ?? [])
             .map { RepositoryEntity(path: $0.repository.path, name: $0.repository.name) }
     }
 }
@@ -141,7 +141,7 @@ struct WorktreeEntity: AppEntity {
 nonisolated struct WorktreeQuery: EntityStringQuery {
     @MainActor
     static func all() -> [WorktreeEntity] {
-        (AppDependencies.shared?.dashboard.groups ?? [])
+        (AppDependencies.shared?.dashboard.visibleGroups ?? [])
             .flatMap(\.items)
             .filter { $0.isPlaceholder == false }
             .map(WorktreeEntity.init)
@@ -149,7 +149,7 @@ nonisolated struct WorktreeQuery: EntityStringQuery {
 
     @MainActor
     static func item(at path: String) -> WorktreeItem? {
-        (AppDependencies.shared?.dashboard.groups ?? [])
+        (AppDependencies.shared?.dashboard.visibleGroups ?? [])
             .flatMap(\.items)
             .first { $0.worktree.path == path }
     }
@@ -331,7 +331,7 @@ nonisolated struct WhatNeedsMeIntent: AppIntent {
 
     @MainActor
     func perform() -> some IntentResult & ReturnsValue<[WorktreeEntity]> & ProvidesDialog {
-        let needing = (AppDependencies.shared?.dashboard.groups ?? [])
+        let needing = (AppDependencies.shared?.dashboard.visibleGroups ?? [])
             .flatMap(\.items)
             .filter { $0.session?.activity == .blocked }
             .map(WorktreeEntity.init)
