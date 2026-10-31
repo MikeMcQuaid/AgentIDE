@@ -33,11 +33,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 
 ## Commands
 
-- `script/bootstrap`: install `Brewfile` dependencies and generate
-  `Sanductor.xcodeproj` with XcodeGen
-- `script/project`: generate Xcode's project and copy the package pins
-- `script/build`: regenerate the Xcode project when sources
-  changed, then build Release (`XCODE_CONFIGURATION=Debug` overrides)
+- `script/bootstrap`: install `Brewfile` dependencies, write version
+  settings and copy package pins into the Xcode workspace
+- `script/package-pins`: copy package pins into the Xcode workspace
+- `script/build`: build Release (`XCODE_CONFIGURATION=Debug` overrides)
 - `script/install`: build, then copy the app into /Applications so
   the running copy survives rebuilds, and relaunch it automatically
 - `script/zip`: zip the Release build as
@@ -68,9 +67,10 @@ conventional-commit prefixes such as `feat:`, `fix:` or `chore:`.
 - `ARCHITECTURE.md`: system design, packages and data flows
 - `AGENTS.md`: this file; `CLAUDE.md` is a symlink to it
 - `Package.swift`, `Sources/`, `Tests/`: the Swift package targets
-- `App/`: the app shell; `project.yml` defines the XcodeGen target
-  (the generated `.xcodeproj` stays gitignored). `Package.swift`
-  also carries these sources as `SanductorAppSources`, which builds
+- `Sanductor.xcodeproj/`: native JSON project and shared schemes,
+  requiring Xcode 27.2 or later; user-specific state stays ignored
+- `App/`: the app shell, synchronised with its native Xcode target.
+  `Package.swift` also carries it as `SanductorAppSources`, which builds
   no bundle and exists only so `swift build` type-checks them
 - `bin/`: the `sanductor` command shipped inside the app bundle: the
   editor shim a shell pane puts on its `PATH` (waiting only with

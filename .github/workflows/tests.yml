@@ -59,15 +59,16 @@ jobs:
           core: false
           cask: false
 
-      - name: Select Xcode 27
+      - name: Select Xcode 27.2 or later
         run: |
-          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print | sort -rV | head -1)"
           if [[ -z "${xcode}" ]]; then
-            echo "::error::Xcode 27 is not installed on this runner image."
+            echo "::error::Xcode 27.2 or later is not installed on this runner image."
             exit 1
           fi
           sudo xcode-select -s "${xcode}/Contents/Developer"
           xcodebuild -version
+          xcodebuild -version | awk '/^Xcode / { split($2, v, "."); exit !(v[1] > 27 || (v[1] == 27 && v[2] >= 2)) }'
 
       - name: Ensure Metal toolchain
         run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
@@ -76,11 +77,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/org.swift.swiftpm/repositories
-          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved', 'Sanductor.xcodeproj/project.xcproj', 'Sanductor.xcodeproj/xcshareddata/xcschemes/*.xcscheme') }}
           restore-keys: ${{ runner.os }}-swiftpm-repositories-
 
       - name: Bootstrap tests
-        run: script/bootstrap gh herdr ripgrep swiftlint xcodegen
+        run: script/bootstrap gh herdr ripgrep swiftlint
 
       - name: Test with Thread Sanitizer
         if: matrix.task == 'thread'
@@ -128,15 +129,16 @@ jobs:
           core: false
           cask: false
 
-      - name: Select Xcode 27
+      - name: Select Xcode 27.2 or later
         run: |
-          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print -quit)"
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode*27*.app' -print | sort -rV | head -1)"
           if [[ -z "${xcode}" ]]; then
-            echo "::error::Xcode 27 is not installed on this runner image."
+            echo "::error::Xcode 27.2 or later is not installed on this runner image."
             exit 1
           fi
           sudo xcode-select -s "${xcode}/Contents/Developer"
           xcodebuild -version
+          xcodebuild -version | awk '/^Xcode / { split($2, v, "."); exit !(v[1] > 27 || (v[1] == 27 && v[2] >= 2)) }'
 
       - name: Ensure Metal toolchain
         run: xcrun metal --version || xcodebuild -downloadComponent MetalToolchain
@@ -145,11 +147,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/org.swift.swiftpm/repositories
-          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved') }}
+          key: ${{ runner.os }}-swiftpm-repositories-${{ hashFiles('Package.resolved', 'Sanductor.xcodeproj/project.xcproj', 'Sanductor.xcodeproj/xcshareddata/xcschemes/*.xcscheme') }}
           restore-keys: ${{ runner.os }}-swiftpm-repositories-
 
       - name: Bootstrap
-        run: script/bootstrap periphery ripgrep swiftlint xcodegen
+        run: script/bootstrap periphery ripgrep swiftlint
 
       - name: Build and analyze both apps
         env:

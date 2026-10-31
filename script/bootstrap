@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Brewfile dependencies (or named formulae) and generate the project.
+# Install Brewfile dependencies (or named formulae) and prepare Xcode settings.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -11,4 +11,4 @@ elif ! brew bundle check &>/dev/null; then
 fi
 
 script/version --xcconfig .build/version.xcconfig
-script/project --quiet
+script/package-pins

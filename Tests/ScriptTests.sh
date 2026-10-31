@@ -94,14 +94,12 @@ done
 echo 'README style tests passed'
 
 printf '{"pins": [], "version": 3}\n' >"${scratch}/Package.resolved"
-cp script/bootstrap script/build script/install script/package script/analyze script/test script/project "${scratch}/script/"
+cp script/bootstrap script/build script/install script/package script/analyze script/test script/package-pins "${scratch}/script/"
 cat >"${scratch}/script/version" <<'VERSION'
 #!/bin/bash
 printf '1.2.3\n42\n'
 VERSION
-for command in xcodegen codesign; do
-  printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/${command}"
-done
+printf '#!/bin/bash\nexit 0\n' >"${scratch}/bin/codesign"
 cat >"${scratch}/bin/xcodebuild" <<'BUILDER'
 #!/bin/bash
 set -euo pipefail
@@ -190,9 +188,9 @@ for missing in 0 1; do
   [[ "$(wc -l <"${scratch}/brew-invocations")" -eq $((missing + 1)) ]] || exit 1
 done
 : >"${scratch}/brew-invocations"
-env PATH="${scratch}/bin:${PATH}" "${scratch}/script/bootstrap" swiftlint xcodegen
-[[ "$(cat "${scratch}/brew-invocations")" == 'install swiftlint xcodegen' ]] || exit 1
-if env PATH="${scratch}/bin:${PATH}" BOOTSTRAP_TEST_STATUS=1 "${scratch}/script/bootstrap" xcodegen; then
+env PATH="${scratch}/bin:${PATH}" "${scratch}/script/bootstrap" swiftlint ripgrep
+[[ "$(cat "${scratch}/brew-invocations")" == 'install swiftlint ripgrep' ]] || exit 1
+if env PATH="${scratch}/bin:${PATH}" BOOTSTRAP_TEST_STATUS=1 "${scratch}/script/bootstrap" ripgrep; then
   echo 'Bootstrap accepted a failed dependency installation' >&2
   exit 1
 fi
@@ -285,6 +283,17 @@ echo 'Build and packaging script tests passed'
 bash Tests/PackageTests.sh
 
 mkdir -p "${scratch}/Tests" "${scratch}/.build"
+python3 - "${scratch}" <<'PLISTS'
+import pathlib, plistlib, sys
+for configuration in ["Debug", "Release"]:
+    for platform, path, encoding in [
+        ("mac", f".DerivedData/Build/Products/{configuration}/Sanductor.app/Contents/Info.plist", plistlib.FMT_XML),
+        ("ios", f".DerivedData/iOS/Build/Products/{configuration}-iphonesimulator/Sanductor.app/Info.plist", plistlib.FMT_BINARY),
+    ]:
+        target = pathlib.Path(sys.argv[1]) / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(plistlib.dumps({"NSPrincipalClass": f"{platform}.AppDelegate", "Configuration": configuration}, fmt=encoding))
+PLISTS
 printf 'only_rules: [trailing_newline]\nanalyzer_rules: [unused_import]\n' >"${scratch}/.swiftlint.yml"
 mkdir -p "${scratch}/App" "${scratch}/iOSApp" "${scratch}/Sources/Interface/"{macOS,iOS}
 touch "${scratch}/Sources/Interface/"{macOS,iOS}/Font.swift
@@ -340,7 +349,9 @@ for sandbox in fixture ''; do
       exit 1
     }
     grep -qx -- --strict "${scratch}/periphery-arguments"
-    grep -qx -- --index-store-path "${scratch}/periphery-arguments"
+    if [[ -n "${sandbox}" ]]; then
+      grep -qx -- --index-store-path "${scratch}/periphery-arguments"
+    fi
     awk '/^--index-exclude$/ { exclude = 1; next } /^--/ { exclude = 0 } exclude' \
       "${scratch}/periphery-arguments" | grep -Fxq '**/BuildToolPluginIntermediates/**'
     if [[ -z "${sandbox}" ]]; then
@@ -348,7 +359,21 @@ for sandbox in fixture ''; do
       grep -q -- '-scheme SanductorApp' "${scratch}/xcode-invocations"
       grep -q -- '-scheme Sanductor-iOS' "${scratch}/xcode-invocations"
       grep -q -- 'generic/platform=iOS Simulator' "${scratch}/xcode-invocations"
-      grep -qx 'Sanductor-iOS' "${scratch}/periphery-arguments"
+      grep -qx -- --generic-project-config "${scratch}/periphery-arguments"
+      python3 - "${scratch}/.build/analyze-project.json" <<'CONFIG'
+import json, pathlib, plistlib, sys, xml.etree.ElementTree as ET
+config = json.load(open(sys.argv[1]))
+assert config["indexstores"] == [".DerivedData/Index.noindex/DataStore", ".DerivedData/iOS/Index.noindex/DataStore"]
+assert config["test_targets"] == ["SanductorIntentTests"]
+assert config["xibs"] == config["xcdatamodels"] == config["xcmappingmodels"] == []
+assert len(config["plists"]) == 2
+root = pathlib.Path(sys.argv[1]).parent.parent
+for platform, path in zip(["mac", "ios"], config["plists"]):
+    contents = (root / path).read_bytes()
+    ET.fromstring(contents)
+    assert plistlib.loads(contents) == {"NSPrincipalClass": f"{platform}.AppDelegate", "Configuration": "Debug"}
+assert (root / ".DerivedData/iOS/Build/Products/Debug-iphonesimulator/Sanductor.app/Info.plist").read_bytes().startswith(b"bplist00")
+CONFIG
       grep -q -- '--compiler-log-path .build/analyze-build.log' "${scratch}/swiftlint-invocations"
       grep -q -- '--compiler-log-path .build/analyze-ios-build.log' "${scratch}/swiftlint-invocations"
       grep -Fxq "${scratch}/Sources/Interface/macOS/Font.swift" "${scratch}/.build/analyze-mac-sources.xcfilelist"
@@ -366,6 +391,26 @@ env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= XCODE_CONFIGURATION=Release \
   SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
   "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1
 [[ "$(grep -c -- '-configuration Release' "${scratch}/xcode-invocations")" -eq 2 ]] || exit 1
+python3 - "${scratch}" <<'PLISTS'
+import json, pathlib, plistlib, sys
+root = pathlib.Path(sys.argv[1])
+for path in json.loads((root / ".build/analyze-project.json").read_text())["plists"]:
+    assert plistlib.loads((root / path).read_bytes())["Configuration"] == "Release"
+PLISTS
+plist="${scratch}/.DerivedData/iOS/Build/Products/Release-iphonesimulator/Sanductor.app/Info.plist"
+cp "${plist}" "${scratch}/original-info.plist"
+for invalid in missing malformed; do
+  rm -f "${plist}" "${scratch}/periphery-arguments"
+  [[ "${invalid}" != malformed ]] || printf 'invalid plist' >"${plist}"
+  if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= XCODE_CONFIGURATION=Release \
+    SCRIPT_TEST_SWIFTLINT="${real_swiftlint}" \
+    "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
+    echo "Analysis accepted a ${invalid} product plist" >&2
+    exit 1
+  fi
+  [[ ! -f "${scratch}/periphery-arguments" ]] || exit 1
+done
+cp "${scratch}/original-info.plist" "${plist}"
 if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= ANALYZE_TEST_EMPTY=1 \
   "${scratch}/script/analyze" >"${scratch}/analyze.log" 2>&1; then
   echo 'Analysis accepted a SwiftLint pass that checked no files' >&2
@@ -454,13 +499,13 @@ if env PATH="${scratch}/bin:${PATH}" SV_SESSION_ID= SANDUCTOR_ANALYZE_BASE=missi
 fi
 [[ ! -s "${scratch}/xcode-invocations" ]] || exit 1
 
-xcodegen dump --type json | python3 -c '
+plutil -convert json -o - Sanductor.xcodeproj/project.xcproj | python3 -c '
 import json
 import sys
 
-targets = json.load(sys.stdin)["targets"]
+targets = {target["name"]: target for target in json.load(sys.stdin)["targets"]}
 modules = [
-    targets[name]["settings"]["base"].get("PRODUCT_MODULE_NAME", targets[name]["settings"]["base"]["PRODUCT_NAME"])
+    targets[name]["build-settings"].get("PRODUCT_MODULE_NAME", targets[name]["build-settings"]["PRODUCT_NAME"])
     for name in ["SanductorApp", "Sanductor-iOS"]
 ]
 assert len(set(modules)) == len(modules), "App targets share a Swift module name"
@@ -493,3 +538,4 @@ done
 echo 'Analysis and sanitizer script tests passed'
 
 bash Tests/TestFlightTests.sh
+bash Tests/ProjectTests.sh

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Print the app's version and build number, one per line, or write them
 # as an xcconfig with --xcconfig <path>. The one place either is
-# decided: `script/build` passes them to xcodebuild and the generated
+# decided: `script/build` passes them to xcodebuild and the native
 # project includes the xcconfig, so a build started in Xcode is
 # versioned exactly as one started from a script.
 set -euo pipefail

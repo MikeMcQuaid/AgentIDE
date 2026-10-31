@@ -112,8 +112,8 @@ if [[ "$(sw_vers -productVersion | cut -d. -f1)" -lt 27 ]]; then
   echo "AppIntentsTesting requires macOS 27: skipping the App Intents tests" >&2
 elif [[ -z "${SANDUCTOR_DEVELOPMENT_TEAM:-}" ]]; then
   echo "SANDUCTOR_DEVELOPMENT_TEAM unset: skipping the App Intents tests" >&2
-elif [[ -z "${SANDUCTOR_SKIP_INTENT_TESTS:-}" ]] && command -v xcodegen &>/dev/null; then
-  script/project
+elif [[ -z "${SANDUCTOR_SKIP_INTENT_TESTS:-}" ]]; then
+  script/package-pins
   # Quiet, so the build's noise stays out, but a failure's reasons
   # come back out of the result bundle: xcodebuild -quiet names the
   # failing tests and nothing else.
